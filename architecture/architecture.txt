@@ -1,0 +1,1 @@
+Please refer to architecture/schema.sql and architecture/workflows.md for the backend specifications.
