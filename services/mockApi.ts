@@ -1,4 +1,4 @@
-import { Quote, QuoteItem, UserDecision, CalendarEvent, User, Tenant, ClientCompany, ClientContact, Deal, DealPermission, Product, CustomStatus } from '../types';
+import { Quote, QuoteItem, UserDecision, CalendarEvent, User, Tenant, ClientCompany, ClientContact, Deal, DealPermission, Product, CustomStatus, InterestStatus } from '../types';
 
 const USE_REAL_API = true; // Cambiar a true cuando configures n8n
 const N8N_BASE_URL = 'https://service.computeksa.com/webhook'; 
@@ -14,6 +14,7 @@ let productsCache: Product[] | null = null;
 let dealStatusesCache: CustomStatus[] | null = null;
 let quoteStatusesCache: CustomStatus[] | null = null;
 let quotesCache: Quote[] | null = null;
+let interestStatusesCache: CustomStatus[] | null = null;
 
 
 // --- MOCK DATA ---
@@ -93,21 +94,27 @@ let mockDeals: Deal[] = [
         nombre_trato: 'Proyecto de Transformador para Hospital',
         valor_trato: 99500.00,
         id_deal_status: 'ds_1', // FK to status
-        interes: 'Alto',
+        id_interest_status: 'is_1', // FK to interest status
         created_at: new Date().toISOString(),
     }
 ];
-let mockDealPermissions: DealPermission[] = [];
 
 let mockDealStatuses: CustomStatus[] = [
-    { id_status: 'ds_1', id_tenant: 'tenant_001', name: 'EN PROCESO', color: '#3b82f6', icon: 'fa-solid fa-hourglass-half', is_default: true },
-    { id_status: 'ds_2', id_tenant: 'tenant_001', name: 'GANADO', color: '#22c55e', icon: 'fa-solid fa-trophy'},
-    { id_status: 'ds_3', id_tenant: 'tenant_001', name: 'PERDIDO', color: '#ef4444', icon: 'fa-solid fa-thumbs-down' },
+    { id_status: 'ds_1', id_tenant: 'tenant_001', type: 'deal', name: 'CALIFICADO', color: '#3b82f6', icon: 'fa-solid fa-star', is_default: true },
+    { id_status: 'ds_2', id_tenant: 'tenant_001', type: 'deal', name: 'PROPUESTA ENVIADA', color: '#f97316', icon: 'fa-solid fa-file-signature' },
+    { id_status: 'ds_3', id_tenant: 'tenant_001', type: 'deal', name: 'NEGOCIACIÓN', color: '#a855f7', icon: 'fa-solid fa-comments-dollar' },
+    { id_status: 'ds_4', id_tenant: 'tenant_001', type: 'deal', name: 'GANADO', color: '#22c55e', icon: 'fa-solid fa-trophy' },
+    { id_status: 'ds_5', id_tenant: 'tenant_001', type: 'deal', name: 'PERDIDO', color: '#ef4444', icon: 'fa-solid fa-thumbs-down' },
+];
+let mockInterestStatuses: CustomStatus[] = [
+  { id_status: 'is_1', id_tenant: 'tenant_001', type: 'interest', name: 'Alto', color: '#ef4444', icon: 'fa-solid fa-fire-flame-curved', is_default: true },
+  { id_status: 'is_2', id_tenant: 'tenant_001', type: 'interest', name: 'Medio', color: '#f97316', icon: 'fa-solid fa-bolt' },
+  { id_status: 'is_3', id_tenant: 'tenant_001', type: 'interest', name: 'Bajo', color: '#22c55e', icon: 'fa-solid fa-leaf' },
 ];
 let mockQuoteStatuses: CustomStatus[] = [
-    { id_status: 'qs_1', id_tenant: 'tenant_001', name: 'PENDIENTE', color: '#6b7280', icon: 'fa-solid fa-clock', is_default: true },
-    { id_status: 'qs_2', id_tenant: 'tenant_001', name: 'ENVIADO', color: '#0ea5e9', icon: 'fa-solid fa-paper-plane' },
-    { id_status: 'qs_3', id_tenant: 'tenant_001', name: 'APROBADO', color: '#22c55e', icon: 'fa-solid fa-check-double' },
+    { id_status: 'qs_1', id_tenant: 'tenant_001', type: 'quote', name: 'BORRADOR', color: '#64748b', icon: 'fa-solid fa-pen-ruler', is_default: true },
+    { id_status: 'qs_2', id_tenant: 'tenant_001', type: 'quote', name: 'ENVIADO', color: '#3b82f6', icon: 'fa-solid fa-paper-plane' },
+    { id_status: 'qs_3', id_tenant: 'tenant_001', type: 'quote', name: 'APROBADO', color: '#22c55e', icon: 'fa-solid fa-check-double' },
 ];
 let mockProducts: Product[] = [
     { id_product: 'p_1', id_tenant: 'tenant_001', codigo: 'PROD-001', tipo: 'BIEN', descripcion: 'Licencia de Software CRM', precio_unitario: 1500.00 }
@@ -510,18 +517,46 @@ export const MockApi = {
 
     if (USE_REAL_API) {
         try {
-            const result = await apiFetch(`/api/deals?id_tenant=${user.id_tenant}`);
-            const list = Array.isArray(result) ? result : [];
+            // Se obtienen todos los datos en paralelo para mayor eficiencia
+            const [dealsResult, dealStatuses, interestStatuses, clientCompanies, users] = await Promise.all([
+                apiFetch(`/api/deals?id_tenant=${user.id_tenant}`),
+                MockApi.getDealStatuses(),
+                MockApi.getInterestStatuses(),
+                MockApi.getClientCompanies(),
+                MockApi.getUsers()
+            ]);
+
+            const dealsList = Array.isArray(dealsResult) ? dealsResult : [];
+
+            // Se enriquecen los datos
+            const enrichedDeals = dealsList.map((deal: Deal) => {
+                const status = dealStatuses.find((s: CustomStatus) => s.id_status === deal.id_deal_status);
+                const interest = interestStatuses.find((i: CustomStatus) => i.id_status === deal.id_interest_status);
+                const company = clientCompanies.find((c: ClientCompany) => c.id_client_company === deal.id_client_company);
+                const owner = users.find((u: User) => u.id_user === deal.id_user_owner);
+
+                return {
+                    ...deal,
+                    estado: status?.name || 'Desconocido',
+                    estado_color: status?.color,
+                    estado_icon: status?.icon,
+                    interes: interest?.name || 'N/D',
+                    interes_color: interest?.color,
+                    interes_icon: interest?.icon,
+                    client_company_name: company?.name_company,
+                    owner_name: owner?.name_user,
+                };
+            });
             
-            // SECURITY FILTER
-            const filteredList = list.filter((d: Deal) => d.id_tenant === user.id_tenant);
-            dealsCache = filteredList;
-            return filteredList;
+            dealsCache = enrichedDeals;
+            return enrichedDeals;
         } catch (e) {
+            console.error("Error fetching or enriching real deals:", e);
             return [];
         }
     }
 
+    // El código de simulación (mock) se mantiene igual
     const filteredMock = mockDeals.filter(d => d.id_tenant === user.id_tenant);
     const enrichedDeals = filteredMock.map(deal => {
         const status = mockDealStatuses.find(s => s.id_status === deal.id_deal_status);
@@ -543,44 +578,71 @@ export const MockApi = {
     return deals.find(d => d.id_trato === id);
   },
 
-  addDeal: async (data: Partial<Deal>): Promise<Deal> => {
-    dealsCache = null;
+  getInterestStatuses: async (): Promise<CustomStatus[]> => {
+    const user = await MockApi.getUser();
+    if (!user) return [];
+
     if (USE_REAL_API) {
-      const payload = { ...data, id_tenant: currentUser?.id_tenant, id_user_owner: currentUser?.id_user };
-      return apiFetch('/api/deals', 'POST', payload);
+      if (interestStatusesCache) return interestStatusesCache;
+      const data = await apiFetch(`/api/statuses/interests?id_tenant=${user.id_tenant}`);
+      interestStatusesCache = data;
+      return data;
     }
-    return new Promise(resolve => {
-      const newDeal = {
-        ...data,
-        id_trato: `deal_${Date.now()}`,
-        id_tenant: currentUser?.id_tenant || 'tenant_001',
-        id_user_owner: currentUser?.id_user || 'u_001',
-        created_at: new Date().toISOString()
-      } as Deal;
-      mockDeals.push(newDeal);
-      resolve(newDeal);
-    });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    return JSON.parse(JSON.stringify(mockInterestStatuses));
   },
 
-  updateDeal: async (id: string, data: Partial<Deal>): Promise<Deal> => {
-    dealsCache = null;
+  addInterestStatus: async (status: Partial<CustomStatus>): Promise<CustomStatus> => {
+    const user = await MockApi.getUser();
+    if (!user) throw new Error("Unauthorized");
+    interestStatusesCache = null;
+
     if (USE_REAL_API) {
-      return apiFetch('/api/deals/update', 'POST', { id_trato: id, ...data, id_tenant: currentUser?.id_tenant });
+      const payload = {
+        id_tenant: user.id_tenant,
+        name: status.name || 'Nuevo Estado',
+        color: status.color || '#cccccc',
+        icon: status.icon || 'fa-solid fa-question-circle',
+        is_default: status.is_default || false,
+      };
+      return apiFetch('/api/statuses/interests', 'POST', payload);
     }
-    const idx = mockDeals.findIndex(d => d.id_trato === id);
-    if (idx !== -1) mockDeals[idx] = { ...mockDeals[idx], ...data } as Deal;
-    return mockDeals[idx];
+
+    // El código de simulación (mock) sí necesita generar un ID.
+    const newStatus: CustomStatus = {
+        ...status,
+        name: status.name || 'Nuevo Estado Mock', // <-- CORRECCIÓN AQUÍ
+        id_status: `is_${Date.now()}`,
+        id_tenant: user.id_tenant,
+        type: 'interest',
+    };
+    mockInterestStatuses.push(newStatus);
+    return newStatus;
   },
 
-  deleteDeal: async (id: string): Promise<void> => {
-    dealsCache = null;
+  updateInterestStatus: async (id: string, data: Partial<CustomStatus>): Promise<CustomStatus> => {
+    interestStatusesCache = null;
     if (USE_REAL_API) {
-      return apiFetch('/api/deals/delete', 'POST', { id_trato: id, id_tenant: currentUser?.id_tenant });
+      // CORRECCIÓN: Replicando la estructura exacta de las otras funciones de actualización.
+      const payload = { ...data };
+      return apiFetch('/api/statuses/interests/update', 'POST', { id_status: id, ...payload, id_tenant: currentUser?.id_tenant });
     }
-    mockDeals = mockDeals.filter(d => d.id_trato !== id);
+    // Lógica de simulación (mock)
+    const index = mockInterestStatuses.findIndex(s => s.id_status === id);
+    if (index === -1) throw new Error("Status not found");
+    mockInterestStatuses[index] = { ...mockInterestStatuses[index], ...data } as CustomStatus;
+    return Promise.resolve(mockInterestStatuses[index]);
   },
-  
-  // --- PRODUCTS ---
+
+  deleteInterestStatus: async (id: string): Promise<void> => {
+    interestStatusesCache = null;
+    if (USE_REAL_API) {
+      return apiFetch('/api/statuses/interests/delete', 'POST', { id_status: id, id_tenant: currentUser?.id_tenant });
+    }
+    mockInterestStatuses = mockInterestStatuses.filter(s => s.id_status !== id);
+    return Promise.resolve();
+  },
+
   getProducts: async (): Promise<Product[]> => {
     const user = await MockApi.getUser();
     if (!user) return [];

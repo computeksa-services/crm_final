@@ -11,6 +11,7 @@ const DealsList: React.FC = () => {
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [dealStatuses, setDealStatuses] = useState<CustomStatus[]>([]);
+  const [interestStatuses, setInterestStatuses] = useState<CustomStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const navigate = useNavigate();
@@ -32,18 +33,20 @@ const DealsList: React.FC = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [dealsData, companiesData, contactsData, usersData, statusesData] = await Promise.all([
+      const [dealsData, companiesData, contactsData, usersData, statusesData, interestStatusesData] = await Promise.all([
         MockApi.getDeals(),
         MockApi.getClientCompanies(),
         MockApi.getClientContacts(),
         MockApi.getUsers(),
         MockApi.getDealStatuses(),
+        MockApi.getInterestStatuses(),
       ]);
       setDeals(dealsData);
       setCompanies(companiesData);
       setContacts(contactsData);
       setUsers(usersData);
       setDealStatuses(statusesData);
+      setInterestStatuses(interestStatusesData);
     } catch (e) {
       setToast({ message: 'Error al cargar datos.', type: 'error' });
     } finally {
@@ -77,7 +80,7 @@ const DealsList: React.FC = () => {
       id_client_company: '',
       id_contact: '',
       id_deal_status: defaultStatus?.id_status || '',
-      interes: 'Medio',
+      id_interest_status: 'is_2', // Default to 'Medio'
     });
     setIsEditMode(false);
     setIsModalOpen(true);
@@ -160,6 +163,7 @@ const DealsList: React.FC = () => {
                   <th className="px-6 py-4 border-b">Nombre del Trato</th>
                   <th className="px-6 py-4 border-b">Empresa Cliente</th>
                   <th className="px-6 py-4 border-b">Valor</th>
+                  <th className="px-6 py-4 border-b">Interés</th>
                   <th className="px-6 py-4 border-b">Estado</th>
                   <th className="px-6 py-4 border-b">Propietario</th>
                   <th className="px-6 py-4 border-b text-right">Acciones</th>
@@ -171,6 +175,15 @@ const DealsList: React.FC = () => {
                     <td className="px-6 py-4 font-medium text-slate-800">{deal.nombre_trato}</td>
                     <td className="px-6 py-4 text-sm text-slate-600">{deal.client_company_name}</td>
                     <td className="px-6 py-4 text-sm font-semibold text-slate-700">${deal.valor_trato.toLocaleString('es-EC')}</td>
+                    <td className="px-6 py-4">
+                      <span
+                        className="px-2 py-1 rounded-full text-xs font-bold flex items-center w-fit"
+                        style={{ backgroundColor: `${deal.interes_color}20`, color: deal.interes_color }}
+                      >
+                        {deal.interes_icon && <i className={`${deal.interes_icon} mr-1.5`}></i>}
+                        {deal.interes}
+                      </span>
+                    </td>
                     <td className="px-6 py-4">
                       <span 
                         className="px-2 py-1 rounded-full text-xs font-bold flex items-center w-fit"
@@ -227,11 +240,17 @@ const DealsList: React.FC = () => {
                   <input type="number" name="valor_trato" value={editingDeal.valor_trato || 0} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg" />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Estado</label>
-                  <select name="id_deal_status" value={editingDeal.id_deal_status || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg bg-white">
-                    {dealStatuses.map(s => <option key={s.id_status} value={s.id_status}>{s.name}</option>)}
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Interés</label>
+                  <select name="id_interest_status" value={editingDeal.id_interest_status || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg bg-white">
+                    {interestStatuses.map(s => <option key={s.id_status} value={s.id_status}>{s.name}</option>)}
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Estado</label>
+                <select name="id_deal_status" value={editingDeal.id_deal_status || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg bg-white">
+                  {dealStatuses.map(s => <option key={s.id_status} value={s.id_status}>{s.name}</option>)}
+                </select>
               </div>
               <div className="flex justify-end pt-4 space-x-2">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100">Cancelar</button>

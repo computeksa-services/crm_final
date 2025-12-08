@@ -80,6 +80,7 @@ export interface Product {
 export interface CustomStatus {
     id_status: string;
     id_tenant: string;
+    type: 'deal' | 'quote' | 'interest'; // To distinguish status types
     name: string;
     color?: string;
     status_order?: number;
@@ -103,7 +104,10 @@ export interface Deal {
   estado?: string; // Enriched data from API
   estado_color?: string; // Enriched data from API
   estado_icon?: string; // Enriched data from API
-  interes?: 'Alto' | 'Medio' | 'Bajo';
+  id_interest_status: string; // FK a CustomStatus where type is 'interest'
+  interes?: string; // Enriched data
+  interes_color?: string; // Enriched data
+  interes_icon?: string; // Enriched data
   created_at: string;
 }
 

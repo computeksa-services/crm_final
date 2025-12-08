@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { MockApi } from '../services/mockApi';
@@ -20,10 +19,11 @@ const DealDetail: React.FC = () => {
     if (!id) return;
     setLoading(true);
     try {
-      const [dealData, allQuotes, allUsers] = await Promise.all([
+      const [dealData, allQuotes, allUsers, interestStatuses] = await Promise.all([
         MockApi.getDealById(id),
         MockApi.getQuotes(), // Assuming this fetches all quotes for now
         MockApi.getUsers(),
+        MockApi.getInterestStatuses(),
       ]);
       
       if (!dealData) {
@@ -32,12 +32,16 @@ const DealDetail: React.FC = () => {
         const companyData = await MockApi.getClientCompanyById(dealData.id_client_company);
         const contactData = await MockApi.getClientContactById(dealData.id_contact);
         const ownerData = allUsers.find(u => u.id_user === dealData.id_user_owner);
+        const interestStatus = interestStatuses.find(i => i.id_interest === dealData.id_interest_status);
         
         setDeal({
             ...dealData,
             client_company_name: companyData?.name_company,
             contact_name: `${contactData?.first_name || ''} ${contactData?.last_name || ''}`,
             owner_name: ownerData?.name_user,
+            interes: interestStatus?.name,
+            interes_color: interestStatus?.color,
+            interes_icon: interestStatus?.icon,
         });
         
         setQuotes(allQuotes.filter(q => q.id_trato === id));
@@ -115,7 +119,13 @@ const DealDetail: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center">
                     <span className="text-slate-500">Interés:</span>
-                    <span className="font-medium text-slate-800">{deal.interes || 'N/A'}</span>
+                    <span 
+                      className="font-medium text-slate-800 px-2 py-1 rounded-full text-xs font-bold flex items-center w-fit"
+                      style={{ backgroundColor: `${deal.interes_color}20`, color: deal.interes_color }}
+                    >
+                      {deal.interes_icon && <i className={`${deal.interes_icon} mr-1.5`}></i>}
+                      {deal.interes || 'N/A'}
+                    </span>
                 </div>
             </div>
           </div>

@@ -5,23 +5,26 @@ import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import IconPicker from '../components/IconPicker';
 
-type StatusType = 'deal' | 'quote';
+type StatusType = 'deal' | 'quote' | 'interest';
 
 const SettingsStatuses: React.FC = () => {
   const [dealStatuses, setDealStatuses] = useState<CustomStatus[]>([]);
   const [quoteStatuses, setQuoteStatuses] = useState<CustomStatus[]>([]);
+  const [interestStatuses, setInterestStatuses] = useState<CustomStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [deals, quotes] = await Promise.all([
+      const [deals, quotes, interests] = await Promise.all([
         MockApi.getDealStatuses(),
-        MockApi.getQuoteStatuses()
+        MockApi.getQuoteStatuses(),
+        MockApi.getInterestStatuses()
       ]);
       setDealStatuses(deals);
       setQuoteStatuses(quotes);
+      setInterestStatuses(interests);
     } catch (e) {
       setToast({ message: 'Error al cargar estados.', type: 'error' });
     } finally {
@@ -70,7 +73,8 @@ const SettingsStatuses: React.FC = () => {
             onConfirm: async () => {
                 try {
                     if (type === 'deal') await MockApi.deleteDealStatus(id);
-                    else await MockApi.deleteQuoteStatus(id);
+                    else if (type === 'quote') await MockApi.deleteQuoteStatus(id);
+                    else await MockApi.deleteInterestStatus(id);
                     setToast({ message: 'Estado eliminado.', type: 'success' });
                     refreshData();
                 } catch (error) {
@@ -91,15 +95,19 @@ const SettingsStatuses: React.FC = () => {
             if (isEditMode && payload.id_status) {
                 if (type === 'deal') {
                     await MockApi.updateDealStatus(payload.id_status, payload);
-                } else {
+                } else if (type === 'quote') {
                     await MockApi.updateQuoteStatus(payload.id_status, payload);
+                } else {
+                    await MockApi.updateInterestStatus(payload.id_status, payload);
                 }
                 setToast({ message: 'Estado actualizado.', type: 'success' });
             } else {
                 if (type === 'deal') {
                     await MockApi.addDealStatus(payload);
-                } else {
+                } else if (type === 'quote') {
                     await MockApi.addQuoteStatus(payload);
+                } else {
+                    await MockApi.addInterestStatus(payload);
                 }
                 setToast({ message: 'Estado creado.', type: 'success' });
             }
@@ -124,9 +132,8 @@ const SettingsStatuses: React.FC = () => {
     return (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200">
             <ConfirmModal 
-              isOpen={confirmState.isOpen}
-              onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
               {...confirmState}
+              onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
             />
 
             {isIconPickerOpen && (
@@ -227,9 +234,10 @@ const SettingsStatuses: React.FC = () => {
       {loading ? (
         <div className="text-center p-8 text-slate-500">Cargando...</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <StatusManager title="Estados de Tratos (Pipeline)" statuses={dealStatuses} type="deal" refreshData={fetchData} />
             <StatusManager title="Estados de Cotizaciones" statuses={quoteStatuses} type="quote" refreshData={fetchData} />
+            <StatusManager title="Niveles de Interés" statuses={interestStatuses} type="interest" refreshData={fetchData} />
         </div>
       )}
     </div>
