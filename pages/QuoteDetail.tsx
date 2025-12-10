@@ -11,7 +11,6 @@ const QuoteDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
-  // Load Data
   const fetchData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
@@ -23,7 +22,6 @@ const QuoteDetail: React.FC = () => {
         setItems(i);
       } else {
         setQuote(null);
-        setItems([]);
       }
     } catch (e) {
       console.error(e);
@@ -35,8 +33,8 @@ const QuoteDetail: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
-
-  // Actions
+  
+    // Actions
   const handleAddItem = async () => {
     if (!quote) return;
     // TODO: Implement a modal to select a product from the catalog
@@ -76,10 +74,10 @@ const QuoteDetail: React.FC = () => {
     setQuote({...quote, estado_decision: newDecision});
   };
 
+
   if (loading) return <div className="p-8 text-center">Cargando detalles...</div>;
   if (!quote) return <div className="p-8 text-center text-red-500">Cotización no encontrada</div>;
 
-  // Logic for Button Visibility
   const hasItems = items.length > 0;
   const isPending = !['ENVIADO', 'APROBADO'].includes(quote.estado);
   const isReady = quote.estado === 'LISTO PARA ENVIAR';
@@ -105,18 +103,16 @@ const QuoteDetail: React.FC = () => {
         <div className="flex items-center space-x-3">
            <div className="text-right mr-4">
              <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Estado</p>
-             <span className={`text-sm font-bold text-slate-600`}>
+             <span className="text-sm font-bold text-slate-600">
                {quote.estado}
              </span>
            </div>
            
-           {/* Dynamic Action Buttons */}
            {showGenerateBtn && (
              <button 
                onClick={handleGeneratePDF}
                disabled={processing}
-               className={`bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-sm font-medium transition-all ${processing ? 'opacity-70 cursor-wait' : ''}`}
-             >
+               className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg shadow-sm font-medium transition-all">
                {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-file-pdf mr-2"></i>}
                Generar PDF v{quote.version + 1}
              </button>
@@ -126,8 +122,7 @@ const QuoteDetail: React.FC = () => {
              <button 
                onClick={handleSendQuote}
                disabled={processing}
-               className={`bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow-sm font-medium transition-all ${processing ? 'opacity-70 cursor-wait' : ''}`}
-             >
+               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg shadow-sm font-medium transition-all">
                {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-paper-plane mr-2"></i>}
                Enviar al Cliente
              </button>

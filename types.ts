@@ -134,6 +134,7 @@ export interface Quote {
   id_contact?: string;
   contact_name?: string;
   id_trato?: string;
+  id_quote_status?: string; // FK a CustomStatus
   
   estado: string; // Usará el nombre del CustomStatus
   version: number;

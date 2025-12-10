@@ -147,7 +147,9 @@ const DealDetail: React.FC = () => {
                     <div>
                         <div className="flex justify-between items-center mb-4">
                             <h4 className="font-bold text-slate-700">Cotizaciones Vinculadas</h4>
-                            <button className="text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded shadow-sm font-medium">
+                            <button 
+                              onClick={() => navigate(`/quotes/new?dealId=${deal.id_trato}&clientCompanyId=${deal.id_client_company}&contactId=${deal.id_contact}&dealName=${encodeURIComponent(deal.nombre_trato)}`)}
+                              className="text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded shadow-sm font-medium">
                                 <i className="fa-solid fa-plus mr-1"></i> Nueva Cotización
                             </button>
                         </div>

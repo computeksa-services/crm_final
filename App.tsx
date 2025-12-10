@@ -19,6 +19,7 @@ import DealDetail from './pages/DealDetail';
 import ProductsList from './pages/ProductsList';
 import SettingsStatuses from './pages/SettingsStatuses';
 import { MockApi } from './services/mockApi';
+import QuoteCreate from './pages/QuoteCreate'; // RUTA CORREGIDA
 
 const AUTH_KEY = 'isAuthenticated';
 
@@ -63,6 +64,7 @@ const App: React.FC = () => {
         <Route element={<ProtectedRoute isAuthenticated={isAuthenticated} onLogout={handleLogout} />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/quotes" element={<QuotesList />} />
+          <Route path="/quotes/new" element={<QuoteCreate />} />
           <Route path="/quotes/:id" element={<QuoteDetail />} />
           <Route path="/deals" element={<DealsList />} />
           <Route path="/deals/:id" element={<DealDetail />} />

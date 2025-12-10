@@ -125,9 +125,11 @@ let quotes: Quote[] = [];
 let quoteItems: QuoteItem[] = [];
 
 const apiFetch = async (endpoint: string, method: string = 'GET', body?: any) => {
+  const fullUrl = `${N8N_BASE_URL}${endpoint}`;
+  console.log(`Intentando conectar a: ${method} ${fullUrl}`); // <-- AÑADIDO PARA DEPURAR
   try {
     const headers = { 'Content-Type': 'application/json' };
-    const response = await fetch(`${N8N_BASE_URL}${endpoint}`, {
+    const response = await fetch(fullUrl, {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
@@ -917,6 +919,41 @@ deleteInterestStatus: async (id: string): Promise<void> => {
     return Promise.resolve();
   },
   
+  // --- QUOTES ---
+  addQuote: async (data: Partial<Quote>): Promise<Quote> => {
+    quotesCache = null;
+    if (USE_REAL_API) {
+      const user = MockApi.getCurrentUser();
+      const payload = {
+        ...data,
+        id_tenant: user?.id_tenant,
+        id_user: user?.id_user,
+      };
+      return apiFetch('/api/quotes', 'POST', payload);
+    }
+    const newQuote = { ...data, id_cotizacion: `q_${Date.now()}` } as Quote;
+    quotes.push(newQuote);
+    return newQuote;
+  },
+
+  updateQuote: async (id: string, data: Partial<Quote>): Promise<Quote> => {
+    quotesCache = null;
+    if (USE_REAL_API) {
+      return apiFetch('/api/quotes/update', 'POST', { id_cotizacion: id, ...data });
+    }
+    const idx = quotes.findIndex(q => q.id_cotizacion === id);
+    quotes[idx] = { ...quotes[idx], ...data } as Quote;
+    return quotes[idx];
+  },
+
+  deleteQuote: async (id: string): Promise<void> => {
+    quotesCache = null;
+    if (USE_REAL_API) {
+      return apiFetch('/api/quotes/delete', 'POST', { id_cotizacion: id, id_tenant: currentUser?.id_tenant });
+    }
+    quotes = quotes.filter(q => q.id_cotizacion !== id);
+  },
+  
   // OTHERS
   getQuotes: async (): Promise<Quote[]> => {
     const user = await MockApi.getUser();
@@ -928,18 +965,32 @@ deleteInterestStatus: async (id: string): Promise<void> => {
 
     if (USE_REAL_API) {
       try {
-        const result = await apiFetch(`/api/quotes?id_tenant=${user.id_tenant}`);
+        const [result, statuses, companies] = await Promise.all([
+           apiFetch(`/api/quotes?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+           MockApi.getQuoteStatuses(),
+           MockApi.getClientCompanies(),
+        ]);
+
         const list = Array.isArray(result) ? result : [];
-        // SECURITY FILTER
-        const filteredList = list.filter((q: Quote) => q.id_tenant === user.id_tenant);
-        quotesCache = filteredList;
-        return filteredList;
+        
+        const enrichedList = list.map((q: Quote) => {
+            const status = statuses.find(s => s.id_status === q.id_quote_status);
+            const company = companies.find(c => c.id_client_company === q.id_client_company);
+            return {
+                ...q,
+                estado: status?.name || 'Desconocido',
+                client_company_name: company?.name_company || 'N/A',
+            };
+        });
+
+        quotesCache = enrichedList;
+        return enrichedList;
       } catch (e) {
         return [];
       }
     }
     
-    // Fallback Mock Data Logic if not using real API
+    // Fallback Mock Data Logic
     const filtered = quotes.filter(q => q.id_tenant === user.id_tenant);
     quotesCache = filtered;
     return filtered;
