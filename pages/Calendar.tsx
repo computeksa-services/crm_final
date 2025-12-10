@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { MockApi } from '../services/mockApi';
 import { CalendarEvent, ClientCompany } from '../types';
@@ -47,6 +46,7 @@ const Calendar: React.FC = () => {
     for (let i = 0; i < firstDay; i++) {
       daysArray.push(null);
     }
+    // Days of month
     // Days of month
     for (let i = 1; i <= days; i++) {
       daysArray.push(new Date(year, month, i));
