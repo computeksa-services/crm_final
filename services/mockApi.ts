@@ -578,19 +578,39 @@ export const MockApi = {
     return deals.find(d => d.id_trato === id);
   },
 
-  getInterestStatuses: async (): Promise<CustomStatus[]> => {
+  // En MockApi.ts
+
+getInterestStatuses: async (): Promise<CustomStatus[]> => {
     const user = await MockApi.getUser();
     if (!user) return [];
 
     if (USE_REAL_API) {
       if (interestStatusesCache) return interestStatusesCache;
-      const data = await apiFetch(`/api/statuses/interests?id_tenant=${user.id_tenant}`);
-      interestStatusesCache = data;
-      return data;
+      
+      try {
+          // 1. Obtenemos los datos crudos del API
+          const data = await apiFetch(`/api/statuses/interests?id_tenant=${user.id_tenant}`);
+          
+          // 2. NORMALIZACIÓN DE DATOS (AQUÍ ESTÁ LA MAGIA)
+          // Si el backend devuelve id_interest, lo copiamos a id_status para que React lo entienda.
+          const normalizedData = Array.isArray(data) ? data.map((item: any) => ({
+              ...item,
+              // Usamos id_status si existe, sino id_interest, sino id
+              id_status: item.id_status || item.id_interest || item.id 
+          })) : [];
+
+          interestStatusesCache = normalizedData;
+          return normalizedData;
+      } catch (e) {
+          console.error("Error fetching interests", e);
+          return [];
+      }
     }
+    
+    // Mock data fallback
     await new Promise(resolve => setTimeout(resolve, 50));
     return JSON.parse(JSON.stringify(mockInterestStatuses));
-  },
+},
 
   addInterestStatus: async (status: Partial<CustomStatus>): Promise<CustomStatus> => {
     const user = await MockApi.getUser();
@@ -634,16 +654,30 @@ export const MockApi = {
     return Promise.resolve(mockInterestStatuses[index]);
   },
 
-  deleteInterestStatus: async (id: string): Promise<void> => {
+deleteInterestStatus: async (id: string): Promise<void> => {
     interestStatusesCache = null;
+    
     if (USE_REAL_API) {
-      return apiFetch('/api/statuses/interests/delete', 'POST', { id_status: id, id_tenant: currentUser?.id_tenant });
+      // 1. Aseguramos que el ID del tenant siempre se envíe, usando tu constante EMPTY_FLAG
+      //    si currentUser es null.
+      const tenantId = currentUser?.id_tenant || EMPTY_FLAG;
+
+      // 2. Construimos el payload explícitamente
+      const payload = { 
+        id_interest: id, 
+        id_tenant: tenantId 
+      };
+
+      // (Opcional) Descomenta esto para ver qué se está enviando en la consola del navegador
+      // console.log('Enviando a n8n:', payload);
+
+      return apiFetch('/api/statuses/interests/delete', 'POST', payload);
     }
+
+    // Lógica Mock
     mockInterestStatuses = mockInterestStatuses.filter(s => s.id_status !== id);
     return Promise.resolve();
-  },
-
-  getProducts: async (): Promise<Product[]> => {
+},  getProducts: async (): Promise<Product[]> => {
     const user = await MockApi.getUser();
     if (!user) return [];
   
