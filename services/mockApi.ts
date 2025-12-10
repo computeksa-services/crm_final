@@ -132,18 +132,22 @@ const apiFetch = async (endpoint: string, method: string = 'GET', body?: any) =>
       headers,
       body: body ? JSON.stringify(body) : undefined,
     });
-    
-    if (response.status === 401) throw new Error('Credenciales inválidas');
+
     if (!response.ok) {
-       if(method === 'GET') return []; 
-       throw new Error('Network response was not ok');
+      // Try to parse the error response from n8n
+      const errorBody = await response.json().catch(() => ({ message: 'La solicitud a la API falló sin un mensaje de error específico.' }));
+      const errorMessage = errorBody.message || `Error ${response.status}: ${response.statusText}`;
+      throw new Error(errorMessage);
     }
-    if (response.status === 204) return null;
+
+    if (response.status === 204) return null; // No Content
+    
     const text = await response.text();
     return text ? JSON.parse(text) : {};
+
   } catch (error) {
     console.error(`API Error ${method} ${endpoint}:`, error);
-    if(method === 'GET') return [];
+    // Re-throw the error so UI components can catch it
     throw error;
   }
 };
@@ -686,7 +690,14 @@ deleteInterestStatus: async (id: string): Promise<void> => {
     if (USE_REAL_API) {
       try {
         const results = await apiFetch(`/api/products?id_tenant=${user.id_tenant}`);
-        const list = Array.isArray(results) ? results : [];
+        let list = Array.isArray(results) ? results : [];
+        
+        // --- !! SOLUCIÓN APLICADA AQUÍ !! ---
+        // Convertimos el precio_unitario de string a number, ya que n8n lo devuelve como texto.
+        list = list.map(product => ({
+          ...product,
+          precio_unitario: parseFloat(product.precio_unitario as any) || 0,
+        }));
         
         // SECURITY FILTER
         const filteredList = list.filter((p: Product) => p.id_tenant === user.id_tenant);

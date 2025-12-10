@@ -90,8 +90,10 @@ const ProductsList: React.FC = () => {
       }
       setIsModalOpen(false);
       fetchData();
-    } catch (error) {
-      setToast({ message: 'Error al guardar.', type: 'error' });
+    } catch (error: any) {
+      // Ahora el 'catch' recibirá el error con el mensaje de n8n
+      const errorMessage = error?.message || 'Ocurrió un error desconocido al guardar.';
+      setToast({ message: errorMessage, type: 'error' });
     } finally {
       setSubmitting(false);
     }
