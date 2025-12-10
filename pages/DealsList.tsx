@@ -69,18 +69,25 @@ const DealsList: React.FC = () => {
   const handleRowClick = (id: string) => navigate(`/deals/${id}`);
 
   const handleAddNew = () => {
+    const currentUser = MockApi.getCurrentUser();
+    if (!currentUser) {
+      setToast({ message: 'Error: No se pudo identificar al usuario.', type: 'error' });
+      return;
+    }
     if (companies.length === 0) {
       setToast({ message: 'Primero debe crear una Empresa Cliente.', type: 'error' });
       return;
     }
     const defaultStatus = dealStatuses.find(s => s.is_default) || dealStatuses[0];
+    const defaultInterestStatus = interestStatuses.find(s => s.is_default) || interestStatuses[0];
     setEditingDeal({
       nombre_trato: '',
       valor_trato: 0,
       id_client_company: '',
       id_contact: '',
+      id_user_owner: currentUser.id_user,
       id_deal_status: defaultStatus?.id_status || '',
-      id_interest_status: 'is_2', // Default to 'Medio'
+      id_interest_status: defaultInterestStatus?.id_status || '', // <-- CORREGIDO
     });
     setIsEditMode(false);
     setIsModalOpen(true);

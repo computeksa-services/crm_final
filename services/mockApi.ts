@@ -201,6 +201,14 @@ export const MockApi = {
     return new Promise(resolve => setTimeout(() => resolve(currentUser), 100));
   },
 
+  getCurrentUser: (): User | null => {
+    if (!currentUser) {
+      const stored = localStorage.getItem('currentUser');
+      if (stored) currentUser = JSON.parse(stored);
+    }
+    return currentUser;
+  },
+
   updateUserSync: async (provider: 'google' | 'outlook', status: boolean) => currentUser,
 
   // --- TENANTS ---
@@ -523,14 +531,20 @@ export const MockApi = {
         try {
             // Se obtienen todos los datos en paralelo para mayor eficiencia
             const [dealsResult, dealStatuses, interestStatuses, clientCompanies, users] = await Promise.all([
-                apiFetch(`/api/deals?id_tenant=${user.id_tenant}`),
+                apiFetch(`/api/deals?id_tenant=${user.id_tenant}&id_user_owner=${user.id_user}`),
                 MockApi.getDealStatuses(),
                 MockApi.getInterestStatuses(),
                 MockApi.getClientCompanies(),
                 MockApi.getUsers()
             ]);
 
-            const dealsList = Array.isArray(dealsResult) ? dealsResult : [];
+            let dealsList = Array.isArray(dealsResult) ? dealsResult : [];
+
+            // Normalizamos el campo de interés que viene de la BD como 'id_interest'
+            dealsList = dealsList.map((deal: any) => ({
+              ...deal,
+              id_interest_status: deal.id_interest_status || deal.id_interest,
+            }));
 
             // Se enriquecen los datos
             const enrichedDeals = dealsList.map((deal: Deal) => {
@@ -580,6 +594,39 @@ export const MockApi = {
   getDealById: async (id: string): Promise<Deal | undefined> => {
     const deals = await MockApi.getDeals();
     return deals.find(d => d.id_trato === id);
+  },
+
+  addDeal: async (data: Partial<Deal>): Promise<Deal> => {
+    dealsCache = null;
+    if (USE_REAL_API) {
+      const payload = {
+        ...data,
+        id_tenant: currentUser?.id_tenant,
+      };
+      return apiFetch('/api/deals', 'POST', payload);
+    }
+    const newDeal = { ...data, id_trato: `d_${Date.now()}` } as Deal;
+    mockDeals.push(newDeal);
+    return Promise.resolve(newDeal);
+  },
+
+  updateDeal: async (id: string, data: Partial<Deal>): Promise<Deal> => {
+    dealsCache = null;
+    if (USE_REAL_API) {
+      return apiFetch('/api/deals/update', 'POST', { id_trato: id, ...data });
+    }
+    const idx = mockDeals.findIndex(d => d.id_trato === id);
+    mockDeals[idx] = { ...mockDeals[idx], ...data } as Deal;
+    return Promise.resolve(mockDeals[idx]);
+  },
+
+  deleteDeal: async (id: string): Promise<void> => {
+    dealsCache = null;
+    if (USE_REAL_API) {
+      return apiFetch('/api/deals/delete', 'POST', { id_trato: id, id_tenant: currentUser?.id_tenant });
+    }
+    mockDeals = mockDeals.filter(d => d.id_trato !== id);
+    return Promise.resolve();
   },
 
   // En MockApi.ts
