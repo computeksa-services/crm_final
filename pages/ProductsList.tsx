@@ -169,7 +169,9 @@ const ProductsList: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 font-mono text-sm text-slate-600">{product.codigo}</td>
                     <td className="px-6 py-4"><span className={`px-2 py-1 rounded text-xs font-bold ${product.tipo === 'BIEN' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{product.tipo}</span></td>
-                    <td className="px-6 py-4 text-right font-semibold text-slate-700">${product.precio_unitario.toFixed(2)}</td>
+                    <td className="px-6 py-4 text-right font-semibold text-slate-700">
+  ${typeof product.precio_unitario === 'number' ? product.precio_unitario.toFixed(2) : '0.00'}
+</td>
                     <td className="px-6 py-4 text-right space-x-2">
                       <button onClick={() => handleEdit(product)} className="p-2 text-slate-400 hover:text-brand-600"><i className="fa-solid fa-pen-to-square"></i></button>
                       <button onClick={() => handleDelete(product.id_product)} className="p-2 text-slate-400 hover:text-red-600"><i className="fa-solid fa-trash"></i></button>

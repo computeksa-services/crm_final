@@ -702,6 +702,18 @@ deleteInterestStatus: async (id: string): Promise<void> => {
   },
   addProduct: async (data: Partial<Product>): Promise<Product> => {
     productsCache = null;
+    if (USE_REAL_API) {
+      const payload = {
+        id_tenant: currentUser?.id_tenant,
+        codigo: data.codigo || EMPTY_FLAG,
+        tipo: data.tipo || 'BIEN',
+        categoria: data.categoria || EMPTY_FLAG,
+        descripcion: data.descripcion || EMPTY_FLAG,
+        precio_unitario: data.precio_unitario || 0,
+        imagen_url: data.imagen_url || EMPTY_FLAG,
+      };
+      return apiFetch('/api/products', 'POST', payload);
+    }
     const newProd = {
         ...data,
         id_product: `prod_${Date.now()}`,
@@ -712,12 +724,28 @@ deleteInterestStatus: async (id: string): Promise<void> => {
   },
   updateProduct: async (id: string, data: Partial<Product>): Promise<Product> => {
     productsCache = null;
+    if (USE_REAL_API) {
+      const payload = {
+        id_product: id,
+        id_tenant: currentUser?.id_tenant,
+        codigo: data.codigo || EMPTY_FLAG,
+        tipo: data.tipo || 'BIEN',
+        categoria: data.categoria || EMPTY_FLAG,
+        descripcion: data.descripcion || EMPTY_FLAG,
+        precio_unitario: data.precio_unitario || 0,
+        imagen_url: data.imagen_url || EMPTY_FLAG,
+      };
+      return apiFetch('/api/products/update', 'POST', payload);
+    }
     const idx = mockProducts.findIndex(p => p.id_product === id);
     mockProducts[idx] = { ...mockProducts[idx], ...data } as Product;
     return Promise.resolve(mockProducts[idx]);
   },
   deleteProduct: async (id: string): Promise<void> => {
     productsCache = null;
+    if (USE_REAL_API) {
+      return apiFetch('/api/products/delete', 'POST', { id_product: id, id_tenant: currentUser?.id_tenant });
+    }
     mockProducts = mockProducts.filter(p => p.id_product !== id);
     return Promise.resolve();
   },
