@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { MockApi } from '../services/mockApi';
 import { Quote, QuoteItem, UserDecision } from '../types';
 
@@ -163,14 +163,14 @@ const QuoteDetail: React.FC = () => {
                     <tr key={item.id_quote_item}>
                       <td className="px-6 py-3 font-medium text-slate-700">{item.descripcion}</td>
                       <td className="px-6 py-3 text-right">{item.cantidad}</td>
-                      <td className="px-6 py-3 text-right">${item.precio_unitario.toFixed(2)}</td>
-                      <td className="px-6 py-3 text-right font-semibold text-slate-800">${item.subtotal.toFixed(2)}</td>
+                      <td className="px-6 py-3 text-right">{item.precio_unitario.toFixed(2)}</td>
+                      <td className="px-6 py-3 text-right font-semibold text-slate-800">{item.subtotal.toFixed(2)}</td>
                     </tr>
                   ))}
                   <tr className="bg-slate-50">
                     <td colSpan={3} className="px-6 py-3 text-right font-bold text-slate-600">Total</td>
                     <td className="px-6 py-3 text-right font-bold text-brand-700 text-lg">
-                      ${items.reduce((acc, curr) => acc + curr.subtotal, 0).toFixed(2)}
+                      {items.reduce((acc, curr) => acc + curr.subtotal, 0).toFixed(2)}
                     </td>
                   </tr>
                 </tbody>
@@ -205,29 +205,61 @@ const QuoteDetail: React.FC = () => {
         {/* Right Column: Meta Info & Decision */}
         <div className="space-y-6">
           
-          {/* Client Card */}
+          {/* Client & Contact Card */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Información del Cliente</h3>
-            <div className="flex items-center mb-4">
-               <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 mr-3">
-                 <i className="fa-solid fa-building"></i>
-               </div>
-               <div>
-                 <p className="font-bold text-slate-800">{quote.client_company_name}</p>
-                 <p className="text-xs text-slate-500">ID: {quote.id_client_company}</p>
-               </div>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Fecha Emisión:</span>
-                <span className="text-slate-700 font-medium">{quote.fecha_emision}</span>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Información Principal</h3>
+            
+            <div className="space-y-4 text-sm">
+              <div className="flex items-start">
+                <i className="fa-solid fa-building text-slate-400 w-5 text-center mr-3 mt-1"></i>
+                <div>
+                  <span className="text-slate-500 block">Cliente:</span>
+                  <Link to={`/client-companies/${quote.id_client_company}`} className="text-brand-600 font-bold hover:underline">
+                    {quote.client_company_name}
+                  </Link>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Vendedor:</span>
-                <span className="text-slate-700 font-medium">Soporte (Admin)</span>
+              <div className="flex items-start">
+                 <i className="fa-solid fa-user text-slate-400 w-5 text-center mr-3 mt-1"></i>
+                 <div>
+                   <span className="text-slate-500 block">Contacto:</span>
+                   <Link to={`/client-contacts/${quote.id_contact}`} className="text-slate-700 font-medium hover:text-brand-600 hover:underline">
+                     {quote.contact_name}
+                   </Link>
+                 </div>
+              </div>
+               <div className="flex items-start">
+                <i className="fa-solid fa-user-tie text-slate-400 w-5 text-center mr-3 mt-1"></i>
+                <div>
+                  <span className="text-slate-500 block">Vendedor:</span>
+                  <span className="text-slate-700 font-medium">{quote.owner_name}</span>
+                </div>
+              </div>
+              <div className="flex items-start">
+                <i className="fa-solid fa-calendar-day text-slate-400 w-5 text-center mr-3 mt-1"></i>
+                <div>
+                  <span className="text-slate-500 block">Fecha Emisión:</span>
+                  <span className="text-slate-700 font-medium">{new Date(quote.fecha_emision).toLocaleDateString()}</span>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Associated Deal Card */}
+          {quote.id_trato && (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Trato Asociado</h3>
+              <div className="flex items-start">
+                 <i className="fa-solid fa-handshake text-slate-400 w-5 text-center mr-3 mt-1"></i>
+                 <div>
+                    <Link to={`/deals/${quote.id_trato}`} className="text-brand-600 font-bold hover:underline">
+                      {quote.nombre_trato}
+                    </Link>
+                    <p className="text-xs text-slate-400">Clic para ver detalles del trato</p>
+                 </div>
+              </div>
+            </div>
+          )}
 
           {/* Decision Card (Only visible if sent) */}
           {isSent && (
@@ -237,7 +269,7 @@ const QuoteDetail: React.FC = () => {
               
               <label className="block text-xs font-semibold text-slate-500 mb-1">Estado Decisión</label>
               <select 
-                value={quote.estado_decision}
+                value={quote.estado_decision || ''}
                 onChange={handleDecisionChange}
                 className="w-full p-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-shadow"
               >
@@ -249,28 +281,33 @@ const QuoteDetail: React.FC = () => {
             </div>
           )}
 
-          {/* Configuration Card */}
+          {/* Commercial Conditions */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Configuración de Envío</h3>
-             <div className="mb-3">
-               <label className="block text-xs text-slate-500 mb-1">Correos Adicionales (CC)</label>
-               <input 
-                 type="text" 
-                 value={quote.correos_adicionales} 
-                 readOnly 
-                 className="w-full text-sm p-2 bg-slate-50 border border-slate-200 rounded text-slate-600"
-               />
-             </div>
-             <div>
-               <label className="block text-xs text-slate-500 mb-1">Mensaje Adjunto</label>
-               <textarea 
-                 value={quote.mensaje} 
-                 readOnly 
-                 rows={3}
-                 className="w-full text-sm p-2 bg-slate-50 border border-slate-200 rounded text-slate-600"
-               />
-             </div>
+             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Condiciones Comerciales</h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Validez de la Oferta:</span>
+                  <span className="text-slate-700 font-medium">{quote.validez_oferta}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Tiempo de Entrega:</span>
+                  <span className="text-slate-700 font-medium">{quote.tiempo_entrega}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Garantía:</span>
+                  <span className="text-slate-700 font-medium">{quote.garantia}</span>
+                </div>
+              </div>
           </div>
+          
+          {/* Notes */}
+          {quote.nota && (
+             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Notas</h3>
+               <p className="text-sm text-slate-600 whitespace-pre-wrap">{quote.nota}</p>
+             </div>
+          )}
+
 
         </div>
       </div>

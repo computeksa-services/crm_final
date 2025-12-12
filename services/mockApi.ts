@@ -973,13 +973,14 @@ deleteInterestStatus: async (id: string): Promise<void> => {
 
         const list = Array.isArray(result) ? result : [];
         
-        const enrichedList = list.map((q: Quote) => {
+        const enrichedList = list.map((q: any) => { // Usamos 'any' temporalmente para la conversión
             const status = statuses.find(s => s.id_status === q.id_quote_status);
             const company = companies.find(c => c.id_client_company === q.id_client_company);
             return {
                 ...q,
                 estado: status?.name || 'Desconocido',
                 client_company_name: company?.name_company || 'N/A',
+                total: parseFloat(q.total) || 0, // <-- SOLUCIÓN APLICADA AQUÍ
             };
         });
 
@@ -997,7 +998,11 @@ deleteInterestStatus: async (id: string): Promise<void> => {
   },
   getEvents: async (): Promise<CalendarEvent[]> => [],
   addEvent: async (e: Partial<CalendarEvent>) => e as CalendarEvent,
-  getQuoteById: async (id: string) => quotes.find(q => q.id_cotizacion === id),
+  getQuoteById: async (id: string): Promise<Quote | undefined> => {
+    // FIX: Always get the enriched list first
+    const allQuotes = await MockApi.getQuotes();
+    return allQuotes.find(q => q.id_cotizacion === id);
+  },
   getQuoteItems: async (id_cotizacion: string): Promise<QuoteItem[]> => {
     return Promise.resolve(quoteItems.filter(i => i.id_cotizacion === id_cotizacion));
   },

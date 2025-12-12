@@ -181,7 +181,7 @@ const DealsList: React.FC = () => {
                   <tr key={deal.id_trato} onClick={() => handleRowClick(deal.id_trato)} className="hover:bg-slate-50 cursor-pointer">
                     <td className="px-6 py-4 font-medium text-slate-800">{deal.nombre_trato}</td>
                     <td className="px-6 py-4 text-sm text-slate-600">{deal.client_company_name}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-700">${deal.valor_trato.toLocaleString('es-EC')}</td>
+                    <td className="px-6 py-4 text-sm font-semibold text-slate-700">{deal.valor_trato.toLocaleString('es-EC')}</td>
                     <td className="px-6 py-4">
                       <span
                         className="px-2 py-1 rounded-full text-xs font-bold flex items-center w-fit"

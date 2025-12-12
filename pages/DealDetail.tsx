@@ -93,7 +93,7 @@ const DealDetail: React.FC = () => {
           </p>
         </div>
         <div className="text-right">
-            <p className="text-3xl font-bold text-slate-800">${deal.valor_trato.toLocaleString('es-EC')}</p>
+            <p className="text-3xl font-bold text-slate-800">{deal.valor_trato.toLocaleString('es-EC')}</p>
             <span className={`px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800`}>{deal.estado}</span>
         </div>
       </div>

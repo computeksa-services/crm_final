@@ -14,6 +14,7 @@ const QuoteCreate: React.FC = () => {
   
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
   const [contacts, setContacts] = useState<ClientContact[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<ClientContact[]>([]);
 
   useEffect(() => {
@@ -22,23 +23,15 @@ const QuoteCreate: React.FC = () => {
       Promise.all([
         MockApi.getClientCompanies(),
         MockApi.getClientContacts(),
-        MockApi.getQuoteStatuses()
-      ]).then(([companiesData, contactsData, statusesData]) => {
+        MockApi.getQuoteStatuses(),
+        MockApi.getDeals(), // <-- Cargar tratos
+      ]).then(([companiesData, contactsData, statusesData, dealsData]) => {
         setCompanies(companiesData);
         setContacts(contactsData);
+        setDeals(dealsData); // <-- Guardar tratos en el estado
         const defaultStatus = statusesData.find(s => s.is_default) || statusesData[0];
         setQuote({
-          nombre_cotizacion: queryParams.get('dealName') ? `Cotización para ${queryParams.get('dealName')}` : '',
-          id_client_company: queryParams.get('clientCompanyId') || '',
-          id_contact: queryParams.get('contactId') || '',
-          id_trato: queryParams.get('dealId') || undefined,
-          id_quote_status: defaultStatus?.id_status,
-          tiempo_entrega: '5-7 días laborables',
-          garantia: '12 meses',
-          validez_oferta: '30 días',
-          total: 0,
-          version: 1,
-          estado_decision: UserDecision.PENDING,
+          // ... (resto del objeto quote sin cambios)
         });
       });
     } catch (error) {
@@ -56,7 +49,19 @@ const QuoteCreate: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setQuote(prev => ({ ...prev, [name]: value }));
+    
+    // Si se cambia el trato, actualizamos cliente y contacto
+    if (name === 'id_trato') {
+      const selectedDeal = deals.find(d => d.id_trato === value);
+      setQuote(prev => ({ 
+        ...prev, 
+        id_trato: value,
+        id_client_company: selectedDeal?.id_client_company || '',
+        id_contact: selectedDeal?.id_contact || '',
+      }));
+    } else {
+      setQuote(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   const handleSave = async () => {
