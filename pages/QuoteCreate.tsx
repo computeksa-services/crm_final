@@ -18,25 +18,39 @@ const QuoteCreate: React.FC = () => {
   const [filteredContacts, setFilteredContacts] = useState<ClientContact[]>([]);
 
   useEffect(() => {
-    try {
-      const queryParams = new URLSearchParams(location.search);
-      Promise.all([
-        MockApi.getClientCompanies(),
-        MockApi.getClientContacts(),
-        MockApi.getQuoteStatuses(),
-        MockApi.getDeals(), // <-- Cargar tratos
-      ]).then(([companiesData, contactsData, statusesData, dealsData]) => {
-        setCompanies(companiesData);
-        setContacts(contactsData);
-        setDeals(dealsData); // <-- Guardar tratos en el estado
-        const defaultStatus = statusesData.find(s => s.is_default) || statusesData[0];
-        setQuote({
-          // ... (resto del objeto quote sin cambios)
-        });
-      });
-    } catch (error) {
+    const queryParams = new URLSearchParams(location.search);
+    const dealId = queryParams.get('dealId');
+    const clientCompanyId = queryParams.get('clientCompanyId');
+    const contactId = queryParams.get('contactId');
+    const dealName = queryParams.get('dealName');
+
+    Promise.all([
+      MockApi.getClientCompanies(),
+      MockApi.getClientContacts(),
+      MockApi.getQuoteStatuses(),
+      MockApi.getDeals(),
+    ]).then(([companiesData, contactsData, statusesData, dealsData]) => {
+      setCompanies(companiesData);
+      setContacts(contactsData);
+      setDeals(dealsData);
+      
+      const defaultStatus = statusesData.find(s => s.is_default) || statusesData[0];
+      
+      let initialState: Partial<Quote> = {
+        nombre_cotizacion: dealName ? `Cotización para ${dealName}` : '',
+        id_trato: dealId || '',
+        id_client_company: clientCompanyId || '',
+        id_contact: contactId || '',
+        id_quote_status: defaultStatus?.id_status,
+        tiempo_entrega: '5-7 días laborables',
+        garantia: '12 meses',
+        validez_oferta: '30 días',
+      };
+      
+      setQuote(initialState);
+    }).catch(error => {
       setToast({ message: 'Error al cargar datos iniciales.', type: 'error' });
-    }
+    });
   }, [location.search]);
 
   useEffect(() => {
@@ -65,17 +79,51 @@ const QuoteCreate: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!quote) return;
+    if (!quote || !quote.nombre_cotizacion || !quote.id_client_company || !quote.id_contact || !quote.id_trato) {
+      setToast({ message: 'Por favor, complete todos los campos requeridos, incluyendo el Trato Asociado.', type: 'error' });
+      return;
+    }
+
+    // Si no estamos creando desde un trato existente y no hay tratos disponibles, evitar guardar.
+    if (!location.search.includes('dealId') && deals.length === 0) {
+        setToast({ message: 'No se puede crear una cotización sin tratos existentes. Cree un trato primero.', type: 'error' });
+        return;
+    }
+    
     setProcessing(true);
+    setToast({ message: 'Guardando cotización...', type: 'success' });
+
     try {
-      const newQuote = await MockApi.addQuote(quote);
-      setToast({ message: 'Cotización creada con éxito.', type: 'success' });
-      navigate(`/quotes/${newQuote.id_cotizacion}`);
+      // Ensure default status is included if not somehow set
+      const payload = { ...quote };
+      if (!payload.id_quote_status) {
+          const statusesData = await MockApi.getQuoteStatuses();
+          const defaultStatus = statusesData.find(s => s.is_default) || statusesData[0];
+          payload.id_quote_status = defaultStatus?.id_status;
+      }
+
+      const newQuote = await MockApi.addQuote(payload);
+      
+      // The toast will be replaced by the navigation, but it's good for debugging
+      setToast({ message: 'Cotización creada con éxito. Redirigiendo...', type: 'success' });
+      
+      // Short delay to allow user to read the toast message and for cache to refresh
+      setTimeout(() => {
+        const queryParams = new URLSearchParams(location.search);
+        const dealId = queryParams.get('dealId');
+
+        if (dealId) {
+          navigate(`/deals/${dealId}`);
+        } else {
+          navigate('/quotes');
+        }
+      }, 1500);
+
     } catch (error: any) {
       setToast({ message: error.message || 'Error al guardar.', type: 'error' });
-    } finally {
-      setProcessing(false);
-    }
+      setProcessing(false); // Re-enable button on error
+    } 
+    // No "finally" block needed to set processing to false, as we are navigating away on success.
   };
 
   return (
@@ -93,17 +141,47 @@ const QuoteCreate: React.FC = () => {
               <label className="block text-xs font-bold text-slate-500 mb-1">Nombre de la Cotización</label>
               <input name="nombre_cotizacion" value={quote.nombre_cotizacion || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg" />
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+               <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Trato Asociado</label>
+                {quote.id_trato && location.search.includes('dealId') ? (
+                  <input 
+                    type="text"
+                    value={deals.find(d => d.id_trato === quote.id_trato)?.nombre_trato || ''}
+                    disabled
+                    className="w-full px-3 py-2 border rounded-lg bg-slate-50 text-slate-500"
+                  />
+                ) : deals.length === 0 ? (
+                  <div className="px-3 py-2 text-sm text-slate-500 bg-slate-50 border rounded-lg">
+                    No hay tratos disponibles. Cree un trato primero.
+                  </div>
+                ) : (
+                  <select name="id_trato" value={quote.id_trato || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg bg-white">
+                    <option value="">-- Seleccionar Trato --</option>
+                    {deals.map(d => <option key={d.id_trato} value={d.id_trato}>{d.nombre_trato}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1">Empresa Cliente</label>
-                <select name="id_client_company" value={quote.id_client_company || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg bg-white">
+                <select name="id_client_company" value={quote.id_client_company || ''} onChange={handleInputChange} required 
+                  className="w-full px-3 py-2 border rounded-lg bg-white"
+                  disabled={!!location.search.includes('dealId')}
+                >
                   <option value="">-- Seleccionar --</option>
                   {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
                 </select>
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-500 mb-1">Contacto Principal</label>
-                <select name="id_contact" value={quote.id_contact || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg bg-white" disabled={!quote.id_client_company}>
+                <select name="id_contact" value={quote.id_contact || ''} onChange={handleInputChange} required 
+                  className="w-full px-3 py-2 border rounded-lg bg-white" 
+                  disabled={!quote.id_client_company || !!location.search.includes('dealId')}
+                >
                   <option value="">-- Seleccionar --</option>
                   {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{`${c.first_name} ${c.last_name || ''}`}</option>)}
                 </select>

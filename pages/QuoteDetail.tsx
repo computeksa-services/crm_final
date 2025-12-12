@@ -1,7 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { MockApi } from '../services/mockApi';
-import { Quote, QuoteItem, UserDecision } from '../types';
+import { Quote, QuoteItem, UserDecision, Product } from '../types';
+import Toast from '../components/Toast';
+import ConfirmModal from '../components/ConfirmModal'; // Importar ConfirmModal
 
 const QuoteDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -11,12 +13,28 @@ const QuoteDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
 
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [itemQuantity, setItemQuantity] = useState<number>(1); // Estado para la cantidad en el modal
+
+  const [confirmState, setConfirmState] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    isDestructive: false,
+  });
+
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
   const fetchData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     try {
       const q = await MockApi.getQuoteById(id);
       if (q) {
+        // Filtrar productos seleccionados por el id_cotizacion
         const i = await MockApi.getQuoteItems(q.id_cotizacion);
         setQuote(q);
         setItems(i);
@@ -32,21 +50,70 @@ const QuoteDetail: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+    // Cargar productos disponibles cuando el componente se monta
+    MockApi.getProducts().then(setAvailableProducts).catch(e => console.error("Error loading products:", e));
   }, [fetchData]);
   
     // Actions
   const handleAddItem = async () => {
+    // Abre el modal para seleccionar productos
+    setIsProductModalOpen(true);
+  };
+
+  const handleProductSelection = async () => {
+    if (!selectedProductId || !quote) return;
+
+    setProcessing(true);
+    try {
+      await MockApi.addQuoteItem(quote.id_cotizacion, selectedProductId, itemQuantity);
+      setToast({ message: 'Artículo añadido con éxito.', type: 'success' });
+      setIsProductModalOpen(false);
+      setSelectedProductId(null);
+      setItemQuantity(1);
+      fetchData(); // Recargar datos para ver el nuevo artículo y el total actualizado
+    } catch (e: any) {
+      setToast({ message: e.message || 'Error al añadir el artículo.', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleUpdateItem = async (itemId: string, newCantidad: number, newPrecioUnitario: number) => {
     if (!quote) return;
-    // TODO: Implement a modal to select a product from the catalog
-    const newItem: Partial<QuoteItem> = {
-      id_cotizacion: quote.id_cotizacion,
-      descripcion: 'Nuevo Artículo (Ejemplo)',
-      cantidad: 1,
-      precio_unitario: 100,
-      subtotal: 100
-    };
-    await MockApi.addQuoteItem(newItem);
-    await fetchData(); // Reload to see state changes
+    setProcessing(true);
+    try {
+      const updatedSubtotal = newCantidad * newPrecioUnitario;
+      await MockApi.updateQuoteItem(itemId, { cantidad: newCantidad, precio_unitario: newPrecioUnitario, subtotal: updatedSubtotal });
+      setToast({ message: 'Artículo actualizado.', type: 'success' });
+      fetchData(); // Recargar datos para ver los cambios
+    } catch (e: any) {
+      setToast({ message: e.message || 'Error al actualizar el artículo.', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDeleteItem = (itemId: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: 'Eliminar Artículo',
+      message: '¿Está seguro que desea eliminar este artículo de la cotización? Esta acción no se puede deshacer.',
+      isDestructive: true,
+      onConfirm: async () => {
+        if (!quote) return;
+        setProcessing(true);
+        try {
+          await MockApi.deleteQuoteItem(itemId);
+          setToast({ message: 'Artículo eliminado.', type: 'success' });
+          fetchData(); // Recargar datos para ver los cambios
+        } catch (e: any) {
+          setToast({ message: e.message || 'Error al eliminar el artículo.', type: 'error' });
+        } finally {
+          setProcessing(false);
+          setConfirmState({ ...confirmState, isOpen: false });
+        }
+      },
+    });
   };
 
   const handleGeneratePDF = async () => {
@@ -88,6 +155,66 @@ const QuoteDetail: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <ConfirmModal {...confirmState} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} />
+
+      {/* Product Selection Modal */}
+      {isProductModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div className="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
+              <h2 className="text-lg font-bold text-slate-800">Seleccionar Artículo</h2>
+              <button onClick={() => setIsProductModalOpen(false)}><i className="fa-solid fa-times text-slate-400"></i></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Producto</label>
+                <select 
+                  value={selectedProductId || ''} 
+                  onChange={(e) => setSelectedProductId(e.target.value)}
+                  required 
+                  className="w-full px-3 py-2 border rounded-lg bg-white"
+                >
+                  <option value="">-- Seleccionar Producto --</option>
+                  {availableProducts.map(p => (
+                    <option key={p.id_product} value={p.id_product}>
+                      {p.descripcion} ({p.codigo})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1">Cantidad</label>
+                <input 
+                  type="number" 
+                  value={itemQuantity} 
+                  onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
+                  min="1" 
+                  required 
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end pt-4 space-x-2 px-6 py-4 border-t bg-slate-50">
+              <button 
+                type="button" 
+                onClick={() => setIsProductModalOpen(false)} 
+                className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100"
+              >Cancelar</button>
+              <button 
+                type="button" 
+                onClick={handleProductSelection} 
+                disabled={processing || !selectedProductId}
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white hover:bg-brand-700 shadow-sm flex items-center"
+              >
+                {processing && <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>}
+                Añadir al Presupuesto
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header & Status Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -95,7 +222,7 @@ const QuoteDetail: React.FC = () => {
              <button onClick={() => navigate('/quotes')} className="text-slate-400 hover:text-slate-600">
                <i className="fa-solid fa-arrow-left"></i>
              </button>
-             <h1 className="text-2xl font-bold text-slate-800">Cotización #{quote.no_cotizacion}</h1>
+             <h1 className="text-2xl font-bold text-slate-800">Cotización #{quote.formatted_no_cotizacion}</h1>
            </div>
            <p className="text-slate-500 ml-7">{quote.nombre_cotizacion}</p>
         </div>
@@ -156,22 +283,49 @@ const QuoteDetail: React.FC = () => {
                     <th className="px-6 py-3 text-right">Cant.</th>
                     <th className="px-6 py-3 text-right">Precio U.</th>
                     <th className="px-6 py-3 text-right">Subtotal</th>
+                    <th className="px-6 py-3 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
                   {items.map((item) => (
-                    <tr key={item.id_quote_item}>
+                    <tr key={item.id_articulo_cot}>
                       <td className="px-6 py-3 font-medium text-slate-700">{item.descripcion}</td>
-                      <td className="px-6 py-3 text-right">{item.cantidad}</td>
-                      <td className="px-6 py-3 text-right">{item.precio_unitario.toFixed(2)}</td>
-                      <td className="px-6 py-3 text-right font-semibold text-slate-800">{item.subtotal.toFixed(2)}</td>
+                      <td className="px-6 py-3 text-right">
+                         <input 
+                            type="number"
+                            value={item.cantidad}
+                            onChange={(e) => handleUpdateItem(item.id_articulo_cot, parseInt(e.target.value) || 1, item.precio_unitario)}
+                            min="1"
+                            className="w-20 px-2 py-1 border rounded-md text-right"
+                         />
+                      </td>
+                      <td className="px-6 py-3 text-right">
+                        <input 
+                            type="number"
+                            value={item.precio_unitario.toFixed(2)}
+                            onChange={(e) => handleUpdateItem(item.id_articulo_cot, item.cantidad, parseFloat(e.target.value) || 0)}
+                            step="0.01"
+                            className="w-28 px-2 py-1 border rounded-md text-right"
+                        />
+                      </td>
+                      <td className="px-6 py-3 text-right font-semibold text-slate-800">{(item.cantidad * item.precio_unitario).toFixed(2)}</td>
+                      <td className="px-6 py-3 text-right">
+                        <button 
+                          onClick={() => handleDeleteItem(item.id_articulo_cot)}
+                          className="text-red-500 hover:text-red-700 p-2"
+                          title="Eliminar artículo"
+                        >
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   <tr className="bg-slate-50">
                     <td colSpan={3} className="px-6 py-3 text-right font-bold text-slate-600">Total</td>
                     <td className="px-6 py-3 text-right font-bold text-brand-700 text-lg">
-                      {items.reduce((acc, curr) => acc + curr.subtotal, 0).toFixed(2)}
+                      {items.reduce((acc, curr) => acc + (curr.cantidad * curr.precio_unitario), 0).toFixed(2)}
                     </td>
+                    <td></td>
                   </tr>
                 </tbody>
               </table>

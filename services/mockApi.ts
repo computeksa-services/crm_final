@@ -921,7 +921,6 @@ deleteInterestStatus: async (id: string): Promise<void> => {
   
   // --- QUOTES ---
   addQuote: async (data: Partial<Quote>): Promise<Quote> => {
-    quotesCache = null;
     if (USE_REAL_API) {
       const user = MockApi.getCurrentUser();
       const payload = {
@@ -929,10 +928,21 @@ deleteInterestStatus: async (id: string): Promise<void> => {
         id_tenant: user?.id_tenant,
         id_user: user?.id_user,
       };
-      return apiFetch('/api/quotes', 'POST', payload);
+      try {
+        const result = await apiFetch('/api/quotes', 'POST', payload);
+        console.log("n8n API addQuote response:", result); // <-- AÑADIDO PARA DEPURAR
+        quotesCache = null; // Invalidar caché DESPUÉS de éxito
+        // Como n8n no devuelve el objeto completo de la cotización, retornamos un objeto básico
+        // que cumple con el tipo Promise<Quote>. La redirección no necesita el ID exacto.
+        return { ...payload, id_cotizacion: `temp_q_${Date.now()}` } as Quote; // Devolvemos un objeto Quote válido
+      } catch (error) {
+        console.error("Error adding quote via real API:", error);
+        throw error;
+      }
     }
     const newQuote = { ...data, id_cotizacion: `q_${Date.now()}` } as Quote;
     quotes.push(newQuote);
+    quotesCache = null; // Invalidar caché para mock data también
     return newQuote;
   },
 
@@ -978,9 +988,10 @@ deleteInterestStatus: async (id: string): Promise<void> => {
             const company = companies.find(c => c.id_client_company === q.id_client_company);
             return {
                 ...q,
+                id_cotizacion: q.id_cotizacion ? q.id_cotizacion.trim() : q.id_cotizacion, // Limpiar el ID
                 estado: status?.name || 'Desconocido',
                 client_company_name: company?.name_company || 'N/A',
-                total: parseFloat(q.total) || 0, // <-- SOLUCIÓN APLICADA AQUÍ
+                total: parseFloat(q.total) || 0,
             };
         });
 

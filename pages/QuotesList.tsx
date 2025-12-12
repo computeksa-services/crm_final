@@ -83,7 +83,7 @@ const QuotesList: React.FC = () => {
                     onClick={() => handleRowClick(quote.id_cotizacion)}
                     className="hover:bg-slate-50 transition-colors cursor-pointer group"
                   >
-                    <td className="px-6 py-4 font-mono text-sm text-slate-600">#{quote.no_cotizacion || 'N/A'}</td>
+                    <td className="px-6 py-4 font-mono text-sm text-slate-600">#{quote.formatted_no_cotizacion || 'N/A'}</td>
                     <td className="px-6 py-4 font-medium text-slate-800">{quote.client_company_name || 'N/A'}</td>
                     <td className="px-6 py-4 text-slate-600">{quote.nombre_cotizacion || 'Sin Nombre'}</td>
                     <td className="px-6 py-4 text-slate-500 text-sm">{quote.fecha_emision ? new Date(quote.fecha_emision).toLocaleDateString() : 'N/A'}</td>
