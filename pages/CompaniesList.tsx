@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext'; // Importar
-import { MockApi } from '../services/mockApi';
 import { Tenant } from '../types'; // Updated Type
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -83,7 +82,12 @@ const CompaniesList: React.FC = () => {
         const original = [...tenants];
         setTenants(prev => prev.filter(t => t.id_tenant !== id));
         try {
-          await MockApi.deleteTenant(id);
+          const response = await fetch('https://service.computeksa.com/webhook/api/tenants/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: id })
+          });
+          if (!response.ok) throw new Error('Error al eliminar tenant');
           setToast({ message: 'Tenant eliminado.', type: 'success' });
         } catch (error) {
           setToast({ message: 'Error al eliminar.', type: 'error' });
@@ -115,7 +119,13 @@ const CompaniesList: React.FC = () => {
     
     try {
       if (isEditMode && editingTenant.id_tenant) {
-        const apiResponse = await MockApi.updateTenant(editingTenant.id_tenant, editingTenant);
+        const response = await fetch('https://service.computeksa.com/webhook/api/tenants/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingTenant.id_tenant, ...editingTenant })
+        });
+        if (!response.ok) throw new Error('Error al actualizar tenant');
+        const apiResponse = await response.json();
         // FORCE LOCAL IMAGE PRIORITY: If we have a local Base64 image, use it.
         // API responses might truncate long Base64 strings, breaking the image.
         const logoToUse = editingTenant.logo_url && editingTenant.logo_url.startsWith('data:') 
@@ -126,7 +136,13 @@ const CompaniesList: React.FC = () => {
         setTenants(prev => prev.map(t => t.id_tenant === updated.id_tenant ? updated : t));
         setToast({ message: 'Tenant actualizado.', type: 'success' });
       } else {
-        const apiResponse = await MockApi.addTenant(editingTenant);
+        const response = await fetch('https://service.computeksa.com/webhook/api/tenants/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(editingTenant)
+        });
+        if (!response.ok) throw new Error('Error al crear tenant');
+        const apiResponse = await response.json();
         // FORCE LOCAL IMAGE PRIORITY here too
         const logoToUse = editingTenant.logo_url && editingTenant.logo_url.startsWith('data:') 
           ? editingTenant.logo_url 

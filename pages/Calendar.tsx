@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { MockApi } from '../services/mockApi';
 import { CalendarEvent, ClientCompany } from '../types';
+import { useAuth } from '../contexts/AuthContext';
 
 const Calendar: React.FC = () => {
+  const { user } = useAuth();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [clients, setClients] = useState<ClientCompany[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,13 +22,24 @@ const Calendar: React.FC = () => {
   });
 
   const fetchData = async () => {
-    const [eventsData, clientsData] = await Promise.all([
-      MockApi.getEvents(),
-      MockApi.getClientCompanies()
-    ]);
-    setEvents(eventsData);
-    setClients(clientsData);
-    setLoading(false);
+    if (!user?.id_tenant) return;
+    
+    try {
+      const [eventsResponse, clientsResponse] = await Promise.all([
+        fetch(`https://service.computeksa.com/webhook/api/events?id_tenant=${user.id_tenant}`),
+        fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${user.id_tenant}`)
+      ]);
+      
+      const eventsData = eventsResponse.ok ? await eventsResponse.json() : [];
+      const clientsData = clientsResponse.ok ? await clientsResponse.json() : [];
+      
+      setEvents(eventsData);
+      setClients(clientsData);
+    } catch (error) {
+      console.error('Error fetching calendar data:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -107,18 +119,25 @@ const Calendar: React.FC = () => {
       // Find client name if selected
       const selectedClient = clients.find(c => c.id_client_company === formData.id_client_company);
       
-      const newEvent: Partial<CalendarEvent> = {
+      const newEvent = {
         titulo: formData.titulo,
         descripcion: formData.descripcion,
         fecha_inicio: new Date(formData.fecha_inicio).toISOString(),
         fecha_fin: new Date(formData.fecha_fin).toISOString(),
-        tipo: formData.tipo as any,
+        tipo: formData.tipo,
         id_client_company: formData.id_client_company || undefined,
-        // nombre_cliente: selectedClient?.name_company || undefined, // Not part of interface? Assuming it is handled or not needed if types don't have it
-        id_user: 'current-user-id' // MockApi will handle this
+        id_user: user?.id_user,
+        id_tenant: user?.id_tenant
       };
 
-      await MockApi.addEvent(newEvent);
+      const response = await fetch('https://service.computeksa.com/webhook/api/events/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newEvent)
+      });
+      
+      if (!response.ok) throw new Error('Error al crear evento');
+      
       await fetchData(); // Refresh events
       setIsModalOpen(false);
     } catch (error) {

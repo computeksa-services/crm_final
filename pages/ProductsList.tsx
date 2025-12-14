@@ -79,9 +79,11 @@ const ProductsList: React.FC = () => {
 
   const handleAddNew = () => {
     setEditingProduct({
+      id_product: '',
+      id_tenant: user?.id_tenant || '',
       codigo: '',
       descripcion: '',
-      tipo: productTypes[0]?.type || 'BIEN', // Usar el primer tipo disponible como default
+      tipo: (productTypes[0]?.type as 'BIEN' | 'SERVICIO') || 'BIEN', // Usar el primer tipo disponible como default
       categoria: '',
       precio_unitario: 0,
       imagen_url: ''
@@ -104,7 +106,12 @@ const ProductsList: React.FC = () => {
       isDestructive: true,
       onConfirm: async () => {
         try {
-          await MockApi.deleteProduct(id);
+          const response = await fetch('https://service.computeksa.com/webhook/api/products/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id })
+          });
+          if (!response.ok) throw new Error('Error al eliminar producto');
           setToast({ message: 'Producto eliminado.', type: 'success' });
           fetchData();
         } catch (error) {

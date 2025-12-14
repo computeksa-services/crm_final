@@ -88,6 +88,7 @@ export interface ClientCompany {
   phone_company?: string;
   email_company?: string;
   created_by?: string; // ID del usuario que creó el registro
+  access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend
 }
 
 // 4. CLIENT CONTACT (La persona de contacto)
@@ -96,6 +97,8 @@ export interface ClientContact {
   id_tenant: string;
   id_client_company?: string;
   client_company_name?: string; // Helper
+  created_by?: string;
+  access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend
   first_name: string;
   last_name?: string;
   email: string;

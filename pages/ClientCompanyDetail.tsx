@@ -14,6 +14,16 @@ const ClientCompanyDetail: React.FC = () => {
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareUsers, setShareUsers] = useState<{ id_user: string; name_user: string; email_user: string; status_user?: string }[]>([]);
+  const [shareTargets, setShareTargets] = useState<string[]>([]);
+  const [sharePermission, setSharePermission] = useState<'VIEW' | 'EDIT'>('VIEW');
+  const [shareSubmitting, setShareSubmitting] = useState(false);
+
+  const isOwnerCompany = company?.created_by === user?.id_user;
+  const companyAccess: 'VIEW' | 'EDIT' = (company?.access_level as any) || (user?.rol_user === 'admin' || isOwnerCompany ? 'EDIT' : 'VIEW');
+  const canEditCompany = companyAccess === 'EDIT';
+  const canDeleteContact = (contact: ClientContact) => contact.created_by === user?.id_user; // Solo owner puede eliminar
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -73,7 +83,10 @@ const ClientCompanyDetail: React.FC = () => {
         if (contactsText) {
           const parsedContacts = JSON.parse(contactsText);
           if (Array.isArray(parsedContacts)) {
-            contactsData = parsedContacts; // Asegurarse de que sea un array
+            // Filtrar solo los contactos que pertenecen a esta empresa
+            contactsData = parsedContacts.filter((contact: ClientContact) => 
+              contact.id_client_company === foundCompany.id_client_company
+            );
           } else {
             console.warn("API de contactos devolvió un formato inesperado:", parsedContacts);
             setToast({ message: 'Formato de contactos inesperado desde el servidor.', type: 'error' });
@@ -106,6 +119,10 @@ const ClientCompanyDetail: React.FC = () => {
       setToast({ message: 'Error de sesión. Vuelve a iniciar sesión.', type: 'error' });
       return;
     }
+    if (!canEditCompany) {
+      setToast({ message: 'No tienes permisos para crear contactos en modo solo lectura.', type: 'error' });
+      return;
+    }
     setEditingContact({
       first_name: '',
       last_name: '',
@@ -114,19 +131,78 @@ const ClientCompanyDetail: React.FC = () => {
       position: '',
       id_client_company: id, // Pre-asignamos el ID de la empresa actual
       id_tenant: user.id_tenant, // Aseguramos id_tenant para nuevo contacto
-      created_by: user.id_user, // Aseguramos created_by para nuevo contacto
     });
     setIsEditMode(false);
     setIsModalOpen(true);
   };
 
   const handleEditContact = (contact: ClientContact) => {
+    if (!canEditCompany && contact.access_level === 'VIEW') {
+      setToast({ message: 'Este contacto es solo lectura.', type: 'error' });
+      return;
+    }
     setEditingContact(contact);
     setIsEditMode(true);
     setIsModalOpen(true);
   };
 
-  const handleDeleteContact = (contactId: string) => {
+  // --- SHARE COMPANY HANDLERS ---
+  const openShareModal = async () => {
+    if (!user?.id_tenant || !user?.id_user) {
+      setToast({ message: 'No se pudo cargar usuarios. Vuelve a iniciar sesión.', type: 'error' });
+      return;
+    }
+    try {
+      const res = await fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      if (!res.ok) throw new Error('No se pudo cargar usuarios');
+      const data = await res.json();
+      const activos = Array.isArray(data)
+        ? data.filter((u: any) => u.status_user !== 'Inactivo' && u.id_user !== user.id_user)
+        : [];
+      setShareUsers(activos);
+      setShareTargets([]);
+      setSharePermission('VIEW');
+      setShareModalOpen(true);
+    } catch (e: any) {
+      setToast({ message: e.message || 'Error al cargar usuarios.', type: 'error' });
+    }
+  };
+
+  const handleShareCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!company || !user?.id_tenant || shareTargets.length === 0) {
+      setToast({ message: 'Selecciona al menos un usuario para compartir.', type: 'error' });
+      return;
+    }
+    setShareSubmitting(true);
+    try {
+      const requests = shareTargets.map(target =>
+        fetch('https://service.computeksa.com/webhook/api/companies/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id_client_company: company.id_client_company,
+            id_user_target: target,
+            id_tenant: user.id_tenant,
+            permission_level: sharePermission,
+          }),
+        })
+      );
+      const responses = await Promise.all(requests);
+      const failed = responses.find(r => !r.ok);
+      if (failed) throw new Error('No se pudo compartir con alguno de los usuarios');
+      setToast({ message: 'Empresa compartida correctamente.', type: 'success' });
+      setShareModalOpen(false);
+    } catch (error: any) {
+      setToast({ message: error.message || 'Error al compartir empresa.', type: 'error' });
+    } finally {
+      setShareSubmitting(false);
+    }
+  };
+
+  const canShare = user?.rol_user === 'admin' || company?.created_by === user?.id_user;
+
+  const handleDeleteContact = (contact: ClientContact) => {
     setConfirmState({
       isOpen: true,
       title: 'Eliminar Contacto',
@@ -134,13 +210,17 @@ const ClientCompanyDetail: React.FC = () => {
       isDestructive: true,
       onConfirm: async () => {
         if (!user?.id_tenant || !user?.id_user) return;
+        if (!canDeleteContact(contact)) {
+          setToast({ message: 'Solo el creador puede eliminar este contacto.', type: 'error' });
+          return;
+        }
         setSubmitting(true);
         try {
           const response = await fetch(`https://service.computeksa.com/webhook/api/clients/contacts/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
-              id_contact: contactId, 
+              id_contact: contact.id_contact, 
               id_tenant: user.id_tenant, 
               id_user: user.id_user // id_user para auditoría/permisos
             }),
@@ -171,7 +251,6 @@ const ClientCompanyDetail: React.FC = () => {
         id_client_company: id, // Aseguramos que el contacto se asocia a la empresa actual
         id_tenant: user.id_tenant, // Aseguramos id_tenant
         id_user: user.id_user, // id_user para auditoría/permisos
-        created_by: editingContact.created_by || user.id_user, // Mantener si existe, o usar el actual al crear
     };
 
     try {
@@ -229,14 +308,24 @@ const ClientCompanyDetail: React.FC = () => {
       />
 
       {/* Header */}
-      <div className="flex items-center space-x-4 mb-2">
-        <button onClick={() => navigate('/client-companies')} className="text-slate-400 hover:text-slate-600 transition-colors">
-          <i className="fa-solid fa-arrow-left text-xl"></i>
-        </button>
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800">{company.name_company}</h1>
-          <p className="text-sm text-slate-500">{company.industry || 'Industria no especificada'} • {company.city || 'Ciudad no especificada'}</p>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center space-x-4">
+          <button onClick={() => navigate('/client-companies')} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <i className="fa-solid fa-arrow-left text-xl"></i>
+          </button>
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">{company.name_company}</h1>
+            <p className="text-sm text-slate-500">{company.industry || 'Industria no especificada'} • {company.city || 'Ciudad no especificada'}</p>
+          </div>
         </div>
+        <button
+          onClick={openShareModal}
+          disabled={!canShare}
+          className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${canShare ? 'border-slate-200 text-slate-700 hover:border-brand-500 hover:text-brand-700' : 'border-slate-200 text-slate-400 cursor-not-allowed'}`}
+        >
+          <i className="fa-solid fa-share-nodes text-slate-500"></i>
+          Compartir
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -311,7 +400,11 @@ const ClientCompanyDetail: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {contacts.map((contact) => (
+                    {contacts.map((contact) => {
+                      const contactAccess: 'VIEW' | 'EDIT' = (contact.access_level as any) || (contact.created_by === user?.id_user || user?.rol_user === 'admin' ? 'EDIT' : 'VIEW');
+                      const disableEdit = contactAccess === 'VIEW' && !canEditCompany;
+                      const disableDelete = !canDeleteContact(contact);
+                      return (
                       <tr key={contact.id_contact} onClick={() => handleContactRowClick(contact.id_contact)} className="hover:bg-slate-50 transition-colors cursor-pointer">
                         <td className="px-6 py-4 font-medium text-slate-800">{contact.first_name} {contact.last_name}</td>
                         <td className="px-6 py-4 text-sm text-slate-600">{contact.position || '-'}</td>
@@ -320,11 +413,23 @@ const ClientCompanyDetail: React.FC = () => {
                           <div className="text-xs text-slate-500">{contact.phone || '-'}</div>
                         </td>
                         <td className="px-6 py-4 text-right space-x-2">
-                          <button onClick={(e) => { e.stopPropagation(); handleEditContact(contact); }} className="p-2 text-slate-400 hover:text-brand-600"><i className="fa-solid fa-pen-to-square"></i></button>
-                          <button onClick={(e) => { e.stopPropagation(); handleDeleteContact(contact.id_contact); }} className="p-2 text-slate-400 hover:text-red-600"><i className="fa-solid fa-trash"></i></button>
+                          <button
+                            disabled={disableEdit}
+                            onClick={(e) => { e.stopPropagation(); if (!disableEdit) handleEditContact(contact); }}
+                            className={`p-2 ${disableEdit ? 'text-slate-300 cursor-not-allowed' : 'text-slate-400 hover:text-brand-600'}`}
+                          >
+                            <i className="fa-solid fa-pen-to-square"></i>
+                          </button>
+                          <button
+                            disabled={disableDelete}
+                            onClick={(e) => { e.stopPropagation(); if (!disableDelete) handleDeleteContact(contact); }}
+                            className={`p-2 ${disableDelete ? 'text-slate-300 cursor-not-allowed' : 'text-slate-400 hover:text-red-600'}`}
+                          >
+                            <i className="fa-solid fa-trash"></i>
+                          </button>
                         </td>
                       </tr>
-                    ))}
+                    );})}
                   </tbody>
                 </table>
               </div>
@@ -333,6 +438,73 @@ const ClientCompanyDetail: React.FC = () => {
         </div>
 
       </div>
+
+      {/* Modal compartir empresa */}
+      {shareModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-xl bg-white shadow-xl border border-slate-200 p-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs uppercase font-bold text-slate-400">Compartir empresa</p>
+                <h3 className="text-lg font-bold text-slate-800 mt-1">{company.name_company}</h3>
+              </div>
+              <button onClick={() => setShareModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <form className="mt-4 space-y-4" onSubmit={handleShareCompany}>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Usuario</label>
+                <select
+                  multiple
+                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500"
+                  value={shareTargets}
+                  onChange={(e) => {
+                    const options = Array.from(e.target.selectedOptions).map(o => o.value);
+                    setShareTargets(options);
+                  }}
+                  size={Math.min(8, Math.max(3, shareUsers.length))}
+                >
+                  {shareUsers.map(u => (
+                    <option key={u.id_user} value={u.id_user}>
+                      {u.name_user} ({u.email_user})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">Puedes elegir varios usuarios (Ctrl/Cmd + click).</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Permiso</label>
+                <div className="flex gap-3">
+                  {(['VIEW','EDIT'] as const).map(level => (
+                    <button
+                      type="button"
+                      key={level}
+                      onClick={() => setSharePermission(level)}
+                      className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${sharePermission === level ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-700 hover:border-slate-300'}`}
+                    >
+                      {level === 'VIEW' ? 'Solo ver' : 'Puede editar'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShareModalOpen(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-700 hover:border-slate-300">Cancelar</button>
+                <button
+                  type="submit"
+                  disabled={shareSubmitting}
+                  className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+                >
+                  {shareSubmitting ? 'Compartiendo...' : 'Compartir'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Contact Modal */}
       {isModalOpen && editingContact && (

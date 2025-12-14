@@ -115,7 +115,7 @@ const ClientCompaniesList: React.FC = () => {
         if (!user?.id_tenant || !user?.id_user) return; // Asegurar user IDs
         setSubmitting(true);
         try {
-          const response = await fetch(`https://service.computeksa.com/webhook/api/client-companies/delete`, {
+          const response = await fetch(`https://service.computeksa.com/webhook/api/clients/companies/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -170,7 +170,7 @@ const ClientCompaniesList: React.FC = () => {
     try {
       if (isEditMode && payload.id_client_company) {
         // --- LÓGICA DE ACTUALIZACIÓN ---
-        const response = await fetch(`https://service.computeksa.com/webhook/api/client-companies/update`, {
+        const response = await fetch(`https://service.computeksa.com/webhook/api/clients/companies/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
@@ -182,7 +182,7 @@ const ClientCompaniesList: React.FC = () => {
         setToast({ message: 'Empresa actualizada.', type: 'success' });
       } else {
         // --- LÓGICA DE CREACIÓN ---
-        const response = await fetch(`https://service.computeksa.com/webhook/api/client-companies`, {
+        const response = await fetch(`https://service.computeksa.com/webhook/api/clients/companies`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
