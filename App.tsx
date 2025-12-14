@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext'; // Importar
 import Layout from './components/Layout';
-import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import QuotesList from './pages/QuotesList';
@@ -19,7 +18,6 @@ import DealsList from './pages/DealsList';
 import DealDetail from './pages/DealDetail';
 import ProductsList from './pages/ProductsList';
 import SettingsPage from './pages/SettingsPage';
-import { MockApi } from './services/mockApi';
 import QuoteCreate from './pages/QuoteCreate'; // RUTA CORREGIDA
 
 // Componente para proteger rutas

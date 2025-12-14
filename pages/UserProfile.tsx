@@ -1,35 +1,73 @@
 
 import React, { useEffect, useState } from 'react';
-import { MockApi } from '../services/mockApi';
+import { useAuth } from '../contexts/AuthContext';
 import { User } from '../types';
 
 const UserProfile: React.FC = () => {
-  const [user, setUser] = useState<User | null>(null);
+  const { user, login } = useAuth(); // Obtener el usuario del contexto de autenticación
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<'google' | 'outlook' | null>(null);
+  const [currentUserData, setCurrentUserData] = useState<User | null>(null); // Usar un estado local para los datos del perfil
 
-  useEffect(() => {
-    MockApi.getUser().then(u => {
-      setUser(u);
+  const fetchUser = async () => {
+    if (user?.id_user) {
+      // En un entorno real, aquí harías una llamada a tu API para obtener los detalles del usuario
+      // Por ahora, usamos los datos del usuario del contexto directamente para el perfil
+      setCurrentUserData(user);
       setLoading(false);
-    });
-  }, []);
-
-  const handleSyncToggle = async (provider: 'google' | 'outlook') => {
-    if (!user) return;
-    setSyncing(provider);
-    
-    // Determine new status (toggle)
-    const currentStatus = provider === 'google' ? user.googleConnected : user.outlookConnected;
-    const newStatus = !currentStatus;
-
-    // Simulate API call
-    const updatedUser = await MockApi.updateUserSync(provider, newStatus);
-    setUser(updatedUser);
-    setSyncing(null);
+    } else {
+      // Manejar caso donde no hay usuario (ej. redirigir a login, mostrar error)
+      setLoading(false);
+    }
   };
 
-  if (loading || !user) return <div className="p-8 text-center text-slate-500">Cargando perfil...</div>;
+  useEffect(() => {
+    fetchUser();
+  }, [user]); // Dependencia del user del contexto
+
+  const handleSyncToggle = async (provider: 'google' | 'outlook') => {
+    if (!currentUserData) return;
+    setSyncing(provider);
+    
+    const currentStatus = provider === 'google' ? currentUserData.googleConnected : currentUserData.outlookConnected;
+    const newStatus = !currentStatus;
+
+    try {
+      // Simular llamada a API de actualización
+      // En una app real, aquí se haría una llamada al backend para actualizar el estado de sincronización
+      const response = await fetch('https://service.computeksa.com/webhook/api/users/update-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_user: currentUserData.id_user,
+          provider,
+          status: newStatus,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al actualizar sincronización.');
+      }
+
+      // Actualizar el estado local y el contexto de autenticación
+      const updatedUserFromApi = { 
+        ...currentUserData, 
+        [provider === 'google' ? 'googleConnected' : 'outlookConnected']: newStatus 
+      };
+      setCurrentUserData(updatedUserFromApi);
+      // Opcional: Si el `login` de AuthContext también actualiza el usuario, podrías llamarlo aquí.
+      // Por ejemplo: login(updatedUserFromApi);
+
+    } catch (error) {
+      console.error("Error updating sync status:", error);
+      // Manejar el error, por ejemplo, mostrando un toast
+    } finally {
+      setSyncing(null);
+    }
+  };
+
+  if (loading || !currentUserData) return <div className="p-8 text-center text-slate-500">Cargando perfil...</div>;
 
   return (
     <div className="max-w-4xl mx-auto">

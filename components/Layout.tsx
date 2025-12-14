@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { MockApi } from '../services/mockApi';
 import { User } from '../types';
 import { useAuth } from '../contexts/AuthContext'; // 1. Importar el hook de autenticación
 
@@ -17,8 +16,8 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   const { user, logout } = useAuth(); // 2. Obtener el usuario y la función de logout
 
   useEffect(() => {
-    MockApi.getUser().then(user => setCurrentUser(user));
-  }, []);
+    setCurrentUser(user);
+  }, [user]);
 
   const handleLogout = () => {
     logout();

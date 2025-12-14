@@ -46,14 +46,19 @@ const UsersList: React.FC = () => {
       const usersData = await parseResponse(usersRes);
       setUsers(usersData);
 
-      // Cargar tenants solo si es superadmin
+      let fetchedTenants: Tenant[] = [];
       if (user.rol_user === 'superadmin') {
         const tenantsRes = await fetch(`https://service.computeksa.com/webhook/api/tenants?id_user=${userId}`);
-        const tenantsData = await parseResponse(tenantsRes);
-        setTenants(tenantsData);
-      } else {
-        setTenants([]); // Asegurar que esté vacío si no es superadmin
+        fetchedTenants = await parseResponse(tenantsRes);
+      } else if (user.id_tenant) {
+        // Para admins/usuarios, cargar solo su propio tenant para poder mostrar el nombre
+        const tenantDetailRes = await fetch(`https://service.computeksa.com/webhook/api/tenants/detail?id_tenant=${user.id_tenant}`);
+        const tenantDetailData = await parseResponse(tenantDetailRes);
+        if (tenantDetailData) {
+          fetchedTenants = Array.isArray(tenantDetailData) ? tenantDetailData : [tenantDetailData];
+        }
       }
+      setTenants(fetchedTenants);
 
     } catch (e: any) {
       console.error("Error fetching data:", e);
@@ -156,8 +161,19 @@ const UsersList: React.FC = () => {
         ...editingUser,
         id_tenant: editingUser.id_tenant || user.id_tenant, // Asegura que el tenant ID sea el del usuario logueado o el seleccionado por superadmin
         id_current_user: user.id_user, // Para auditoría en la API
-        created_by: user.id_user, // Campo específico para la creación
+        // 'created_by' is not in the User DB schema, so it's removed from the payload.
+        // 'password' is only sent for creation, not updates.
+        ...(isEditMode ? {} : { password: editingUser.password }),
+        // Ensure password_hash is not sent if it's an update and no new password is provided
+        ...(!isEditMode && !editingUser.password ? { password: 'default_password' } : {}), // Fallback or handle appropriately
     };
+    // Clean up empty strings or add default values where the API expects them
+    const cleanedPayload = Object.fromEntries(
+      Object.entries(payload).map(([key, value]) => [
+        key,
+        (value === null || value === undefined || value === '') ? '__EMPTY__' : value
+      ])
+    );
     
     try {
       if (isEditMode && payload.id_user) {
