@@ -48,6 +48,8 @@ const ClientContactsList: React.FC = () => {
         let data = [];
         if (text) {
           const parsed = JSON.parse(text);
+
+          
           if (Array.isArray(parsed)) {
             data = parsed;
           } else {
