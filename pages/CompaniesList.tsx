@@ -1,11 +1,12 @@
-
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useAuth } from '../contexts/AuthContext'; // Importar
 import { MockApi } from '../services/mockApi';
 import { Tenant } from '../types'; // Updated Type
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 
 const CompaniesList: React.FC = () => {
+  const { user } = useAuth(); // Usar para validación de rol
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -26,21 +27,39 @@ const CompaniesList: React.FC = () => {
     isDestructive: false,
   });
 
-  const fetchTenants = useCallback(async () => {
+  const fetchData = useCallback(async () => {
+    // Solo un superadmin puede ver esta lista
+    if (user?.rol_user !== 'superadmin') {
+      setTenants([]);
+      setLoading(false);
+      return;
+    }
+    if (!user?.id_user) return; // Comprobar que hay id_user
+
     setLoading(true);
+    const userId = user.id_user;
+
     try {
-      const data = await MockApi.getTenants();
+      const response = await fetch(`https://service.computeksa.com/webhook/api/tenants?id_user=${userId}`);
+      if (!response.ok) {
+        if (response.status === 404) setTenants([]);
+        else throw new Error('Error al cargar tenants');
+        return;
+      }
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : [];
       setTenants(data);
     } catch (e) {
-      setToast({ message: 'Error al cargar tenants.', type: 'error' });
+      setToast({ message: 'Error al cargar los tenants.', type: 'error' });
+      setTenants([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
-    fetchTenants();
-  }, [fetchTenants]);
+    fetchData();
+  }, [fetchData]);
 
   const handleAddNew = () => {
     setEditingTenant({ ruc: '', name_tenant: '', country: 'Ecuador', city: '', address: '', website: '', logo_url: '' });

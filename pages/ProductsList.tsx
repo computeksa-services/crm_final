@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useAuth } from '../contexts/AuthContext'; // Importar el hook
-import { Product } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { Product, ProductType } from '../types'; // 1. Importar ProductType
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 
 const ProductsList: React.FC = () => {
-  const { user } = useAuth(); // Obtener el usuario del contexto
+  const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]); // 2. Nuevo estado para los tipos
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
@@ -56,15 +57,31 @@ const ProductsList: React.FC = () => {
     }
   }, [user]); // El efecto ahora depende del objeto 'user' del contexto
 
+  // 3. Nueva función para cargar los tipos de producto
+  const fetchProductTypes = useCallback(async () => {
+    if (!user?.id_tenant) return;
+    try {
+      const response = await fetch(`https://service.computeksa.com/webhook/api/products_type?id_tenant=${user.id_tenant}`);
+      if (response.ok) {
+        const data = await response.json();
+        setProductTypes(data);
+      }
+    } catch (error) {
+      console.error("Error fetching product types:", error);
+      setToast({ message: 'No se pudieron cargar los tipos de producto.', type: 'error' });
+    }
+  }, [user]);
+
   useEffect(() => {
     fetchData();
-  }, [fetchData]);
+    fetchProductTypes(); // 4. Llamar a la nueva función al montar el componente
+  }, [fetchData, fetchProductTypes]);
 
   const handleAddNew = () => {
     setEditingProduct({
       codigo: '',
       descripcion: '',
-      tipo: 'BIEN',
+      tipo: productTypes[0]?.type || 'BIEN', // Usar el primer tipo disponible como default
       categoria: '',
       precio_unitario: 0,
       imagen_url: ''
@@ -252,38 +269,70 @@ const ProductsList: React.FC = () => {
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center text-transparent group-hover:text-white text-xs font-bold">Cambiar</div>
                 </div>
                 <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-                <div className="flex-1">
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Descripción</label>
-                  <textarea name="descripcion" value={editingProduct.descripcion || ''} onChange={handleInputChange} required rows={4} className="w-full px-3 py-2 border rounded-lg"></textarea>
+                <div className="flex-1 space-y-4">
+                  <div>
+                    <label htmlFor="codigo" className="block text-xs font-bold text-slate-500 mb-1">Código</label>
+                    <input
+                      id="codigo"
+                      name="codigo"
+                      type="text"
+                      value={editingProduct.codigo || ''}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="Dejar en blanco para asignar un código"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="descripcion" className="block text-xs font-bold text-slate-500 mb-1">Descripción</label>
+                    <textarea
+                      id="descripcion"
+                      name="descripcion"
+                      rows={3}
+                      required
+                      value={editingProduct.descripcion || ''}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border rounded-lg"
+                    ></textarea>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Código</label>
-                  <input name="codigo" value={editingProduct.codigo || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Tipo</label>
-                  <select name="tipo" value={editingProduct.tipo || 'BIEN'} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg bg-white">
-                    <option value="BIEN">Bien</option>
-                    <option value="SERVICIO">Servicio</option>
+                  <label htmlFor="tipo" className="block text-xs font-bold text-slate-500 mb-1">Tipo</label>
+                  <select
+                    id="tipo"
+                    name="tipo"
+                    value={editingProduct.tipo || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border rounded-lg bg-white"
+                  >
+                    {productTypes.map((pt) => (
+                      <option key={pt.id_product_type} value={pt.type}>
+                        {pt.type}
+                      </option>
+                    ))}
                   </select>
                 </div>
+                <div>
+                  <label htmlFor="categoria" className="block text-xs font-bold text-slate-500 mb-1">Categoría</label>
+                  <input
+                    id="categoria"
+                    name="categoria"
+                    type="text"
+                    value={editingProduct.categoria || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Categoría</label>
-                  <input name="categoria" value={editingProduct.categoria || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Precio Unitario (USD)</label>
-                  <input type="number" step="0.01" name="precio_unitario" value={editingProduct.precio_unitario || 0} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg" />
-                </div>
+              <div>
+                <label htmlFor="precio_unitario" className="block text-xs font-bold text-slate-500 mb-1">Precio Unitario (USD)</label>
+                <input type="number" step="0.01" name="precio_unitario" value={editingProduct.precio_unitario || 0} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg" />
               </div>
-              
-              <div className="flex justify-end pt-4 space-x-2">
+
+              <div className="flex justify-end pt-4 space-x-2 border-t">
                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100">Cancelar</button>
                  <button type="submit" disabled={submitting} className="px-4 py-2 rounded-lg bg-brand-600 text-white hover:bg-brand-700 shadow-sm flex items-center">
                     {submitting && <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>}

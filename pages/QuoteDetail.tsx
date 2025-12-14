@@ -1,13 +1,15 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { MockApi } from '../services/mockApi';
+import { useAuth } from '../contexts/AuthContext'; // Importar useAuth
 import { Quote, QuoteItem, UserDecision, Product } from '../types';
 import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal'; // Importar ConfirmModal
+import ConfirmModal from '../components/ConfirmModal';
 
 const QuoteDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth(); // Usar useAuth
+
   const [quote, setQuote] = useState<Quote | null>(null);
   const [items, setItems] = useState<QuoteItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -16,7 +18,7 @@ const QuoteDetail: React.FC = () => {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [itemQuantity, setItemQuantity] = useState<number>(1); // Estado para la cantidad en el modal
+  const [itemQuantity, setItemQuantity] = useState<number>(1);
 
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -29,70 +31,94 @@ const QuoteDetail: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!id) return;
+    if (!id || !user?.id_tenant || !user?.id_user) return;
     setLoading(true);
+    const tenantId = user.id_tenant;
+    const userId = user.id_user;
+
     try {
       // 1. Obtener los datos principales de la cotización
-      const q = await MockApi.getQuoteById(id);
-      
-      if (q) {
-        // 2. Guardar la cotización en el estado inmediatamente.
-        // Así, si falla la carga de items, la página principal no se rompe.
-        setQuote(q);
+      const quoteResponse = await fetch(`https://service.computeksa.com/webhook/api/quotes/detail?id_cotizacion=${id}&id_tenant=${tenantId}&id_user=${userId}`);
+      if (!quoteResponse.ok) {
+        if (quoteResponse.status === 404) {
+          setQuote(null);
+        } else {
+          const errorText = await quoteResponse.text();
+          throw new Error(`Error del servidor al cargar la cotización: ${quoteResponse.status} - ${errorText}`);
+        }
+        setLoading(false);
+        return;
+      }
+      const quoteResponseText = await quoteResponse.text();
+      let q: Quote | null = null;
+      if (quoteResponseText) {
+        const parsedResponse = JSON.parse(quoteResponseText);
+        q = Array.isArray(parsedResponse) ? parsedResponse[0] : parsedResponse; // Asume que puede venir un array o un objeto directo
+      }
+      setQuote(q || null); // Asegura que q sea null si está vacío o undefined
 
-        // 3. Cargar los artículos en un bloque try/catch anidado.
-        try {
-          const itemsResponse = await fetch(`https://service.computeksa.com/webhook/api/quote-items?id_cotizacion=${q.id_cotizacion}`);
-          
-          if (!itemsResponse.ok) {
-            // Si la API responde con 404, es una forma común de decir "no hay items".
-            // Lo manejamos sin mostrar un error al usuario.
-            if (itemsResponse.status === 404) {
-              setItems([]);
-            } else {
-              // Para otros errores (ej. 500), sí queremos saberlo.
-              throw new Error(`Error del servidor: ${itemsResponse.status}`);
-            }
+      if (!q) { // Si la cotización principal no se encontró, no intentes cargar sus items o productos
+        setLoading(false);
+        return;
+      }
+
+      // 2. Cargar los artículos de la cotización
+      try {
+        const itemsResponse = await fetch(`https://service.computeksa.com/webhook/api/quote-items?id_cotizacion=${q.id_cotizacion}&id_tenant=${tenantId}&id_user=${userId}`);
+        if (!itemsResponse.ok) {
+          if (itemsResponse.status === 404) {
+            setItems([]);
           } else {
-            // Leemos la respuesta como texto para manejar el caso de que n8n devuelva un cuerpo vacío
-            // en lugar de un array `[]` cuando no hay resultados.
-            const responseText = await itemsResponse.text();
-            const itemsData = responseText ? JSON.parse(responseText) : [];
-            setItems(itemsData);
+            const errorText = await itemsResponse.text();
+            throw new Error(`Error del servidor al cargar los artículos: ${itemsResponse.status} - ${errorText}`);
           }
-
-        } catch (itemError) {
-          console.error("Error al cargar o procesar los artículos:", itemError);
-          setToast({ message: 'No se pudieron cargar los artículos.', type: 'error' });
-          setItems([]); // En cualquier caso de error, dejamos la tabla vacía.
+        } else {
+          const responseText = await itemsResponse.text();
+          const itemsData = responseText ? JSON.parse(responseText) : [];
+          setItems(itemsData);
         }
 
-      } else {
-        setQuote(null);
+      } catch (itemError) {
+        console.error("Error al cargar o procesar los artículos:", itemError);
+        setToast({ message: 'No se pudieron cargar los artículos.', type: 'error' });
+        setItems([]);
       }
-    } catch (e) {
-      console.error("Error al cargar la cotización:", e);
-      setToast({ message: 'Error fatal al cargar la cotización.', type: 'error' });
+
+      // 3. Cargar productos disponibles
+      try {
+        const productsResponse = await fetch(`https://service.computeksa.com/webhook/api/products?id_tenant=${tenantId}&id_user=${userId}`);
+        if (!productsResponse.ok) {
+          const errorText = await productsResponse.text();
+          throw new Error(`Error del servidor al cargar productos disponibles: ${productsResponse.status} - ${errorText}`);
+        }
+        const productsText = await productsResponse.text();
+        const productsData = productsText ? JSON.parse(productsText) : [];
+        setAvailableProducts(productsData);
+      } catch (productsError) {
+        console.error("Error loading available products:", productsError);
+        setToast({ message: 'Error al cargar productos disponibles.', type: 'error' });
+      }
+
+    } catch (e: any) {
+      console.error("Error al cargar la cotización o productos:", e);
+      setToast({ message: e.message || 'Error fatal al cargar la cotización.', type: 'error' });
       setQuote(null);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, user]);
 
   useEffect(() => {
     fetchData();
-    // Cargar productos disponibles cuando el componente se monta
-    MockApi.getProducts().then(setAvailableProducts).catch(e => console.error("Error loading products:", e));
   }, [fetchData]);
   
-    // Actions
+  // Actions
   const handleAddItem = async () => {
-    // Abre el modal para seleccionar productos
     setIsProductModalOpen(true);
   };
 
   const handleProductSelection = async () => {
-    if (!selectedProductId || !quote) return;
+    if (!selectedProductId || !quote || !user?.id_tenant || !user?.id_user) return;
 
     const selectedProduct = availableProducts.find(p => p.id_product === selectedProductId);
     if (!selectedProduct) {
@@ -104,17 +130,17 @@ const QuoteDetail: React.FC = () => {
 
     const apiEndpoint = 'https://service.computeksa.com/webhook/api/products-selected';
     
-    // El id_tenant se obtiene de la cotización
-    const tenantId = quote.id_tenant;
+    const tenantId = user.id_tenant;
+    const userId = user.id_user;
 
     const payload = {
       id_cotizacion: quote.id_cotizacion,
       id_tenant: tenantId,
-      // Datos del producto seleccionado
+      id_user: userId,
       descripcion: selectedProduct.descripcion, 
       cantidad: itemQuantity,
-      precio_unitario: selectedProduct.precio_unitario,
-      subtotal: itemQuantity * selectedProduct.precio_unitario,
+      precio_unitario: parseFloat((selectedProduct.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0, // Asegurar que sea número
+      subtotal: itemQuantity * (parseFloat((selectedProduct.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0),
       id_producto: selectedProduct.id_product
     };
 
@@ -128,17 +154,15 @@ const QuoteDetail: React.FC = () => {
       });
 
       if (!response.ok) {
-        // Si el servidor responde con un error, lo capturamos
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ message: 'Error al conectar con el servidor.' }));
         throw new Error(errorData.message || 'Error al conectar con el servidor.');
       }
 
-      // Si todo va bien...
       setToast({ message: 'Artículo añadido con éxito.', type: 'success' });
-      setIsProductModalOpen(false); // Cierra el modal
-      setSelectedProductId(null); // Resetea el producto seleccionado
-      setItemQuantity(1); // Resetea la cantidad
-      fetchData(); // Vuelve a cargar los datos de la cotización
+      setIsProductModalOpen(false);
+      setSelectedProductId(null);
+      setItemQuantity(1);
+      fetchData();
 
     } catch (e: any) {
       setToast({ message: e.message || 'Error al añadir el artículo.', type: 'error' });
@@ -148,9 +172,8 @@ const QuoteDetail: React.FC = () => {
   };
 
   const handleUpdateItem = async (itemId: string, newCantidad: number, newPrecioUnitario: number) => {
-    if (!quote) return;
+    if (!quote || !user?.id_tenant || !user?.id_user) return;
     
-    // Evitar llamadas a la API si los valores no han cambiado.
     const currentItem = items.find(i => i.id_articulo_cot === itemId);
     const cantidad = parseFloat(currentItem?.cantidad as any) || 0;
     const precioUnitario = parseFloat((currentItem?.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
@@ -169,7 +192,9 @@ const QuoteDetail: React.FC = () => {
       id_articulo_cot: itemId,
       cantidad: newCantidad,
       precio_unitario: newPrecioUnitario,
-      subtotal: updatedSubtotal
+      subtotal: updatedSubtotal,
+      id_tenant: user.id_tenant,
+      id_user: user.id_user,
     };
 
     try {
@@ -180,12 +205,11 @@ const QuoteDetail: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ message: 'Error del servidor al actualizar.' }));
         throw new Error(errorData.message || 'Error del servidor al actualizar.');
       }
 
       setToast({ message: 'Artículo actualizado.', type: 'success' });
-      // Forzamos la recarga de datos para asegurar consistencia total.
       fetchData(); 
 
     } catch (e: any) {
@@ -202,11 +226,15 @@ const QuoteDetail: React.FC = () => {
       message: '¿Está seguro que desea eliminar este artículo de la cotización? Esta acción no se puede deshacer.',
       isDestructive: true,
       onConfirm: async () => {
-        if (!quote) return;
+        if (!quote || !user?.id_tenant || !user?.id_user) return;
         setProcessing(true);
         
         const apiEndpoint = 'https://service.computeksa.com/webhook/api/quote-items/delete';
-        const payload = { id_articulo_cot: itemId };
+        const payload = { 
+          id_articulo_cot: itemId,
+          id_tenant: user.id_tenant,
+          id_user: user.id_user,
+        };
 
         try {
           const response = await fetch(apiEndpoint, {
@@ -216,12 +244,12 @@ const QuoteDetail: React.FC = () => {
           });
 
           if (!response.ok) {
-            const errorData = await response.json();
+            const errorData = await response.json().catch(() => ({ message: 'Error del servidor al eliminar.' }));
             throw new Error(errorData.message || 'Error del servidor al eliminar.');
           }
 
           setToast({ message: 'Artículo eliminado.', type: 'success' });
-          fetchData(); // Recargar datos para ver los cambios
+          fetchData(); 
 
         } catch (e: any) {
           setToast({ message: e.message || 'Error al eliminar el artículo.', type: 'error' });
@@ -234,28 +262,75 @@ const QuoteDetail: React.FC = () => {
   };
 
   const handleGeneratePDF = async () => {
-    if (!quote) return;
+    if (!quote || !user?.id_tenant || !user?.id_user) return;
     setProcessing(true);
-    // Call API (n8n trigger)
-    const updatedQuote = await MockApi.generatePDF(quote.id_cotizacion);
-    setQuote(updatedQuote);
-    setProcessing(false);
+    try {
+      const response = await fetch(`https://service.computeksa.com/webhook/api/cotizaciones/${quote.id_cotizacion}/generar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_tenant: user.id_tenant, id_user: user.id_user }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Error al generar PDF.' }));
+        throw new Error(errorData.message || 'Error al generar PDF.');
+      }
+      const updatedQuote = await response.json();
+      setQuote(updatedQuote);
+      setToast({ message: 'PDF generado con éxito.', type: 'success' });
+    } catch (e: any) {
+      setToast({ message: e.message || 'Error al generar el PDF.', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleSendQuote = async () => {
-    if (!quote) return;
+    if (!quote || !user?.id_tenant || !user?.id_user) return;
     setProcessing(true);
-    const updatedQuote = await MockApi.sendQuote(quote.id_cotizacion);
-    setQuote(updatedQuote);
-    setProcessing(false);
+    try {
+      const response = await fetch(`https://service.computeksa.com/webhook/api/cotizaciones/${quote.id_cotizacion}/enviar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_tenant: user.id_tenant, id_user: user.id_user }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Error al enviar cotización.' }));
+        throw new Error(errorData.message || 'Error al enviar cotización.');
+      }
+      const updatedQuote = await response.json();
+      setQuote(updatedQuote);
+      setToast({ message: 'Cotización enviada con éxito.', type: 'success' });
+    } catch (e: any) {
+      setToast({ message: e.message || 'Error al enviar la cotización.', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleDecisionChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    if(!quote) return;
+    if(!quote || !user?.id_tenant || !user?.id_user) return;
     const newDecision = e.target.value as UserDecision;
-    await MockApi.updateDecision(quote.id_cotizacion, newDecision);
-    // Optimistic update
-    setQuote({...quote, estado_decision: newDecision});
+    
+    try {
+      const response = await fetch(`https://service.computeksa.com/webhook/api/cotizaciones/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_cotizacion: quote.id_cotizacion,
+          estado_decision: newDecision,
+          id_tenant: user.id_tenant,
+          id_user: user.id_user,
+        }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Error al actualizar decisión.' }));
+        throw new Error(errorData.message || 'Error al actualizar decisión.');
+      }
+      setQuote({...quote, estado_decision: newDecision}); // Optimistic update
+      setToast({ message: 'Decisión actualizada.', type: 'success' });
+    } catch (e: any) {
+      setToast({ message: e.message || 'Error al actualizar la decisión.', type: 'error' });
+    }
   };
 
 
@@ -263,9 +338,9 @@ const QuoteDetail: React.FC = () => {
   if (!quote) return <div className="p-8 text-center text-red-500">Cotización no encontrada</div>;
 
   const hasItems = items.length > 0;
-  const isPending = !['ENVIADO', 'APROBADO'].includes(quote.estado);
+  const isPending = !['ENVIADO', 'APROBADO', 'NEGOCIACION'].includes(quote.estado || '');
   const isReady = quote.estado === 'LISTO PARA ENVIAR';
-  const isSent = quote.estado === 'ENVIADO';
+  const isSent = quote.estado_decision !== UserDecision.PENDING; // Si la decisión no es pendiente, se considera enviada
   
   const showGenerateBtn = hasItems && (isPending || !quote.file_generado);
   const showSendBtn = isReady; 
@@ -419,13 +494,13 @@ const QuoteDetail: React.FC = () => {
                         <td className="px-4 py-3 font-mono text-xs text-slate-500">{item.codigo}</td>
                         <td className="px-6 py-3 font-medium text-slate-700">{item.descripcion}</td>
                         <td className="px-6 py-3 text-right">
-                          <input 
+                           <input 
                               type="number"
                               defaultValue={cantidad}
                               onBlur={(e) => handleUpdateItem(item.id_articulo_cot, parseInt(e.target.value) || 1, precioUnitario)}
-                              min="1"
+                              min="1" 
                               className="w-20 px-2 py-1 border rounded-md text-right"
-                          />
+                           />
                         </td>
                         <td className="px-6 py-3 text-right">
                           <input 
@@ -452,11 +527,7 @@ const QuoteDetail: React.FC = () => {
                   <tr className="bg-slate-50">
                     <td colSpan={5} className="px-6 py-3 text-right font-bold text-slate-600">Total</td>
                     <td className="px-6 py-3 text-right font-bold text-brand-700 text-lg">
-                      {items.reduce((acc, curr) => {
-                        const cantidad = parseFloat(curr.cantidad as any) || 0;
-                        const precioUnitario = parseFloat((curr.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
-                        return acc + (cantidad * precioUnitario);
-                      }, 0).toFixed(2)}
+                      {quote.total}
                     </td>
                     <td></td>
                   </tr>

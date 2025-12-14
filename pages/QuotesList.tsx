@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MockApi } from '../services/mockApi';
+import { useAuth } from '../contexts/AuthContext'; // Importar
 import { Quote } from '../types';
 import Toast from '../components/Toast';
 
 const QuotesList: React.FC = () => {
+  const { user } = useAuth(); // Usar
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -12,25 +13,30 @@ const QuotesList: React.FC = () => {
   const navigate = useNavigate();
 
   const fetchData = useCallback(async () => {
+    if (!user?.id_tenant || !user?.id_user) return; // Comprobar también id_user
     setLoading(true);
-    setError(null);
+    const tenantId = user.id_tenant;
+    const userId = user.id_user;
+
     try {
-      const data = await MockApi.getQuotes();
-      console.log("Datos recibidos en QuotesList:", data); // Log para depuración
-      if (Array.isArray(data)) {
-        setQuotes(data);
-      } else {
-        // Si la API no devuelve un array, evitamos el crash
-        console.error("La API no devolvió un array de cotizaciones:", data);
-        setQuotes([]);
+      const response = await fetch(`https://service.computeksa.com/webhook/api/quotes?id_tenant=${tenantId}&id_user=${userId}`);
+      
+      if (!response.ok) {
+        if (response.status === 404) setQuotes([]);
+        else throw new Error('Error al cargar cotizaciones');
+        return;
       }
-    } catch (err: any) {
-      setError('No se pudieron cargar las cotizaciones. Verifique su conexión o intente de nuevo.');
-      setToast({ message: err.message || 'Error de red', type: 'error' });
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : [];
+      setQuotes(data);
+
+    } catch (e) {
+      setToast({ message: 'Error al cargar las cotizaciones.', type: 'error' });
+      setQuotes([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     fetchData();
@@ -92,7 +98,7 @@ const QuotesList: React.FC = () => {
                         {quote.estado || 'Desconocido'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-semibold text-slate-700">{(quote.total || 0).toFixed(2)}</td>
+                    <td className="px-6 py-4 font-semibold text-slate-700">{quote.total}</td>
                     <td className="px-6 py-4">
                       <span className="text-brand-600 font-medium text-sm group-hover:underline">
                         Ver Detalles <i className="fa-solid fa-arrow-right ml-1 text-xs"></i>

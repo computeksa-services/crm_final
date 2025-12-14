@@ -1,13 +1,12 @@
-
-
 import React, { useEffect, useState, useCallback } from 'react';
-import { MockApi } from '../services/mockApi';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext'; // Importar useAuth
 import { ClientContact, ClientCompany } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
-import { useNavigate } from 'react-router-dom';
 
 const ClientContactsList: React.FC = () => {
+  const { user } = useAuth(); // Usar useAuth
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
   const [loading, setLoading] = useState(true);
@@ -19,7 +18,6 @@ const ClientContactsList: React.FC = () => {
   const [editingContact, setEditingContact] = useState<Partial<ClientContact> | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Confirmation Modal
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
     title: '',
@@ -29,20 +27,41 @@ const ClientContactsList: React.FC = () => {
   });
 
   const fetchData = useCallback(async () => {
+    if (!user?.id_tenant || !user?.id_user) return; // Asegurar que user y tenant/user IDs existan
     setLoading(true);
+    const tenantId = user.id_tenant;
+    const userId = user.id_user;
+
     try {
-      const [contactsData, companiesData] = await Promise.all([
-        MockApi.getClientContacts(),
-        MockApi.getClientCompanies()
+      const [contactsRes, companiesRes] = await Promise.all([
+        fetch(`https://service.computeksa.com/webhook/api/clients/contacts?id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`)
       ]);
-      setContacts(Array.isArray(contactsData) ? contactsData : []);
-      setCompanies(Array.isArray(companiesData) ? companiesData : []);
-    } catch (e) {
-      setToast({ message: 'Error al cargar datos.', type: 'error' });
+
+      const parseResponse = async (res: Response) => {
+        if (!res.ok) {
+          if (res.status === 404) return []; // Si no se encuentra, devolver array vacío
+          const errorText = await res.text();
+          throw new Error(`Error del servidor: ${res.status} - ${errorText}`);
+        }
+        const text = await res.text();
+        return text ? JSON.parse(text) : [];
+      };
+
+      const contactsData = await parseResponse(contactsRes);
+      const companiesData = await parseResponse(companiesRes);
+
+      setContacts(contactsData);
+      setCompanies(companiesData);
+    } catch (e: any) {
+      console.error("Error fetching data:", e);
+      setToast({ message: e.message || 'Error al cargar datos de contactos o empresas.', type: 'error' });
+      setContacts([]);
+      setCompanies([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     fetchData();
@@ -88,12 +107,25 @@ const ClientContactsList: React.FC = () => {
       message: '¿Estás seguro? Esta acción no se puede deshacer.',
       isDestructive: true,
       onConfirm: async () => {
+        if (!user?.id_tenant || !user?.id_user) return; // Asegurar user IDs
+        setSubmitting(true);
         try {
-          await MockApi.deleteClientContact(id);
-          await fetchData(); // Recargar datos para actualizar la UI y la caché
+          const response = await fetch(`https://service.computeksa.com/webhook/api/clients/contacts/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_contact: id, id_tenant: user.id_tenant, id_user: user.id_user }), // Añadir id_tenant y id_user
+          });
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Error al eliminar contacto.' }));
+            throw new Error(errorData.message || 'Error al eliminar contacto.');
+          }
+          await fetchData(); // Recargar datos para actualizar la UI
           setToast({ message: 'Contacto eliminado.', type: 'success' });
-        } catch (error) {
-          setToast({ message: 'Error al eliminar.', type: 'error' });
+        } catch (error: any) {
+          setToast({ message: error.message || 'Error al eliminar.', type: 'error' });
+        } finally {
+          setSubmitting(false);
+          setConfirmState({ ...confirmState, isOpen: false });
         }
       },
     });
@@ -101,7 +133,7 @@ const ClientContactsList: React.FC = () => {
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingContact) return;
+    if (!editingContact || !user?.id_tenant || !user?.id_user) return; // Asegurar user IDs
     
     if (!editingContact.id_client_company) {
         setToast({ message: 'Debes seleccionar una Empresa Cliente.', type: 'error' });
@@ -109,18 +141,41 @@ const ClientContactsList: React.FC = () => {
     }
 
     setSubmitting(true);
+    
+    const payload = {
+        ...editingContact,
+        id_tenant: user.id_tenant,
+        id_user: user.id_user, // Añadir id_user al payload
+    };
+
     try {
-      if (isEditMode && editingContact.id_contact) {
-        await MockApi.updateClientContact(editingContact.id_contact, editingContact);
+      if (isEditMode && payload.id_contact) {
+        const response = await fetch(`https://service.computeksa.com/webhook/api/clients/contacts/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Error al actualizar contacto.' }));
+            throw new Error(errorData.message || 'Error al actualizar contacto.');
+        }
         setToast({ message: 'Contacto actualizado.', type: 'success' });
       } else {
-        await MockApi.addClientContact(editingContact);
+        const response = await fetch(`https://service.computeksa.com/webhook/api/clients/contacts`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Error al crear contacto.' }));
+            throw new Error(errorData.message || 'Error al crear contacto.');
+        }
         setToast({ message: 'Contacto creado.', type: 'success' });
       }
       setIsModalOpen(false);
-      await fetchData(); // Recargar datos para actualizar la UI y la caché
-    } catch (error) {
-      setToast({ message: 'Error al guardar.', type: 'error' });
+      await fetchData(); // Recargar datos para actualizar la UI
+    } catch (error: any) {
+      setToast({ message: error.message || 'Error al guardar el contacto.', type: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -211,65 +266,103 @@ const ClientContactsList: React.FC = () => {
 
       {isModalOpen && editingContact && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto">
             <div className="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
               <h2 className="text-lg font-bold text-slate-800">{isEditMode ? 'Editar Contacto' : 'Nuevo Contacto'}</h2>
               <button onClick={() => setIsModalOpen(false)}><i className="fa-solid fa-times text-slate-400"></i></button>
             </div>
             <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
-              
               <div>
-                 <label className="block text-xs font-bold text-slate-500 mb-1">Empresa Cliente <span className="text-red-500">*</span></label>
-                 <select 
-                    name="id_client_company" 
-                    value={editingContact.id_client_company || ''} 
-                    onChange={handleInputChange} 
+                <label htmlFor="id_client_company" className="block text-xs font-bold text-slate-500 mb-1">Empresa Cliente</label>
+                <select
+                  id="id_client_company"
+                  name="id_client_company"
+                  required
+                  value={editingContact.id_client_company || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border rounded-lg bg-white"
+                >
+                  <option value="">-- Seleccionar Empresa --</option>
+                  {companies.map(company => (
+                    <option key={company.id_client_company} value={company.id_client_company}>
+                      {company.name_company}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="first_name" className="block text-xs font-bold text-slate-500 mb-1">Nombre</label>
+                  <input
+                    type="text"
+                    id="first_name"
+                    name="first_name"
                     required
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-500 outline-none"
-                 >
-                    <option value="">-- Seleccione una empresa --</option>
-                    {companies.map(comp => (
-                        <option key={comp.id_client_company} value={comp.id_client_company}>
-                            {comp.name_company}
-                        </option>
-                    ))}
-                 </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Nombre</label>
-                  <input name="first_name" value={editingContact.first_name || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg" />
+                    value={editingContact.first_name || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 mb-1">Apellido</label>
-                  <input name="last_name" value={editingContact.last_name || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg" />
+                  <label htmlFor="last_name" className="block text-xs font-bold text-slate-500 mb-1">Apellido</label>
+                  <input
+                    type="text"
+                    id="last_name"
+                    name="last_name"
+                    value={editingContact.last_name || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border rounded-lg"
+                  />
                 </div>
               </div>
-              
               <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1">Cargo / Puesto</label>
-                <input name="position" value={editingContact.position || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg" />
+                <label htmlFor="position" className="block text-xs font-bold text-slate-500 mb-1">Cargo</label>
+                <input
+                  type="text"
+                  id="position"
+                  name="position"
+                  value={editingContact.position || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Email</label>
-                    <input type="email" name="email" value={editingContact.email || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg" />
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Teléfono</label>
-                    <input name="phone" value={editingContact.phone || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg" />
-                </div>
+              <div>
+                <label htmlFor="email" className="block text-xs font-bold text-slate-500 mb-1">Email</label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={editingContact.email || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
               </div>
-
-              <div className="flex justify-end pt-4 space-x-2">
-                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100">Cancelar</button>
-                 <button type="submit" disabled={submitting} className="px-4 py-2 rounded-lg bg-brand-600 text-white hover:bg-brand-700 shadow-sm flex items-center">
-                    {submitting && <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>}
-                    Guardar
-                 </button>
-               </div>
+              <div>
+                <label htmlFor="phone" className="block text-xs font-bold text-slate-500 mb-1">Teléfono</label>
+                <input
+                  type="text"
+                  id="phone"
+                  name="phone"
+                  value={editingContact.phone || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border rounded-lg"
+                />
+              </div>
+              <div className="flex justify-end pt-4 space-x-2 border-t mt-6">
+                <button 
+                  type="button" 
+                  onClick={() => setIsModalOpen(false)} 
+                  className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100"
+                >Cancelar</button>
+                <button 
+                  type="submit" 
+                  disabled={submitting}
+                  className="px-4 py-2 rounded-lg bg-brand-600 text-white hover:bg-brand-700 shadow-sm flex items-center"
+                >
+                  {submitting && <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>}
+                  Guardar Contacto
+                </button>
+              </div>
             </form>
           </div>
         </div>

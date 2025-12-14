@@ -131,23 +131,27 @@ export interface CustomStatus {
 export interface Deal {
   id_trato: string;
   id_tenant: string;
-  id_user_owner: string;
-  owner_name?: string;
+  id_user_owner: string; // Propietario del trato
   id_client_company: string;
-  client_company_name?: string;
   id_contact: string;
-  contact_name?: string;
+  id_deal_status: string;
+  id_interest: string;
   nombre_trato: string;
   valor_trato: number;
-  id_deal_status: string; // FK a CustomStatus
-  estado?: string; // Enriched data from API
-  estado_color?: string; // Enriched data from API
-  estado_icon?: string; // Enriched data from API
-  id_interest_status: string; // FK a CustomStatus where type is 'interest'
-  interes?: string; // Enriched data
-  interes_color?: string; // Enriched data
-  interes_icon?: string; // Enriched data
-  created_at: string;
+  fecha_creacion: string; // ISO Date String
+  fecha_cierre_esperada?: string; // ISO Date String
+  descripcion?: string;
+  
+  // Campos derivados (JOINs en el backend)
+  client_company_name?: string;
+  contact_name?: string;
+  owner_name?: string; // Nombre del propietario
+  estado?: string; // Nombre del estado del trato
+  estado_color?: string; // Color del estado del trato
+  estado_icon?: string; // Icono del estado del trato
+  interes?: string; // Nombre del nivel de interés
+  interes_color?: string; // Color del nivel de interés
+  interes_icon?: string; // Icono del nivel de interés
 }
 
 export interface DealPermission {
@@ -161,38 +165,39 @@ export interface DealPermission {
 // 8. COTIZACIONES (QUOTES)
 export interface Quote {
   id_cotizacion: string;
+  id_tenant: string;
+  id_user: string; // Vendedor/Owner
+  id_client_company: string;
+  id_contact: string;
   no_cotizacion: number;
   nombre_cotizacion: string;
-  fecha_emision: string;
-  
-  // Relaciones
-  id_tenant: string;
-  id_user: string;
-  id_client_company: string;
-  client_company_name?: string;
-  id_contact?: string;
-  contact_name?: string;
-  id_trato?: string;
-  id_quote_status?: string; // FK a CustomStatus
-  
-  estado: string; // Usará el nombre del CustomStatus
+  fecha_emision: string; // ISO Date String
+  estado_decision: UserDecision; // PENDIENTE, APROBADO, RECHAZADO
+  total: string; // Viene como string tipo "$0.00"
   version: number;
-  total: number;
-  
-  // Nuevos campos de detalle
+  mensaje?: string;
+  correos_adicionales?: string | null;
+  file_generado?: string | null; // URL del PDF generado
+  created_at: string;
+  updated_at: string;
+  id_quote_status: string;
   tiempo_entrega?: string;
   garantia?: string;
   validez_oferta?: string;
   nota?: string;
+  id_trato?: string | null;
   
-  mensaje?: string;
-  correos_adicionales?: string;
-  file_generado?: string;
-  estado_decision: UserDecision;
-  
-  // UI triggers
-  trigger2: boolean; 
-  trigger3: boolean;
+  // Campos derivados (JOINs en el backend)
+  created_at_fmt?: string; // Fecha de creación formateada
+  fecha_emision_fmt?: string; // Fecha de emisión formateada
+  estado?: string; // Nombre del estado de la cotización
+  estado_color?: string; // Color del estado de la cotización
+  contact_name?: string;
+  contact_email?: string;
+  client_company_name?: string;
+  owner_name?: string; // Nombre del vendedor
+  nombre_trato?: string; // Nombre del trato asociado
+  formatted_no_cotizacion?: string; // Número de cotización formateado (ej. 001, 002)
 }
 
 // 9. QUOTE ITEMS (Artículos de la cotización)

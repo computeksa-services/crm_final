@@ -1,35 +1,73 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { MockApi } from '../services/mockApi';
+import { useAuth } from '../contexts/AuthContext'; // Importar useAuth
 import { ClientContact, ClientCompany } from '../types';
+import Toast from '../components/Toast'; // Necesario para los mensajes de error
 
 const ClientContactDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth(); // Usar useAuth
+
   const [contact, setContact] = useState<ClientContact | null>(null);
   const [company, setCompany] = useState<ClientCompany | null>(null);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null); // Añadir estado del toast
 
   const fetchData = useCallback(async () => {
-    if (!id) return;
+    if (!id || !user?.id_tenant || !user?.id_user) return;
     setLoading(true);
+    const tenantId = user.id_tenant;
+    const userId = user.id_user;
+
     try {
-      const foundContact = await MockApi.getClientContactById(id);
-      if (foundContact) {
-        setContact(foundContact);
-        if (foundContact.id_client_company) {
-          const foundCompany = await MockApi.getClientCompanyById(foundContact.id_client_company);
-          setCompany(foundCompany || null);
+      // 1. Obtener el contacto
+      const contactResponse = await fetch(`https://service.computeksa.com/webhook/api/clients/contacts/detail?id_contact=${id}&id_tenant=${tenantId}&id_user=${userId}`);
+      if (!contactResponse.ok) {
+        if (contactResponse.status === 404) {
+          setContact(null);
+        } else {
+          const errorText = await contactResponse.text();
+          throw new Error(`Error del servidor al cargar contacto: ${contactResponse.status} - ${errorText}`);
         }
-      } else {
-        setContact(null);
+        setLoading(false);
+        return;
       }
-    } catch (e) {
+      const contactText = await contactResponse.text();
+      const foundContact: ClientContact | null = contactText ? (Array.isArray(JSON.parse(contactText)) ? JSON.parse(contactText)[0] : JSON.parse(contactText)) : null;
+      setContact(foundContact);
+
+      if (!foundContact) { // Si no se encuentra el contacto, no hay empresa
+        setLoading(false);
+        return;
+      }
+
+      // 2. Obtener la empresa asociada (si existe)
+      if (foundContact.id_client_company) {
+        const companyResponse = await fetch(`https://service.computeksa.com/webhook/api/clients/companies/detail?id_client_company=${foundContact.id_client_company}&id_tenant=${tenantId}&id_user=${userId}`);
+        if (!companyResponse.ok) {
+          if (companyResponse.status === 404) {
+            setCompany(null);
+          } else {
+            const errorText = await companyResponse.text();
+            throw new Error(`Error del servidor al cargar empresa: ${companyResponse.status} - ${errorText}`);
+          }
+        } else {
+          const companyText = await companyResponse.text();
+          const foundCompany: ClientCompany | null = companyText ? (Array.isArray(JSON.parse(companyText)) ? JSON.parse(companyText)[0] : JSON.parse(companyText)) : null;
+          setCompany(foundCompany);
+        }
+      }
+
+    } catch (e: any) {
       console.error("Error fetching contact details:", e);
+      setToast({ message: e.message || 'Error al cargar los detalles del contacto.', type: 'error' });
+      setContact(null);
+      setCompany(null);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, user]);
 
   useEffect(() => {
     fetchData();
@@ -40,6 +78,8 @@ const ClientContactDetail: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
       {/* Header */}
       <div className="flex items-center space-x-4 mb-2">
         <button onClick={() => navigate(-1)} className="text-slate-400 hover:text-slate-600 transition-colors">

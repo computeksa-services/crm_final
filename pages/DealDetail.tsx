@@ -1,61 +1,98 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { MockApi } from '../services/mockApi';
-import { Deal, Quote, DealPermission, User } from '../types';
+import { useAuth } from '../contexts/AuthContext';
+import { Deal, Quote, DealStatus, DealInterest, ClientCompany, ClientContact, User } from '../types';
+import Toast from '../components/Toast'; // Asumimos que tienes un Toast genérico
 
 type Tab = 'quotes' | 'permissions' | 'activity';
 
 const DealDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+
   const [deal, setDeal] = useState<Deal | null>(null);
   const [quotes, setQuotes] = useState<Quote[]>([]);
-  const [permissions, setPermissions] = useState<DealPermission[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('quotes');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const fetchData = useCallback(async () => {
-    if (!id) return;
+    if (!id || !user?.id_tenant || !user?.id_user) return;
     setLoading(true);
+    const tenantId = user.id_tenant;
+    const userId = user.id_user;
+
     try {
-      const [dealData, allQuotes, allUsers, interestStatuses] = await Promise.all([
-        MockApi.getDealById(id),
-        MockApi.getQuotes(), // Assuming this fetches all quotes for now
-        MockApi.getUsers(),
-        MockApi.getInterestStatuses(),
+      // Cargar todos los datos en paralelo
+      const [dealRes, quotesRes, usersRes, companiesRes, contactsRes, dealStatusesRes, interestRes] = await Promise.all([
+        fetch(`https://service.computeksa.com/webhook/api/deals/detail?id_trato=${id}&id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`https://service.computeksa.com/webhook/api/quotes?id_tenant=${tenantId}&id_user=${userId}&id_trato=${id}`), // Filtrar cotizaciones por trato
+        fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`https://service.computeksa.com/webhook/api/clients/contacts?id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`https://service.computeksa.com/webhook/api/statuses/deals?id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`https://service.computeksa.com/webhook/api/statuses/interests?id_tenant=${tenantId}&id_user=${userId}`),
       ]);
-      
-      if (!dealData) {
-        setDeal(null);
-      } else {
-        const companyData = await MockApi.getClientCompanyById(dealData.id_client_company);
-        const contactData = await MockApi.getClientContactById(dealData.id_contact);
-        const ownerData = allUsers.find(u => u.id_user === dealData.id_user_owner);
-        const interestStatus = interestStatuses.find(i => i.id_interest === dealData.id_interest_status);
-        
-        setDeal({
-            ...dealData,
-            client_company_name: companyData?.name_company,
-            contact_name: `${contactData?.first_name || ''} ${contactData?.last_name || ''}`,
-            owner_name: ownerData?.name_user,
-            interes: interestStatus?.name,
-            interes_color: interestStatus?.color,
-            interes_icon: interestStatus?.icon,
-        });
-        
-        setQuotes(allQuotes.filter(q => q.id_trato === id));
-        // Mock permissions for now
-        // const perms = await MockApi.getDealPermissions(id);
-        // setPermissions(perms);
-        setUsers(allUsers);
+
+      const parseResponse = async (res: Response) => {
+        if (!res.ok) {
+          if (res.status === 404) return null; // Para detalle
+          const errorText = await res.text();
+          throw new Error(`Error del servidor: ${res.status} - ${errorText}`);
+        }
+        const text = await res.text();
+        return text ? JSON.parse(text) : null;
+      };
+
+      // Parsear respuestas
+      const rawDealData = await parseResponse(dealRes);
+      const allQuotesData = await parseResponse(quotesRes) || [];
+      const allUsersData = await parseResponse(usersRes) || [];
+      const allCompaniesData = await parseResponse(companiesRes) || [];
+      const allContactsData = await parseResponse(contactsRes) || [];
+      const allDealStatusesData = await parseResponse(dealStatusesRes) || [];
+      const allInterestData = await parseResponse(interestRes) || [];
+
+      let processedDeal: Deal | null = null;
+      if (rawDealData) {
+        // Manejar si la API de detalle devuelve un array o un objeto directo
+        const dealData = Array.isArray(rawDealData) ? rawDealData[0] : rawDealData;
+        if (dealData) {
+            // Enriquecer el objeto Deal con datos relacionados
+            const company = allCompaniesData.find((c: ClientCompany) => c.id_client_company === dealData.id_client_company);
+            const contact = allContactsData.find((c: ClientContact) => c.id_contact === dealData.id_contact);
+            const owner = allUsersData.find((u: User) => u.id_user === dealData.id_user_owner);
+            const dealStatus = allDealStatusesData.find((s: DealStatus) => s.id_status === dealData.id_deal_status);
+            const interestStatus = allInterestData.find((i: DealInterest) => i.id_interest === dealData.id_interest);
+
+            processedDeal = {
+                ...dealData,
+                client_company_name: company?.name_company || 'Desconocida',
+                contact_name: `${contact?.first_name || ''} ${contact?.last_name || ''}`.trim() || 'Desconocido',
+                owner_name: owner?.name_user || 'Desconocido',
+                estado: dealStatus?.name || 'Desconocido',
+                estado_color: dealStatus?.color || '#cccccc',
+                estado_icon: dealStatus?.icon || 'fa-solid fa-circle',
+                interes: interestStatus?.name || 'N/A',
+                interes_color: interestStatus?.color || '#cccccc',
+                interes_icon: interestStatus?.icon || 'fa-solid fa-circle',
+            };
+        }
       }
-    } catch (e) {
+      
+      setDeal(processedDeal);
+      setQuotes(allQuotesData.filter((q: Quote) => q.id_trato === id)); // Filtrar si la API no lo hizo
+      // setPermissions(perms); // No hay API de permisos aún
+
+    } catch (e: any) {
       console.error("Error fetching deal details:", e);
+      setToast({ message: e.message || 'Error al cargar los detalles del trato.', type: 'error' });
+      setDeal(null);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, user]);
 
   useEffect(() => {
     fetchData();
@@ -79,6 +116,8 @@ const DealDetail: React.FC = () => {
 
   return (
     <div className="space-y-6">
+        {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
@@ -93,8 +132,8 @@ const DealDetail: React.FC = () => {
           </p>
         </div>
         <div className="text-right">
-            <p className="text-3xl font-bold text-slate-800">{deal.valor_trato.toLocaleString('es-EC')}</p>
-            <span className={`px-2 py-1 rounded-full text-xs font-bold bg-green-100 text-green-800`}>{deal.estado}</span>
+            <p className="text-3xl font-bold text-slate-800">{deal.valor_trato.toLocaleString('es-EC', { style: 'currency', currency: 'USD' })}</p>
+            <span className={`px-2 py-1 rounded-full text-xs font-bold`} style={{ backgroundColor: `${deal.estado_color || '#cccccc'}20`, color: deal.estado_color }}>{deal.estado}</span>
         </div>
       </div>
 
@@ -115,13 +154,13 @@ const DealDetail: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center">
                     <span className="text-slate-500">Fecha Creación:</span>
-                    <span className="font-medium text-slate-800">{new Date(deal.created_at).toLocaleDateString()}</span>
+                    <span className="font-medium text-slate-800">{new Date(deal.fecha_creacion).toLocaleDateString()}</span>
                 </div>
                 <div className="flex justify-between items-center">
                     <span className="text-slate-500">Interés:</span>
                     <span 
                       className="font-medium text-slate-800 px-2 py-1 rounded-full text-xs font-bold flex items-center w-fit"
-                      style={{ backgroundColor: `${deal.interes_color}20`, color: deal.interes_color }}
+                      style={{ backgroundColor: `${deal.interes_color || '#cccccc'}20`, color: deal.interes_color }}
                     >
                       {deal.interes_icon && <i className={`${deal.interes_icon} mr-1.5`}></i>}
                       {deal.interes || 'N/A'}
@@ -148,7 +187,7 @@ const DealDetail: React.FC = () => {
                         <div className="flex justify-between items-center mb-4">
                             <h4 className="font-bold text-slate-700">Cotizaciones Vinculadas</h4>
                             <button 
-                              onClick={() => navigate(`/quotes/new?dealId=${deal.id_trato}&clientCompanyId=${deal.id_client_company}&contactId=${deal.id_contact}&dealName=${encodeURIComponent(deal.nombre_trato)}`)}
+                              onClick={() => navigate(`/quotes/new?dealId=${deal.id_trato}&clientCompanyId=${deal.id_client_company}&contactId=${deal.id_contact}&dealName=${encodeURIComponent(deal.nombre_trato || '')}`)}
                               className="text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded shadow-sm font-medium">
                                 <i className="fa-solid fa-plus mr-1"></i> Nueva Cotización
                             </button>
