@@ -67,7 +67,8 @@ const DealsList: React.FC = () => {
       // Enriquecer los datos de deals antes de establecer el estado
       const enrichedDeals: Deal[] = dealsData.map((deal: Deal) => {
         const company = companiesData.find((c: ClientCompany) => c.id_client_company === deal.id_client_company);
-        const contact = contactsData.find((c: ClientContact) => c.id_contact === deal.id_contact);
+        // Añado Array.isArray(contactsData) antes de .find()
+        const contact = Array.isArray(contactsData) ? contactsData.find((c: ClientContact) => c.id_contact === deal.id_contact) : undefined;
         const owner = usersData.find((u: User) => u.id_user === deal.id_user_owner);
         const dealStatus = dealStatusesData.find((s: DealStatus) => s.id_status === deal.id_deal_status);
         const interestStatus = interestStatusesData.find((i: DealInterest) => i.id_interest === deal.id_interest);

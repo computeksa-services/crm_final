@@ -45,7 +45,17 @@ const ClientContactsList: React.FC = () => {
           throw new Error(`Error del servidor: ${res.status} - ${errorText}`);
         }
         const text = await res.text();
-        return text ? JSON.parse(text) : [];
+        let data = [];
+        if (text) {
+          const parsed = JSON.parse(text);
+          if (Array.isArray(parsed)) {
+            data = parsed;
+          } else {
+            console.warn("API devolvió un formato inesperado (no un array):", parsed);
+            setToast({ message: 'Formato de datos inesperado desde el servidor.', type: 'error' });
+          }
+        }
+        return data;
       };
 
       const contactsData = await parseResponse(contactsRes);
@@ -209,59 +219,57 @@ const ClientContactsList: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-slate-500">Cargando contactos...</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold">
-                <tr>
-                  <th className="px-6 py-4 border-b">Nombre</th>
-                  <th className="px-6 py-4 border-b">Empresa</th>
-                  <th className="px-6 py-4 border-b">Cargo</th>
-                  <th className="px-6 py-4 border-b">Contacto</th>
-                  <th className="px-6 py-4 border-b text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {contacts.length === 0 ? (
-                  <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-500">No hay contactos registrados.</td></tr>
-                ) : (
-                  contacts.map((contact) => (
-                    <tr 
-                      key={contact.id_contact} 
-                      onClick={() => handleRowClick(contact.id_contact)}
-                      className="hover:bg-slate-50 transition-colors cursor-pointer"
-                    >
-                      <td className="px-6 py-4 font-medium text-slate-800">
-                        {contact.first_name} {contact.last_name}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-700">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                           <i className="fa-solid fa-building mr-1"></i>
-                           {getCompanyName(contact.id_client_company)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{contact.position || '-'}</td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="text-slate-800">{contact.email}</div>
-                        <div className="text-xs text-slate-500">{contact.phone}</div>
-                      </td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        <button onClick={(e) => { e.stopPropagation(); handleEdit(contact); }} className="p-2 text-slate-400 hover:text-brand-600">
-                          <i className="fa-solid fa-pen-to-square"></i>
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); handleDelete(contact.id_contact); }} className="p-2 text-slate-400 hover:text-red-600">
-                          <i className="fa-solid fa-trash"></i>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold">
+              <tr>
+                <th className="px-6 py-4 border-b">Nombre</th>
+                <th className="px-6 py-4 border-b">Empresa</th>
+                <th className="px-6 py-4 border-b">Cargo</th>
+                <th className="px-6 py-4 border-b">Contacto</th>
+                <th className="px-6 py-4 border-b text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {loading ? (
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-500">Cargando contactos...</td></tr>
+              ) : contacts.length === 0 ? (
+                <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-500">No hay contactos registrados.</td></tr>
+              ) : (
+                Array.isArray(contacts) && contacts.map((contact) => (
+                  <tr 
+                    key={contact.id_contact} 
+                    onClick={() => handleRowClick(contact.id_contact)}
+                    className="hover:bg-slate-50 transition-colors cursor-pointer"
+                  >
+                    <td className="px-6 py-4 font-medium text-slate-800">
+                      {contact.first_name} {contact.last_name}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-700">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                         <i className="fa-solid fa-building mr-1"></i>
+                         {getCompanyName(contact.id_client_company)}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-slate-600">{contact.position || '-'}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="text-slate-800">{contact.email}</div>
+                      <div className="text-xs text-slate-500">{contact.phone}</div>
+                    </td>
+                    <td className="px-6 py-4 text-right space-x-2">
+                      <button onClick={(e) => { e.stopPropagation(); handleEdit(contact); }} className="p-2 text-slate-400 hover:text-brand-600">
+                        <i className="fa-solid fa-pen-to-square"></i>
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDelete(contact.id_contact); }} className="p-2 text-slate-400 hover:text-red-600">
+                        <i className="fa-solid fa-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {isModalOpen && editingContact && (

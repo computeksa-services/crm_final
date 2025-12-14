@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext'; // Importar useAuth
-import { Quote, ClientCompany, ClientContact, QuoteStatus, Deal } from '../types';
+import { Quote, ClientCompany, ClientContact, QuoteStatus, Deal, UserDecision } from '../types';
 import Toast from '../components/Toast';
 
 const QuoteCreate: React.FC = () => {

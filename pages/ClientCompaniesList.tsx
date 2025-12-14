@@ -34,7 +34,7 @@ const ClientCompaniesList: React.FC = () => {
 
     try {
       const [companiesRes, usersRes] = await Promise.all([
-        fetch(`https://service.computeksa.com/webhook/api/client-companies?id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`),
         fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${tenantId}&id_user=${userId}`)
       ]);
 
