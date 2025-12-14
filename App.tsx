@@ -18,7 +18,7 @@ import ClientContactDetail from './pages/ClientContactDetail';
 import DealsList from './pages/DealsList';
 import DealDetail from './pages/DealDetail';
 import ProductsList from './pages/ProductsList';
-import SettingsStatuses from './pages/SettingsStatuses';
+import SettingsPage from './pages/SettingsPage';
 import { MockApi } from './services/mockApi';
 import QuoteCreate from './pages/QuoteCreate'; // RUTA CORREGIDA
 
@@ -57,7 +57,7 @@ const App: React.FC = () => {
             <Route path="client-contacts" element={<ClientContactsList />} />
             <Route path="client-contacts/:id" element={<ClientContactDetail />} />
             <Route path="products" element={<ProductsList />} />
-            <Route path="settings/statuses" element={<SettingsStatuses />} />
+            <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </HashRouter>

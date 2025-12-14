@@ -99,20 +99,51 @@ const ProductsList: React.FC = () => {
 
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingProduct) return;
+    if (!editingProduct || !user?.id_tenant) return;
+    
     setSubmitting(true);
+    
+    const payload = {
+      ...editingProduct,
+      id_tenant: user.id_tenant,
+    };
+
     try {
-      if (isEditMode && editingProduct.id_product) {
-        await MockApi.updateProduct(editingProduct.id_product, editingProduct);
+      if (isEditMode && payload.id_product) {
+        // --- LÓGICA DE ACTUALIZACIÓN ---
+        const response = await fetch('https://service.computeksa.com/webhook/api/products/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Error del servidor al actualizar.');
+        }
+        
         setToast({ message: 'Producto actualizado.', type: 'success' });
+
       } else {
-        await MockApi.addProduct(editingProduct);
+        // --- LÓGICA DE CREACIÓN (CORREGIDA) ---
+        const response = await fetch('https://service.computeksa.com/webhook/api/products', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            throw new Error(errorData.message || 'Error del servidor al crear el producto.');
+        }
+
         setToast({ message: 'Producto creado.', type: 'success' });
       }
+
       setIsModalOpen(false);
       fetchData();
+
     } catch (error: any) {
-      // Ahora el 'catch' recibirá el error con el mensaje de n8n
       const errorMessage = error?.message || 'Ocurrió un error desconocido al guardar.';
       setToast({ message: errorMessage, type: 'error' });
     } finally {

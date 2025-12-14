@@ -35,6 +35,45 @@ export interface User {
   outlookConnected: boolean;
 }
 
+// NUEVA INTERFAZ PARA TIPOS DE PRODUCTO
+export interface ProductType {
+  id_product_type: string;
+  id_tenant: string;
+  type: string;
+}
+
+// INTERFACES PARA ESTADOS PERSONALIZADOS
+export interface DealStatus {
+  id_status: string;
+  id_tenant: string;
+  name: string; // Renombrado de status_name
+  color: string;
+  status_order: number;
+  is_default: boolean;
+  icon: string;
+}
+
+export interface QuoteStatus {
+  id_status: string;
+  id_tenant: string;
+  name: string; // Renombrado de status_name
+  color: string;
+  status_order: number;
+  is_default: boolean;
+  icon: string;
+}
+
+// NUEVA INTERFAZ PARA INTERESES DE TRATOS
+export interface DealInterest {
+  id_interest: string; // Corregido de id_deal_interest
+  id_tenant: string;
+  name: string;
+  color: string;
+  icon: string;
+  status_order: number;
+  is_default: boolean;
+}
+
 // 3. CLIENT COMPANY (La empresa cliente B2B)
 export interface ClientCompany {
   id_client_company: string;

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { MockApi } from '../services/mockApi';
 import { User } from '../types';
+import { useAuth } from '../contexts/AuthContext'; // 1. Importar el hook de autenticación
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -13,13 +14,15 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth(); // 2. Obtener el usuario y la función de logout
 
   useEffect(() => {
     MockApi.getUser().then(user => setCurrentUser(user));
   }, []);
 
   const handleLogout = () => {
-    onLogout();
+    logout();
+    navigate('/login');
   };
 
   const navItems = [
@@ -76,6 +79,30 @@ const Layout: React.FC<LayoutProps> = ({ children, onLogout }) => {
               );
             })}
           </ul>
+
+          {/* 3. Lógica para roles */}
+          {user && (user.rol_user === 'admin' || user.rol_user === 'superadmin') && (
+            <>
+              <h2 className="px-2 text-xs font-semibold text-slate-500 uppercase tracking-wider mt-6 mb-2">Configuración</h2>
+              <ul>
+                <li><Link to="/settings" className="flex items-center p-3 rounded-lg transition-colors">
+                   <i className="fa-solid fa-sliders w-6 text-center"></i>
+                   <span className="ml-3 text-sm font-medium">Ajustes</span>
+                </Link></li>
+                <li><Link to="/users" className="flex items-center p-3 rounded-lg transition-colors">
+                   <i className="fa-solid fa-users-cog w-6 text-center"></i>
+                   <span className="ml-3 text-sm font-medium">Usuarios</span>
+                </Link></li>
+                {user.rol_user === 'superadmin' && (
+                  <li><Link to="/companies" className="flex items-center p-3 rounded-lg transition-colors">
+                     <i className="fa-solid fa-building-user w-6 text-center"></i>
+                     <span className="ml-3 text-sm font-medium">Tenants</span>
+                  </Link></li>
+                )}
+              </ul>
+            </>
+          )}
+
         </nav>
 
         <div className="p-4 border-t border-slate-700">
