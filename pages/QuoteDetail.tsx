@@ -32,17 +32,48 @@ const QuoteDetail: React.FC = () => {
     if (!id) return;
     setLoading(true);
     try {
+      // 1. Obtener los datos principales de la cotización
       const q = await MockApi.getQuoteById(id);
+      
       if (q) {
-        // Filtrar productos seleccionados por el id_cotizacion
-        const i = await MockApi.getQuoteItems(q.id_cotizacion);
+        // 2. Guardar la cotización en el estado inmediatamente.
+        // Así, si falla la carga de items, la página principal no se rompe.
         setQuote(q);
-        setItems(i);
+
+        // 3. Cargar los artículos en un bloque try/catch anidado.
+        try {
+          const itemsResponse = await fetch(`https://service.computeksa.com/webhook/api/quote-items?id_cotizacion=${q.id_cotizacion}`);
+          
+          if (!itemsResponse.ok) {
+            // Si la API responde con 404, es una forma común de decir "no hay items".
+            // Lo manejamos sin mostrar un error al usuario.
+            if (itemsResponse.status === 404) {
+              setItems([]);
+            } else {
+              // Para otros errores (ej. 500), sí queremos saberlo.
+              throw new Error(`Error del servidor: ${itemsResponse.status}`);
+            }
+          } else {
+            // Leemos la respuesta como texto para manejar el caso de que n8n devuelva un cuerpo vacío
+            // en lugar de un array `[]` cuando no hay resultados.
+            const responseText = await itemsResponse.text();
+            const itemsData = responseText ? JSON.parse(responseText) : [];
+            setItems(itemsData);
+          }
+
+        } catch (itemError) {
+          console.error("Error al cargar o procesar los artículos:", itemError);
+          setToast({ message: 'No se pudieron cargar los artículos.', type: 'error' });
+          setItems([]); // En cualquier caso de error, dejamos la tabla vacía.
+        }
+
       } else {
         setQuote(null);
       }
     } catch (e) {
-      console.error(e);
+      console.error("Error al cargar la cotización:", e);
+      setToast({ message: 'Error fatal al cargar la cotización.', type: 'error' });
+      setQuote(null);
     } finally {
       setLoading(false);
     }
@@ -63,14 +94,52 @@ const QuoteDetail: React.FC = () => {
   const handleProductSelection = async () => {
     if (!selectedProductId || !quote) return;
 
+    const selectedProduct = availableProducts.find(p => p.id_product === selectedProductId);
+    if (!selectedProduct) {
+      setToast({ message: 'Producto seleccionado no encontrado.', type: 'error' });
+      return;
+    }
+
     setProcessing(true);
+
+    const apiEndpoint = 'https://service.computeksa.com/webhook/api/products-selected';
+    
+    // El id_tenant se obtiene de la cotización
+    const tenantId = quote.id_tenant;
+
+    const payload = {
+      id_cotizacion: quote.id_cotizacion,
+      id_tenant: tenantId,
+      // Datos del producto seleccionado
+      descripcion: selectedProduct.descripcion, 
+      cantidad: itemQuantity,
+      precio_unitario: selectedProduct.precio_unitario,
+      subtotal: itemQuantity * selectedProduct.precio_unitario,
+      id_producto: selectedProduct.id_product
+    };
+
     try {
-      await MockApi.addQuoteItem(quote.id_cotizacion, selectedProductId, itemQuantity);
+      const response = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        // Si el servidor responde con un error, lo capturamos
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error al conectar con el servidor.');
+      }
+
+      // Si todo va bien...
       setToast({ message: 'Artículo añadido con éxito.', type: 'success' });
-      setIsProductModalOpen(false);
-      setSelectedProductId(null);
-      setItemQuantity(1);
-      fetchData(); // Recargar datos para ver el nuevo artículo y el total actualizado
+      setIsProductModalOpen(false); // Cierra el modal
+      setSelectedProductId(null); // Resetea el producto seleccionado
+      setItemQuantity(1); // Resetea la cantidad
+      fetchData(); // Vuelve a cargar los datos de la cotización
+
     } catch (e: any) {
       setToast({ message: e.message || 'Error al añadir el artículo.', type: 'error' });
     } finally {
@@ -279,6 +348,8 @@ const QuoteDetail: React.FC = () => {
               <table className="w-full text-sm text-left">
                 <thead className="text-xs text-slate-500 uppercase bg-white border-b border-slate-100">
                   <tr>
+                    <th className="px-4 py-3">#</th>
+                    <th className="px-4 py-3">Código</th>
                     <th className="px-6 py-3">Descripción</th>
                     <th className="px-6 py-3 text-right">Cant.</th>
                     <th className="px-6 py-3 text-right">Precio U.</th>
@@ -287,43 +358,57 @@ const QuoteDetail: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                  {items.map((item) => (
-                    <tr key={item.id_articulo_cot}>
-                      <td className="px-6 py-3 font-medium text-slate-700">{item.descripcion}</td>
-                      <td className="px-6 py-3 text-right">
-                         <input 
-                            type="number"
-                            value={item.cantidad}
-                            onChange={(e) => handleUpdateItem(item.id_articulo_cot, parseInt(e.target.value) || 1, item.precio_unitario)}
-                            min="1"
-                            className="w-20 px-2 py-1 border rounded-md text-right"
-                         />
-                      </td>
-                      <td className="px-6 py-3 text-right">
-                        <input 
-                            type="number"
-                            value={item.precio_unitario.toFixed(2)}
-                            onChange={(e) => handleUpdateItem(item.id_articulo_cot, item.cantidad, parseFloat(e.target.value) || 0)}
-                            step="0.01"
-                            className="w-28 px-2 py-1 border rounded-md text-right"
-                        />
-                      </td>
-                      <td className="px-6 py-3 text-right font-semibold text-slate-800">{(item.cantidad * item.precio_unitario).toFixed(2)}</td>
-                      <td className="px-6 py-3 text-right">
-                        <button 
-                          onClick={() => handleDeleteItem(item.id_articulo_cot)}
-                          className="text-red-500 hover:text-red-700 p-2"
-                          title="Eliminar artículo"
-                        >
-                          <i className="fa-solid fa-trash"></i>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {items.map((item, index) => {
+                    // Convertir precios de string a número para los cálculos.
+                    // Esto es clave porque la API devuelve los valores monetarios como texto.
+                    const cantidad = parseFloat(item.cantidad as any) || 0;
+                    const precioUnitario = parseFloat((item.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
+                    const subtotal = cantidad * precioUnitario;
+
+                    return (
+                      <tr key={item.id_articulo_cot}>
+                        <td className="px-4 py-3 text-slate-400 font-medium">{index + 1}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500">{item.codigo}</td>
+                        <td className="px-6 py-3 font-medium text-slate-700">{item.descripcion}</td>
+                        <td className="px-6 py-3 text-right">
+                          <input 
+                              type="number"
+                              defaultValue={cantidad}
+                              onBlur={(e) => handleUpdateItem(item.id_articulo_cot, parseInt(e.target.value) || 1, precioUnitario)}
+                              min="1"
+                              className="w-20 px-2 py-1 border rounded-md text-right"
+                          />
+                        </td>
+                        <td className="px-6 py-3 text-right">
+                          <input 
+                              type="number"
+                              defaultValue={precioUnitario.toFixed(2)}
+                              onBlur={(e) => handleUpdateItem(item.id_articulo_cot, cantidad, parseFloat(e.target.value) || 0)}
+                              step="0.01"
+                              className="w-28 px-2 py-1 border rounded-md text-right"
+                          />
+                        </td>
+                        <td className="px-6 py-3 text-right font-semibold text-slate-800">{subtotal.toFixed(2)}</td>
+                        <td className="px-6 py-3 text-right">
+                          <button 
+                            onClick={() => handleDeleteItem(item.id_articulo_cot)}
+                            className="text-red-500 hover:text-red-700 p-2"
+                            title="Eliminar artículo"
+                          >
+                            <i className="fa-solid fa-trash"></i>
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
                   <tr className="bg-slate-50">
-                    <td colSpan={3} className="px-6 py-3 text-right font-bold text-slate-600">Total</td>
+                    <td colSpan={5} className="px-6 py-3 text-right font-bold text-slate-600">Total</td>
                     <td className="px-6 py-3 text-right font-bold text-brand-700 text-lg">
-                      {items.reduce((acc, curr) => acc + (curr.cantidad * curr.precio_unitario), 0).toFixed(2)}
+                      {items.reduce((acc, curr) => {
+                        const cantidad = parseFloat(curr.cantidad as any) || 0;
+                        const precioUnitario = parseFloat((curr.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
+                        return acc + (cantidad * precioUnitario);
+                      }, 0).toFixed(2)}
                     </td>
                     <td></td>
                   </tr>
