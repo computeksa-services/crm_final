@@ -1,39 +1,60 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { MockApi } from '../services/mockApi';
+import { useAuth } from '../contexts/AuthContext'; // Importar el hook
 import { Product } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 
 const ProductsList: React.FC = () => {
+  const { user } = useAuth(); // Obtener el usuario del contexto
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
     title: '',
     message: '',
-    onConfirm: () => {},
     isDestructive: false,
+    onConfirm: () => {},
   });
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const fetchData = useCallback(async () => {
+    if (!user?.id_tenant) {
+      setToast({ message: 'No se pudo identificar tu empresa. Vuelve a iniciar sesión.', type: 'error' });
+      return;
+    }
+
     setLoading(true);
+    const tenantId = user.id_tenant;
+
     try {
-      const data = await MockApi.getProducts();
-      setProducts(data);
-    } catch (e) {
-      setToast({ message: 'Error al cargar productos.', type: 'error' });
+      const response = await fetch(`https://service.computeksa.com/webhook/api/products?id_tenant=${tenantId}`);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          setProducts([]);
+        } else {
+          throw new Error('Error al conectar con el servidor.');
+        }
+      } else {
+        const responseText = await response.text();
+        const data = responseText ? JSON.parse(responseText) : [];
+        setProducts(data);
+      }
+
+    } catch (e: any) {
+      setToast({ message: e.message || 'Error al cargar productos.', type: 'error' });
+      setProducts([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]); // El efecto ahora depende del objeto 'user' del contexto
 
   useEffect(() => {
     fetchData();
@@ -172,8 +193,8 @@ const ProductsList: React.FC = () => {
                     <td className="px-6 py-4 font-mono text-sm text-slate-600">{product.codigo}</td>
                     <td className="px-6 py-4"><span className={`px-2 py-1 rounded text-xs font-bold ${product.tipo === 'BIEN' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>{product.tipo}</span></td>
                     <td className="px-6 py-4 text-right font-semibold text-slate-700">
-  {typeof product.precio_unitario === 'number' ? product.precio_unitario.toFixed(2) : '0.00'}
-</td>
+                      {product.precio_unitario}
+                    </td>
                     <td className="px-6 py-4 text-right space-x-2">
                       <button onClick={() => handleEdit(product)} className="p-2 text-slate-400 hover:text-brand-600"><i className="fa-solid fa-pen-to-square"></i></button>
                       <button onClick={() => handleDelete(product.id_product)} className="p-2 text-slate-400 hover:text-red-600"><i className="fa-solid fa-trash"></i></button>

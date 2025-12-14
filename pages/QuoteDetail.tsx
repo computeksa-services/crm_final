@@ -149,12 +149,45 @@ const QuoteDetail: React.FC = () => {
 
   const handleUpdateItem = async (itemId: string, newCantidad: number, newPrecioUnitario: number) => {
     if (!quote) return;
+    
+    // Evitar llamadas a la API si los valores no han cambiado.
+    const currentItem = items.find(i => i.id_articulo_cot === itemId);
+    const cantidad = parseFloat(currentItem?.cantidad as any) || 0;
+    const precioUnitario = parseFloat((currentItem?.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
+
+    if (newCantidad === cantidad && newPrecioUnitario === precioUnitario) {
+      console.log("Sin cambios, no se actualiza.");
+      return;
+    }
+
     setProcessing(true);
+    
+    const apiEndpoint = 'https://service.computeksa.com/webhook/api/quote-items/update';
+    const updatedSubtotal = newCantidad * newPrecioUnitario;
+
+    const payload = {
+      id_articulo_cot: itemId,
+      cantidad: newCantidad,
+      precio_unitario: newPrecioUnitario,
+      subtotal: updatedSubtotal
+    };
+
     try {
-      const updatedSubtotal = newCantidad * newPrecioUnitario;
-      await MockApi.updateQuoteItem(itemId, { cantidad: newCantidad, precio_unitario: newPrecioUnitario, subtotal: updatedSubtotal });
+      const response = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Error del servidor al actualizar.');
+      }
+
       setToast({ message: 'Artículo actualizado.', type: 'success' });
-      fetchData(); // Recargar datos para ver los cambios
+      // Forzamos la recarga de datos para asegurar consistencia total.
+      fetchData(); 
+
     } catch (e: any) {
       setToast({ message: e.message || 'Error al actualizar el artículo.', type: 'error' });
     } finally {
@@ -171,10 +204,25 @@ const QuoteDetail: React.FC = () => {
       onConfirm: async () => {
         if (!quote) return;
         setProcessing(true);
+        
+        const apiEndpoint = 'https://service.computeksa.com/webhook/api/quote-items/delete';
+        const payload = { id_articulo_cot: itemId };
+
         try {
-          await MockApi.deleteQuoteItem(itemId);
+          const response = await fetch(apiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || 'Error del servidor al eliminar.');
+          }
+
           setToast({ message: 'Artículo eliminado.', type: 'success' });
           fetchData(); // Recargar datos para ver los cambios
+
         } catch (e: any) {
           setToast({ message: e.message || 'Error al eliminar el artículo.', type: 'error' });
         } finally {

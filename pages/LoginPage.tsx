@@ -1,18 +1,14 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MockApi } from '../services/mockApi';
+import { useAuth } from '../contexts/AuthContext'; // Importar el hook
 
-interface LoginPageProps {
-  onLogin: () => void;
-}
-
-const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
+const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login } = useAuth(); // Usar el contexto
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,15 +16,27 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setError('');
 
     try {
-      const success = await MockApi.login(email, password);
-      if (success) {
-        onLogin(); // Update global auth state
-        navigate('/dashboard'); // Redirect to internal app
-      } else {
-        setError('Credenciales inválidas. Intente admin@computeksa.com / admin');
+      // Llamada a la API real
+      const response = await fetch('https://service.computeksa.com/webhook/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        // Asumimos que una respuesta no-OK es por credenciales inválidas
+        const errorData = await response.json().catch(() => ({ message: 'Credenciales inválidas.' }));
+        throw new Error(errorData.message);
       }
-    } catch (err) {
-      setError('Error al conectar con el servidor.');
+
+      const userData = await response.json();
+      login(userData); // Guardar usuario en el contexto y localStorage
+      navigate('/dashboard'); // Redirigir
+
+    } catch (err: any) {
+      setError(err.message || 'Error al conectar con el servidor.');
     } finally {
       setLoading(false);
     }
