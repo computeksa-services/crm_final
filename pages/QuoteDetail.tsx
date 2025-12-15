@@ -11,18 +11,25 @@ const QuoteDetail: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  // --- ESTADOS ---
   const [quote, setQuote] = useState<Quote | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]);
   const [items, setItems] = useState<QuoteItem[]>([]);
+  const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]);
+  const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+
+  // Estados de UI
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-
+  const [isEditing, setIsEditing] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
-  const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  
+  // Estados de Formulario Modal
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [itemQuantity, setItemQuantity] = useState<number>(1);
 
+  // Estado de Confirmación
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
     title: '',
@@ -31,27 +38,27 @@ const QuoteDetail: React.FC = () => {
     isDestructive: false,
   });
 
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [isShareOpen, setIsShareOpen] = useState(false);
-
+  // --- CARGA DE DATOS ---
   const fetchData = useCallback(async () => {
     if (!id || !user?.id_tenant || !user?.id_user) return;
-    setLoading(true);
+    
     const tenantId = user.id_tenant;
     const userId = user.id_user;
 
     try {
+      // 1. Obtener Cotización
       const quoteResponse = await fetch(`https://service.computeksa.com/webhook/api/quotes/detail?id_cotizacion=${id}&id_tenant=${tenantId}&id_user=${userId}`);
+      
       if (!quoteResponse.ok) {
         if (quoteResponse.status === 404) {
           setQuote(null);
         } else {
-          const errorText = await quoteResponse.text();
-          throw new Error(`Error del servidor al cargar la cotización: ${quoteResponse.status} - ${errorText}`);
+          throw new Error('Error al cargar la cotización.');
         }
         setLoading(false);
         return;
       }
+
       const quoteResponseText = await quoteResponse.text();
       let q: Quote | null = null;
       if (quoteResponseText) {
@@ -65,62 +72,53 @@ const QuoteDetail: React.FC = () => {
         return;
       }
 
-      try {
-        const statusesResponse = await fetch(`/api/statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`);
-        if (statusesResponse.ok) {
-          const statuses = await statusesResponse.json();
-          setQuoteStatuses(statuses);
-        }
-      } catch {}
-
+      // 2. Obtener Artículos (Usando la variable local 'q')
       try {
         const itemsResponse = await fetch(`https://service.computeksa.com/webhook/api/quote-items?id_cotizacion=${q.id_cotizacion}&id_tenant=${tenantId}&id_user=${userId}`);
-        if (!itemsResponse.ok) {
-          if (itemsResponse.status === 404) {
-            setItems([]);
-          } else {
-            const errorText = await itemsResponse.text();
-            throw new Error(`Error del servidor al cargar los artículos: ${itemsResponse.status} - ${errorText}`);
-          }
-        } else {
+        if (itemsResponse.ok) {
           const responseText = await itemsResponse.text();
           const itemsData = responseText ? JSON.parse(responseText) : [];
           setItems(itemsData);
         }
-
       } catch (itemError) {
-        console.error("Error al cargar o procesar los artículos:", itemError);
-        setToast({ message: 'No se pudieron cargar los artículos.', type: 'error' });
-        setItems([]);
+        console.error("Error items:", itemError);
       }
 
-      try {
-        const productsResponse = await fetch(`https://service.computeksa.com/webhook/api/products?id_tenant=${tenantId}&id_user=${userId}`);
-        if (!productsResponse.ok) {
-          const errorText = await productsResponse.text();
-          throw new Error(`Error del servidor al cargar productos disponibles: ${productsResponse.status} - ${errorText}`);
-        }
-        const productsText = await productsResponse.text();
-        const productsData = productsText ? JSON.parse(productsText) : [];
-        setAvailableProducts(productsData);
-      } catch (productsError) {
-        console.error("Error loading available products:", productsError);
-        setToast({ message: 'Error al cargar productos disponibles.', type: 'error' });
-      }
+      // 3. Cargas secundarias (Paralelo para velocidad)
+      const promises = [];
+
+      // Estados
+      promises.push(
+        fetch(`/api/statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`)
+          .then(res => res.ok ? res.json() : [])
+          .then(data => setQuoteStatuses(data))
+          .catch(() => {})
+      );
+
+      // Productos
+      promises.push(
+        fetch(`https://service.computeksa.com/webhook/api/products?id_tenant=${tenantId}&id_user=${userId}`)
+          .then(res => res.ok ? res.text() : null)
+          .then(text => text ? JSON.parse(text) : [])
+          .then(data => setAvailableProducts(data))
+          .catch(() => {})
+      );
+
+      await Promise.all(promises);
 
     } catch (e: any) {
-      console.error("Error al cargar la cotización o productos:", e);
-      setToast({ message: e.message || 'Error fatal al cargar la cotización.', type: 'error' });
-      setQuote(null);
+      console.error("Error fatal:", e);
+      setToast({ message: 'Error al cargar los datos.', type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [id, user]);
+  }, [id, user]); // <--- CORREGIDO: Dependencias mínimas para evitar bucle
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
   
+  // Activar modo edición si viene por URL
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -128,7 +126,9 @@ const QuoteDetail: React.FC = () => {
     } catch {}
   }, []);
   
-  const handleAddItem = async () => {
+  // --- HANDLERS (LOGICA SIMPLIFICADA) ---
+
+  const handleAddItem = () => {
     setIsProductModalOpen(true);
   };
 
@@ -137,75 +137,49 @@ const QuoteDetail: React.FC = () => {
 
     const selectedProduct = availableProducts.find(p => p.id_product === selectedProductId);
     if (!selectedProduct) {
-      setToast({ message: 'Producto seleccionado no encontrado.', type: 'error' });
+      setToast({ message: 'Producto no encontrado.', type: 'error' });
       return;
     }
 
     setProcessing(true);
 
-    const apiEndpoint = 'https://service.computeksa.com/webhook/api/products-selected';
-    
-    const tenantId = user.id_tenant;
-    const userId = user.id_user;
-
-    // Calcular valores numéricos
+    // Solo calculamos el subtotal del ITEM
     const precioUnitario = parseFloat((selectedProduct.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
-    const subtotalNuevoItem = itemQuantity * precioUnitario;
-    
-    // Calcular el total actual de la cotización (limpiando formato moneda)
-    const totalActual = parseFloat((quote.total as any).replace(/[^0-9.-]+/g,"")) || 0;
-    const nuevoTotalCotizacion = totalActual + subtotalNuevoItem;
+    const subtotalItem = itemQuantity * precioUnitario;
 
-    const payloadItem = {
+    const payload = {
       id_cotizacion: quote.id_cotizacion,
-      id_tenant: tenantId,
-      id_user: userId,
+      id_tenant: user.id_tenant,
+      id_user: user.id_user,
       descripcion: selectedProduct.descripcion, 
       cantidad: itemQuantity,
       precio_unitario: precioUnitario,
-      subtotal: subtotalNuevoItem,
+      subtotal: subtotalItem,
       id_producto: selectedProduct.id_product
     };
 
     try {
-      // 1. Insertar el nuevo item
-      const responseItem = await fetch(apiEndpoint, {
+      // 1. Guardar Item
+      const response = await fetch('https://service.computeksa.com/webhook/api/products-selected', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payloadItem),
+        body: JSON.stringify(payload),
       });
 
-      if (!responseItem.ok) {
-        const errorData = await responseItem.json().catch(() => ({ message: 'Error al añadir item.' }));
-        throw new Error(errorData.message || 'Error al añadir item.');
-      }
+      if (!response.ok) throw new Error('Error al conectar con el servidor.');
 
-      // 2. Actualizar el total de la cotización en la base de datos
-      const responseQuoteUpdate = await fetch('/api/quotes/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-           id_cotizacion: quote.id_cotizacion,
-           total: nuevoTotalCotizacion, // Enviamos el nuevo total calculado
-           id_tenant: tenantId,
-           id_user: userId
-        }),
-      });
-
-      if (!responseQuoteUpdate.ok) {
-         console.warn("El item se añadió pero falló la actualización del total de la cotización.");
-      }
-
-      setToast({ message: 'Artículo añadido y total actualizado.', type: 'success' });
+      setToast({ message: 'Artículo añadido.', type: 'success' });
+      
+      // Limpiar modal
       setIsProductModalOpen(false);
       setSelectedProductId(null);
       setItemQuantity(1);
       
-      // 3. Recargar datos para ver cambios reflejados
+      // 2. Recargar (La BD ya calculó el nuevo total global)
       fetchData();
 
     } catch (e: any) {
-      setToast({ message: e.message || 'Error al procesar la solicitud.', type: 'error' });
+      setToast({ message: e.message || 'Error al añadir.', type: 'error' });
     } finally {
       setProcessing(false);
     }
@@ -214,59 +188,38 @@ const QuoteDetail: React.FC = () => {
   const handleUpdateItem = async (itemId: string, newCantidad: number, newPrecioUnitario: number) => {
     if (!quote || !user?.id_tenant || !user?.id_user || !itemId) return;
     
+    // Evitar llamadas innecesarias
     const currentItem = items.find(i => (i.id_articulo_cot || i.id_quote_item) === itemId);
-    const cantidadAnterior = parseFloat(currentItem?.cantidad as any) || 0;
-    const precioUnitarioAnterior = parseFloat((currentItem?.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
-    const subtotalAnterior = cantidadAnterior * precioUnitarioAnterior;
+    const cantidadAnt = parseFloat(currentItem?.cantidad as any) || 0;
+    const precioAnt = parseFloat((currentItem?.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
 
-    if (newCantidad === cantidadAnterior && newPrecioUnitario === precioUnitarioAnterior) {
-      return;
-    }
+    if (newCantidad === cantidadAnt && newPrecioUnitario === precioAnt) return;
 
     setProcessing(true);
     
-    const apiEndpoint = 'https://service.computeksa.com/webhook/api/quote-items/update';
-    const updatedSubtotalItem = newCantidad * newPrecioUnitario;
-
-    // Calcular la diferencia para ajustar el total general
-    const diferencia = updatedSubtotalItem - subtotalAnterior;
-    const totalActual = parseFloat((quote.total as any).replace(/[^0-9.-]+/g,"")) || 0;
-    const nuevoTotalCotizacion = totalActual + diferencia;
-
+    const updatedSubtotal = newCantidad * newPrecioUnitario;
     const payload = {
       id_articulo_cot: itemId,
       cantidad: newCantidad,
       precio_unitario: newPrecioUnitario,
-      subtotal: updatedSubtotalItem,
+      subtotal: updatedSubtotal,
       id_tenant: user.id_tenant,
       id_user: user.id_user,
     };
 
     try {
-      // 1. Actualizar el item
-      const response = await fetch(apiEndpoint, {
+      // 1. Actualizar Item
+      const response = await fetch('https://service.computeksa.com/webhook/api/quote-items/update', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) {
-        throw new Error('Error al actualizar item.');
-      }
-
-      // 2. Actualizar el total de la cotización
-      await fetch('/api/quotes/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-           id_cotizacion: quote.id_cotizacion,
-           total: nuevoTotalCotizacion,
-           id_tenant: user.id_tenant,
-           id_user: user.id_user
-        }),
-      });
+      if (!response.ok) throw new Error('Error del servidor al actualizar.');
 
       setToast({ message: 'Artículo actualizado.', type: 'success' });
+      
+      // 2. Recargar (La BD ya calculó el nuevo total global)
       fetchData(); 
 
     } catch (e: any) {
@@ -280,22 +233,12 @@ const QuoteDetail: React.FC = () => {
     setConfirmState({
       isOpen: true,
       title: 'Eliminar Artículo',
-      message: '¿Está seguro que desea eliminar este artículo? El total se recalculará.',
+      message: '¿Está seguro que desea eliminar este artículo?',
       isDestructive: true,
       onConfirm: async () => {
         if (!quote || !user?.id_tenant || !user?.id_user) return;
         setProcessing(true);
         
-        // Obtener el subtotal del item a eliminar para restarlo
-        const itemToDelete = items.find(i => (i.id_articulo_cot || i.id_quote_item) === itemId);
-        const cantidad = parseFloat(itemToDelete?.cantidad as any) || 0;
-        const precio = parseFloat((itemToDelete?.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
-        const subtotalEliminar = cantidad * precio;
-        
-        const totalActual = parseFloat((quote.total as any).replace(/[^0-9.-]+/g,"")) || 0;
-        const nuevoTotalCotizacion = totalActual - subtotalEliminar;
-
-        const apiEndpoint = 'https://service.computeksa.com/webhook/api/quote-items/delete';
         const payload = { 
           id_articulo_cot: itemId,
           id_tenant: user.id_tenant,
@@ -303,30 +246,18 @@ const QuoteDetail: React.FC = () => {
         };
 
         try {
-          // 1. Eliminar item
-          const response = await fetch(apiEndpoint, {
+          // 1. Eliminar Item
+          const response = await fetch('https://service.computeksa.com/webhook/api/quote-items/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
 
-          if (!response.ok) {
-            throw new Error('Error al eliminar item.');
-          }
+          if (!response.ok) throw new Error('Error al eliminar.');
 
-          // 2. Actualizar total cotización
-          await fetch('/api/quotes/update', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-               id_cotizacion: quote.id_cotizacion,
-               total: nuevoTotalCotizacion < 0 ? 0 : nuevoTotalCotizacion, // Evitar negativos por error de redondeo
-               id_tenant: user.id_tenant,
-               id_user: user.id_user
-            }),
-          });
-
-          setToast({ message: 'Artículo eliminado y total ajustado.', type: 'success' });
+          setToast({ message: 'Artículo eliminado.', type: 'success' });
+          
+          // 2. Recargar (La BD ya calculó el nuevo total global)
           fetchData(); 
 
         } catch (e: any) {
@@ -339,6 +270,36 @@ const QuoteDetail: React.FC = () => {
     });
   };
 
+  const handleSaveHeader = async () => {
+    if (!quote || !user) return;
+    setProcessing(true);
+    try {
+        const response = await fetch('/api/quotes/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id_cotizacion: quote.id_cotizacion,
+            nombre_cotizacion: quote.nombre_cotizacion,
+            id_quote_status: quote.id_quote_status,
+            id_tenant: user.id_tenant,
+            id_user: user.id_user,
+            // NOTA: NO enviamos 'total' aquí, la BD se encarga de eso.
+            // Solo actualizamos cabeceras.
+        }),
+        });
+        if (!response.ok) throw new Error('Error al actualizar cotización.');
+        
+        const updated = await response.json();
+        setQuote(updated);
+        setIsEditing(false);
+        setToast({ message: 'Cotización actualizada.', type: 'success' });
+    } catch (e: any) {
+        setToast({ message: e.message || 'Error al guardar.', type: 'error' });
+    } finally {
+        setProcessing(false);
+    }
+  };
+
   const handleGeneratePDF = async () => {
     if (!quote || !user?.id_tenant || !user?.id_user) return;
     setProcessing(true);
@@ -348,15 +309,13 @@ const QuoteDetail: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_tenant: user.id_tenant, id_user: user.id_user }),
       });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Error al generar PDF.' }));
-        throw new Error(errorData.message || 'Error al generar PDF.');
-      }
+      if (!response.ok) throw new Error('Error al generar PDF.');
+      
       const updatedQuote = await response.json();
       setQuote(updatedQuote);
       setToast({ message: 'PDF generado con éxito.', type: 'success' });
     } catch (e: any) {
-      setToast({ message: e.message || 'Error al generar el PDF.', type: 'error' });
+      setToast({ message: e.message || 'Error al generar PDF.', type: 'error' });
     } finally {
       setProcessing(false);
     }
@@ -371,15 +330,13 @@ const QuoteDetail: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_tenant: user.id_tenant, id_user: user.id_user }),
       });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Error al enviar cotización.' }));
-        throw new Error(errorData.message || 'Error al enviar cotización.');
-      }
+      if (!response.ok) throw new Error('Error al enviar cotización.');
+      
       const updatedQuote = await response.json();
       setQuote(updatedQuote);
       setToast({ message: 'Cotización enviada con éxito.', type: 'success' });
     } catch (e: any) {
-      setToast({ message: e.message || 'Error al enviar la cotización.', type: 'error' });
+      setToast({ message: e.message || 'Error al enviar.', type: 'error' });
     } finally {
       setProcessing(false);
     }
@@ -400,16 +357,16 @@ const QuoteDetail: React.FC = () => {
           id_user: user.id_user,
         }),
       });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Error al actualizar decisión.' }));
-        throw new Error(errorData.message || 'Error al actualizar decisión.');
-      }
+      if (!response.ok) throw new Error('Error al actualizar decisión.');
+      
       setQuote({...quote, estado_decision: newDecision});
       setToast({ message: 'Decisión actualizada.', type: 'success' });
     } catch (e: any) {
-      setToast({ message: e.message || 'Error al actualizar la decisión.', type: 'error' });
+      setToast({ message: e.message || 'Error al actualizar.', type: 'error' });
     }
   };
+
+  // --- RENDERIZADO ---
 
   if (loading) return (
     <div className="flex h-64 items-center justify-center">
@@ -425,7 +382,6 @@ const QuoteDetail: React.FC = () => {
         <div className="text-center bg-red-50 p-8 rounded-xl border border-red-100">
             <i className="fa-solid fa-triangle-exclamation text-4xl text-red-400 mb-3"></i>
             <h3 className="text-lg font-bold text-red-700">Cotización no encontrada</h3>
-            <p className="text-red-500 mt-2">No se pudo acceder a los datos de la cotización solicitada.</p>
             <button onClick={() => navigate('/quotes')} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50">
                 Volver al listado
             </button>
@@ -574,35 +530,7 @@ const QuoteDetail: React.FC = () => {
                <div className="sm:mt-5">
                    <button onClick={handleGeneratePDF} className="hidden" />
                    <button 
-                        onClick={async () => {
-                        if (!quote) return;
-                        setProcessing(true);
-                        try {
-                            const response = await fetch('/api/quotes/update', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                id_cotizacion: quote.id_cotizacion,
-                                nombre_cotizacion: quote.nombre_cotizacion,
-                                id_quote_status: quote.id_quote_status,
-                                id_tenant: user?.id_tenant,
-                                id_user: user?.id_user,
-                            }),
-                            });
-                            if (!response.ok) {
-                            const errorData = await response.json().catch(() => ({ message: 'Error al actualizar cotización.' }));
-                            throw new Error(errorData.message || 'Error al actualizar cotización.');
-                            }
-                            const updated = await response.json();
-                            setQuote(updated);
-                            setIsEditing(false);
-                            setToast({ message: 'Cotización actualizada.', type: 'success' });
-                        } catch (e: any) {
-                            setToast({ message: e.message || 'Error al guardar cambios.', type: 'error' });
-                        } finally {
-                            setProcessing(false);
-                        }
-                        }}
+                        onClick={handleSaveHeader}
                         disabled={processing}
                         className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg shadow-md font-medium transition-all flex items-center whitespace-nowrap"
                     >
