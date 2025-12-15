@@ -134,25 +134,36 @@ export interface CustomStatus {
 export interface Deal {
   id_trato: string;
   id_tenant: string;
-  id_user_owner: string; // Propietario del trato
+  id_user_owner: string; // Propietario del trato (legacy, usar id_user)
+  id_user: string; // Propietario del trato
   id_client_company: string;
   id_contact: string;
   id_deal_status: string;
   id_interest: string;
   nombre_trato: string;
-  valor_trato: number;
-  fecha_creacion: string; // ISO Date String
+  valor_trato: number | string; // Puede venir como "$1,000.00" o number
+  fecha_creacion?: string; // ISO Date String
+  created_at?: string; // ISO Date String (nuevo formato backend)
+  created_at_fmt?: string; // Fecha formateada "12/12/2025 20:24"
   fecha_cierre_esperada?: string; // ISO Date String
   descripcion?: string;
+  created_by?: string; // ID del usuario que creó el trato
+  access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend
   
   // Campos derivados (JOINs en el backend)
   client_company_name?: string;
-  contact_name?: string;
+  contact_name?: string; // Legacy
+  contact_full_name?: string; // Nuevo formato "Pablo Luna"
+  contact_email?: string;
+  contact_phone?: string;
   owner_name?: string; // Nombre del propietario
-  estado?: string; // Nombre del estado del trato
+  owner_avatar?: string; // Avatar del propietario
+  estado?: string; // Nombre del estado del trato (legacy)
+  estado_nombre?: string; // Nuevo formato backend
   estado_color?: string; // Color del estado del trato
   estado_icon?: string; // Icono del estado del trato
-  interes?: string; // Nombre del nivel de interés
+  interes?: string; // Nombre del nivel de interés (legacy)
+  interes_nombre?: string; // Nuevo formato backend
   interes_color?: string; // Color del nivel de interés
   interes_icon?: string; // Icono del nivel de interés
 }
@@ -189,18 +200,31 @@ export interface Quote {
   validez_oferta?: string;
   nota?: string;
   id_trato?: string | null;
+  is_private?: boolean; // Si es privada (no sigue permisos compartidos)
   
   // Campos derivados (JOINs en el backend)
-  created_at_fmt?: string; // Fecha de creación formateada
-  fecha_emision_fmt?: string; // Fecha de emisión formateada
-  estado?: string; // Nombre del estado de la cotización
+  created_at_fmt?: string; // Fecha de creación formateada "12/12/2025 00:00"
+  fecha_emision_fmt?: string; // Fecha de emisión formateada "12/12/2025"
+  estado?: string; // Nombre del estado de la cotización (legacy)
+  estado_nombre?: string; // Nuevo formato backend
   estado_color?: string; // Color del estado de la cotización
-  contact_name?: string;
+  estado_icon?: string; // Icono del estado
+  contact_name?: string; // Legacy
+  contact_full_name?: string; // Nuevo formato "Pablo Luna"
   contact_email?: string;
   client_company_name?: string;
-  owner_name?: string; // Nombre del vendedor
-  nombre_trato?: string; // Nombre del trato asociado
+  client_company_ruc?: string;
+  client_company_address?: string;
+  client_company_email?: string;
+  owner_name?: string; // Nombre del vendedor (legacy)
+  created_by_name?: string; // Nuevo formato backend
+  created_by_email?: string;
+  created_by_avatar?: string;
+  nombre_trato?: string; // Nombre del trato asociado (legacy)
+  deal_name?: string; // Nuevo formato backend
   formatted_no_cotizacion?: string; // Número de cotización formateado (ej. 001, 002)
+  access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend
+  created_by?: string; // ID del usuario creador
 }
 
 // 9. QUOTE ITEMS (Artículos de la cotización)

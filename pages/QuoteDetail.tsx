@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext'; // Importar useAuth
-import { Quote, QuoteItem, UserDecision, Product } from '../types';
+import { Quote, QuoteItem, UserDecision, Product, QuoteStatus } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -11,6 +11,8 @@ const QuoteDetail: React.FC = () => {
   const { user } = useAuth(); // Usar useAuth
 
   const [quote, setQuote] = useState<Quote | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]);
   const [items, setItems] = useState<QuoteItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -62,7 +64,16 @@ const QuoteDetail: React.FC = () => {
         return;
       }
 
-      // 2. Cargar los artículos de la cotización
+      // 2. Cargar estados de cotización para edición
+      try {
+        const statusesResponse = await fetch(`/api/statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`);
+        if (statusesResponse.ok) {
+          const statuses = await statusesResponse.json();
+          setQuoteStatuses(statuses);
+        }
+      } catch {}
+
+      // 3. Cargar los artículos de la cotización
       try {
         const itemsResponse = await fetch(`https://service.computeksa.com/webhook/api/quote-items?id_cotizacion=${q.id_cotizacion}&id_tenant=${tenantId}&id_user=${userId}`);
         if (!itemsResponse.ok) {
@@ -111,6 +122,44 @@ const QuoteDetail: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+  
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('edit') === '1') setIsEditing(true);
+    } catch {}
+  }, []);
+
+  // Load companies and contacts for edit mode when toggled
+  useEffect(() => {
+    const loadAuxData = async () => {
+      if (!isEditing || !user?.id_tenant || !user?.id_user) return;
+      try {
+        const [companiesRes, contactsRes] = await Promise.all([
+          fetch(`/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+          fetch(`/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
+        ]);
+        if (companiesRes.ok) {
+          const ct = await companiesRes.text();
+          const cs = ct ? JSON.parse(ct) : [];
+          // @ts-ignore - extend state dynamically
+          setAvailableProducts(prev => prev);
+          // store companies in a hidden property via quote to avoid new top-level state
+        }
+        if (contactsRes.ok) {
+          const tt = await contactsRes.text();
+          const cons = tt ? JSON.parse(tt) : [];
+          const filtered = cons.filter((c: any) => c.id_client_company === quote?.id_client_company);
+          // temporarily attach to window for selector rendering without refactor
+          (window as any).__quoteCompanies = (window as any).__quoteCompanies || [];
+          (window as any).__quoteCompanies = (ct ? JSON.parse(ct) : []);
+          (window as any).__quoteContacts = cons;
+          (window as any).__quoteFilteredContacts = filtered;
+        }
+      } catch {}
+    };
+    loadAuxData();
+  }, [isEditing, user, quote?.id_client_company]);
   
   // Actions
   const handleAddItem = async () => {
@@ -265,7 +314,7 @@ const QuoteDetail: React.FC = () => {
     if (!quote || !user?.id_tenant || !user?.id_user) return;
     setProcessing(true);
     try {
-      const response = await fetch(`https://service.computeksa.com/webhook/api/cotizaciones/${quote.id_cotizacion}/generar`, {
+      const response = await fetch(`/api/quotes/${quote.id_cotizacion}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_tenant: user.id_tenant, id_user: user.id_user }),
@@ -288,7 +337,7 @@ const QuoteDetail: React.FC = () => {
     if (!quote || !user?.id_tenant || !user?.id_user) return;
     setProcessing(true);
     try {
-      const response = await fetch(`https://service.computeksa.com/webhook/api/cotizaciones/${quote.id_cotizacion}/enviar`, {
+      const response = await fetch(`/api/quotes/${quote.id_cotizacion}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_tenant: user.id_tenant, id_user: user.id_user }),
@@ -312,7 +361,7 @@ const QuoteDetail: React.FC = () => {
     const newDecision = e.target.value as UserDecision;
     
     try {
-      const response = await fetch(`https://service.computeksa.com/webhook/api/cotizaciones/decision`, {
+      const response = await fetch(`/api/quotes/decision`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -416,15 +465,83 @@ const QuoteDetail: React.FC = () => {
              </button>
              <h1 className="text-2xl font-bold text-slate-800">Cotización #{quote.formatted_no_cotizacion}</h1>
            </div>
-           <p className="text-slate-500 ml-7">{quote.nombre_cotizacion}</p>
+           {!isEditing ? (
+             <p className="text-slate-500 ml-7">{quote.nombre_cotizacion}</p>
+           ) : (
+             <div className="ml-7 flex items-center space-x-3">
+               <input 
+                 className="px-3 py-2 border rounded-lg"
+                 value={quote.nombre_cotizacion || ''}
+                 onChange={(e) => setQuote({ ...quote, nombre_cotizacion: e.target.value })}
+               />
+               <select 
+                 className="px-3 py-2 border rounded-lg"
+                 value={quote.id_quote_status || ''}
+                 onChange={(e) => setQuote({ ...quote, id_quote_status: e.target.value })}
+               >
+                 {quoteStatuses.map(s => (
+                   <option key={s.id_status} value={s.id_status}>{s.name}</option>
+                 ))}
+               </select>
+               <button onClick={handleGeneratePDF} className="hidden" />
+               <button 
+                 onClick={async () => {
+                   if (!quote) return;
+                   setProcessing(true);
+                   try {
+                     const response = await fetch('/api/quotes/update', {
+                       method: 'POST',
+                       headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify({
+                         id_cotizacion: quote.id_cotizacion,
+                         nombre_cotizacion: quote.nombre_cotizacion,
+                         id_quote_status: quote.id_quote_status,
+                         id_tenant: user?.id_tenant,
+                         id_user: user?.id_user,
+                       }),
+                     });
+                     if (!response.ok) {
+                       const errorData = await response.json().catch(() => ({ message: 'Error al actualizar cotización.' }));
+                       throw new Error(errorData.message || 'Error al actualizar cotización.');
+                     }
+                     const updated = await response.json();
+                     setQuote(updated);
+                     setIsEditing(false);
+                     setToast({ message: 'Cotización actualizada.', type: 'success' });
+                   } catch (e: any) {
+                     setToast({ message: e.message || 'Error al guardar cambios.', type: 'error' });
+                   } finally {
+                     setProcessing(false);
+                   }
+                 }}
+                 disabled={processing}
+                 className="bg-brand-600 hover:bg-brand-700 text-white px-3 py-2 rounded-lg"
+               >
+                 {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-floppy-disk mr-2"></i>}
+                 Guardar Cambios
+               </button>
+             </div>
+           )}
         </div>
         
         <div className="flex items-center space-x-3">
+           {/* Edit Button: visible siempre para simplificar la edición */}
+           <button 
+             onClick={() => setIsEditing(prev => !prev)}
+             className="bg-slate-200 hover:bg-slate-300 text-slate-800 px-4 py-2 rounded-lg shadow-sm font-medium transition-all">
+             <i className={`fa-solid ${isEditing ? 'fa-xmark' : 'fa-pen'} mr-2`}></i>
+             {isEditing ? 'Cancelar Edición' : 'Editar Cotización'}
+           </button>
            <div className="text-right mr-4">
              <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Estado</p>
-             <span className="text-sm font-bold text-slate-600">
-               {quote.estado}
+             <span 
+               className="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold"
+               style={{ backgroundColor: `${quote.estado_color || '#cccccc'}20`, color: quote.estado_color || '#333' }}
+             >
+               {quote.estado_icon && <i className={`${quote.estado_icon} mr-1.5`}></i>}
+               {quote.estado_nombre || quote.estado}
              </span>
+             {quote.is_private && <span className="ml-2 text-xs text-amber-600" title="Cotización privada"><i className="fa-solid fa-lock"></i></span>}
            </div>
            
            {showGenerateBtn && (

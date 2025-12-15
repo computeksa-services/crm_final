@@ -136,7 +136,7 @@ const QuoteCreate: React.FC = () => {
         fecha_emision: new Date().toISOString(), // Usar fecha actual
       };
 
-      const response = await fetch('https://service.computeksa.com/webhook/api/cotizaciones', {
+      const response = await fetch('/api/quotes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -295,6 +295,27 @@ const QuoteCreate: React.FC = () => {
             <div>
               <label className="block text-xs font-bold text-slate-500 mb-1">Correos Adicionales (Separados por coma)</label>
               <input name="correos_adicionales" value={quote.correos_adicionales || ''} onChange={handleInputChange} placeholder="ejemplo@otro.com, ejemplo2@otro.com" className="w-full px-3 py-2 border rounded-lg" />
+
+                        <h2 className="text-lg font-semibold text-slate-800 border-b pb-2 pt-4">Privacidad</h2>
+                        <div className="flex items-center space-x-3 bg-slate-50 p-4 rounded-lg">
+                          <input
+                            type="checkbox"
+                            id="is_private"
+                            name="is_private"
+                            checked={quote.is_private || false}
+                            onChange={(e) => setQuote({ ...quote, is_private: e.target.checked })}
+                            className="w-5 h-5 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                          />
+                          <label htmlFor="is_private" className="flex-1 cursor-pointer">
+                            <div className="font-semibold text-slate-700 flex items-center">
+                              <i className="fa-solid fa-lock mr-2 text-slate-600"></i>
+                              Cotización Privada
+                            </div>
+                            <div className="text-sm text-slate-500 mt-1">
+                              Las cotizaciones privadas solo son visibles para ti y no se comparten con otros usuarios del equipo
+                            </div>
+                          </label>
+                        </div>
             </div>
 
             <div className="flex justify-end pt-4 space-x-2 border-t mt-6">

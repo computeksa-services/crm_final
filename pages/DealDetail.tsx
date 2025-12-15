@@ -27,7 +27,7 @@ const DealDetail: React.FC = () => {
       // Cargar todos los datos en paralelo
       const [dealRes, quotesRes, usersRes, companiesRes, contactsRes, dealStatusesRes, interestRes] = await Promise.all([
         fetch(`https://service.computeksa.com/webhook/api/deals/detail?id_trato=${id}&id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`https://service.computeksa.com/webhook/api/quotes?id_tenant=${tenantId}&id_user=${userId}&id_trato=${id}`), // Filtrar cotizaciones por trato
+        fetch(`/api/quotes?id_tenant=${tenantId}&id_user=${userId}&id_trato=${id}`), // Filtrar cotizaciones por trato
         fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${tenantId}&id_user=${userId}`),
         fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`),
         fetch(`https://service.computeksa.com/webhook/api/clients/contacts?id_tenant=${tenantId}&id_user=${userId}`),
@@ -45,40 +45,14 @@ const DealDetail: React.FC = () => {
         return text ? JSON.parse(text) : null;
       };
 
-      // Parsear respuestas
+      // Parsear respuestas - el backend ya envía datos enriquecidos
       const rawDealData = await parseResponse(dealRes);
       const allQuotesData = await parseResponse(quotesRes) || [];
-      const allUsersData = await parseResponse(usersRes) || [];
-      const allCompaniesData = await parseResponse(companiesRes) || [];
-      const allContactsData = await parseResponse(contactsRes) || [];
-      const allDealStatusesData = await parseResponse(dealStatusesRes) || [];
-      const allInterestData = await parseResponse(interestRes) || [];
 
       let processedDeal: Deal | null = null;
       if (rawDealData) {
         // Manejar si la API de detalle devuelve un array o un objeto directo
-        const dealData = Array.isArray(rawDealData) ? rawDealData[0] : rawDealData;
-        if (dealData) {
-            // Enriquecer el objeto Deal con datos relacionados
-            const company = allCompaniesData.find((c: ClientCompany) => c.id_client_company === dealData.id_client_company);
-            const contact = allContactsData.find((c: ClientContact) => c.id_contact === dealData.id_contact);
-            const owner = allUsersData.find((u: User) => u.id_user === dealData.id_user_owner);
-            const dealStatus = allDealStatusesData.find((s: DealStatus) => s.id_status === dealData.id_deal_status);
-            const interestStatus = allInterestData.find((i: DealInterest) => i.id_interest === dealData.id_interest);
-
-            processedDeal = {
-                ...dealData,
-                client_company_name: company?.name_company || 'Desconocida',
-                contact_name: `${contact?.first_name || ''} ${contact?.last_name || ''}`.trim() || 'Desconocido',
-                owner_name: owner?.name_user || 'Desconocido',
-                estado: dealStatus?.name || 'Desconocido',
-                estado_color: dealStatus?.color || '#cccccc',
-                estado_icon: dealStatus?.icon || 'fa-solid fa-circle',
-                interes: interestStatus?.name || 'N/A',
-                interes_color: interestStatus?.color || '#cccccc',
-                interes_icon: interestStatus?.icon || 'fa-solid fa-circle',
-            };
-        }
+        processedDeal = Array.isArray(rawDealData) ? rawDealData[0] : rawDealData;
       }
       
       setDeal(processedDeal);
@@ -132,8 +106,8 @@ const DealDetail: React.FC = () => {
           </p>
         </div>
         <div className="text-right">
-            <p className="text-3xl font-bold text-slate-800">{deal.valor_trato.toLocaleString('es-EC', { style: 'currency', currency: 'USD' })}</p>
-            <span className={`px-2 py-1 rounded-full text-xs font-bold`} style={{ backgroundColor: `${deal.estado_color || '#cccccc'}20`, color: deal.estado_color }}>{deal.estado}</span>
+            <p className="text-3xl font-bold text-slate-800">{deal.valor_trato}</p>
+            <span className={`px-2 py-1 rounded-full text-xs font-bold`} style={{ backgroundColor: `${deal.estado_color || '#cccccc'}20`, color: deal.estado_color }}>{deal.estado_nombre}</span>
         </div>
       </div>
 
@@ -150,11 +124,11 @@ const DealDetail: React.FC = () => {
                 </div>
                 <div className="flex justify-between items-center">
                     <span className="text-slate-500">Contacto Principal:</span>
-                    <Link to={`/client-contacts/${deal.id_contact}`} className="font-medium text-brand-600 hover:underline">{deal.contact_name}</Link>
+                    <Link to={`/client-contacts/${deal.id_contact}`} className="font-medium text-brand-600 hover:underline">{deal.contact_full_name}</Link>
                 </div>
                 <div className="flex justify-between items-center">
                     <span className="text-slate-500">Fecha Creación:</span>
-                    <span className="font-medium text-slate-800">{new Date(deal.fecha_creacion).toLocaleDateString()}</span>
+                    <span className="font-medium text-slate-800">{deal.created_at_fmt || (deal.created_at ? new Date(deal.created_at).toLocaleDateString() : '-')}</span>
                 </div>
                 <div className="flex justify-between items-center">
                     <span className="text-slate-500">Interés:</span>
@@ -163,7 +137,7 @@ const DealDetail: React.FC = () => {
                       style={{ backgroundColor: `${deal.interes_color || '#cccccc'}20`, color: deal.interes_color }}
                     >
                       {deal.interes_icon && <i className={`${deal.interes_icon} mr-1.5`}></i>}
-                      {deal.interes || 'N/A'}
+                      {deal.interes_nombre || 'N/A'}
                     </span>
                 </div>
             </div>

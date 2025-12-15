@@ -64,30 +64,8 @@ const DealsList: React.FC = () => {
       const dealStatusesData = await parseResponse(dealStatusesRes);
       const interestStatusesData = await parseResponse(interestStatusesRes);
 
-      // Enriquecer los datos de deals antes de establecer el estado
-      const enrichedDeals: Deal[] = dealsData.map((deal: Deal) => {
-        const company = companiesData.find((c: ClientCompany) => c.id_client_company === deal.id_client_company);
-        // Añado Array.isArray(contactsData) antes de .find()
-        const contact = Array.isArray(contactsData) ? contactsData.find((c: ClientContact) => c.id_contact === deal.id_contact) : undefined;
-        const owner = usersData.find((u: User) => u.id_user === deal.id_user_owner);
-        const dealStatus = dealStatusesData.find((s: DealStatus) => s.id_status === deal.id_deal_status);
-        const interestStatus = interestStatusesData.find((i: DealInterest) => i.id_interest === deal.id_interest);
-
-        return {
-          ...deal,
-          client_company_name: company?.name_company || 'Desconocida',
-          contact_name: `${contact?.first_name || ''} ${contact?.last_name || ''}`.trim() || 'Desconocido',
-          owner_name: owner?.name_user || 'Desconocido',
-          estado: dealStatus?.name || 'Desconocido',
-          estado_color: dealStatus?.color || '#cccccc',
-          estado_icon: dealStatus?.icon || 'fa-solid fa-circle',
-          interes: interestStatus?.name || 'N/A',
-          interes_color: interestStatus?.color || '#cccccc',
-          interes_icon: interestStatus?.icon || 'fa-solid fa-circle',
-        };
-      });
-
-      setDeals(enrichedDeals);
+      // El backend ya envía datos enriquecidos (estado_nombre, interes_nombre, client_company_name, etc.)
+      setDeals(dealsData);
       setCompanies(companiesData);
       setContacts(contactsData);
       setUsers(usersData);
@@ -241,7 +219,7 @@ const DealsList: React.FC = () => {
     }
   };
   
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     const isCompanyChange = name === 'id_client_company';
     setEditingDeal(prev => (prev ? { ...prev, [name]: value, ...(isCompanyChange && { id_contact: '' }) } : null));
@@ -283,7 +261,10 @@ const DealsList: React.FC = () => {
                 {deals.length === 0 ? (
                   <tr><td colSpan={7} className="px-6 py-8 text-center text-slate-500 italic">No hay tratos registrados.</td></tr>
                 ) : (
-                  deals.map((deal) => (
+                  deals.map((deal) => {
+                    const canDelete = deal.created_by === user?.id_user;
+                    const canEdit = deal.access_level === 'EDIT' || user?.rol_user === 'admin';
+                    return (
                     <tr 
                       key={deal.id_trato} 
                       onClick={() => handleRowClick(deal.id_trato)}
@@ -291,14 +272,14 @@ const DealsList: React.FC = () => {
                     >
                       <td className="px-6 py-4 font-medium text-slate-800">{deal.nombre_trato}</td>
                       <td className="px-6 py-4 text-sm text-slate-700">{deal.client_company_name}</td>
-                      <td className="px-6 py-4 text-slate-700">{deal.valor_trato?.toLocaleString('es-EC', { style: 'currency', currency: 'USD' })}</td>
+                      <td className="px-6 py-4 text-slate-700">{deal.valor_trato}</td>
                       <td className="px-6 py-4 text-sm">
                          <span 
                            className="px-2 py-1 rounded-full text-xs font-bold flex items-center w-fit"
                            style={{ backgroundColor: `${deal.interes_color || '#cccccc'}20`, color: deal.interes_color }}
                          >
                            {deal.interes_icon && <i className={`${deal.interes_icon} mr-1.5`}></i>}
-                           {deal.interes || 'N/A'}
+                           {deal.interes_nombre || 'N/A'}
                          </span>
                       </td>
                       <td className="px-6 py-4 text-sm">
@@ -307,20 +288,29 @@ const DealsList: React.FC = () => {
                            style={{ backgroundColor: `${deal.estado_color || '#cccccc'}20`, color: deal.estado_color }}
                          >
                            {deal.estado_icon && <i className={`${deal.estado_icon} mr-1.5`}></i>}
-                           {deal.estado}
+                           {deal.estado_nombre}
                          </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">{deal.owner_name}</td>
                       <td className="px-6 py-4 text-right space-x-2">
-                        <button onClick={(e) => { e.stopPropagation(); handleEdit(deal); }} className="p-2 text-slate-400 hover:text-brand-600">
+                        <button 
+                          disabled={deal.access_level !== 'EDIT' && user?.rol_user !== 'admin'} 
+                          onClick={(e) => { e.stopPropagation(); if(deal.access_level === 'EDIT' || user?.rol_user === 'admin') handleEdit(deal); }} 
+                          className={`p-2 ${deal.access_level === 'EDIT' || user?.rol_user === 'admin' ? 'text-slate-400 hover:text-brand-600' : 'text-slate-300 cursor-not-allowed'}`}
+                        >
                           <i className="fa-solid fa-pen-to-square"></i>
                         </button>
-                        <button onClick={(e) => { e.stopPropagation(); handleDelete(deal.id_trato); }} className="p-2 text-slate-400 hover:text-red-600">
+                        <button 
+                          disabled={deal.created_by !== user?.id_user} 
+                          onClick={(e) => { e.stopPropagation(); if(deal.created_by === user?.id_user) handleDelete(deal.id_trato); }} 
+                          className={`p-2 ${deal.created_by === user?.id_user ? 'text-slate-400 hover:text-red-600' : 'text-slate-300 cursor-not-allowed'}`}
+                        >
                           <i className="fa-solid fa-trash"></i>
                         </button>
                       </td>
                     </tr>
-                  ))
+                    );
+                  })
                 )}
               </tbody>
             </table>
