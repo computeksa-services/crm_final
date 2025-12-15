@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Deal, Quote, DealStatus, DealInterest, ClientCompany, ClientContact, User } from '../types';
 import Toast from '../components/Toast'; // Asumimos que tienes un Toast genérico
+import ShareModal from '../components/ShareModal';
 
 type Tab = 'quotes' | 'permissions' | 'activity';
 
@@ -16,6 +17,7 @@ const DealDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('quotes');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isShareOpen, setIsShareOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!id || !user?.id_tenant || !user?.id_user) return;
@@ -85,9 +87,8 @@ const DealDetail: React.FC = () => {
           }`}
       >
           <i className={`fa-solid ${icon} mr-2 w-4`}></i> {label}
-      </button>
-  );
-
+        </button>
+      );
   return (
     <div className="space-y-6">
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
@@ -108,6 +109,16 @@ const DealDetail: React.FC = () => {
         <div className="text-right">
             <p className="text-3xl font-bold text-slate-800">{deal.valor_trato}</p>
             <span className={`px-2 py-1 rounded-full text-xs font-bold`} style={{ backgroundColor: `${deal.estado_color || '#cccccc'}20`, color: deal.estado_color }}>{deal.estado_nombre}</span>
+            {(deal.access_level === 'EDIT' || user?.rol_user === 'admin') && (
+              <div className="mt-3">
+                <button
+                  onClick={() => setIsShareOpen(true)}
+                  className="text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded shadow-sm font-medium"
+                >
+                  <i className="fa-solid fa-user-plus mr-1"></i> Compartir
+                </button>
+              </div>
+            )}
         </div>
       </div>
 
@@ -160,24 +171,39 @@ const DealDetail: React.FC = () => {
                     <div>
                         <div className="flex justify-between items-center mb-4">
                             <h4 className="font-bold text-slate-700">Cotizaciones Vinculadas</h4>
-                            <button 
-                              onClick={() => navigate(`/quotes/new?dealId=${deal.id_trato}&clientCompanyId=${deal.id_client_company}&contactId=${deal.id_contact}&dealName=${encodeURIComponent(deal.nombre_trato || '')}`)}
-                              className="text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded shadow-sm font-medium">
-                                <i className="fa-solid fa-plus mr-1"></i> Nueva Cotización
-                            </button>
+                            {(deal.access_level === 'EDIT' || user?.rol_user === 'admin') && (
+                              <button 
+                                onClick={() => navigate(`/quotes/new?dealId=${deal.id_trato}&clientCompanyId=${deal.id_client_company}&contactId=${deal.id_contact}&dealName=${encodeURIComponent(deal.nombre_trato || '')}`)}
+                                className="text-xs bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-3 py-1.5 rounded shadow-sm font-medium">
+                                  <i className="fa-solid fa-plus mr-1"></i> Nueva Cotización
+                              </button>
+                            )}
                         </div>
-                        {quotes.length > 0 ? (
+                        {(() => {
+                          // Filtrar cotizaciones privadas si el usuario no tiene EDIT access
+                          const visibleQuotes = quotes.filter(q => {
+                            if (q.is_private && deal.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
+                              return false; // No mostrar cotizaciones privadas a usuarios sin EDIT
+                            }
+                            return true;
+                          });
+                          
+                          return visibleQuotes.length > 0 ? (
                             <ul className="divide-y divide-slate-100">
-                                {quotes.map(q => (
+                                {visibleQuotes.map(q => (
                                     <li key={q.id_cotizacion} className="py-2 flex justify-between items-center">
-                                        <Link to={`/quotes/${q.id_cotizacion}`} className="hover:text-brand-600">{q.nombre_cotizacion} (v{q.version})</Link>
+                                        <div className="flex items-center space-x-2">
+                                          <Link to={`/quotes/${q.id_cotizacion}`} className="hover:text-brand-600">{q.nombre_cotizacion} (v{q.version})</Link>
+                                          {q.is_private && <i className="fa-solid fa-lock text-xs text-amber-600" title="Cotización privada"></i>}
+                                        </div>
                                         <span className="text-slate-500 text-xs">{q.estado}</span>
                                     </li>
                                 ))}
                             </ul>
-                        ) : (
+                          ) : (
                             <p className="text-slate-400 text-sm italic">No hay cotizaciones para este trato.</p>
-                        )}
+                          );
+                        })()}
                     </div>
                 )}
                 {activeTab === 'permissions' && (
@@ -196,6 +222,15 @@ const DealDetail: React.FC = () => {
           </div>
         </div>
       </div>
+      {isShareOpen && deal && (
+        <ShareModal
+          entity="deal"
+          id={deal.id_trato}
+          isOpen={isShareOpen}
+          onClose={() => setIsShareOpen(false)}
+          onShared={() => setToast({ message: 'Trato compartido.', type: 'success' })}
+        />
+      )}
     </div>
   );
 };

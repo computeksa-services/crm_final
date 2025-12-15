@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Deal, ClientCompany, ClientContact, User, DealStatus, DealInterest } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
+import ShareModal from '../components/ShareModal';
 
 const DealsList: React.FC = () => {
   const { user } = useAuth();
@@ -22,6 +23,8 @@ const DealsList: React.FC = () => {
   const [editingDeal, setEditingDeal] = useState<Partial<Deal> | null>(null);
   const [filteredContacts, setFilteredContacts] = useState<ClientContact[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [shareDealId, setShareDealId] = useState<string | null>(null);
 
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -300,6 +303,14 @@ const DealsList: React.FC = () => {
                         >
                           <i className="fa-solid fa-pen-to-square"></i>
                         </button>
+                        <button
+                          disabled={deal.access_level !== 'EDIT' && user?.rol_user !== 'admin'}
+                          onClick={(e) => { e.stopPropagation(); if(deal.access_level === 'EDIT' || user?.rol_user === 'admin') { setShareDealId(deal.id_trato); setIsShareOpen(true); } }}
+                          className={`p-2 ${deal.access_level === 'EDIT' || user?.rol_user === 'admin' ? 'text-slate-400 hover:text-slate-700' : 'text-slate-300 cursor-not-allowed'}`}
+                          title="Compartir Trato"
+                        >
+                          <i className="fa-solid fa-user-plus"></i>
+                        </button>
                         <button 
                           disabled={deal.created_by !== user?.id_user} 
                           onClick={(e) => { e.stopPropagation(); if(deal.created_by === user?.id_user) handleDelete(deal.id_trato); }} 
@@ -432,6 +443,17 @@ const DealsList: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Share Modal */}
+      {isShareOpen && shareDealId && (
+        <ShareModal 
+          entity="deal" 
+          id={shareDealId} 
+          isOpen={isShareOpen} 
+          onClose={() => { setIsShareOpen(false); setShareDealId(null); }} 
+          onShared={() => setToast({ message: 'Trato compartido.', type: 'success' })}
+        />
       )}
     </div>
   );

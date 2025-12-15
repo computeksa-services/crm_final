@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext'; // Importar
 import { Quote, ClientCompany, ClientContact, QuoteStatus } from '../types';
 import Toast from '../components/Toast';
+import ShareModal from '../components/ShareModal';
+import ConfirmModal from '../components/ConfirmModal';
 
 const QuotesList: React.FC = () => {
   const { user } = useAuth(); // Usar
@@ -15,9 +17,12 @@ const QuotesList: React.FC = () => {
   const [editingQuote, setEditingQuote] = useState<Partial<Quote> | null>(null);
   const [filteredContacts, setFilteredContacts] = useState<ClientContact[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
+  const [shareQuoteId, setShareQuoteId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title: string; message: string; isDestructive?: boolean; onConfirm?: () => void }>({ isOpen: false, title: '', message: '' });
   const navigate = useNavigate();
 
   const fetchData = useCallback(async () => {
@@ -128,6 +133,37 @@ const QuotesList: React.FC = () => {
     }
   };
 
+  const handleDeleteQuote = (id: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: 'Eliminar Cotización',
+      message: '¿Estás seguro? Esta acción no se puede deshacer.',
+      isDestructive: true,
+      onConfirm: async () => {
+        if (!user?.id_tenant || !user?.id_user) return;
+        setSubmitting(true);
+        try {
+          const response = await fetch('https://service.computeksa.com/webhook/api/quotes/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_cotizacion: id, id_tenant: user.id_tenant, id_user: user.id_user }),
+          });
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({ message: 'Error al eliminar cotización.' }));
+            throw new Error(errorData.message || 'Error al eliminar cotización.');
+          }
+          await fetchData();
+          setToast({ message: 'Cotización eliminada.', type: 'success' });
+        } catch (error: any) {
+          setToast({ message: error.message || 'Error al eliminar.', type: 'error' });
+        } finally {
+          setSubmitting(false);
+          setConfirmState({ ...confirmState, isOpen: false });
+        }
+      },
+    });
+  };
+
   const renderContent = () => {
     if (loading) {
       return <div className="p-8 text-center text-slate-500">Cargando cotizaciones...</div>;
@@ -179,25 +215,45 @@ const QuotesList: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4 font-semibold text-slate-700">{quote.total}</td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center space-x-3">
+                    <td className="px-6 py-4 text-right space-x-2">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/quotes/${quote.id_cotizacion}`); }}
+                        className="p-2 text-slate-400 hover:text-brand-600"
+                        title="Ver detalles"
+                      >
+                        <i className="fa-solid fa-arrow-right"></i>
+                      </button>
+                      {quote.access_level === 'EDIT' && (
                         <button
                           type="button"
-                          onClick={(e) => { e.stopPropagation(); navigate(`/quotes/${quote.id_cotizacion}`); }}
-                          className="text-brand-600 font-medium text-sm hover:underline"
+                          onClick={(e) => { e.stopPropagation(); handleEdit(quote); }}
+                          className="p-2 text-slate-400 hover:text-brand-600"
+                          title="Editar"
                         >
-                          Ver Detalles <i className="fa-solid fa-arrow-right ml-1 text-xs"></i>
+                          <i className="fa-solid fa-pen-to-square"></i>
                         </button>
-                        {quote.access_level === 'EDIT' && (
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); handleEdit(quote); }}
-                            className="text-slate-700 font-medium text-sm hover:underline"
-                          >
-                            Editar <i className="fa-solid fa-pen ml-1 text-xs"></i>
-                          </button>
-                        )}
-                      </div>
+                      )}
+                      {quote.access_level === 'EDIT' && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteQuote(quote.id_cotizacion); }}
+                          className="p-2 text-slate-400 hover:text-red-600"
+                          title="Eliminar"
+                        >
+                          <i className="fa-solid fa-trash"></i>
+                        </button>
+                      )}
+                      {quote.access_level === 'EDIT' && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setShareQuoteId(quote.id_cotizacion); setIsShareOpen(true); }}
+                          className="p-2 text-slate-400 hover:text-brand-600"
+                          title="Compartir"
+                        >
+                          <i className="fa-solid fa-user-plus"></i>
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -249,7 +305,7 @@ const QuotesList: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-500 mb-1">Empresa</label>
                 <select name="id_client_company" required value={editingQuote.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg bg-white">
                   <option value="">-- Seleccionar Empresa --</option>
-                  {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.client_company_name || c.name_company}</option>)}
+                  {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
                 </select>
               </div>
               <div>
@@ -304,6 +360,29 @@ const QuotesList: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {confirmState.isOpen && (
+        <ConfirmModal
+          isOpen={confirmState.isOpen}
+          title={confirmState.title}
+          message={confirmState.message}
+          isDestructive={confirmState.isDestructive}
+          onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
+          onConfirm={confirmState.onConfirm || (() => setConfirmState({ ...confirmState, isOpen: false }))}
+        />
+      )}
+
+      {/* Share Modal */}
+      {isShareOpen && shareQuoteId && (
+        <ShareModal 
+          entity="quotes" 
+          id={shareQuoteId} 
+          isOpen={isShareOpen} 
+          onClose={() => { setIsShareOpen(false); setShareQuoteId(null); }} 
+          onShared={() => setToast({ message: 'Cotización compartida.', type: 'success' })}
+          excludeUserIds={user ? [user.id_user] : []}
+        />
       )}
     </div>
   );

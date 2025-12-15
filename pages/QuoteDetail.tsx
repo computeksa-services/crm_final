@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext'; // Importar useAuth
 import { Quote, QuoteItem, UserDecision, Product, QuoteStatus } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
+import ShareModal from '../components/ShareModal';
 
 const QuoteDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -31,6 +32,7 @@ const QuoteDetail: React.FC = () => {
   });
 
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [isShareOpen, setIsShareOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!id || !user?.id_tenant || !user?.id_user) return;
@@ -129,37 +131,6 @@ const QuoteDetail: React.FC = () => {
       if (params.get('edit') === '1') setIsEditing(true);
     } catch {}
   }, []);
-
-  // Load companies and contacts for edit mode when toggled
-  useEffect(() => {
-    const loadAuxData = async () => {
-      if (!isEditing || !user?.id_tenant || !user?.id_user) return;
-      try {
-        const [companiesRes, contactsRes] = await Promise.all([
-          fetch(`/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-          fetch(`/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
-        ]);
-        if (companiesRes.ok) {
-          const ct = await companiesRes.text();
-          const cs = ct ? JSON.parse(ct) : [];
-          // @ts-ignore - extend state dynamically
-          setAvailableProducts(prev => prev);
-          // store companies in a hidden property via quote to avoid new top-level state
-        }
-        if (contactsRes.ok) {
-          const tt = await contactsRes.text();
-          const cons = tt ? JSON.parse(tt) : [];
-          const filtered = cons.filter((c: any) => c.id_client_company === quote?.id_client_company);
-          // temporarily attach to window for selector rendering without refactor
-          (window as any).__quoteCompanies = (window as any).__quoteCompanies || [];
-          (window as any).__quoteCompanies = (ct ? JSON.parse(ct) : []);
-          (window as any).__quoteContacts = cons;
-          (window as any).__quoteFilteredContacts = filtered;
-        }
-      } catch {}
-    };
-    loadAuxData();
-  }, [isEditing, user, quote?.id_client_company]);
   
   // Actions
   const handleAddItem = async () => {
@@ -221,9 +192,9 @@ const QuoteDetail: React.FC = () => {
   };
 
   const handleUpdateItem = async (itemId: string, newCantidad: number, newPrecioUnitario: number) => {
-    if (!quote || !user?.id_tenant || !user?.id_user) return;
+    if (!quote || !user?.id_tenant || !user?.id_user || !itemId) return;
     
-    const currentItem = items.find(i => i.id_articulo_cot === itemId);
+    const currentItem = items.find(i => (i.id_articulo_cot || i.id_quote_item) === itemId);
     const cantidad = parseFloat(currentItem?.cantidad as any) || 0;
     const precioUnitario = parseFloat((currentItem?.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
 
@@ -456,7 +427,6 @@ const QuoteDetail: React.FC = () => {
         </div>
       )}
 
-      {/* Header & Status Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
            <div className="flex items-center space-x-3 mb-1">
@@ -526,12 +496,7 @@ const QuoteDetail: React.FC = () => {
         
         <div className="flex items-center space-x-3">
            {/* Edit Button: visible siempre para simplificar la edición */}
-           <button 
-             onClick={() => setIsEditing(prev => !prev)}
-             className="bg-slate-200 hover:bg-slate-300 text-slate-800 px-4 py-2 rounded-lg shadow-sm font-medium transition-all">
-             <i className={`fa-solid ${isEditing ? 'fa-xmark' : 'fa-pen'} mr-2`}></i>
-             {isEditing ? 'Cancelar Edición' : 'Editar Cotización'}
-           </button>
+           
            <div className="text-right mr-4">
              <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">Estado</p>
              <span 
@@ -563,6 +528,14 @@ const QuoteDetail: React.FC = () => {
                Enviar al Cliente
              </button>
            )}
+          {(quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
+            <button 
+              onClick={() => setIsShareOpen(true)}
+              className="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-lg shadow-sm font-medium transition-all">
+              <i className="fa-solid fa-user-plus mr-2"></i>
+              Compartir
+            </button>
+          )}
         </div>
       </div>
 
@@ -606,15 +579,15 @@ const QuoteDetail: React.FC = () => {
                     const subtotal = cantidad * precioUnitario;
 
                     return (
-                      <tr key={item.id_articulo_cot}>
+                      <tr key={item.id_articulo_cot || item.id_quote_item}>
                         <td className="px-4 py-3 text-slate-400 font-medium">{index + 1}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-slate-500">{item.codigo}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-slate-500">{item.codigo || '-'}</td>
                         <td className="px-6 py-3 font-medium text-slate-700">{item.descripcion}</td>
                         <td className="px-6 py-3 text-right">
                            <input 
                               type="number"
                               defaultValue={cantidad}
-                              onBlur={(e) => handleUpdateItem(item.id_articulo_cot, parseInt(e.target.value) || 1, precioUnitario)}
+                              onBlur={(e) => handleUpdateItem(item.id_articulo_cot || item.id_quote_item || '', parseInt(e.target.value) || 1, precioUnitario)}
                               min="1" 
                               className="w-20 px-2 py-1 border rounded-md text-right"
                            />
@@ -623,7 +596,7 @@ const QuoteDetail: React.FC = () => {
                           <input 
                               type="number"
                               defaultValue={precioUnitario.toFixed(2)}
-                              onBlur={(e) => handleUpdateItem(item.id_articulo_cot, cantidad, parseFloat(e.target.value) || 0)}
+                              onBlur={(e) => handleUpdateItem(item.id_articulo_cot || item.id_quote_item || '', cantidad, parseFloat(e.target.value) || 0)}
                               step="0.01"
                               className="w-28 px-2 py-1 border rounded-md text-right"
                           />
@@ -631,7 +604,7 @@ const QuoteDetail: React.FC = () => {
                         <td className="px-6 py-3 text-right font-semibold text-slate-800">{subtotal.toFixed(2)}</td>
                         <td className="px-6 py-3 text-right">
                           <button 
-                            onClick={() => handleDeleteItem(item.id_articulo_cot)}
+                            onClick={() => handleDeleteItem(item.id_articulo_cot || item.id_quote_item || '')}
                             className="text-red-500 hover:text-red-700 p-2"
                             title="Eliminar artículo"
                           >
@@ -786,6 +759,15 @@ const QuoteDetail: React.FC = () => {
 
         </div>
       </div>
+      {isShareOpen && quote && (
+        <ShareModal 
+          entity="quotes" 
+          id={quote.id_cotizacion} 
+          isOpen={isShareOpen} 
+          onClose={() => setIsShareOpen(false)} 
+          onShared={() => setToast({ message: 'Cotización compartida.', type: 'success' })}
+        />
+      )}
     </div>
   );
 };

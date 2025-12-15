@@ -229,10 +229,12 @@ export interface Quote {
 
 // 9. QUOTE ITEMS (Artículos de la cotización)
 export interface QuoteItem {
-  id_quote_item: string;
+  id_quote_item?: string;
+  id_articulo_cot?: string; // Campo alternativo usado por el API
   id_cotizacion: string;
   id_product?: string;
   descripcion: string; // Snapshot
+  codigo?: string; // Código del producto
   cantidad: number;
   precio_unitario: number; // Snapshot
   subtotal: number;
