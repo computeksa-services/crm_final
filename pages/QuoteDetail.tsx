@@ -148,39 +148,64 @@ const QuoteDetail: React.FC = () => {
     const tenantId = user.id_tenant;
     const userId = user.id_user;
 
-    const payload = {
+    // Calcular valores numéricos
+    const precioUnitario = parseFloat((selectedProduct.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
+    const subtotalNuevoItem = itemQuantity * precioUnitario;
+    
+    // Calcular el total actual de la cotización (limpiando formato moneda)
+    const totalActual = parseFloat((quote.total as any).replace(/[^0-9.-]+/g,"")) || 0;
+    const nuevoTotalCotizacion = totalActual + subtotalNuevoItem;
+
+    const payloadItem = {
       id_cotizacion: quote.id_cotizacion,
       id_tenant: tenantId,
       id_user: userId,
       descripcion: selectedProduct.descripcion, 
       cantidad: itemQuantity,
-      precio_unitario: parseFloat((selectedProduct.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0,
-      subtotal: itemQuantity * (parseFloat((selectedProduct.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0),
+      precio_unitario: precioUnitario,
+      subtotal: subtotalNuevoItem,
       id_producto: selectedProduct.id_product
     };
 
     try {
-      const response = await fetch(apiEndpoint, {
+      // 1. Insertar el nuevo item
+      const responseItem = await fetch(apiEndpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payloadItem),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Error al conectar con el servidor.' }));
-        throw new Error(errorData.message || 'Error al conectar con el servidor.');
+      if (!responseItem.ok) {
+        const errorData = await responseItem.json().catch(() => ({ message: 'Error al añadir item.' }));
+        throw new Error(errorData.message || 'Error al añadir item.');
       }
 
-      setToast({ message: 'Artículo añadido con éxito.', type: 'success' });
+      // 2. Actualizar el total de la cotización en la base de datos
+      const responseQuoteUpdate = await fetch('/api/quotes/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+           id_cotizacion: quote.id_cotizacion,
+           total: nuevoTotalCotizacion, // Enviamos el nuevo total calculado
+           id_tenant: tenantId,
+           id_user: userId
+        }),
+      });
+
+      if (!responseQuoteUpdate.ok) {
+         console.warn("El item se añadió pero falló la actualización del total de la cotización.");
+      }
+
+      setToast({ message: 'Artículo añadido y total actualizado.', type: 'success' });
       setIsProductModalOpen(false);
       setSelectedProductId(null);
       setItemQuantity(1);
+      
+      // 3. Recargar datos para ver cambios reflejados
       fetchData();
 
     } catch (e: any) {
-      setToast({ message: e.message || 'Error al añadir el artículo.', type: 'error' });
+      setToast({ message: e.message || 'Error al procesar la solicitud.', type: 'error' });
     } finally {
       setProcessing(false);
     }
@@ -190,28 +215,35 @@ const QuoteDetail: React.FC = () => {
     if (!quote || !user?.id_tenant || !user?.id_user || !itemId) return;
     
     const currentItem = items.find(i => (i.id_articulo_cot || i.id_quote_item) === itemId);
-    const cantidad = parseFloat(currentItem?.cantidad as any) || 0;
-    const precioUnitario = parseFloat((currentItem?.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
+    const cantidadAnterior = parseFloat(currentItem?.cantidad as any) || 0;
+    const precioUnitarioAnterior = parseFloat((currentItem?.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
+    const subtotalAnterior = cantidadAnterior * precioUnitarioAnterior;
 
-    if (newCantidad === cantidad && newPrecioUnitario === precioUnitario) {
+    if (newCantidad === cantidadAnterior && newPrecioUnitario === precioUnitarioAnterior) {
       return;
     }
 
     setProcessing(true);
     
     const apiEndpoint = 'https://service.computeksa.com/webhook/api/quote-items/update';
-    const updatedSubtotal = newCantidad * newPrecioUnitario;
+    const updatedSubtotalItem = newCantidad * newPrecioUnitario;
+
+    // Calcular la diferencia para ajustar el total general
+    const diferencia = updatedSubtotalItem - subtotalAnterior;
+    const totalActual = parseFloat((quote.total as any).replace(/[^0-9.-]+/g,"")) || 0;
+    const nuevoTotalCotizacion = totalActual + diferencia;
 
     const payload = {
       id_articulo_cot: itemId,
       cantidad: newCantidad,
       precio_unitario: newPrecioUnitario,
-      subtotal: updatedSubtotal,
+      subtotal: updatedSubtotalItem,
       id_tenant: user.id_tenant,
       id_user: user.id_user,
     };
 
     try {
+      // 1. Actualizar el item
       const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -219,15 +251,26 @@ const QuoteDetail: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Error del servidor al actualizar.' }));
-        throw new Error(errorData.message || 'Error del servidor al actualizar.');
+        throw new Error('Error al actualizar item.');
       }
+
+      // 2. Actualizar el total de la cotización
+      await fetch('/api/quotes/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+           id_cotizacion: quote.id_cotizacion,
+           total: nuevoTotalCotizacion,
+           id_tenant: user.id_tenant,
+           id_user: user.id_user
+        }),
+      });
 
       setToast({ message: 'Artículo actualizado.', type: 'success' });
       fetchData(); 
 
     } catch (e: any) {
-      setToast({ message: e.message || 'Error al actualizar el artículo.', type: 'error' });
+      setToast({ message: e.message || 'Error al actualizar.', type: 'error' });
     } finally {
       setProcessing(false);
     }
@@ -237,12 +280,21 @@ const QuoteDetail: React.FC = () => {
     setConfirmState({
       isOpen: true,
       title: 'Eliminar Artículo',
-      message: '¿Está seguro que desea eliminar este artículo de la cotización? Esta acción no se puede deshacer.',
+      message: '¿Está seguro que desea eliminar este artículo? El total se recalculará.',
       isDestructive: true,
       onConfirm: async () => {
         if (!quote || !user?.id_tenant || !user?.id_user) return;
         setProcessing(true);
         
+        // Obtener el subtotal del item a eliminar para restarlo
+        const itemToDelete = items.find(i => (i.id_articulo_cot || i.id_quote_item) === itemId);
+        const cantidad = parseFloat(itemToDelete?.cantidad as any) || 0;
+        const precio = parseFloat((itemToDelete?.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
+        const subtotalEliminar = cantidad * precio;
+        
+        const totalActual = parseFloat((quote.total as any).replace(/[^0-9.-]+/g,"")) || 0;
+        const nuevoTotalCotizacion = totalActual - subtotalEliminar;
+
         const apiEndpoint = 'https://service.computeksa.com/webhook/api/quote-items/delete';
         const payload = { 
           id_articulo_cot: itemId,
@@ -251,6 +303,7 @@ const QuoteDetail: React.FC = () => {
         };
 
         try {
+          // 1. Eliminar item
           const response = await fetch(apiEndpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -258,15 +311,26 @@ const QuoteDetail: React.FC = () => {
           });
 
           if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Error del servidor al eliminar.' }));
-            throw new Error(errorData.message || 'Error del servidor al eliminar.');
+            throw new Error('Error al eliminar item.');
           }
 
-          setToast({ message: 'Artículo eliminado.', type: 'success' });
+          // 2. Actualizar total cotización
+          await fetch('/api/quotes/update', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+               id_cotizacion: quote.id_cotizacion,
+               total: nuevoTotalCotizacion < 0 ? 0 : nuevoTotalCotizacion, // Evitar negativos por error de redondeo
+               id_tenant: user.id_tenant,
+               id_user: user.id_user
+            }),
+          });
+
+          setToast({ message: 'Artículo eliminado y total ajustado.', type: 'success' });
           fetchData(); 
 
         } catch (e: any) {
-          setToast({ message: e.message || 'Error al eliminar el artículo.', type: 'error' });
+          setToast({ message: e.message || 'Error al eliminar.', type: 'error' });
         } finally {
           setProcessing(false);
           setConfirmState({ ...confirmState, isOpen: false });
