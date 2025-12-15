@@ -1,16 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ProductType } from '../types';
-import Toast from './Toast';
-import ConfirmModal from './ConfirmModal';
+import Toast from '../components/Toast';
+import ConfirmModal from '../components/ConfirmModal';
 
 const SettingsProductTypes: React.FC = () => {
   const { user } = useAuth();
+  
+  // Datos
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editingType, setEditingType] = useState<Partial<ProductType> | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   
+  // Edición
+  const [editingType, setEditingType] = useState<Partial<ProductType> | null>(null);
+  
+  // UI States
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
@@ -51,7 +56,7 @@ const SettingsProductTypes: React.FC = () => {
 
   const handleSave = async () => {
     if (!editingType || !editingType.type || !user?.id_tenant) {
-      setToast({ message: 'El nombre del tipo no puede estar vacío.', type: 'error' });
+      setToast({ message: 'El nombre del tipo es obligatorio.', type: 'error' });
       return;
     }
 
@@ -61,7 +66,9 @@ const SettingsProductTypes: React.FC = () => {
     };
     
     const isUpdating = 'id_product_type' in editingType;
-    const url = isUpdating ? 'https://service.computeksa.com/webhook/api/products_type/update' : 'https://service.computeksa.com/webhook/api/products_type';
+    const url = isUpdating 
+        ? 'https://service.computeksa.com/webhook/api/products_type/update' 
+        : 'https://service.computeksa.com/webhook/api/products_type';
 
     try {
       const response = await fetch(url, {
@@ -103,10 +110,14 @@ const SettingsProductTypes: React.FC = () => {
     });
   };
 
-  if (loading) return <div>Cargando tipos de producto...</div>;
+  if (loading) return (
+      <div className="flex justify-center p-8">
+          <i className="fa-solid fa-circle-notch fa-spin text-brand-500"></i>
+      </div>
+  );
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-slate-200 mt-4">
+    <div className="max-w-4xl mx-auto mt-6 animate-fade-in pb-20">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal 
         {...confirmState} 
@@ -114,53 +125,115 @@ const SettingsProductTypes: React.FC = () => {
         onClose={() => setConfirmState({ ...confirmState, isOpen: false })} 
       />
 
-      <div className="px-6 py-4 border-b flex justify-between items-center">
-        <h3 className="font-bold text-slate-700">Gestionar Tipos de Producto</h3>
-        <button onClick={handleAddNew} className="text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded">
-          <i className="fa-solid fa-plus mr-1"></i> Añadir Tipo
+      <div className="flex justify-between items-center mb-6">
+        <div>
+            <h3 className="text-lg font-bold text-slate-800">Tipos de Producto</h3>
+            <p className="text-sm text-slate-500">Categoriza tu inventario.</p>
+        </div>
+        <button 
+            onClick={handleAddNew} 
+            className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl shadow-sm font-medium transition-all flex items-center"
+        >
+          <i className="fa-solid fa-plus mr-2"></i> Nuevo
         </button>
       </div>
-      <table className="w-full text-sm">
-        <thead className="text-xs text-slate-500 uppercase bg-slate-50">
-          <tr>
-            <th className="px-6 py-3">Nombre del Tipo</th>
-            <th className="px-6 py-3 text-right">Acciones</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {productTypes.map((item) => (
-            <tr key={item.id_product_type} className="hover:bg-slate-50">
-              <td className="px-6 py-4 font-medium text-slate-800">{item.type}</td>
-              <td className="px-6 py-4 text-right space-x-2">
-                <button onClick={() => handleEdit(item)} className="p-2 text-slate-400 hover:text-brand-600"><i className="fa-solid fa-pen-to-square"></i></button>
-                <button onClick={() => handleDelete(item.id_product_type)} className="p-2 text-slate-400 hover:text-red-600"><i className="fa-solid fa-trash"></i></button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
 
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm">
-            <div className="px-6 py-4 border-b">
-              <h2 className="font-bold text-lg">{editingType?.id_product_type ? 'Editar' : 'Nuevo'} Tipo</h2>
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        {productTypes.length === 0 ? (
+            <div className="p-12 text-center text-slate-400">
+                <i className="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i>
+                <p>No hay tipos de producto configurados.</p>
             </div>
-            <div className="p-6 space-y-4">
-              <label className="block">
-                <span className="text-sm font-medium text-slate-700">Nombre del Tipo</span>
+        ) : (
+            <div className="divide-y divide-slate-100">
+            {productTypes.map((item) => (
+                <div key={item.id_product_type} className="group flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
+                    <div className="flex items-center gap-4">
+                        {/* Icono Genérico para mantener consistencia visual */}
+                        <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-500 flex items-center justify-center text-lg shadow-sm">
+                            <i className="fa-solid fa-box-open"></i>
+                        </div>
+                        <div>
+                            <span className="block font-bold text-base text-slate-700">
+                                {item.type}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button 
+                            onClick={() => handleEdit(item)} 
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                            title="Editar"
+                        >
+                            <i className="fa-solid fa-pen-to-square"></i>
+                        </button>
+                        <button 
+                            onClick={() => handleDelete(item.id_product_type)} 
+                            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Eliminar"
+                        >
+                            <i className="fa-solid fa-trash-can"></i>
+                        </button>
+                    </div>
+                </div>
+            ))}
+            </div>
+        )}
+      </div>
+
+      {/* Modal Simplificado */}
+      {isModalOpen && editingType && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all relative">
+            <div className="px-6 py-4 border-b border-slate-100 bg-white flex justify-between items-center">
+              <h2 className="font-bold text-lg text-slate-800">
+                  {editingType.id_product_type ? 'Editar Tipo' : 'Nuevo Tipo'}
+              </h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                  <i className="fa-solid fa-times"></i>
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* Vista Previa Simple */}
+              <div className="flex justify-center">
+                  <div className="flex items-center gap-3 px-5 py-3 rounded-xl border border-slate-200 bg-slate-50 transition-all">
+                     <div className="text-xl text-slate-500">
+                        <i className="fa-solid fa-box-open"></i>
+                     </div>
+                     <span className="font-bold text-lg text-slate-700">
+                        {editingType.type || 'Nombre Tipo'}
+                     </span>
+                  </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Nombre del Tipo</label>
                 <input
                   type="text"
-                  value={editingType?.type || ''}
+                  value={editingType.type || ''}
                   onChange={(e) => setEditingType({ ...editingType, type: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-lg shadow-sm"
-                  placeholder="Ej: Electrónico"
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all placeholder:text-slate-300"
+                  placeholder="Ej: Servicios"
+                  autoFocus
                 />
-              </label>
+              </div>
             </div>
-            <div className="px-6 py-4 bg-slate-50 flex justify-end space-x-2">
-              <button onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100">Cancelar</button>
-              <button onClick={handleSave} className="px-4 py-2 rounded-lg bg-brand-600 text-white hover:bg-brand-700">Guardar</button>
+
+            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 hover:bg-white transition-colors text-sm font-medium"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleSave} 
+                className="px-6 py-2 rounded-xl bg-brand-600 text-white hover:bg-brand-700 shadow-md shadow-brand-200 transition-all text-sm font-medium"
+              >
+                Guardar
+              </button>
             </div>
           </div>
         </div>

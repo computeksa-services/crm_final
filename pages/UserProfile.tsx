@@ -1,185 +1,243 @@
-
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { User } from '../types';
+import Toast from '../components/Toast';
 
 const UserProfile: React.FC = () => {
-  const { user, login } = useAuth(); // Obtener el usuario del contexto de autenticación
+  const { user } = useAuth(); // Obtener usuario del contexto
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<'google' | 'outlook' | null>(null);
-  const [currentUserData, setCurrentUserData] = useState<User | null>(null); // Usar un estado local para los datos del perfil
-
-  const fetchUser = async () => {
-    if (user?.id_user) {
-      // En un entorno real, aquí harías una llamada a tu API para obtener los detalles del usuario
-      // Por ahora, usamos los datos del usuario del contexto directamente para el perfil
-      setCurrentUserData(user);
-      setLoading(false);
-    } else {
-      // Manejar caso donde no hay usuario (ej. redirigir a login, mostrar error)
-      setLoading(false);
-    }
-  };
+  
+  // Estado local para datos del perfil (en caso de que queramos editar sin tocar el contexto global inmediatamente)
+  const [profileData, setProfileData] = useState<User | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   useEffect(() => {
-    fetchUser();
-  }, [user]); // Dependencia del user del contexto
+    if (user) {
+      setProfileData(user);
+      setLoading(false);
+    }
+  }, [user]);
 
+  // Simulación de conexión (Aquí iría la lógica real de OAuth)
   const handleSyncToggle = async (provider: 'google' | 'outlook') => {
-    if (!currentUserData) return;
+    if (!profileData) return;
     setSyncing(provider);
     
-    const currentStatus = provider === 'google' ? currentUserData.googleConnected : currentUserData.outlookConnected;
-    const newStatus = !currentStatus;
+    // Determinamos el estado actual basado en el proveedor
+    const isConnected = provider === 'google' ? profileData.googleConnected : profileData.outlookConnected;
+    const action = isConnected ? 'desconectado' : 'conectado';
 
     try {
-      // Simular llamada a API de actualización
-      // En una app real, aquí se haría una llamada al backend para actualizar el estado de sincronización
-      const response = await fetch('https://service.computeksa.com/webhook/api/users/update-sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id_user: currentUserData.id_user,
-          provider,
-          status: newStatus,
-        }),
-      });
+      // AQUÍ IRÍA LA LLAMADA AL BACKEND REAL
+      // await api.updateSyncStatus(...)
+      
+      // Simulamos un delay de red
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Error al actualizar sincronización.');
-      }
+      // Actualizamos estado local (Optimistic UI)
+      setProfileData(prev => prev ? ({
+        ...prev,
+        [provider === 'google' ? 'googleConnected' : 'outlookConnected']: !isConnected
+      }) : null);
 
-      // Actualizar el estado local y el contexto de autenticación
-      const updatedUserFromApi = { 
-        ...currentUserData, 
-        [provider === 'google' ? 'googleConnected' : 'outlookConnected']: newStatus 
-      };
-      setCurrentUserData(updatedUserFromApi);
-      // Opcional: Si el `login` de AuthContext también actualiza el usuario, podrías llamarlo aquí.
-      // Por ejemplo: login(updatedUserFromApi);
+      setToast({ message: `Cuenta de ${provider === 'google' ? 'Google' : 'Outlook'} ${action} correctamente.`, type: 'success' });
 
     } catch (error) {
       console.error("Error updating sync status:", error);
-      // Manejar el error, por ejemplo, mostrando un toast
+      setToast({ message: 'Error al actualizar sincronización.', type: 'error' });
     } finally {
       setSyncing(null);
     }
   };
 
-  if (loading || !currentUserData) return <div className="p-8 text-center text-slate-500">Cargando perfil...</div>;
+  if (loading || !profileData) {
+    return (
+        <div className="flex h-64 items-center justify-center">
+            <div className="flex flex-col items-center space-y-3">
+                <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500"></i>
+                <p className="text-slate-500 font-medium animate-pulse">Cargando perfil...</p>
+            </div>
+        </div>
+    );
+  }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">Mi Perfil</h1>
+    <div className="max-w-5xl mx-auto space-y-8 pb-12 animate-fade-in">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Mi Perfil</h1>
+        <p className="text-slate-500 text-sm mt-1">Gestiona tu información personal y preferencias de cuenta.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Profile Card */}
-        <div className="md:col-span-1">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-center">
-             <div className="w-24 h-24 mx-auto bg-slate-200 rounded-full mb-4 overflow-hidden">
-               <img src={user.avatar_url} alt="Profile" className="w-full h-full object-cover" />
-             </div>
-             <h2 className="text-lg font-bold text-slate-800">{user.name_user}</h2>
-             <p className="text-sm text-brand-600 font-medium mb-1">{user.job_title}</p> {/* Updated from jobTitle */}
-             <p className="text-xs text-slate-400 mb-6">{user.email_user}</p>
+        {/* Left Column: Identity Card */}
+        <div className="lg:col-span-1 space-y-6">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative">
+             <div className="h-24 bg-gradient-to-r from-slate-800 to-slate-900"></div>
+             <div className="px-6 pb-6 text-center -mt-12">
+                <div className="relative inline-block">
+                    <img 
+                        src={profileData.avatar_url || `https://ui-avatars.com/api/?name=${profileData.name_user}&background=random`} 
+                        alt="Profile" 
+                        className="w-24 h-24 rounded-full border-4 border-white shadow-md object-cover bg-white" 
+                    />
+                    <div className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full" title="Activo"></div>
+                </div>
+                
+                <h2 className="text-lg font-bold text-slate-800 mt-3">{profileData.name_user}</h2>
+                <p className="text-sm text-brand-600 font-medium">{profileData.job_title || 'Sin Cargo Definido'}</p>
+                
+                <div className="mt-4 flex justify-center gap-2">
+                    <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs rounded-full font-medium border border-slate-200 flex items-center">
+                        <i className="fa-regular fa-envelope mr-1.5"></i> {profileData.email_user}
+                    </span>
+                </div>
 
-             <button className="w-full border border-slate-300 text-slate-600 py-2 rounded-lg hover:bg-slate-50 text-sm font-medium transition-colors">
-               Editar Información
-             </button>
+                <div className="mt-6 pt-6 border-t border-slate-100">
+                    <button className="w-full bg-white border border-slate-300 text-slate-700 py-2.5 rounded-xl hover:bg-slate-50 hover:border-slate-400 text-sm font-medium transition-all shadow-sm">
+                        Editar Información
+                    </button>
+                </div>
+             </div>
+          </div>
+
+          {/* Quick Stats (Opcional - Decorativo) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Detalles de Cuenta</h3>
+              <div className="space-y-3 text-sm">
+                  <div className="flex justify-between">
+                      <span className="text-slate-500">Rol</span>
+                      <span className="font-medium text-slate-800 capitalize">{profileData.rol_user}</span>
+                  </div>
+                  <div className="flex justify-between">
+                      <span className="text-slate-500">Estado</span>
+                      <span className="text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded text-xs">Activo</span>
+                  </div>
+                  <div className="flex justify-between">
+                      <span className="text-slate-500">Miembro desde</span>
+                      <span className="font-medium text-slate-800">Dic 2024</span>
+                  </div>
+                  <div className="pt-2 mt-2 border-t border-slate-100">
+                      <span className="text-slate-500 block mb-1 text-xs">ID de Organización (Tenant)</span>
+                      <span className="font-mono text-xs text-slate-400 bg-slate-50 p-1.5 rounded block break-all">{profileData.id_tenant}</span>
+                  </div>
+              </div>
           </div>
         </div>
 
-        {/* Settings & Integrations */}
-        <div className="md:col-span-2 space-y-6">
+        {/* Right Column: Settings */}
+        <div className="lg:col-span-2 space-y-6">
           
-          {/* General Info */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h3 className="font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Información de la Cuenta</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-               <div>
-                 <p className="text-slate-500 mb-1">Empresa ID</p>
-                 <p className="font-medium text-slate-800 uppercase">{user.id_tenant}</p>
-               </div>
-               <div>
-                 <p className="text-slate-500 mb-1">Rol</p>
-                 <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs font-bold uppercase">{user.rol_user}</span>
-               </div>
-               <div>
-                  <p className="text-slate-500 mb-1">Teléfono</p>
-                  <p className="text-slate-800">{user.phone_user}</p>
-               </div>
+          {/* Integrations Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+            <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
+                    <i className="fa-solid fa-plug text-lg"></i>
+                </div>
+                <div>
+                    <h3 className="font-bold text-slate-800 text-lg">Integraciones</h3>
+                    <p className="text-sm text-slate-500">Conecta tu calendario y correo para sincronización automática.</p>
+                </div>
             </div>
-          </div>
-
-          {/* Integrations */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-            <h3 className="font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Sincronización de Correo y Calendario</h3>
-            <p className="text-sm text-slate-500 mb-6">Conecta tus cuentas para sincronizar eventos del calendario y correos electrónicos automáticamente con el CRM.</p>
             
             <div className="space-y-4">
               
               {/* Google Integration */}
-              <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-white border border-slate-100 rounded-full flex items-center justify-center mr-3 shadow-sm">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google" className="w-5 h-5" />
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-200 rounded-xl hover:border-slate-300 transition-all bg-slate-50/50">
+                <div className="flex items-center gap-4 mb-4 sm:mb-0">
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 p-2">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google" className="w-full h-full object-contain" />
                   </div>
                   <div>
                     <p className="font-bold text-slate-800">Google Workspace</p>
-                    <p className="text-xs text-slate-500">Calendar & Gmail</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Sincroniza Calendar y Gmail</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => handleSyncToggle('google')}
-                  disabled={syncing === 'google'}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    user.googleConnected 
-                    ? 'bg-red-50 text-red-600 hover:bg-red-100' 
-                    : 'bg-slate-900 text-white hover:bg-slate-800'
-                  }`}
-                >
-                  {syncing === 'google' ? (
-                    <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  ) : user.googleConnected ? (
-                    'Desconectar'
-                  ) : (
-                    'Conectar Google'
-                  )}
-                </button>
+                
+                {profileData.googleConnected ? (
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center">
+                            <i className="fa-solid fa-check-circle mr-1.5"></i> Conectado
+                        </span>
+                        <button 
+                            onClick={() => handleSyncToggle('google')}
+                            disabled={syncing === 'google'}
+                            className="text-slate-400 hover:text-red-500 p-2 rounded-lg transition-colors text-sm"
+                            title="Desconectar"
+                        >
+                            {syncing === 'google' ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-power-off"></i>}
+                        </button>
+                    </div>
+                ) : (
+                    <button 
+                        onClick={() => handleSyncToggle('google')}
+                        disabled={syncing === 'google'}
+                        className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm flex items-center"
+                    >
+                        {syncing === 'google' ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-brands fa-google mr-2"></i>}
+                        Conectar Cuenta
+                    </button>
+                )}
               </div>
 
               {/* Outlook Integration */}
-              <div className="flex items-center justify-between p-4 border border-slate-200 rounded-lg hover:border-slate-300 transition-colors">
-                <div className="flex items-center">
-                  <div className="w-10 h-10 bg-[#0078D4] rounded-full flex items-center justify-center mr-3 shadow-sm text-white">
-                    <i className="fa-brands fa-microsoft text-lg"></i>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-200 rounded-xl hover:border-slate-300 transition-all bg-slate-50/50">
+                <div className="flex items-center gap-4 mb-4 sm:mb-0">
+                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 p-2">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/d/df/Microsoft_Office_Outlook_%282018%E2%80%93present%29.svg" alt="Outlook" className="w-full h-full object-contain" />
                   </div>
                   <div>
                     <p className="font-bold text-slate-800">Microsoft Outlook</p>
-                    <p className="text-xs text-slate-500">Calendar & Exchange</p>
+                    <p className="text-xs text-slate-500 mt-0.5">Sincroniza Calendario y Contactos</p>
                   </div>
                 </div>
-                <button 
-                  onClick={() => handleSyncToggle('outlook')}
-                  disabled={syncing === 'outlook'}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    user.outlookConnected 
-                    ? 'bg-red-50 text-red-600 hover:bg-red-100' 
-                    : 'bg-slate-900 text-white hover:bg-slate-800'
-                  }`}
-                >
-                  {syncing === 'outlook' ? (
-                    <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  ) : user.outlookConnected ? (
-                    'Desconectar'
-                  ) : (
-                    'Conectar Outlook'
-                  )}
-                </button>
+
+                {profileData.outlookConnected ? (
+                    <div className="flex items-center gap-3">
+                        <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center">
+                            <i className="fa-solid fa-check-circle mr-1.5"></i> Conectado
+                        </span>
+                        <button 
+                            onClick={() => handleSyncToggle('outlook')}
+                            disabled={syncing === 'outlook'}
+                            className="text-slate-400 hover:text-red-500 p-2 rounded-lg transition-colors text-sm"
+                            title="Desconectar"
+                        >
+                            {syncing === 'outlook' ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-power-off"></i>}
+                        </button>
+                    </div>
+                ) : (
+                    <button 
+                        onClick={() => handleSyncToggle('outlook')}
+                        disabled={syncing === 'outlook'}
+                        className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm flex items-center"
+                    >
+                        {syncing === 'outlook' ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-brands fa-microsoft mr-2"></i>}
+                        Conectar Cuenta
+                    </button>
+                )}
               </div>
 
+            </div>
+          </div>
+
+          {/* Security (Placeholder) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 opacity-75">
+             <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-slate-600">
+                    <i className="fa-solid fa-shield-halved text-lg"></i>
+                </div>
+                <div>
+                    <h3 className="font-bold text-slate-800 text-lg">Seguridad</h3>
+                    <p className="text-sm text-slate-500">Gestiona tu contraseña y sesiones.</p>
+                </div>
+            </div>
+            <div className="p-4 border border-dashed border-slate-200 rounded-xl text-center bg-slate-50">
+                <p className="text-sm text-slate-500">Para cambiar tu contraseña, contacta a un administrador.</p>
             </div>
           </div>
 

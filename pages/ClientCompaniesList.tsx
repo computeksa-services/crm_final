@@ -1,18 +1,24 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext'; // Importar useAuth
+import { useAuth } from '../contexts/AuthContext';
 import { ClientCompany, User } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 
 const ClientCompaniesList: React.FC = () => {
-  const { user } = useAuth(); // Usar useAuth
-  const [companies, setCompanies] = useState<ClientCompany[]>([]);
-  const [users, setUsers] = useState<User[]>([]); // Para mostrar el nombre del creador
-  const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const { user } = useAuth();
   const navigate = useNavigate();
   
+  // Datos
+  const [companies, setCompanies] = useState<ClientCompany[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  
+  // UI & Filtros
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  
+  // Modal & Edición
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Partial<ClientCompany> | null>(null);
@@ -26,6 +32,7 @@ const ClientCompaniesList: React.FC = () => {
     isDestructive: false,
   });
 
+  // --- CARGA DE DATOS ---
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
     setLoading(true);
@@ -42,22 +49,18 @@ const ClientCompaniesList: React.FC = () => {
         if (!res.ok) {
           if (res.status === 404) return [];
           const errorText = await res.text();
-          throw new Error(`Error del servidor: ${res.status} - ${errorText}`);
+          throw new Error(`Error: ${res.status} - ${errorText}`);
         }
         const text = await res.text();
         return text ? JSON.parse(text) : [];
       };
 
-      const companiesData = await parseResponse(companiesRes);
-      const usersData = await parseResponse(usersRes);
+      setCompanies(await parseResponse(companiesRes));
+      setUsers(await parseResponse(usersRes));
 
-      setCompanies(companiesData);
-      setUsers(usersData);
     } catch (e: any) {
       console.error("Error fetching data:", e);
-      setToast({ message: e.message || 'Error al cargar empresas o usuarios.', type: 'error' });
-      setCompanies([]);
-      setUsers([]);
+      setToast({ message: 'Error al cargar empresas.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -67,21 +70,29 @@ const ClientCompaniesList: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
+  // --- FILTROS ---
+  const filteredCompanies = useMemo(() => {
+    return companies.filter(c => {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        (c.name_company || '').toLowerCase().includes(searchLower) ||
+        (c.id_number || '').includes(searchLower) ||
+        (c.industry || '').toLowerCase().includes(searchLower)
+      );
+    });
+  }, [companies, searchTerm]);
+
   const getUserName = (id: string | undefined) => {
     if (!id) return '-';
     const creator = users.find(u => u.id_user === id);
     return creator ? creator.name_user : 'Desconocido';
   };
 
-  const handleRowClick = (id: string) => {
-    navigate(`/client-companies/${id}`);
-  };
+  // --- HANDLERS ---
+  const handleRowClick = (id: string) => navigate(`/client-companies/${id}`);
 
   const handleAddNew = () => {
-    if (!user?.id_tenant || !user?.id_user) {
-      setToast({ message: 'Error de sesión. Vuelve a iniciar sesión.', type: 'error' });
-      return;
-    }
+    if (!user?.id_tenant) return;
     setEditingCompany({
       id_type: 'RUC',
       id_number: '',
@@ -92,8 +103,8 @@ const ClientCompaniesList: React.FC = () => {
       website: '',
       phone_company: '',
       email_company: '',
-      id_tenant: user.id_tenant, // Asegurar id_tenant para nueva empresa
-      created_by: user.id_user, // Asegurar created_by para nueva empresa
+      id_tenant: user.id_tenant,
+      created_by: user.id_user,
     });
     setIsEditMode(false);
     setIsModalOpen(true);
@@ -108,11 +119,11 @@ const ClientCompaniesList: React.FC = () => {
   const handleDelete = (id: string) => {
     setConfirmState({
       isOpen: true,
-      title: 'Eliminar Empresa Cliente',
-      message: '¿Estás seguro? Esto eliminará la empresa y sus contactos asociados.',
+      title: 'Eliminar Empresa',
+      message: '¿Estás seguro? Se eliminarán también todos los contactos asociados a esta empresa.',
       isDestructive: true,
       onConfirm: async () => {
-        if (!user?.id_tenant || !user?.id_user) return; // Asegurar user IDs
+        if (!user?.id_tenant) return;
         setSubmitting(true);
         try {
           const response = await fetch(`https://service.computeksa.com/webhook/api/clients/companies/delete`, {
@@ -121,85 +132,62 @@ const ClientCompaniesList: React.FC = () => {
             body: JSON.stringify({ 
               id_client_company: id, 
               id_tenant: user.id_tenant, 
-              id_user: user.id_user // id_user para auditoría/permisos
+              id_user: user.id_user
             }),
           });
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Error al eliminar empresa.' }));
-            throw new Error(errorData.message || 'Error al eliminar empresa.');
-          }
-          setToast({ message: 'Empresa cliente eliminada.', type: 'success' });
+          if (!response.ok) throw new Error('Error al eliminar empresa.');
+          
+          setToast({ message: 'Empresa eliminada.', type: 'success' });
           await fetchData(); 
         } catch (error: any) {
-          setToast({ message: error.message || 'Error al eliminar.', type: 'error' });
+          setToast({ message: error.message, type: 'error' });
         } finally {
           setSubmitting(false);
-          setConfirmState({ ...confirmState, isOpen: false });
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
         }
       },
     });
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isEditMode) {
-      setIsModalOpen(false);
-      setConfirmState({
-        isOpen: true,
-        title: 'Guardar Cambios',
-        message: '¿Confirmas guardar los cambios de esta empresa?',
-        isDestructive: false,
-        onConfirm: () => performSubmit(),
-      });
-    } else {
-      performSubmit();
+    if (!editingCompany || !user?.id_tenant) return;
+    
+    // Validación
+    if(!editingCompany.name_company || !editingCompany.id_number) {
+        setToast({ message: 'Razón Social y Número de ID son obligatorios.', type: 'error' });
+        return;
     }
-  };
 
-  const performSubmit = async () => {
-    if (!editingCompany || !user?.id_tenant || !user?.id_user) return;
     setSubmitting(true);
     
     const payload = {
         ...editingCompany,
-        id_tenant: user.id_tenant, // Asegura que el tenant ID sea el del usuario logueado
-        id_user: user.id_user, // id_user para auditoría/permisos en update/create
-        created_by: editingCompany.created_by || user.id_user, // Mantener si existe, o usar el actual al crear
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+        created_by: editingCompany.created_by || user.id_user,
     };
 
     try {
-      if (isEditMode && payload.id_client_company) {
-        // --- LÓGICA DE ACTUALIZACIÓN ---
-        const response = await fetch(`https://service.computeksa.com/webhook/api/clients/companies/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Error al actualizar empresa.' }));
-            throw new Error(errorData.message || 'Error al actualizar empresa.');
-        }
-        setToast({ message: 'Empresa actualizada.', type: 'success' });
-      } else {
-        // --- LÓGICA DE CREACIÓN ---
-        const response = await fetch(`https://service.computeksa.com/webhook/api/clients/companies`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Error al crear empresa.' }));
-            throw new Error(errorData.message || 'Error al crear empresa.');
-        }
-        setToast({ message: 'Empresa creada.', type: 'success' });
-      }
+      const url = isEditMode 
+        ? `https://service.computeksa.com/webhook/api/clients/companies/update`
+        : `https://service.computeksa.com/webhook/api/clients/companies`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error(isEditMode ? 'Error al actualizar.' : 'Error al crear.');
+      
+      setToast({ message: isEditMode ? 'Empresa actualizada.' : 'Empresa creada.', type: 'success' });
       setIsModalOpen(false); 
       await fetchData(); 
     } catch (error: any) {
-      setToast({ message: error.message || 'Error al guardar la empresa.', type: 'error' });
+      setToast({ message: error.message, type: 'error' });
     } finally {
       setSubmitting(false); 
-      setConfirmState({ ...confirmState, isOpen: false });
     }
   };
 
@@ -208,209 +196,264 @@ const ClientCompaniesList: React.FC = () => {
     setEditingCompany(prev => (prev ? { ...prev, [name]: value } : null));
   };
 
-  return (
-    <div>
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      <ConfirmModal 
-        isOpen={confirmState.isOpen}
-        onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
-        onConfirm={confirmState.onConfirm}
-        title={confirmState.title}
-        message={confirmState.message}
-        isDestructive={confirmState.isDestructive}
-      />
+  // Renderizado condicional
+  const renderContent = () => {
+    if (loading) {
+        return (
+          <div className="p-12 text-center">
+              <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500 mb-4"></i>
+              <p className="text-slate-500 font-medium">Cargando clientes...</p>
+          </div>
+        );
+    }
 
-      <div className="flex justify-between items-center mb-6">
-        <div>
-           <h1 className="text-2xl font-bold text-slate-800">Empresas Clientes (B2B)</h1>
-           <p className="text-slate-500 text-sm">Gestiona tu cartera de clientes corporativos.</p>
-        </div>
-        <button onClick={handleAddNew} className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm">
-          <i className="fa-solid fa-plus mr-2"></i> Nueva Empresa
-        </button>
-      </div>
+    if (companies.length === 0) {
+        return (
+            <div className="p-16 text-center flex flex-col items-center">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+                    <i className="fa-solid fa-building text-3xl text-slate-300"></i>
+                </div>
+                <h3 className="text-lg font-bold text-slate-700">No hay empresas</h3>
+                <p className="text-slate-500 max-w-sm mt-1 mb-6">Registra tus clientes corporativos para gestionar contactos y tratos.</p>
+                <button onClick={handleAddNew} className="bg-brand-600 text-white px-5 py-2.5 rounded-xl shadow-md hover:bg-brand-700 transition-all">
+                    Crear Primera Empresa
+                </button>
+            </div>
+        );
+    }
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-slate-500">Cargando clientes...</div>
-        ) : (
-          <div className="overflow-x-auto">
+    if (filteredCompanies.length === 0) {
+        return (
+            <div className="p-12 text-center">
+                <i className="fa-solid fa-search text-3xl text-slate-200 mb-4"></i>
+                <p className="text-slate-500">No se encontraron empresas con los filtros actuales.</p>
+                <button onClick={() => setSearchTerm('')} className="text-brand-600 font-medium mt-2 hover:underline">Limpiar búsqueda</button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="overflow-x-auto min-h-[400px]">
             <table className="w-full text-left border-collapse">
               <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold">
                 <tr>
+                  <th className="px-6 py-4 border-b">Empresa</th>
                   <th className="px-6 py-4 border-b">Identificación</th>
-                  <th className="px-6 py-4 border-b">Razón Social</th>
                   <th className="px-6 py-4 border-b">Industria</th>
+                  <th className="px-6 py-4 border-b">Ubicación</th>
                   <th className="px-6 py-4 border-b">Creado Por</th>
                   <th className="px-6 py-4 border-b text-right">Acciones</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
-                {companies.length === 0 ? (
-                  <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-500">No hay empresas registradas.</td></tr>
-                ) : (
-                  companies.map((comp) => (
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {filteredCompanies.map((comp) => (
                     <tr 
                       key={comp.id_client_company} 
                       onClick={() => handleRowClick(comp.id_client_company)}
-                      className="hover:bg-slate-50 cursor-pointer transition-colors"
+                      className="hover:bg-slate-50/80 transition-all cursor-pointer group"
                     >
                       <td className="px-6 py-4">
-                        <span className="text-xs font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded mr-2">{comp.id_type || 'ID'}</span>
-                        <span className="text-slate-700 font-mono text-sm">{comp.id_number}</span>
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm border border-indigo-100">
+                                <i className="fa-solid fa-building"></i>
+                            </div>
+                            <div>
+                                <div className="font-bold text-slate-800 text-sm">{comp.name_company}</div>
+                                <div className="flex items-center gap-3 mt-0.5">
+                                    {comp.website && (
+                                        <a href={comp.website} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-xs text-brand-600 hover:underline flex items-center gap-1">
+                                            <i className="fa-solid fa-link text-[10px]"></i> Web
+                                        </a>
+                                    )}
+                                    {comp.email_company && (
+                                        <a href={`mailto:${comp.email_company}`} onClick={(e) => e.stopPropagation()} className="text-xs text-slate-500 hover:text-brand-600 flex items-center gap-1">
+                                            <i className="fa-regular fa-envelope text-[10px]"></i> Email
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                       </td>
-                      <td className="px-6 py-4 font-medium text-slate-800">{comp.name_company}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{comp.industry || '-'}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{getUserName(comp.created_by)}</td>
-                      <td className="px-6 py-4 text-right space-x-2">
-                        <button onClick={(e) => { e.stopPropagation(); handleEdit(comp); }} className="p-2 text-slate-400 hover:text-brand-600">
-                          <i className="fa-solid fa-pen-to-square"></i>
-                        </button>
-                        <button onClick={(e) => { e.stopPropagation(); handleDelete(comp.id_client_company); }} className="p-2 text-slate-400 hover:text-red-600">
-                          <i className="fa-solid fa-trash"></i>
-                        </button>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{comp.id_type || 'ID'}</span>
+                            <span className="text-slate-700 font-mono text-sm">{comp.id_number}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        {comp.industry ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                {comp.industry}
+                            </span>
+                        ) : (
+                            <span className="text-slate-400 text-xs italic">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {comp.city || comp.address ? (
+                            <div className="flex items-center gap-1" title={comp.address}>
+                                <i className="fa-solid fa-location-dot text-slate-400 text-xs"></i>
+                                {comp.city || 'Sin ciudad'}
+                            </div>
+                        ) : (
+                            <span className="text-slate-400 text-xs italic">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                         <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-500 font-bold border border-slate-200">
+                                {getUserName(comp.created_by).charAt(0)}
+                            </div>
+                            <span className="text-xs text-slate-600 truncate max-w-[100px]">{getUserName(comp.created_by)}</span>
+                         </div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={(e) => { e.stopPropagation(); handleEdit(comp); }} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
+                                <i className="fa-solid fa-pen-to-square"></i>
+                            </button>
+                            <button onClick={(e) => { e.stopPropagation(); handleDelete(comp.id_client_company); }} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                                <i className="fa-solid fa-trash-can"></i>
+                            </button>
+                        </div>
                       </td>
                     </tr>
-                  ))
-                )}
+                  ))}
               </tbody>
             </table>
-          </div>
-        )}
+        </div>
+    );
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6 animate-fade-in pb-12">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />
+
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+           <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Empresas (B2B)</h1>
+           <p className="text-slate-500 text-sm mt-1">Cartera de clientes corporativos.</p>
+        </div>
+        <button onClick={handleAddNew} className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-brand-200 text-sm font-medium transition-all flex items-center justify-center">
+            <i className="fa-solid fa-plus mr-2"></i> Nueva Empresa
+        </button>
       </div>
 
+      {/* Filters Bar */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between">
+         <div className="relative w-full md:w-96">
+            <span className="absolute left-3 top-2.5 text-slate-400">
+                <i className="fa-solid fa-magnifying-glass"></i>
+            </span>
+            <input 
+                type="text"
+                placeholder="Buscar por nombre, RUC o industria..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-sm"
+            />
+         </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[400px]">
+        {renderContent()}
+      </div>
+
+      {/* Pagination Footer */}
+      <div className="flex justify-between items-center text-xs text-slate-400 px-2">
+         <span>Mostrando {filteredCompanies.length} de {companies.length} empresas</span>
+      </div>
+
+      {/* Create/Edit Modal */}
       {isModalOpen && editingCompany && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
-              <h2 className="text-lg font-bold text-slate-800">{isEditMode ? 'Editar Empresa Cliente' : 'Nueva Empresa Cliente'}</h2>
-              <button onClick={() => setIsModalOpen(false)}><i className="fa-solid fa-times text-slate-400"></i></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
+              <h2 className="text-lg font-bold text-slate-800">{isEditMode ? 'Editar Empresa' : 'Nueva Empresa'}</h2>
+              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-colors">
+                  <i className="fa-solid fa-times"></i>
+              </button>
             </div>
-            <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
-              <div>
-                <label htmlFor="id_type" className="block text-xs font-bold text-slate-500 mb-1">Tipo de Identificación</label>
-                <select
-                  id="id_type"
-                  name="id_type"
-                  required
-                  value={editingCompany.id_type || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-lg bg-white"
-                >
-                  <option value="">-- Seleccionar Tipo --</option>
-                  <option value="RUC">RUC</option>
-                  <option value="CI">Cédula</option>
-                  <option value="PASAPORTE">Pasaporte</option>
-                  <option value="OTRO">Otro</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="id_number" className="block text-xs font-bold text-slate-500 mb-1">Número de Identificación</label>
-                <input
-                  type="text"
-                  id="id_number"
-                  name="id_number"
-                  required
-                  value={editingCompany.id_number || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
-              </div>
-              <div>
-                <label htmlFor="name_company" className="block text-xs font-bold text-slate-500 mb-1">Razón Social</label>
-                <input
-                  type="text"
-                  id="name_company"
-                  name="name_company"
-                  required
-                  value={editingCompany.name_company || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
-              </div>
-              <div>
-                <label htmlFor="industry" className="block text-xs font-bold text-slate-500 mb-1">Industria</label>
-                <input
-                  type="text"
-                  id="industry"
-                  name="industry"
-                  value={editingCompany.industry || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="city" className="block text-xs font-bold text-slate-500 mb-1">Ciudad</label>
-                  <input
-                    type="text"
-                    id="city"
-                    name="city"
-                    value={editingCompany.city || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="address" className="block text-xs font-bold text-slate-500 mb-1">Dirección</label>
-                  <input
-                    type="text"
-                    id="address"
-                    name="address"
-                    value={editingCompany.address || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="email_company" className="block text-xs font-bold text-slate-500 mb-1">Email</label>
-                  <input
-                    type="email"
-                    id="email_company"
-                    name="email_company"
-                    value={editingCompany.email_company || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="phone_company" className="block text-xs font-bold text-slate-500 mb-1">Teléfono</label>
-                  <input
-                    type="text"
-                    id="phone_company"
-                    name="phone_company"
-                    value={editingCompany.phone_company || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
-                </div>
-              </div>
-              <div>
-                <label htmlFor="website" className="block text-xs font-bold text-slate-500 mb-1">Web</label>
-                <input
-                  type="url"
-                  id="website"
-                  name="website"
-                  value={editingCompany.website || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border rounded-lg"
-                />
+            
+            <form onSubmit={handleFormSubmit} className="overflow-y-auto p-6 space-y-5">
+              
+              {/* Sección Identificación */}
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 grid grid-cols-3 gap-4">
+                  <div className="col-span-1">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tipo ID</label>
+                    <select
+                        name="id_type"
+                        required
+                        value={editingCompany.id_type || 'RUC'}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-brand-500 text-sm"
+                    >
+                        <option value="RUC">RUC</option>
+                        <option value="CI">Cédula</option>
+                        <option value="PASAPORTE">Pasaporte</option>
+                        <option value="OTRO">Otro</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Número ID</label>
+                    <input
+                        type="text"
+                        name="id_number"
+                        required
+                        value={editingCompany.id_number || ''}
+                        onChange={handleInputChange}
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm"
+                        placeholder="17900..."
+                    />
+                  </div>
               </div>
 
-              <div className="flex justify-end pt-4 space-x-2 border-t mt-6">
-                <button 
-                  type="button" 
-                  onClick={() => setIsModalOpen(false)} 
-                  className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100"
-                >Cancelar</button>
-                <button 
-                  type="submit" 
-                  disabled={submitting}
-                  className="px-4 py-2 rounded-lg bg-brand-600 text-white hover:bg-brand-700 shadow-sm flex items-center"
-                >
-                  {submitting && <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Razón Social</label>
+                <input type="text" name="name_company" required value={editingCompany.name_company || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 transition-all" placeholder="Ej. Corporación Favorita C.A." />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Industria</label>
+                    <input type="text" name="industry" value={editingCompany.industry || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="Ej. Tecnología" />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Ciudad</label>
+                    <input type="text" name="city" value={editingCompany.city || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="Quito" />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Dirección</label>
+                <input type="text" name="address" value={editingCompany.address || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="Av. Amazonas y..." />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Email</label>
+                    <input type="email" name="email_company" value={editingCompany.email_company || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="contacto@empresa.com" />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Teléfono</label>
+                    <input type="text" name="phone_company" value={editingCompany.phone_company || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="022..." />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Sitio Web</label>
+                <div className="relative">
+                    <span className="absolute left-4 top-2.5 text-slate-400"><i className="fa-solid fa-globe"></i></span>
+                    <input type="url" name="website" value={editingCompany.website || ''} onChange={handleInputChange} className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="https://..." />
+                </div>
+              </div>
+              
+              <div className="flex justify-end pt-4 gap-3 border-t border-slate-100">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all">Cancelar</button>
+                <button type="submit" disabled={submitting} className="px-5 py-2.5 rounded-xl bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-200 font-medium flex items-center transition-all disabled:opacity-70">
+                  {submitting ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-check mr-2"></i>}
                   Guardar Empresa
                 </button>
               </div>

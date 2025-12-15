@@ -16,6 +16,7 @@ import ClientContactsList from './pages/ClientContactsList';
 import ClientContactDetail from './pages/ClientContactDetail';
 import DealsList from './pages/DealsList';
 import DealDetail from './pages/DealDetail';
+import DealCreate from './pages/DealCreate';
 import ProductsList from './pages/ProductsList';
 import SettingsPage from './pages/SettingsPage';
 import QuoteCreate from './pages/QuoteCreate'; // RUTA CORREGIDA
@@ -45,6 +46,7 @@ const App: React.FC = () => {
             <Route path="quotes/new" element={<QuoteCreate />} />
             <Route path="quotes/:id" element={<QuoteDetail />} />
             <Route path="deals" element={<DealsList />} />
+            <Route path="deals/new" element={<DealCreate />} />
             <Route path="deals/:id" element={<DealDetail />} />
             <Route path="calendar" element={<Calendar />} />
             <Route path="profile" element={<UserProfile />} />

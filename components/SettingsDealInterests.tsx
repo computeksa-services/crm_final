@@ -1,9 +1,21 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { DealInterest } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import IconPicker from '../components/IconPicker';
+
+// Paleta de colores moderna y profesional para CRM
+const PRESET_COLORS = [
+  '#6366f1', // Indigo (Brand)
+  '#ef4444', // Red
+  '#f59e0b', // Amber
+  '#10b981', // Emerald
+  '#3b82f6', // Blue
+  '#8b5cf6', // Violet
+  '#ec4899', // Pink
+  '#64748b', // Slate
+];
 
 const SettingsDealInterests: React.FC = () => {
   const { user } = useAuth();
@@ -38,10 +50,9 @@ const SettingsDealInterests: React.FC = () => {
         return;
       }
       const data = await response.json();
-      // Ordenamos por status_order
       const sortedData = data.sort((a: DealInterest, b: DealInterest) => a.status_order - b.status_order);
       setInterests(sortedData);
-      setOrderChanged(false); // Reseteamos el estado de cambio
+      setOrderChanged(false);
     } catch (error) {
       setToast({ message: 'Error al cargar los niveles de interés.', type: 'error' });
     } finally {
@@ -59,20 +70,18 @@ const SettingsDealInterests: React.FC = () => {
   };
 
   const handleDragOver = (e: React.DragEvent, index: number) => {
-    e.preventDefault(); // Necesario para permitir el drop
+    e.preventDefault();
     if (draggedItemIndex === null || draggedItemIndex === index) return;
 
-    // Reordenar el array en tiempo real visualmente
     const updatedInterests = [...interests];
     const draggedItem = updatedInterests[draggedItemIndex];
     
-    // Eliminar del viejo sitio y poner en el nuevo
     updatedInterests.splice(draggedItemIndex, 1);
     updatedInterests.splice(index, 0, draggedItem);
 
     setInterests(updatedInterests);
-    setDraggedItemIndex(index); // Actualizar el índice arrastrado
-    setOrderChanged(true); // Marcar que hay cambios pendientes de guardar
+    setDraggedItemIndex(index);
+    setOrderChanged(true);
   };
 
   const handleDragEnd = () => {
@@ -85,20 +94,9 @@ const SettingsDealInterests: React.FC = () => {
     setSavingOrder(true);
 
     try {
-      // Creamos un array de promesas. Recorremos la lista visual actual.
-      // El índice del array (0, 1, 2) + 1 se convierte en el nuevo status_order.
       const updatePromises = interests.map((item, index) => {
         const newOrder = index + 1;
-        
-        // Solo enviamos actualización si el orden es diferente al que tenía (opcional, pero optimiza)
-        // O para asegurar consistencia, mandamos actualizar todos.
-        // Usamos el endpoint existente de update.
-        const payload = { 
-            ...item, 
-            status_order: newOrder, 
-            id_tenant: user.id_tenant 
-        };
-
+        const payload = { ...item, status_order: newOrder, id_tenant: user.id_tenant };
         return fetch(`https://service.computeksa.com/webhook/api/statuses/interests/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -106,27 +104,26 @@ const SettingsDealInterests: React.FC = () => {
         });
       });
 
-      // Esperamos a que TODAS las actualizaciones terminen
       await Promise.all(updatePromises);
-
       setToast({ message: 'Orden actualizado correctamente.', type: 'success' });
       setOrderChanged(false);
-      // Opcional: recargar datos para asegurar sincronía
-      // fetchData(); 
-
     } catch (error) {
-      console.error(error);
-      setToast({ message: 'Error al guardar el orden. Intente nuevamente.', type: 'error' });
+      setToast({ message: 'Error al guardar el orden.', type: 'error' });
     } finally {
       setSavingOrder(false);
     }
   };
 
-  // --- LÓGICA CRUD EXISTENTE ---
+  // --- LÓGICA CRUD ---
   const handleAddNew = () => {
-    // El nuevo orden será el último + 1
     const newOrder = interests.length > 0 ? interests.length + 1 : 1;
-    setEditingInterest({ name: '', color: '#6366f1', icon: 'fa-solid fa-star', status_order: newOrder, is_default: false });
+    setEditingInterest({ 
+        name: '', 
+        color: PRESET_COLORS[0], // Color por defecto de la paleta
+        icon: 'fa-solid fa-star', 
+        status_order: newOrder, 
+        is_default: false 
+    });
     setIsModalOpen(true);
   };
 
@@ -137,17 +134,25 @@ const SettingsDealInterests: React.FC = () => {
 
   const handleSave = async () => {
     if (!editingInterest || !editingInterest.name || !user?.id_tenant) {
-      setToast({ message: 'El nombre del interés no puede estar vacío.', type: 'error' });
+      setToast({ message: 'El nombre es obligatorio.', type: 'error' });
       return;
     }
 
     const payload = { ...editingInterest, id_tenant: user.id_tenant };
     const isUpdating = 'id_interest' in editingInterest;
-    const url = isUpdating ? `https://service.computeksa.com/webhook/api/statuses/interests/update` : `https://service.computeksa.com/webhook/api/statuses/interests`;
+    const url = isUpdating 
+        ? `https://service.computeksa.com/webhook/api/statuses/interests/update` 
+        : `https://service.computeksa.com/webhook/api/statuses/interests`;
 
     try {
-      const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const response = await fetch(url, { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify(payload) 
+      });
+      
       if (!response.ok) throw new Error(isUpdating ? 'Error al actualizar' : 'Error al crear');
+      
       setToast({ message: `Interés ${isUpdating ? 'actualizado' : 'creado'}.`, type: 'success' });
       setIsModalOpen(false);
       fetchData();
@@ -160,7 +165,7 @@ const SettingsDealInterests: React.FC = () => {
     setConfirmState({
       isOpen: true,
       title: 'Eliminar Interés',
-      message: '¿Estás seguro? Esto eliminará la etiqueta de los tratos que la tengan asignada.',
+      message: '¿Estás seguro? Esto podría afectar a tratos existentes.',
       onConfirm: async () => {
         try {
           const response = await fetch(`https://service.computeksa.com/webhook/api/statuses/interests/delete`, {
@@ -195,7 +200,6 @@ const SettingsDealInterests: React.FC = () => {
             <p className="text-sm text-slate-500">Arrastra los elementos para cambiar su prioridad.</p>
         </div>
         <div className="flex items-center gap-3">
-             {/* BOTÓN DE GUARDAR ORDEN (Solo aparece si se movió algo) */}
             {orderChanged && (
                 <button 
                     onClick={saveNewOrder} 
@@ -203,7 +207,7 @@ const SettingsDealInterests: React.FC = () => {
                     className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl shadow-lg shadow-indigo-200 font-medium transition-all flex items-center animate-pulse"
                 >
                     {savingOrder ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-floppy-disk mr-2"></i>}
-                    Guardar Nuevo Orden
+                    Guardar Orden
                 </button>
             )}
 
@@ -233,16 +237,13 @@ const SettingsDealInterests: React.FC = () => {
                     onDragEnd={handleDragEnd}
                     className={`group flex items-center justify-between p-4 transition-colors cursor-grab active:cursor-grabbing ${draggedItemIndex === index ? 'bg-slate-50 opacity-50 border-2 border-dashed border-slate-300' : 'hover:bg-slate-50'}`}
                 >
-                    
-                    {/* Visualización Principal */}
                     <div className="flex items-center gap-4">
-                        {/* Icono de Agarre (Handle) */}
                         <div className="text-slate-300 group-hover:text-slate-500 cursor-grab">
                             <i className="fa-solid fa-grip-vertical"></i>
                         </div>
 
                         <div 
-                            className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-sm"
+                            className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-sm transition-colors"
                             style={{ 
                                 backgroundColor: `${interest.color}15`, 
                                 color: interest.color 
@@ -257,21 +258,9 @@ const SettingsDealInterests: React.FC = () => {
                             >
                                 {interest.name}
                             </span>
-                            <div className="flex items-center gap-2">
-                                {interest.is_default && (
-                                    <span className="text-[10px] bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full border border-slate-200 inline-block">
-                                        Por defecto
-                                    </span>
-                                )}
-                                {/* Mostramos el orden visualmente para referencia */}
-                                <span className="text-[10px] text-slate-400">
-                                    Posición: {index + 1}
-                                </span>
-                            </div>
                         </div>
                     </div>
 
-                    {/* Acciones */}
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
                             onClick={() => handleEdit(interest)} 
@@ -294,10 +283,10 @@ const SettingsDealInterests: React.FC = () => {
         )}
       </div>
 
-      {/* Modal de Edición/Creación */}
+      {/* Modal de Edición/Creación SIMPLIFICADO */}
       {isModalOpen && editingInterest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all relative">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all relative">
             
             <div className="px-6 py-4 border-b border-slate-100 bg-white flex justify-between items-center">
                 <h2 className="font-bold text-lg text-slate-800">
@@ -308,57 +297,59 @@ const SettingsDealInterests: React.FC = () => {
                 </button>
             </div>
             
-            <div className="p-6 space-y-5">
+            <div className="p-6 space-y-6">
               
-              {/* Vista Previa */}
-              <div className="flex justify-center mb-2">
-                  <div className="flex items-center gap-3 px-6 py-3 rounded-xl border border-slate-200 bg-slate-50">
-                     <span className="text-xs text-slate-400 uppercase font-bold mr-2">Vista Previa:</span>
-                     <div className="flex items-center gap-2" style={{ color: editingInterest.color }}>
+              {/* VISTA PREVIA (Compacta) */}
+              <div className="flex justify-center">
+                  <div 
+                    className="flex items-center gap-3 px-5 py-3 rounded-xl border border-slate-100 bg-slate-50 transition-all"
+                    style={{ borderColor: `${editingInterest.color}40`, backgroundColor: `${editingInterest.color}10` }}
+                  >
+                     <div className="text-xl" style={{ color: editingInterest.color }}>
                         <i className={editingInterest.icon}></i>
-                        <span className="font-bold">{editingInterest.name || 'Nombre Etiqueta'}</span>
                      </div>
+                     <span className="font-bold text-lg" style={{ color: editingInterest.color }}>
+                        {editingInterest.name || 'Nombre Etiqueta'}
+                     </span>
                   </div>
               </div>
 
+              {/* NOMBRE */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Nombre</label>
                 <input 
                     type="text" 
                     value={editingInterest.name || ''} 
                     onChange={(e) => setEditingInterest({ ...editingInterest, name: e.target.value })} 
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all"
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all placeholder:text-slate-300"
                     placeholder="Ej. Muy Interesado"
+                    autoFocus
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Color</label>
-                    <div className="flex items-center gap-3 h-10">
-                        <input 
-                            type="color" 
-                            value={editingInterest.color || '#cccccc'} 
-                            onChange={(e) => setEditingInterest({ ...editingInterest, color: e.target.value })} 
-                            className="h-10 w-full p-0 border-0 rounded-lg cursor-pointer shadow-sm" 
+              {/* COLOR PICKER (Paleta de Círculos) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Color</label>
+                <div className="flex flex-wrap gap-3">
+                    {PRESET_COLORS.map(color => (
+                        <button
+                            key={color}
+                            type="button"
+                            onClick={() => setEditingInterest({ ...editingInterest, color })}
+                            className={`w-8 h-8 rounded-full transition-all border-2 ${
+                                editingInterest.color === color 
+                                ? 'border-slate-600 scale-110 shadow-sm' 
+                                : 'border-transparent hover:scale-105'
+                            }`}
+                            style={{ backgroundColor: color }}
                         />
-                    </div>
-                </div>
-                {/* Ocultamos el campo ORDEN en el modal porque ahora se maneja visualmente, 
-                    pero lo mantenemos en el estado */}
-                <div>
-                     <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 cursor-not-allowed">Orden (Automático)</label>
-                     <input 
-                        type="text" 
-                        disabled
-                        value={editingInterest.status_order || '-'}
-                        className="w-full px-4 py-2 border border-slate-100 bg-slate-50 text-slate-400 rounded-xl outline-none"
-                    />
+                    ))}
                 </div>
               </div>
 
+              {/* ICON PICKER */}
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Icono</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Icono</label>
                 <button
                     type="button"
                     onClick={() => setShowIconPicker(true)}
@@ -366,33 +357,22 @@ const SettingsDealInterests: React.FC = () => {
                 >
                    <div className="flex items-center gap-3">
                        <div 
-                         className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600 group-hover:bg-white group-hover:shadow-sm transition-all"
-                         style={{ color: editingInterest.color }}
+                         className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-white group-hover:shadow-sm transition-all"
+                         style={{ color: editingInterest.color }} // Feedback visual del color
                         >
                            <i className={editingInterest.icon || 'fa-solid fa-icons'}></i>
                        </div>
                        <span className="text-sm text-slate-600 font-medium">
-                           {editingInterest.icon || 'Seleccionar un icono...'}
+                           Cambiar icono...
                        </span>
                    </div>
                    <i className="fa-solid fa-chevron-right text-xs text-slate-400"></i>
                 </button>
               </div>
 
-              <div className="flex items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
-                 <input 
-                    type="checkbox" 
-                    id="is_default_interest" 
-                    checked={editingInterest.is_default || false} 
-                    onChange={(e) => setEditingInterest({ ...editingInterest, is_default: e.target.checked })} 
-                    className="h-4 w-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500" 
-                 />
-                 <label htmlFor="is_default_interest" className="ml-3 text-sm text-slate-700 cursor-pointer select-none">
-                    Establecer como valor por defecto
-                 </label>
-              </div>
-
             </div>
+            
+            {/* FOOTER */}
             <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button 
                 onClick={() => setIsModalOpen(false)} 
@@ -402,9 +382,9 @@ const SettingsDealInterests: React.FC = () => {
               </button>
               <button 
                 onClick={handleSave} 
-                className="px-4 py-2 rounded-xl bg-brand-600 text-white hover:bg-brand-700 shadow-md shadow-brand-200 transition-all text-sm font-medium"
+                className="px-6 py-2 rounded-xl bg-brand-600 text-white hover:bg-brand-700 shadow-md shadow-brand-200 transition-all text-sm font-medium"
               >
-                Guardar Cambios
+                Guardar
               </button>
             </div>
           </div>

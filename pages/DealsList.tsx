@@ -4,7 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { Deal, ClientCompany, ClientContact, User, DealStatus, DealInterest } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
-import ShareModal from '../components/ShareModal';
 
 const DealsList: React.FC = () => {
   const { user } = useAuth();
@@ -23,17 +22,22 @@ const DealsList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [interestFilter, setInterestFilter] = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
   // --- ESTADOS DE MODALES ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Partial<Deal> | null>(null);
   const [filteredContacts, setFilteredContacts] = useState<ClientContact[]>([]);
-  
   const [submitting, setSubmitting] = useState(false);
-  const [isShareOpen, setIsShareOpen] = useState(false);
+
+  // --- ESTADOS COMPARTIR ---
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareDealId, setShareDealId] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [shareUsers, setShareUsers] = useState<{ id_user: string; name_user: string; email_user: string; status_user?: string }[]>([]);
+  const [shareTargets, setShareTargets] = useState<string[]>([]);
+  const [sharePermission, setSharePermission] = useState<'VIEW' | 'EDIT'>('VIEW');
+  const [shareSubmitting, setShareSubmitting] = useState(false);
 
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -129,39 +133,16 @@ const DealsList: React.FC = () => {
   const handleRowClick = (id: string) => navigate(`/deals/${id}`);
 
   const handleAddNew = () => {
-    if (!user?.id_tenant) return;
-    if (companies.length === 0) {
-      setToast({ message: 'Primero debe crear una Empresa Cliente.', type: 'error' });
-      return;
-    }
-    const defaultStatus = dealStatuses.find(s => s.is_default) || dealStatuses[0];
-    const defaultInterest = interestStatuses.find(s => s.is_default) || interestStatuses[0];
-
-    setEditingDeal({
-      nombre_trato: '',
-      valor_trato: 0,
-      id_client_company: '',
-      id_contact: '',
-      id_user_owner: user.id_user,
-      id_deal_status: defaultStatus?.id_status || '',
-      id_interest: defaultInterest?.id_interest || '',
-      id_tenant: user.id_tenant,
-      fecha_creacion: new Date().toISOString(),
-    });
-    setIsEditMode(false);
-    setIsModalOpen(true);
+    navigate('/deals/new');
   };
   
   const handleEdit = (deal: Deal) => {
-    // Limpiamos el valor monetario para que sea un número editable (quitamos $)
+    // Limpiamos el valor monetario
     const rawValue = typeof deal.valor_trato === 'string' 
         ? parseFloat((deal.valor_trato as string).replace(/[^0-9.-]+/g,"")) 
         : deal.valor_trato;
 
-    setEditingDeal({
-        ...deal,
-        valor_trato: rawValue
-    });
+    setEditingDeal({ ...deal, valor_trato: rawValue });
     setIsEditMode(true);
     setIsModalOpen(true);
   };
@@ -209,12 +190,9 @@ const DealsList: React.FC = () => {
         ...editingDeal,
         id_tenant: user.id_tenant,
         id_user: user.id_user,
-        // Asegurar que valor sea número
         valor_trato: parseFloat(editingDeal.valor_trato as any) || 0
     };
 
-    const endpoint = isEditMode ? 'update' : 'create';
-    // Nota: Ajusta la URL de create si es diferente a 'deals' base
     const url = isEditMode 
         ? `https://service.computeksa.com/webhook/api/deals/update`
         : `https://service.computeksa.com/webhook/api/deals`;
@@ -243,10 +221,61 @@ const DealsList: React.FC = () => {
     setEditingDeal(prev => {
         if (!prev) return null;
         if (name === 'id_client_company') {
-            return { ...prev, [name]: value, id_contact: '' }; // Reset contact on company change
+            return { ...prev, [name]: value, id_contact: '' };
         }
         return { ...prev, [name]: value };
     });
+  };
+
+  // --- HANDLERS COMPARTIR (Nuevo formato Checkboxes) ---
+  const openShareModal = (dealId: string) => {
+    setShareDealId(dealId);
+    if (!user?.id_tenant) return;
+    // Cargar usuarios activos (excepto uno mismo si se desea)
+    // Aquí reutilizamos users si ya están cargados, o los filtramos
+    const activos = users.filter((u: any) => u.status_user !== 'Inactivo' && u.id_user !== user.id_user);
+    setShareUsers(activos.map(u => ({ id_user: u.id_user, name_user: u.name_user, email_user: u.email_user })));
+    setShareTargets([]);
+    setSharePermission('VIEW');
+    setShareModalOpen(true);
+  };
+
+  const toggleShareTarget = (userId: string) => {
+    setShareTargets(prev => 
+        prev.includes(userId) 
+        ? prev.filter(id => id !== userId) 
+        : [...prev, userId] 
+    );
+  };
+
+  const handleShareDeal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shareDealId || !user?.id_tenant || shareTargets.length === 0) {
+      setToast({ message: 'Selecciona usuarios.', type: 'error' });
+      return;
+    }
+    setShareSubmitting(true);
+    try {
+      const requests = shareTargets.map(target =>
+        fetch('https://service.computeksa.com/webhook/api/deals/share', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id_trato: shareDealId,
+            id_user_target: target,
+            id_tenant: user.id_tenant,
+            permission_level: sharePermission,
+          }),
+        })
+      );
+      await Promise.all(requests);
+      setToast({ message: 'Trato compartido.', type: 'success' });
+      setShareModalOpen(false);
+    } catch (error: any) {
+      setToast({ message: 'Error al compartir.', type: 'error' });
+    } finally {
+      setShareSubmitting(false);
+    }
   };
 
   // --- RENDERIZADO ---
@@ -356,7 +385,6 @@ const DealsList: React.FC = () => {
                             </td>
                             <td className="px-6 py-4 text-right">
                                 <div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    {/* Botones de acción solo si tiene permisos */}
                                     {(deal.access_level === 'EDIT' || user?.rol_user === 'admin') && (
                                         <>
                                             <button 
@@ -367,7 +395,7 @@ const DealsList: React.FC = () => {
                                                 <i className="fa-solid fa-pen-to-square"></i>
                                             </button>
                                             <button
-                                                onClick={(e) => { e.stopPropagation(); setShareDealId(deal.id_trato); setIsShareOpen(true); }}
+                                                onClick={(e) => { e.stopPropagation(); openShareModal(deal.id_trato); }}
                                                 className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
                                                 title="Compartir"
                                             >
@@ -430,7 +458,6 @@ const DealsList: React.FC = () => {
          </div>
          
          <div className="flex items-center gap-2 w-full md:w-auto">
-             {/* Filtro Estado */}
              <div className="relative w-full md:w-48">
                 <select 
                     value={statusFilter}
@@ -445,7 +472,6 @@ const DealsList: React.FC = () => {
                 </div>
              </div>
 
-             {/* Filtro Interés */}
              <div className="relative w-full md:w-48">
                 <select 
                     value={interestFilter}
@@ -643,15 +669,103 @@ const DealsList: React.FC = () => {
         </div>
       )}
 
-      {/* Share Modal */}
-      {isShareOpen && shareDealId && (
-        <ShareModal 
-          entity="deal" 
-          id={shareDealId} 
-          isOpen={isShareOpen} 
-          onClose={() => { setIsShareOpen(false); setShareDealId(null); }} 
-          onShared={() => setToast({ message: 'Trato compartido.', type: 'success' })}
-        />
+      {/* SHARE MODAL MEJORADO */}
+      {shareModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 transition-opacity">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+                <h2 className="font-bold text-lg text-slate-800 uppercase tracking-wide">Compartir Trato</h2>
+                <button onClick={() => setShareModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
+                    <i className="fa-solid fa-times text-lg"></i>
+                </button>
+            </div>
+
+            <form className="p-6 space-y-6" onSubmit={handleShareDeal}>
+              
+              {/* USUARIOS (CHECKBOX LIST) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Usuario</label>
+                <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1 custom-scrollbar">
+                    {shareUsers.length === 0 ? (
+                        <p className="text-sm text-slate-400 text-center py-4">No hay usuarios disponibles.</p>
+                    ) : (
+                        shareUsers.map(u => {
+                            const isSelected = shareTargets.includes(u.id_user);
+                            return (
+                                <div 
+                                    key={u.id_user} 
+                                    onClick={() => toggleShareTarget(u.id_user)}
+                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all border ${
+                                        isSelected 
+                                        ? 'bg-brand-50 border-brand-200' 
+                                        : 'hover:bg-slate-50 border-transparent'
+                                    }`}
+                                >
+                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                                        isSelected 
+                                        ? 'bg-brand-600 border-brand-600 text-white' 
+                                        : 'bg-white border-slate-300'
+                                    }`}>
+                                        {isSelected && <i className="fa-solid fa-check text-xs"></i>}
+                                    </div>
+                                    <div>
+                                        <p className={`text-sm font-medium ${isSelected ? 'text-brand-900' : 'text-slate-700'}`}>
+                                            {u.name_user}
+                                        </p>
+                                        <p className="text-xs text-slate-400">{u.email_user}</p>
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+              </div>
+
+              {/* PERMISOS (SEGMENTED CONTROL) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Permiso</label>
+                <div className="flex p-1 bg-slate-100 rounded-xl">
+                  <button
+                    type="button"
+                    key="VIEW"
+                    onClick={() => setSharePermission('VIEW')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+                        sharePermission === 'VIEW' 
+                        ? 'bg-blue-600 text-white shadow-sm' 
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Solo ver
+                  </button>
+                  <button
+                    type="button"
+                    key="EDIT"
+                    onClick={() => setSharePermission('EDIT')}
+                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+                        sharePermission === 'EDIT' 
+                        ? 'bg-blue-600 text-white shadow-sm' 
+                        : 'text-slate-500 hover:text-slate-700'
+                    }`}
+                  >
+                    Puede editar
+                  </button>
+                </div>
+              </div>
+
+              {/* FOOTER */}
+              <div className="flex justify-end gap-3 pt-2">
+                <button type="button" onClick={() => setShareModalOpen(false)} className="px-5 py-2.5 rounded-xl text-slate-500 font-bold hover:bg-slate-50 transition-colors">Cancelar</button>
+                <button
+                  type="submit"
+                  disabled={shareSubmitting || shareTargets.length === 0}
+                  className="px-6 py-2.5 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 shadow-lg shadow-brand-200 transition-all disabled:opacity-50"
+                >
+                  {shareSubmitting ? <i className="fa-solid fa-circle-notch fa-spin"></i> : 'Compartir'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

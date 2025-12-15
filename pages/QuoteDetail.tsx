@@ -300,22 +300,39 @@ const QuoteDetail: React.FC = () => {
     }
   };
 
-  const handleGeneratePDF = async () => {
-    if (!quote || !user?.id_tenant || !user?.id_user) return;
+const handleGeneratePDF = async () => {
+    if (!quote || !user) return;
     setProcessing(true);
     try {
-      const response = await fetch(`/api/quotes/${quote.id_cotizacion}/generate`, {
+      // 1. Llamar al Webhook de n8n
+      const response = await fetch(`https://service.computeksa.com/webhook/api/quotes/generate-pdf`, { // URL inventada para el ejemplo
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_tenant: user.id_tenant, id_user: user.id_user }),
+        body: JSON.stringify({ 
+            id_cotizacion: quote.id_cotizacion, 
+            id_tenant: user.id_tenant,
+            version_actual: quote.version 
+        }),
       });
+
       if (!response.ok) throw new Error('Error al generar PDF.');
       
-      const updatedQuote = await response.json();
-      setQuote(updatedQuote);
+      const data = await response.json(); // Esperamos { url_pdf: "https://...", version: 1 }
+
+      // 2. Actualizar estado local
+      setQuote(prev => prev ? ({ 
+          ...prev, 
+          file_generado: data.url_pdf,
+          version: data.version
+      }) : null);
+
       setToast({ message: 'PDF generado con éxito.', type: 'success' });
+      
+      // Opcional: Abrir en nueva pestaña automáticamente
+      window.open(data.url_pdf, '_blank');
+
     } catch (e: any) {
-      setToast({ message: e.message || 'Error al generar PDF.', type: 'error' });
+      setToast({ message: 'Error al generar el PDF.', type: 'error' });
     } finally {
       setProcessing(false);
     }
