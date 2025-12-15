@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Deal, Quote } from '../types';
 import Toast from '../components/Toast';
 import ShareModal from '../components/ShareModal';
+import DealShareList from '../components/DealShareList';
 
 type Tab = 'quotes' | 'permissions' | 'activity';
 
@@ -18,6 +19,7 @@ const DealDetail: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('quotes');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [refreshPermissions, setRefreshPermissions] = useState(0);
 
   const fetchData = useCallback(async () => {
     if (!id || !user?.id_tenant || !user?.id_user) return;
@@ -289,13 +291,7 @@ const DealDetail: React.FC = () => {
                 )}
 
                 {activeTab === 'permissions' && (
-                    <div className="flex flex-col items-center justify-center h-64 text-center">
-                         <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                            <i className="fa-solid fa-user-shield text-2xl text-slate-300"></i>
-                        </div>
-                         <h4 className="font-bold text-slate-600">Control de Acceso</h4>
-                         <p className="text-slate-400 text-sm mt-1 max-w-xs">Gestiona quién puede ver y editar este trato específico.</p>
-                    </div>
+                    <DealShareList id_trato={deal.id_trato} refreshTrigger={refreshPermissions} />
                 )}
             </div>
           </div>
@@ -308,7 +304,10 @@ const DealDetail: React.FC = () => {
           id={deal.id_trato}
           isOpen={isShareOpen}
           onClose={() => setIsShareOpen(false)}
-          onShared={() => setToast({ message: 'Trato compartido.', type: 'success' })}
+          onShared={() => {
+            setToast({ message: 'Trato compartido.', type: 'success' });
+            setRefreshPermissions(prev => prev + 1);
+          }}
         />
       )}
     </div>

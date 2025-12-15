@@ -1,4 +1,4 @@
-import { Quote, QuoteItem, UserDecision, CalendarEvent, User, Tenant, ClientCompany, ClientContact, Deal, DealPermission, Product, CustomStatus, InterestStatus } from '../types';
+import { Quote, QuoteItem, UserDecision, CalendarEvent, User, Tenant, ClientCompany, ClientContact, Deal, DealPermission, Product, CustomStatus } from '../types';
 
 const USE_REAL_API = true; // Cambiar a true cuando configures n8n
 const N8N_BASE_URL = 'https://service.computeksa.com/webhook'; 
@@ -89,12 +89,13 @@ let mockDeals: Deal[] = [
         id_trato: 'deal_001',
         id_tenant: 'tenant_001',
         id_user_owner: 'u_001',
+        id_user: 'u_001',
         id_client_company: 'cc_001',
         id_contact: 'c_test_1',
         nombre_trato: 'Proyecto de Transformador para Hospital',
         valor_trato: 99500.00,
         id_deal_status: 'ds_1', // FK to status
-        id_interest_status: 'is_1', // FK to interest status
+        id_interest: 'is_1', // FK to interest status
         created_at: new Date().toISOString(),
     }
 ];
@@ -542,16 +543,10 @@ export const MockApi = {
 
             let dealsList = Array.isArray(dealsResult) ? dealsResult : [];
 
-            // Normalizamos el campo de interés que viene de la BD como 'id_interest'
-            dealsList = dealsList.map((deal: any) => ({
-              ...deal,
-              id_interest_status: deal.id_interest_status || deal.id_interest,
-            }));
-
             // Se enriquecen los datos
             const enrichedDeals = dealsList.map((deal: Deal) => {
                 const status = dealStatuses.find((s: CustomStatus) => s.id_status === deal.id_deal_status);
-                const interest = interestStatuses.find((i: CustomStatus) => i.id_status === deal.id_interest_status);
+                const interest = interestStatuses.find((i: CustomStatus) => i.id_status === deal.id_interest);
                 const company = clientCompanies.find((c: ClientCompany) => c.id_client_company === deal.id_client_company);
                 const owner = users.find((u: User) => u.id_user === deal.id_user_owner);
 
