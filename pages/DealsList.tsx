@@ -205,7 +205,7 @@ const DealsList: React.FC = () => {
         }, [open]);
 
         return (
-            <div ref={containerRef} className="relative w-full md:w-auto md:min-w-[16rem] lg:min-w-[18rem] max-w-[26rem]">
+            <div ref={containerRef} className="relative w-full md:w-auto md:min-w-[16rem] lg:min-w-[18rem] max-w-[26rem]" onMouseLeave={() => setOpen(false)}>
                 <button
                     type="button"
                     onClick={() => setOpen(o => !o)}
@@ -359,7 +359,6 @@ const DealsList: React.FC = () => {
                 if (col === 'estado_nombre') return values.includes(deal.estado_nombre || '');
                 if (col === 'interes_nombre') return values.includes(deal.interes_nombre || '');
                 if (col === 'owner_name') return values.includes(deal.owner_name || '');
-                if (col === 'client_company_name') return values.includes(deal.client_company_name || '');
                 return true;
             });
 
@@ -452,9 +451,6 @@ const DealsList: React.FC = () => {
             } else if (column === 'owner_name') {
                 val = deal.owner_name || '';
                 label = deal.owner_name || '';
-            } else if (column === 'client_company_name') {
-                val = deal.client_company_name || '';
-                label = deal.client_company_name || '';
             }
             if (val) {
                 const existing = values.get(val);
@@ -592,39 +588,11 @@ const DealsList: React.FC = () => {
                 <table className="w-full text-left border-collapse" style={{ minWidth: '1200px' }}>
                     <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-bold tracking-wider sticky top-0 z-10">
                         <tr>
-                            <th className="px-2 py-3"></th>
                             <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors min-w-[240px]" onClick={() => requestSort('nombre_trato')}>
                                 Trato <SortIcon column="nombre_trato" />
                             </th>
-                            <th data-filter-column="client_company_name" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
-                                <div className="flex items-center gap-2">
-                                    <div className="flex-1 cursor-pointer" onClick={() => requestSort('client_company_name')}>
-                                        Cliente <SortIcon column="client_company_name" />
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'client_company_name' ? null : 'client_company_name'); }}
-                                        className={`p-1 rounded hover:bg-slate-200 transition-colors ${(columnFilters['client_company_name'] || []).length > 0 ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
-                                        title="Filtrar por Cliente"
-                                    >
-                                        <i className="fa-solid fa-filter text-xs"></i>
-                                    </button>
-                                </div>
-                                {openFilterColumn === 'client_company_name' && (
-                                    <div
-                                        ref={(el) => adjustDropdownPosition(el, 270)}
-                                        onMouseLeave={() => setOpenFilterColumn(null)}
-                                        className="bg-white border border-slate-200 rounded-lg shadow-lg w-64 max-h-64 overflow-auto"
-                                    >
-                                        {getUniqueValues('client_company_name').map(val => (
-                                            <label key={val.value} className="px-3 py-2 hover:bg-slate-50 flex items-center gap-2 cursor-pointer text-sm text-slate-600 border-b border-slate-100 last:border-b-0">
-                                                <input type="checkbox" checked={(columnFilters['client_company_name'] || []).includes(val.value)} onChange={() => toggleColumnFilter('client_company_name', val.value)} className="w-4 h-4" />
-                                                <span className="flex-1">{val.label}</span>
-                                                <span className="text-xs text-slate-400">({val.count})</span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                )}
+                            <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('client_company_name')}>
+                                Cliente <SortIcon column="client_company_name" />
                             </th>
                             <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors text-right" onClick={() => requestSort('valor_trato')}>
                                 Valor <SortIcon column="valor_trato" />
@@ -795,6 +763,7 @@ const DealsList: React.FC = () => {
                                     </div>
                                 )}
                             </th>
+                            <th className="px-2 py-3 text-center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white" style={{ minHeight: '400px' }}>
@@ -810,28 +779,7 @@ const DealsList: React.FC = () => {
                             {processedDeals.map((deal) => (
                                 <tr key={deal.id_trato} onClick={() => handleRowClick(deal.id_trato)} className="hover:bg-slate-50/80 transition-all cursor-pointer group">
 
-                                    {/* 1. Acciones */}
-                                    <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            {(deal.access_level === 'EDIT' || user?.rol_user === 'admin') && (
-                                                <>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(deal); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Editar">
-                                                        <i className="fa-solid fa-pen-to-square text-xs"></i>
-                                                    </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); openShareModal(deal.id_trato); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Compartir">
-                                                        <i className="fa-solid fa-user-plus text-xs"></i>
-                                                    </button>
-                                                </>
-                                            )}
-                                            {(deal.created_by === user?.id_user || user?.rol_user === 'admin') && (
-                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(deal.id_trato); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
-                                                    <i className="fa-solid fa-trash-can text-xs"></i>
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-
-                                    {/* 2. Nombre Trato */}
+                                    {/* 1. Nombre Trato */}
                                     <td className="px-2 sm:px-4 py-2 align-top">
                                         <div className="flex flex-col whitespace-normal break-words">
                                             <span className="font-bold text-brand-600 text-sm hover:underline">{deal.nombre_trato}</span>
@@ -852,14 +800,14 @@ const DealsList: React.FC = () => {
                                         </div>
                                     </td>
 
-                                    {/* 4. Valor */}
+                                    {/* 3. Valor */}
                                     <td className="px-2 sm:px-4 py-2 text-right">
                                         <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded text-sm">
                                             {deal.valor_trato}
                                         </span>
                                     </td>
 
-                                    {/* 5. Estado (editable) */}
+                                    {/* 4. Estado (editable) */}
                                     <td className="px-2 sm:px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                         <InlineBadgeSelector
                                             valueId={deal.id_deal_status}
@@ -878,7 +826,7 @@ const DealsList: React.FC = () => {
                                         />
                                     </td>
 
-                                    {/* 6. Interés (editable) */}
+                                    {/* 5. Interés (editable) */}
                                     <td className="px-2 sm:px-4 py-2" onClick={(e) => e.stopPropagation()}>
                                         <InlineBadgeSelector
                                             valueId={deal.id_interest}
@@ -897,7 +845,7 @@ const DealsList: React.FC = () => {
                                         />
                                     </td>
 
-                                    {/* 7. Propietario (Avatar) */}
+                                    {/* 6. Propietario (Avatar) */}
                                     <td className="px-2 sm:px-4 py-2">
                                         <div className="flex items-center gap-2" title={deal.owner_name}>
                                             <img
@@ -909,7 +857,7 @@ const DealsList: React.FC = () => {
                                         </div>
                                     </td>
 
-                                    {/* 8. Fecha Creación */}
+                                    {/* 7. Fecha Creación */}
                                     <td className="px-2 sm:px-4 py-2">
                                         <div className="text-xs text-slate-600 whitespace-nowrap">
                                             <i className="fa-regular fa-calendar-plus text-slate-400 mr-1.5"></i>
@@ -917,11 +865,32 @@ const DealsList: React.FC = () => {
                                         </div>
                                     </td>
 
-                                    {/* 9. Fecha Actualización */}
+                                    {/* 8. Fecha Actualización */}
                                     <td className="px-2 sm:px-4 py-2">
                                         <div className="text-xs text-slate-600 whitespace-nowrap">
                                             <i className="fa-regular fa-calendar-check text-slate-400 mr-1.5"></i>
                                             {deal.fecha_cierre_esperada?.split('T')[0] || 'N/A'}
+                                        </div>
+                                    </td>
+
+                                    {/* 9. Acciones */}
+                                    <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                            {(deal.access_level === 'EDIT' || user?.rol_user === 'admin') && (
+                                                <>
+                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(deal); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Editar">
+                                                        <i className="fa-solid fa-pen-to-square text-xs"></i>
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); openShareModal(deal.id_trato); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Compartir">
+                                                        <i className="fa-solid fa-user-plus text-xs"></i>
+                                                    </button>
+                                                </>
+                                            )}
+                                            {(deal.created_by === user?.id_user || user?.rol_user === 'admin') && (
+                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(deal.id_trato); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
+                                                    <i className="fa-solid fa-trash-can text-xs"></i>
+                                                </button>
+                                            )}
                                         </div>
                                     </td>
                                 </tr>

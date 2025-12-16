@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ClientContact, ClientCompany } from '../types';
@@ -17,6 +17,8 @@ const ClientContactsList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [companyFilter, setCompanyFilter] = useState('');
+    const [columnFilters, setColumnFilters] = useState<{[key: string]: string[]}>({});
+    const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
   // Modal & Edición
@@ -74,6 +76,56 @@ const ClientContactsList: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
+  // Filter Functions
+  const toggleColumnFilter = (column: string, value: string) => {
+    setColumnFilters(prev => {
+      const current = prev[column] || [];
+      const newValues = current.includes(value)
+        ? current.filter(v => v !== value)
+        : [...current, value];
+      return { ...prev, [column]: newValues };
+    });
+  };
+
+  const getUniqueValues = (column: string) => {
+    const valueCounts = new Map<string, number>();
+    contacts.forEach(contact => {
+      let val = '';
+      if (column === 'company_name') {
+        const companyName = getCompanyName(contact.id_client_company);
+        val = companyName || '';
+      } else if (column === 'position') {
+        val = contact.position || '';
+      }
+      if (val) {
+        valueCounts.set(val, (valueCounts.get(val) || 0) + 1);
+      }
+    });
+    return Array.from(valueCounts.entries())
+      .map(([value, count]) => ({ value, label: value, count }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  };
+
+  const adjustDropdownPosition = (el: HTMLDivElement | null) => {
+    if (!el) return;
+    el.style.position = 'absolute';
+    el.style.top = '100%';
+    el.style.left = '0';
+    el.style.marginTop = '8px';
+    el.style.zIndex = '50';
+  };
+
+  const clearAllFilters = () => {
+    setSearchTerm('');
+    setCompanyFilter('');
+    setColumnFilters({});
+  };
+
+  const hasActiveFilters = useMemo(() => {
+    const hasColumnFilters = Object.values(columnFilters).some(v => (v || []).length > 0);
+    return Boolean(searchTerm || companyFilter || hasColumnFilters);
+  }, [searchTerm, companyFilter, columnFilters]);
+
   // --- FILTROS ---
   const filteredContacts = useMemo(() => {
     return contacts.filter(c => {
@@ -84,12 +136,28 @@ const ClientContactsList: React.FC = () => {
         fullName.includes(searchLower) ||
         (c.email || '').toLowerCase().includes(searchLower) ||
         (c.position || '').toLowerCase().includes(searchLower);
-      
-      const matchesCompany = companyFilter ? c.id_client_company === companyFilter : true;
 
-      return matchesSearch && matchesCompany;
+      if (!matchesSearch) return false;
+
+      const matchesCompany = companyFilter ? c.id_client_company === companyFilter : true;
+      if (!matchesCompany) return false;
+
+      const matchesColumnFilters = Object.entries(columnFilters).every(([col, values]) => {
+        if (values.length === 0) return true;
+        if (col === 'company_name') {
+          const companyName = getCompanyName(c.id_client_company);
+          return values.includes(companyName || '');
+        }
+        if (col === 'position') {
+          return values.includes(c.position || '');
+        }
+        return true;
+      });
+      if (!matchesColumnFilters) return false;
+
+      return true;
     });
-  }, [contacts, searchTerm, companyFilter]);
+  }, [contacts, searchTerm, companyFilter, columnFilters]);
 
   const getCompanyName = (id: string | undefined) => {
     if (!id) return null;
@@ -228,7 +296,7 @@ const ClientContactsList: React.FC = () => {
             <div className="p-12 text-center">
                 <i className="fa-solid fa-search text-3xl text-slate-200 mb-4"></i>
                 <p className="text-slate-500">No se encontraron contactos con los filtros actuales.</p>
-                <button onClick={() => { setSearchTerm(''); setCompanyFilter(''); }} className="text-brand-600 font-medium mt-2 hover:underline">Limpiar filtros</button>
+                <button onClick={clearAllFilters} className="text-brand-600 font-medium mt-2 hover:underline">Limpiar filtros</button>
             </div>
         );
     }
@@ -236,11 +304,87 @@ const ClientContactsList: React.FC = () => {
     return (
         <div className="overflow-x-auto min-h-[400px]">
             <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold">
+              <thead className="sticky top-0 z-10 bg-slate-50 text-slate-500 uppercase text-xs font-semibold">
                 <tr>
                   <th className="px-6 py-4 border-b">Contacto</th>
-                  <th className="px-6 py-4 border-b">Empresa</th>
-                  <th className="px-6 py-4 border-b">Cargo</th>
+                  <th className="px-6 py-4 border-b relative overflow-visible">
+                    <div className="flex items-center justify-between">
+                      <span>Empresa</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'company_name' ? null : 'company_name'); }}
+                        className={`ml-2 w-6 h-6 rounded flex items-center justify-center transition-all ${
+                          (columnFilters.company_name || []).length > 0 ? 'bg-brand-500 text-white' : 'hover:bg-slate-200 text-slate-400'
+                        }`}
+                      >
+                        <i className="fa-solid fa-filter text-[10px]"></i>
+                      </button>
+                    </div>
+                    {openFilterColumn === 'company_name' && (
+                      <div
+                        ref={(el) => adjustDropdownPosition(el)}
+                        className="bg-white rounded-xl shadow-2xl border border-slate-200 py-2 min-w-[220px] max-h-[280px] overflow-y-auto"
+                        onMouseLeave={() => setOpenFilterColumn(null)}
+                      >
+                        {getUniqueValues('company_name').map((val) => (
+                          <label key={val.value} className="flex items-center px-4 py-2 hover:bg-slate-50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(columnFilters.company_name || []).includes(val.value)}
+                              onChange={() => toggleColumnFilter('company_name', val.value)}
+                              className="mr-3 w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500"
+                            />
+                                     {hasActiveFilters && (
+                                       <button
+                                         onClick={clearAllFilters}
+                                         className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-all flex items-center"
+                                       >
+                                         <i className="fa-solid fa-rotate-left mr-2 text-xs"></i>
+                                         Restablecer
+                                       </button>
+                                     )}
+
+                            <span className="text-sm text-slate-700 flex-1">{val.label}</span>
+                            <span className="text-xs text-slate-400">({val.count})</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </th>
+                  <th className="px-6 py-4 border-b relative overflow-visible">
+                    <div className="flex items-center justify-between">
+                      <span>Cargo</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'position' ? null : 'position'); }}
+                        className={`ml-2 w-6 h-6 rounded flex items-center justify-center transition-all ${
+                          (columnFilters.position || []).length > 0 ? 'bg-brand-500 text-white' : 'hover:bg-slate-200 text-slate-400'
+                        }`}
+                      >
+                        <i className="fa-solid fa-filter text-[10px]"></i>
+                      </button>
+                    </div>
+                    {openFilterColumn === 'position' && (
+                      <div
+                        ref={(el) => adjustDropdownPosition(el)}
+                        className="bg-white rounded-xl shadow-2xl border border-slate-200 py-2 min-w-[220px] max-h-[280px] overflow-y-auto"
+                        onMouseLeave={() => setOpenFilterColumn(null)}
+                      >
+                        {getUniqueValues('position').map((val) => (
+                          <label key={val.value} className="flex items-center px-4 py-2 hover:bg-slate-50 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={(columnFilters.position || []).includes(val.value)}
+                              onChange={() => toggleColumnFilter('position', val.value)}
+                              className="mr-3 w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500"
+                            />
+                            <span className="text-sm text-slate-700 flex-1">{val.label}</span>
+                            <span className="text-xs text-slate-400">({val.count})</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </th>
                   <th className="px-6 py-4 border-b">Datos de Contacto</th>
                   <th className="px-6 py-4 border-b text-right">Acciones</th>
                 </tr>

@@ -8,6 +8,8 @@ const CompaniesList: React.FC = () => {
   const { user } = useAuth(); // Usar para validación de rol
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(true);
+    const [searchTerm, setSearchTerm] = useState('');
+    const [countryFilter, setCountryFilter] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
   // Modal State
