@@ -242,7 +242,47 @@ export interface Quote {
   created_by?: string; // ID del usuario creador
 }
 
-// 9. QUOTE ITEMS (Artículos de la cotización)
+// 9. FINANCIAL TRANSACTIONS (Transacciones financieras)
+export interface FinancialTransaction {
+  id_transaction: string;
+  id_tenant: string;
+  created_by: string;
+  id_client_company?: string;
+  id_related_quote?: string;
+  transaction_type: 'VENTA' | 'GASTO' | 'OTRO';
+  status: 'PENDIENTE' | 'PAGADO' | 'VENCIDO' | 'ANULADO';
+  invoice_number: string;
+  description: string;
+  invoice_date: string; // Fecha de la factura real
+  issue_date: string; // ISO Date (deprecated, usar invoice_date)
+  credit_days?: number;
+  due_date?: string; // ISO Date (autocalculado: invoice_date + credit_days)
+  payment_date?: string; // ISO Date
+  subtotal?: number;
+  tax_amount?: number; // Porcentaje de IVA (ej: 15 para 15%)
+  total_value?: number;
+  has_retention?: boolean; // Indica si hay retención
+  retention_number?: string;
+  retention_date?: string; // ISO Date
+  retention_value?: number;
+  paid_amount?: number;
+  payment_method?: string;
+  payment_reference?: string;
+  invoice_file_url?: string;
+  retention_file_url?: string;
+  is_urgent?: boolean;
+  notes?: string;
+  created_at?: string;
+  updated_at?: string;
+
+  // Campos derivados (JOINs)
+  client_company_name?: string;
+  created_by_name?: string;
+  quote_number?: string;
+  balance?: number; // total_value - paid_amount
+}
+
+// 10. QUOTE ITEMS (Artículos de la cotización)
 export interface QuoteItem {
   id_quote_item?: string;
   id_articulo_cot?: string; // Campo alternativo usado por el API
