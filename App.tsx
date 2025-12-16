@@ -20,6 +20,7 @@ import DealCreate from './pages/DealCreate';
 import ProductsList from './pages/ProductsList';
 import SettingsPage from './pages/SettingsPage';
 import QuoteCreate from './pages/QuoteCreate'; // RUTA CORREGIDA
+import FinancialsList from './pages/FinancialsList';
 
 // Componente para proteger rutas
 const ProtectedRoute = () => {
@@ -48,6 +49,7 @@ const App: React.FC = () => {
             <Route path="deals" element={<DealsList />} />
             <Route path="deals/new" element={<DealCreate />} />
             <Route path="deals/:id" element={<DealDetail />} />
+            <Route path="financials" element={<FinancialsList />} />
             <Route path="calendar" element={<Calendar />} />
             <Route path="profile" element={<UserProfile />} />
             <Route path="users" element={<UsersList />} />

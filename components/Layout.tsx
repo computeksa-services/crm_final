@@ -185,6 +185,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 
                 <NavLinkItem item={{ label: 'Ajustes', path: '/settings', icon: 'fa-sliders', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
                 <NavLinkItem item={{ label: 'Usuarios', path: '/users', icon: 'fa-users-cog', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
+                <NavLinkItem item={{ label: 'Cartera', path: '/financials', icon: 'fa-wallet', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
                 {user.rol_user === 'superadmin' && (
                   <NavLinkItem item={{ label: 'Tenants', path: '/companies', icon: 'fa-server', roles: ['superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
                 )}
@@ -284,7 +285,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         {/* CONTENT SCROLLABLE AREA */}
         <main className="flex-1 overflow-y-auto bg-slate-50/50 p-4 md:p-8 scroll-smooth">
-          <div className="max-w-7xl mx-auto">
+          <div className="w-full">
              {children}
           </div>
         </main>
