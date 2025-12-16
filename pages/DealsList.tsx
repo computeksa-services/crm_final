@@ -31,6 +31,7 @@ const DealsList: React.FC = () => {
   const [interestFilter, setInterestFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<{ [key: string]: string[] }>({});
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+    const [dateFilters, setDateFilters] = useState<{ [key: string]: { start: string; end: string } }>({});
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'desc' });
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
@@ -324,15 +325,26 @@ const DealsList: React.FC = () => {
       // Column filters
       const matchesColumnFilters = Object.entries(columnFilters).every(([col, values]) => {
         if (values.length === 0) return true;
-        if (col === 'estado') return values.includes(deal.id_deal_status || '');
-        if (col === 'interes') return values.includes(deal.id_interest || '');
-        if (col === 'owner') return values.includes(deal.owner_name || '');
-        if (col === 'estado_badge') return values.includes(deal.estado_nombre || '');
-        if (col === 'interes_badge') return values.includes(deal.interes_nombre || '');
+                if (col === 'estado_nombre') return values.includes(deal.estado_nombre || '');
+                if (col === 'interes_nombre') return values.includes(deal.interes_nombre || '');
+                if (col === 'owner_name') return values.includes(deal.owner_name || '');
         return true;
       });
 
-      return matchesSearch && matchesStatus && matchesInterest && matchesColumnFilters;
+            // Date range filters
+            const matchesDateFilters = Object.entries(dateFilters).every(([col, range]) => {
+                if (!range.start && !range.end) return true;
+                let dateValue = '';
+                if (col === 'created_at') dateValue = deal.created_at || deal.fecha_creacion || '';
+                if (col === 'fecha_cierre_esperada') dateValue = deal.fecha_cierre_esperada || '';
+                if (!dateValue) return false;
+                const onlyDate = dateValue.split('T')[0];
+                if (range.start && onlyDate < range.start) return false;
+                if (range.end && onlyDate > range.end) return false;
+                return true;
+            });
+
+            return matchesSearch && matchesStatus && matchesInterest && matchesColumnFilters && matchesDateFilters;
     });
 
     // 2. Ordenar
@@ -369,6 +381,31 @@ const DealsList: React.FC = () => {
       }
     });
   };
+
+    const updateDateFilter = (column: string, field: 'start' | 'end', value: string) => {
+        setDateFilters(prev => ({
+            ...prev,
+            [column]: { ...(prev[column] || { start: '', end: '' }), [field]: value }
+        }));
+    };
+
+    const clearDateFilter = (column: string) => {
+        setDateFilters(prev => ({ ...prev, [column]: { start: '', end: '' } }));
+    };
+
+    const clearAllFilters = () => {
+        setSearchTerm('');
+        setStatusFilter('');
+        setInterestFilter('');
+        setColumnFilters({});
+        setDateFilters({});
+    };
+
+    const hasActiveFilters = useMemo(() => {
+        const hasColumnFilters = Object.values(columnFilters).some(v => (v || []).length > 0);
+        const hasDateFilters = Object.values(dateFilters).some(r => !!(r?.start || r?.end));
+        return Boolean(searchTerm || statusFilter || interestFilter || hasColumnFilters || hasDateFilters);
+    }, [searchTerm, statusFilter, interestFilter, columnFilters, dateFilters]);
 
   const getUniqueValues = (column: string): { value: string; label: string; count: number }[] => {
     const values = new Map<string, { value: string; label: string; count: number }>();
@@ -484,21 +521,33 @@ const DealsList: React.FC = () => {
     } catch { setToast({ message: 'Error.', type: 'error' }); } finally { setShareSubmitting(false); }
   };
 
-  // --- RENDERIZADO TABLA ---
+    // Cierra dropdowns de columna al hacer clic fuera
+    useEffect(() => {
+        if (!openFilterColumn) return;
+        const handleClick = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            if (!target.closest('[data-filter-column]')) {
+                setOpenFilterColumn(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
+    }, [openFilterColumn]);
+
+    // --- RENDERIZADO TABLA ---
   const SortIcon = ({ column }: { column: string }) => {
     if (sortConfig.key !== column) return <i className="fa-solid fa-sort text-slate-300 ml-1 text-xs"></i>;
     return <i className={`fa-solid fa-sort-${sortConfig.direction === 'asc' ? 'up' : 'down'} text-brand-600 ml-1 text-xs`}></i>;
   };
 
-  const renderContent = () => {
-    if (loading) return <div className="p-12 text-center text-slate-500"><i className="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i><p>Cargando tratos...</p></div>;
-    if (deals.length === 0) return <div className="p-16 text-center text-slate-500">No hay tratos registrados.</div>;
-    if (processedDeals.length === 0) return <div className="p-12 text-center text-slate-500">No hay resultados para los filtros.</div>;
+    const renderContent = () => {
+        if (loading) return <div className="p-12 text-center text-slate-500"><i className="fa-solid fa-circle-notch fa-spin text-2xl mb-2"></i><p>Cargando tratos...</p></div>;
+        if (deals.length === 0) return <div className="p-16 text-center text-slate-500">No hay tratos registrados.</div>;
 
-    return (
-        <div className="overflow-x-auto min-h-[400px]">
-            <table className="w-full text-left border-collapse" style={{ minWidth: '1200px' }}>
-                <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-bold tracking-wider">
+        return (
+                <div className="overflow-x-auto min-h-[400px]">
+                        <table className="w-full text-left border-collapse" style={{ minWidth: '1200px' }}>
+                                <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-bold tracking-wider">
                     <tr>
                         <th className="px-2 py-3"></th>
                         <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors min-w-[240px]" onClick={() => requestSort('nombre_trato')}>
@@ -510,7 +559,7 @@ const DealsList: React.FC = () => {
                         <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors text-right" onClick={() => requestSort('valor_trato')}>
                             Valor <SortIcon column="valor_trato" />
                         </th>
-                        <th className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                        <th data-filter-column className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
                             <div className="flex items-center gap-2">
                                 <div className="flex-1 cursor-pointer" onClick={() => requestSort('estado_nombre')}>
                                     Estado <SortIcon column="estado_nombre" />
@@ -536,7 +585,7 @@ const DealsList: React.FC = () => {
                                 </div>
                             )}
                         </th>
-                        <th className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                        <th data-filter-column className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
                             <div className="flex items-center gap-2">
                                 <div className="flex-1 cursor-pointer" onClick={() => requestSort('interes_nombre')}>
                                     Interés <SortIcon column="interes_nombre" />
@@ -562,7 +611,7 @@ const DealsList: React.FC = () => {
                                 </div>
                             )}
                         </th>
-                        <th className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                        <th data-filter-column className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
                             <div className="flex items-center gap-2">
                                 <div className="flex-1 cursor-pointer" onClick={() => requestSort('owner_name')}>
                                     Owner <SortIcon column="owner_name" />
@@ -588,16 +637,86 @@ const DealsList: React.FC = () => {
                                 </div>
                             )}
                         </th>
-                        <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('created_at')}>
-                            Creado <SortIcon column="created_at" />
+                        <th data-filter-column className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-1 cursor-pointer" onClick={() => requestSort('created_at')}>
+                                    Creado <SortIcon column="created_at" />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'created_at' ? null : 'created_at'); }}
+                                    className={`p-1 rounded hover:bg-slate-200 transition-colors ${(dateFilters['created_at']?.start || dateFilters['created_at']?.end) ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
+                                    title="Filtrar por fecha"
+                                >
+                                    <i className="fa-solid fa-calendar text-xs"></i>
+                                </button>
+                            </div>
+                            {openFilterColumn === 'created_at' && (
+                                <div className="absolute z-30 top-full mt-1 left-0 bg-white border border-slate-200 rounded-lg shadow-lg p-3 w-64">
+                                    <div className="space-y-2">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-1">Desde</label>
+                                            <input type="date" value={dateFilters['created_at']?.start || ''} onChange={(e) => updateDateFilter('created_at', 'start', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-1">Hasta</label>
+                                            <input type="date" value={dateFilters['created_at']?.end || ''} onChange={(e) => updateDateFilter('created_at', 'end', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
+                                        </div>
+                                        {(dateFilters['created_at']?.start || dateFilters['created_at']?.end) && (
+                                            <button type="button" onClick={() => clearDateFilter('created_at')} className="w-full px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded border border-red-200 transition-colors">
+                                                <i className="fa-solid fa-times mr-1"></i> Limpiar filtro
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </th>
-                        <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('fecha_cierre_esperada')}>
-                            Last Update <SortIcon column="fecha_cierre_esperada" />
+                        <th data-filter-column className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-1 cursor-pointer" onClick={() => requestSort('fecha_cierre_esperada')}>
+                                    Last Update <SortIcon column="fecha_cierre_esperada" />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'fecha_cierre_esperada' ? null : 'fecha_cierre_esperada'); }}
+                                    className={`p-1 rounded hover:bg-slate-200 transition-colors ${(dateFilters['fecha_cierre_esperada']?.start || dateFilters['fecha_cierre_esperada']?.end) ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
+                                    title="Filtrar por fecha"
+                                >
+                                    <i className="fa-solid fa-calendar text-xs"></i>
+                                </button>
+                            </div>
+                            {openFilterColumn === 'fecha_cierre_esperada' && (
+                                <div className="absolute z-30 top-full mt-1 left-0 bg-white border border-slate-200 rounded-lg shadow-lg p-3 w-64">
+                                    <div className="space-y-2">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-1">Desde</label>
+                                            <input type="date" value={dateFilters['fecha_cierre_esperada']?.start || ''} onChange={(e) => updateDateFilter('fecha_cierre_esperada', 'start', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-1">Hasta</label>
+                                            <input type="date" value={dateFilters['fecha_cierre_esperada']?.end || ''} onChange={(e) => updateDateFilter('fecha_cierre_esperada', 'end', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
+                                        </div>
+                                        {(dateFilters['fecha_cierre_esperada']?.start || dateFilters['fecha_cierre_esperada']?.end) && (
+                                            <button type="button" onClick={() => clearDateFilter('fecha_cierre_esperada')} className="w-full px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded border border-red-200 transition-colors">
+                                                <i className="fa-solid fa-times mr-1"></i> Limpiar filtro
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                    {processedDeals.map((deal) => (
+                    {processedDeals.length === 0 ? (
+                        <tr>
+                            <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
+                                <i className="fa-solid fa-filter text-2xl mb-2 block text-slate-300"></i>
+                                No hay resultados para los filtros aplicados.
+                            </td>
+                        </tr>
+                    ) : (
+                    processedDeals.map((deal) => (
                         <tr key={deal.id_trato} onClick={() => handleRowClick(deal.id_trato)} className="hover:bg-slate-50/80 transition-all cursor-pointer group">
                             
                             {/* 1. Acciones */}
@@ -715,7 +834,8 @@ const DealsList: React.FC = () => {
                                 </div>
                             </td>
                         </tr>
-                    ))}
+                    ))
+                    )}
                 </tbody>
             </table>
         </div>
@@ -768,6 +888,16 @@ const DealsList: React.FC = () => {
                     return { id: i.id_interest, name: i.name, color: i.color, icon: i.icon, count };
                   })}
                 />
+                                {hasActiveFilters && (
+                                        <button
+                                                type="button"
+                                                onClick={clearAllFilters}
+                                                className="px-4 py-2 text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors flex items-center gap-2"
+                                                title="Restablecer filtros"
+                                        >
+                                                <i className="fa-solid fa-rotate-left text-xs"></i> Restablecer
+                                        </button>
+                                )}
             </div>
         </div>
 
