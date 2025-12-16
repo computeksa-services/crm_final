@@ -52,6 +52,12 @@ const InlineBadgeSelector: React.FC<{
         e.stopPropagation();
         if (disabled || !buttonRef.current) return;
 
+        // Si ya está abierto, cerrarlo
+        if (isOpen) {
+            setIsOpen(false);
+            return;
+        }
+
         const rect = buttonRef.current.getBoundingClientRect();
         const dropdownHeight = Math.min(items.length * 36 + 10, 256); // Altura estimada
         const dropdownWidth = 224;
@@ -94,6 +100,7 @@ const InlineBadgeSelector: React.FC<{
             {isOpen && (
                 <div
                     ref={dropdownRef}
+                    onMouseLeave={() => setIsOpen(false)}
                     className="fixed z-[9999] bg-white border border-slate-200 rounded-lg shadow-xl overflow-auto animate-fade-in"
                     style={{
                         top: coords.top,
@@ -102,7 +109,7 @@ const InlineBadgeSelector: React.FC<{
                         maxHeight: '256px'
                     }}
                 >
-                    {items.map(item => (
+                    {items.filter(item => item.id !== valueId).map(item => (
                         <button
                             key={item.id}
                             type="button"
@@ -352,6 +359,7 @@ const DealsList: React.FC = () => {
                 if (col === 'estado_nombre') return values.includes(deal.estado_nombre || '');
                 if (col === 'interes_nombre') return values.includes(deal.interes_nombre || '');
                 if (col === 'owner_name') return values.includes(deal.owner_name || '');
+                if (col === 'client_company_name') return values.includes(deal.client_company_name || '');
                 return true;
             });
 
@@ -444,6 +452,9 @@ const DealsList: React.FC = () => {
             } else if (column === 'owner_name') {
                 val = deal.owner_name || '';
                 label = deal.owner_name || '';
+            } else if (column === 'client_company_name') {
+                val = deal.client_company_name || '';
+                label = deal.client_company_name || '';
             }
             if (val) {
                 const existing = values.get(val);
@@ -577,7 +588,7 @@ const DealsList: React.FC = () => {
         };
 
         return (
-            <div className="overflow-x-auto overflow-y-visible">
+            <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse" style={{ minWidth: '1200px' }}>
                     <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-bold tracking-wider sticky top-0 z-10">
                         <tr>
@@ -585,8 +596,35 @@ const DealsList: React.FC = () => {
                             <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors min-w-[240px]" onClick={() => requestSort('nombre_trato')}>
                                 Trato <SortIcon column="nombre_trato" />
                             </th>
-                            <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('client_company_name')}>
-                                Cliente <SortIcon column="client_company_name" />
+                            <th data-filter-column="client_company_name" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                                <div className="flex items-center gap-2">
+                                    <div className="flex-1 cursor-pointer" onClick={() => requestSort('client_company_name')}>
+                                        Cliente <SortIcon column="client_company_name" />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'client_company_name' ? null : 'client_company_name'); }}
+                                        className={`p-1 rounded hover:bg-slate-200 transition-colors ${(columnFilters['client_company_name'] || []).length > 0 ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
+                                        title="Filtrar por Cliente"
+                                    >
+                                        <i className="fa-solid fa-filter text-xs"></i>
+                                    </button>
+                                </div>
+                                {openFilterColumn === 'client_company_name' && (
+                                    <div
+                                        ref={(el) => adjustDropdownPosition(el, 270)}
+                                        onMouseLeave={() => setOpenFilterColumn(null)}
+                                        className="bg-white border border-slate-200 rounded-lg shadow-lg w-64 max-h-64 overflow-auto"
+                                    >
+                                        {getUniqueValues('client_company_name').map(val => (
+                                            <label key={val.value} className="px-3 py-2 hover:bg-slate-50 flex items-center gap-2 cursor-pointer text-sm text-slate-600 border-b border-slate-100 last:border-b-0">
+                                                <input type="checkbox" checked={(columnFilters['client_company_name'] || []).includes(val.value)} onChange={() => toggleColumnFilter('client_company_name', val.value)} className="w-4 h-4" />
+                                                <span className="flex-1">{val.label}</span>
+                                                <span className="text-xs text-slate-400">({val.count})</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                )}
                             </th>
                             <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors text-right" onClick={() => requestSort('valor_trato')}>
                                 Valor <SortIcon column="valor_trato" />
@@ -608,6 +646,7 @@ const DealsList: React.FC = () => {
                                 {openFilterColumn === 'estado_nombre' && (
                                     <div
                                         ref={(el) => adjustDropdownPosition(el, 270)}
+                                        onMouseLeave={() => setOpenFilterColumn(null)}
                                         className="bg-white border border-slate-200 rounded-lg shadow-lg w-64 max-h-64 overflow-auto"
                                     >
                                         {getUniqueValues('estado_nombre').map(val => (
@@ -637,6 +676,7 @@ const DealsList: React.FC = () => {
                                 {openFilterColumn === 'interes_nombre' && (
                                     <div
                                         ref={(el) => adjustDropdownPosition(el, 270)}
+                                        onMouseLeave={() => setOpenFilterColumn(null)}
                                         className="bg-white border border-slate-200 rounded-lg shadow-lg w-64 max-h-64 overflow-auto"
                                     >
                                         {getUniqueValues('interes_nombre').map(val => (
@@ -666,6 +706,7 @@ const DealsList: React.FC = () => {
                                 {openFilterColumn === 'owner_name' && (
                                     <div
                                         ref={(el) => adjustDropdownPosition(el, 270)}
+                                        onMouseLeave={() => setOpenFilterColumn(null)}
                                         className="bg-white border border-slate-200 rounded-lg shadow-lg w-64 max-h-64 overflow-auto"
                                     >
                                         {getUniqueValues('owner_name').map(val => (
@@ -695,6 +736,7 @@ const DealsList: React.FC = () => {
                                 {openFilterColumn === 'created_at' && (
                                     <div
                                         ref={(el) => adjustDropdownPosition(el, 180)}
+                                        onMouseLeave={() => setOpenFilterColumn(null)}
                                         className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 w-64"
                                     >
                                         <div className="space-y-2">
@@ -732,6 +774,7 @@ const DealsList: React.FC = () => {
                                 {openFilterColumn === 'fecha_cierre_esperada' && (
                                     <div
                                         ref={(el) => adjustDropdownPosition(el, 180)}
+                                        onMouseLeave={() => setOpenFilterColumn(null)}
                                         className="bg-white border border-slate-200 rounded-lg shadow-lg p-3 w-64"
                                     >
                                         <div className="space-y-2">
@@ -754,16 +797,17 @@ const DealsList: React.FC = () => {
                             </th>
                         </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 bg-white">
+                    <tbody className="divide-y divide-slate-100 bg-white" style={{ minHeight: '400px' }}>
                         {processedDeals.length === 0 ? (
                             <tr>
-                                <td colSpan={9} className="px-4 py-12 text-center text-slate-500">
+                                <td colSpan={9} className="px-4 py-12 text-center text-slate-500" style={{ minHeight: '400px' }}>
                                     <i className="fa-solid fa-filter text-2xl mb-2 block text-slate-300"></i>
                                     No hay resultados para los filtros aplicados.
                                 </td>
                             </tr>
                         ) : (
-                            processedDeals.map((deal) => (
+                            <>
+                            {processedDeals.map((deal) => (
                                 <tr key={deal.id_trato} onClick={() => handleRowClick(deal.id_trato)} className="hover:bg-slate-50/80 transition-all cursor-pointer group">
 
                                     {/* 1. Acciones */}
@@ -881,7 +925,14 @@ const DealsList: React.FC = () => {
                                         </div>
                                     </td>
                                 </tr>
-                            ))
+                            ))}
+                            {/* Filas vacías para mantener altura mínima */}
+                            {processedDeals.length < 6 && Array.from({ length: 6 - processedDeals.length }).map((_, i) => (
+                                <tr key={`empty-${i}`} style={{ height: '60px' }}>
+                                    <td colSpan={9}></td>
+                                </tr>
+                            ))}
+                            </>
                         )}
                     </tbody>
                 </table>
@@ -944,7 +995,7 @@ const DealsList: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-visible w-full flex flex-col">
-                <div className="flex-1" style={{ maxHeight: 'calc(100vh - 300px)', minHeight: '350px', overflowY: 'auto', overflowX: 'visible' }}>
+                <div style={{ maxHeight: 'calc(100vh - 300px)', minHeight: '350px', overflowY: 'auto', overflowX: 'hidden' }}>
                     {renderContent()}
                 </div>
                 {processedDeals.length > 0 && (
