@@ -1,5 +1,5 @@
 import React from 'react';
-import { HashRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext'; // Importar
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
@@ -35,7 +35,7 @@ const ProtectedRoute = () => {
 const App: React.FC = () => {
   return (
     <AuthProvider>
-      <HashRouter>
+      <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<ProtectedRoute />}>
@@ -60,7 +60,7 @@ const App: React.FC = () => {
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>
-      </HashRouter>
+      </BrowserRouter>
     </AuthProvider>
   );
 };
