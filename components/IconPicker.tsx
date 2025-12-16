@@ -3,6 +3,7 @@ import React from 'react';
 interface IconPickerProps {
   onSelect: (icon: string) => void;
   onClose: () => void;
+  socialOnly?: boolean;
 }
 
 const icons = [
@@ -63,7 +64,43 @@ const icons = [
     'fa-solid fa-tags',                // Etiquetas/categorías
   ];
 
-const IconPicker: React.FC<IconPickerProps> = ({ onSelect, onClose }) => {
+  const socialIcons = [
+    // Mensajería Instantánea (Apps de Chat)
+    'fa-brands fa-whatsapp',           // WhatsApp
+    'fa-brands fa-telegram',           // Telegram
+    'fa-brands fa-facebook-messenger', // Facebook Messenger
+    'fa-brands fa-viber',              // Viber
+    'fa-brands fa-weixin',             // WeChat
+    'fa-brands fa-line',               // Line
+
+    // Redes Sociales Principales
+    'fa-brands fa-facebook',           // Facebook
+    'fa-brands fa-instagram',          // Instagram
+    'fa-brands fa-linkedin',           // LinkedIn (Profesional)s
+    'fa-brands fa-tiktok',             // TikTok
+    'fa-brands fa-youtube',            // YouTube
+    'fa-brands fa-pinterest',          // Pinterest
+    'fa-brands fa-snapchat',           // Snapchat
+
+    // Telefonía y Contacto Directo (Iconos Sólidos)
+    'fa-solid fa-mobile-screen-button', // Celular / Móvil
+    'fa-solid fa-phone',               // Teléfono fijo básico
+    'fa-solid fa-headset',             // Soporte / Call Center
+    'fa-solid fa-comment-sms',         // SMS / Mensaje de texto
+    'fa-solid fa-address-book',        // Agenda / Contactos
+    'fa-solid fa-globe',               // Sitio Web / WWW
+    'fa-solid fa-at',                  // Arroba / Mención
+
+    // Herramientas de Reunión y Trabajo
+    'fa-brands fa-skype',              // Skype
+    'fa-brands fa-slack',              // Slack
+    'fa-brands fa-discord',            // Discord
+    'fa-brands fa-google',             // Google Meet (genérico)
+    'fa-brands fa-microsoft',          // Microsoft Teams (genérico)
+    'fa-solid fa-video',               // Videollamada genérica
+];
+
+const IconPicker: React.FC<IconPickerProps> = ({ onSelect, onClose, socialOnly }) => {
   const handleIconClick = (icon: string) => {
     onSelect(icon);
     onClose();
@@ -71,22 +108,49 @@ const IconPicker: React.FC<IconPickerProps> = ({ onSelect, onClose }) => {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="px-6 py-4 border-b bg-slate-50">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="px-6 py-4 border-b bg-slate-50 flex items-center justify-between">
           <h3 className="font-bold text-slate-700">Seleccionar Icono</h3>
+          <button onClick={onClose} className="w-9 h-9 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center">
+            <i className="fa-solid fa-times"></i>
+          </button>
         </div>
-        <div className="p-6 grid grid-cols-6 gap-4">
-          {icons.map(icon => (
-            <button
-              key={icon}
-              type="button"
-              onClick={() => handleIconClick(icon)}
-              className="flex items-center justify-center w-12 h-12 text-2xl text-slate-600 bg-slate-100 rounded-lg hover:bg-brand-500 hover:text-white transition-colors"
-              title={icon}
-            >
-              <i className={icon}></i>
-            </button>
-          ))}
+        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+          {!socialOnly && (
+            <div>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Negocio</p>
+              <div className="grid grid-cols-6 gap-3">
+                {icons.map(icon => (
+                  <button
+                    key={icon}
+                    type="button"
+                    onClick={() => handleIconClick(icon)}
+                    className="flex items-center justify-center w-12 h-12 text-2xl text-slate-600 bg-slate-100 rounded-lg hover:bg-brand-500 hover:text-white transition-colors"
+                    title={icon}
+                  >
+                    <i className={icon}></i>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Social / Canales</p>
+            <div className="grid grid-cols-6 gap-3">
+              {socialIcons.map(icon => (
+                <button
+                  key={icon}
+                  type="button"
+                  onClick={() => handleIconClick(icon)}
+                  className="flex items-center justify-center w-12 h-12 text-2xl text-slate-600 bg-slate-100 rounded-lg hover:bg-brand-500 hover:text-white transition-colors"
+                  title={icon}
+                >
+                  <i className={icon}></i>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

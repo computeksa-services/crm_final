@@ -74,6 +74,16 @@ export interface DealInterest {
   is_default: boolean;
 }
 
+export interface DealChannel {
+  id_channel: string;
+  id_tenant: string;
+  name: string;
+  color: string;
+  icon: string;
+  status_order: number;
+  is_default: boolean;
+}
+
 // 3. CLIENT COMPANY (La empresa cliente B2B)
 export interface ClientCompany {
   id_client_company: string;
@@ -166,6 +176,11 @@ export interface Deal {
   interes_nombre?: string; // Nuevo formato backend
   interes_color?: string; // Color del nivel de interés
   interes_icon?: string; // Icono del nivel de interés
+
+  id_channel?: string;
+  channel_nombre?: string;
+  channel_color?: string;
+  channel_icon?: string;
 }
 
 export interface DealPermission {

@@ -24,6 +24,7 @@ const InlineBadgeSelector: React.FC<{
     const current = items.find(i => i.id === valueId);
     const buttonRef = useRef<HTMLButtonElement>(null);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const leaveTimeoutRef = useRef<number | null>(null);
 
     // Cerrar solo al hacer resize para evitar que el menú flote separado
     useEffect(() => {
@@ -85,7 +86,7 @@ const InlineBadgeSelector: React.FC<{
                 type="button"
                 onClick={handleOpen}
                 disabled={disabled}
-                className={`inline-flex items-center px-2 py-1 rounded-lg border text-[13px] whitespace-nowrap ${disabled ? 'cursor-not-allowed opacity-70' : 'hover:border-slate-300'}`}
+                className={`inline-flex items-center px-2 py-1 rounded-lg border text-[13px] font-bold whitespace-nowrap ${disabled ? 'cursor-not-allowed opacity-70' : 'hover:border-slate-300'}`}
                 style={{
                     backgroundColor: `${current?.color || '#cccccc'}15`,
                     color: current?.color || '#333333',
@@ -100,7 +101,15 @@ const InlineBadgeSelector: React.FC<{
             {isOpen && (
                 <div
                     ref={dropdownRef}
-                    onMouseLeave={() => setIsOpen(false)}
+                    onMouseLeave={() => {
+                        leaveTimeoutRef.current = setTimeout(() => setIsOpen(false), 300);
+                    }}
+                    onMouseEnter={() => {
+                        if (leaveTimeoutRef.current) {
+                            clearTimeout(leaveTimeoutRef.current);
+                            leaveTimeoutRef.current = null;
+                        }
+                    }}
                     className="fixed z-[9999] bg-white border border-slate-200 rounded-lg shadow-xl overflow-auto animate-fade-in"
                     style={{
                         top: coords.top,
@@ -117,7 +126,7 @@ const InlineBadgeSelector: React.FC<{
                             className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-sm border-b border-slate-50 last:border-0"
                         >
                             <span
-                                className="inline-flex items-center px-2 py-1 rounded-lg border text-[13px]"
+                                className="inline-flex items-center px-2 py-1 rounded-lg border text-[13px] font-bold"
                                 style={{
                                     backgroundColor: `${item.color || '#cccccc'}15`,
                                     color: item.color || '#333333',
@@ -182,6 +191,24 @@ const DealsList: React.FC = () => {
         isDestructive: false,
     });
 
+    // --- ESC KEY HANDLER ---
+    useEffect(() => {
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                // Primero cerrar confirmación si está abierta
+                if (confirmState.isOpen) {
+                    setConfirmState(prev => ({ ...prev, isOpen: false }));
+                }
+                // Luego cerrar modal de edición solo si confirmación no está abierta
+                else if (isModalOpen) {
+                    setIsModalOpen(false);
+                }
+            }
+        };
+        document.addEventListener('keydown', handleEscape);
+        return () => document.removeEventListener('keydown', handleEscape);
+    }, [isModalOpen, confirmState.isOpen]);
+
     // --- COMPONENTE INTERNO: Dropdown de Filtro Superior (Barra de búsqueda) ---
     const StatusInterestFilter: React.FC<{
         placeholder: string;
@@ -192,6 +219,7 @@ const DealsList: React.FC = () => {
         const [open, setOpen] = useState(false);
         const current = items.find(i => i.id === selectedId);
         const containerRef = useRef<HTMLDivElement>(null);
+        const leaveTimeoutRef = useRef<number | null>(null);
 
         useEffect(() => {
             if (!open) return;
@@ -204,8 +232,19 @@ const DealsList: React.FC = () => {
             return () => document.removeEventListener('mousedown', handleClickOutside);
         }, [open]);
 
+        const handleMouseLeave = () => {
+            leaveTimeoutRef.current = setTimeout(() => setOpen(false), 300);
+        };
+
+        const handleMouseEnter = () => {
+            if (leaveTimeoutRef.current) {
+                clearTimeout(leaveTimeoutRef.current);
+                leaveTimeoutRef.current = null;
+            }
+        };
+
         return (
-            <div ref={containerRef} className="relative w-full md:w-auto md:min-w-[16rem] lg:min-w-[18rem] max-w-[26rem]" onMouseLeave={() => setOpen(false)}>
+            <div ref={containerRef} className="relative w-full md:w-auto md:min-w-[16rem] lg:min-w-[18rem] max-w-[26rem]" onMouseLeave={handleMouseLeave} onMouseEnter={handleMouseEnter}>
                 <button
                     type="button"
                     onClick={() => setOpen(o => !o)}
@@ -213,7 +252,7 @@ const DealsList: React.FC = () => {
                 >
                     {current ? (
                         <span
-                            className="inline-flex items-center px-2 py-1 rounded-lg border text-[13px]"
+                            className="inline-flex items-center px-2 py-0.5 rounded-lg border text-[13px] font-bold"
                             style={{
                                 backgroundColor: `${current.color || '#cccccc'}15`,
                                 color: current.color || '#333333',
@@ -249,7 +288,7 @@ const DealsList: React.FC = () => {
                                 className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center justify-between text-sm"
                             >
                                 <span
-                                    className="inline-flex items-center px-2 py-1 rounded-lg border text-[13px]"
+                                    className="inline-flex items-center px-2 py-0.5 rounded-lg border text-[13px] font-bold"
                                     style={{
                                         backgroundColor: `${item.color || '#cccccc'}15`,
                                         color: item.color || '#333333',
@@ -462,9 +501,7 @@ const DealsList: React.FC = () => {
 
     const handleRowClick = (id: string) => navigate(`/deals/${id}`);
     const handleAddNew = () => {
-        setEditingDeal({});
-        setIsEditMode(false);
-        setIsModalOpen(true);
+        navigate('/deals/new');
     };
     const handleEdit = (deal: Deal) => {
         const rawValue = typeof deal.valor_trato === 'string' ? parseFloat((deal.valor_trato as string).replace(/[^0-9.-]+/g, "")) : deal.valor_trato;
@@ -487,14 +524,23 @@ const DealsList: React.FC = () => {
     const handleFormSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingDeal || !user?.id_tenant) return;
-        setSubmitting(true);
-        const payload = { ...editingDeal, id_tenant: user.id_tenant, id_user: user.id_user, valor_trato: parseFloat(editingDeal.valor_trato as any) || 0 };
-        try {
-            const url = isEditMode ? `https://service.computeksa.com/webhook/api/deals/update` : `https://service.computeksa.com/webhook/api/deals`;
-            await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-            setToast({ message: isEditMode ? 'Actualizado.' : 'Creado.', type: 'success' });
-            setIsModalOpen(false); fetchData();
-        } catch { setToast({ message: 'Error al guardar.', type: 'error' }); } finally { setSubmitting(false); }
+        
+        setConfirmState({
+            isOpen: true,
+            title: isEditMode ? 'Confirmar Actualización' : 'Confirmar Creación',
+            message: isEditMode ? '¿Deseas guardar los cambios realizados?' : '¿Deseas crear este nuevo trato?',
+            isDestructive: false,
+            onConfirm: async () => {
+                setSubmitting(true);
+                const payload = { ...editingDeal, id_tenant: user.id_tenant, id_user: user.id_user, valor_trato: parseFloat(editingDeal.valor_trato as any) || 0 };
+                try {
+                    const url = isEditMode ? `https://service.computeksa.com/webhook/api/deals/update` : `https://service.computeksa.com/webhook/api/deals`;
+                    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    setToast({ message: isEditMode ? 'Actualizado.' : 'Creado.', type: 'success' });
+                    setIsModalOpen(false); fetchData();
+                } catch { setToast({ message: 'Error al guardar.', type: 'error' }); } finally { setSubmitting(false); setConfirmState(prev => ({ ...prev, isOpen: false })); }
+            }
+        });
     };
     const handleInputChange = (e: any) => {
         const { name, value } = e.target;
@@ -725,21 +771,21 @@ const DealsList: React.FC = () => {
                                     </div>
                                 )}
                             </th>
-                            <th data-filter-column="fecha_cierre_esperada" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                            <th data-filter-column="updated_at" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
                                 <div className="flex items-center gap-2">
-                                    <div className="flex-1 cursor-pointer" onClick={() => requestSort('fecha_cierre_esperada')}>
-                                        Last Update <SortIcon column="fecha_cierre_esperada" />
+                                    <div className="flex-1 cursor-pointer" onClick={() => requestSort('updated_at')}>
+                                        Last Update <SortIcon column="updated_at" />
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'fecha_cierre_esperada' ? null : 'fecha_cierre_esperada'); }}
-                                        className={`p-1 rounded hover:bg-slate-200 transition-colors ${(dateFilters['fecha_cierre_esperada']?.start || dateFilters['fecha_cierre_esperada']?.end) ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
+                                        onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'updated_at' ? null : 'updated_at'); }}
+                                        className={`p-1 rounded hover:bg-slate-200 transition-colors ${(dateFilters['updated_at']?.start || dateFilters['updated_at']?.end) ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
                                         title="Filtrar por fecha"
                                     >
                                         <i className="fa-solid fa-calendar text-xs"></i>
                                     </button>
                                 </div>
-                                {openFilterColumn === 'fecha_cierre_esperada' && (
+                                {openFilterColumn === 'updated_at' && (
                                     <div
                                         ref={(el) => adjustDropdownPosition(el, 180)}
                                         onMouseLeave={() => setOpenFilterColumn(null)}
@@ -748,14 +794,14 @@ const DealsList: React.FC = () => {
                                         <div className="space-y-2">
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-600 mb-1">Desde</label>
-                                                <input type="date" value={dateFilters['fecha_cierre_esperada']?.start || ''} onChange={(e) => updateDateFilter('fecha_cierre_esperada', 'start', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
+                                                <input type="date" value={dateFilters['updated_at']?.start || ''} onChange={(e) => updateDateFilter('updated_at', 'start', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-600 mb-1">Hasta</label>
-                                                <input type="date" value={dateFilters['fecha_cierre_esperada']?.end || ''} onChange={(e) => updateDateFilter('fecha_cierre_esperada', 'end', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
+                                                <input type="date" value={dateFilters['updated_at']?.end || ''} onChange={(e) => updateDateFilter('updated_at', 'end', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
                                             </div>
-                                            {(dateFilters['fecha_cierre_esperada']?.start || dateFilters['fecha_cierre_esperada']?.end) && (
-                                                <button type="button" onClick={() => clearDateFilter('fecha_cierre_esperada')} className="w-full px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded border border-red-200 transition-colors">
+                                            {(dateFilters['updated_at']?.start || dateFilters['updated_at']?.end) && (
+                                                <button type="button" onClick={() => clearDateFilter('updated_at')} className="w-full px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded border border-red-200 transition-colors">
                                                     <i className="fa-solid fa-times mr-1"></i> Limpiar filtro
                                                 </button>
                                             )}
@@ -869,7 +915,7 @@ const DealsList: React.FC = () => {
                                     <td className="px-2 sm:px-4 py-2">
                                         <div className="text-xs text-slate-600 whitespace-nowrap">
                                             <i className="fa-regular fa-calendar-check text-slate-400 mr-1.5"></i>
-                                            {deal.fecha_cierre_esperada?.split('T')[0] || 'N/A'}
+                                            {deal.updated_at_fmt || deal.updated_at?.split('T')[0] || 'N/A'}
                                         </div>
                                     </td>
 
@@ -932,6 +978,16 @@ const DealsList: React.FC = () => {
                     <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-sm" />
                 </div>
                 <div className="flex items-center gap-2 w-full md:flex-1 flex-wrap justify-end">
+                    {hasActiveFilters && (
+                        <button
+                            type="button"
+                            onClick={clearAllFilters}
+                            className="p-2.5 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+                            title="Quitar filtros"
+                        >
+                            <i className="fa-solid fa-filter-circle-xmark text-base"></i>
+                        </button>
+                    )}
                     <StatusInterestFilter
                         placeholder="Todos los Estados"
                         selectedId={statusFilter}
@@ -950,16 +1006,6 @@ const DealsList: React.FC = () => {
                             return { id: i.id_interest, name: i.name, color: i.color, icon: i.icon, count };
                         })}
                     />
-                    {hasActiveFilters && (
-                        <button
-                            type="button"
-                            onClick={clearAllFilters}
-                            className="px-4 py-2 text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors flex items-center gap-2"
-                            title="Restablecer filtros"
-                        >
-                            <i className="fa-solid fa-rotate-left text-xs"></i> Restablecer
-                        </button>
-                    )}
                 </div>
             </div>
 
@@ -983,13 +1029,13 @@ const DealsList: React.FC = () => {
             )}
 
             {isModalOpen && editingDeal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh', zIndex: 999999, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} onClick={() => setIsModalOpen(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
                         <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
                             <h2 className="text-lg font-bold text-slate-800">{isEditMode ? 'Editar Trato' : 'Nuevo Trato'}</h2>
                             <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-colors"><i className="fa-solid fa-times"></i></button>
                         </div>
-                        <form onSubmit={handleFormSubmit} className="overflow-y-auto p-6 space-y-6">
+                        <form onSubmit={handleFormSubmit} className="overflow-y-auto p-6 space-y-6 flex-1">
                             {/* Sección 1 */}
                             <div>
                                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Información General</h3>
@@ -1034,15 +1080,47 @@ const DealsList: React.FC = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 mb-1">Estado</label>
-                                        <select name="id_deal_status" required value={editingDeal.id_deal_status || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-brand-500">
-                                            {dealStatuses.map(s => <option key={s.id_status} value={s.id_status}>{s.name}</option>)}
-                                        </select>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {dealStatuses.map(s => (
+                                                <button
+                                                    key={s.id_status}
+                                                    type="button"
+                                                    onClick={() => handleInputChange({ target: { name: 'id_deal_status', value: s.id_status } } as any)}
+                                                    className={`px-3 py-2 rounded-lg border text-sm font-bold text-left flex items-center gap-2 transition-all ${editingDeal.id_deal_status === s.id_status ? 'ring-2 ring-brand-500' : 'hover:border-slate-300'}`}
+                                                    style={{
+                                                        backgroundColor: `${s.color || '#cccccc'}15`,
+                                                        color: s.color || '#333333',
+                                                        borderColor: `${s.color || '#cccccc'}40`
+                                                    }}
+                                                >
+                                                    {s.icon && <i className={s.icon}></i>}
+                                                    {s.name}
+                                                    {editingDeal.id_deal_status === s.id_status && <i className="fa-solid fa-check ml-auto"></i>}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 mb-1">Interés</label>
-                                        <select name="id_interest" required value={editingDeal.id_interest || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-200 rounded-lg bg-white outline-none focus:ring-2 focus:ring-brand-500">
-                                            {interestStatuses.map(i => <option key={i.id_interest} value={i.id_interest}>{i.name}</option>)}
-                                        </select>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {interestStatuses.map(i => (
+                                                <button
+                                                    key={i.id_interest}
+                                                    type="button"
+                                                    onClick={() => handleInputChange({ target: { name: 'id_interest', value: i.id_interest } } as any)}
+                                                    className={`px-3 py-2 rounded-lg border text-sm font-bold text-left flex items-center gap-2 transition-all ${editingDeal.id_interest === i.id_interest ? 'ring-2 ring-brand-500' : 'hover:border-slate-300'}`}
+                                                    style={{
+                                                        backgroundColor: `${i.color || '#cccccc'}15`,
+                                                        color: i.color || '#333333',
+                                                        borderColor: `${i.color || '#cccccc'}40`
+                                                    }}
+                                                >
+                                                    {i.icon && <i className={i.icon}></i>}
+                                                    {i.name}
+                                                    {editingDeal.id_interest === i.id_interest && <i className="fa-solid fa-check ml-auto"></i>}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-slate-500 mb-1">Propietario</label>

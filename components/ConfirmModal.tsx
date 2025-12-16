@@ -21,6 +21,16 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
   cancelText = 'Cancelar',
   isDestructive = false,
 }) => {
+  React.useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
   if (!isOpen) return null;
 
   const confirmButtonClass = isDestructive
@@ -28,7 +38,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
     : 'bg-brand-600 hover:bg-brand-700';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-4" style={{ animation: 'fadeIn 0.2s ease-out' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh', zIndex: 9999999, backgroundColor: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="p-6">
           <div className="flex items-start">

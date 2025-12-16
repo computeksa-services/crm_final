@@ -3,8 +3,9 @@ import SettingsDealStatuses from '../components/SettingsDealStatuses';
 import SettingsQuoteStatuses from '../components/SettingsQuoteStatuses';
 import SettingsProductTypes from '../components/SettingsProductTypes';
 import SettingsDealInterests from '../components/SettingsDealInterests';
+import SettingsDealChannels from '../components/SettingsDealChannels';
 
-type SettingsTab = 'dealStatuses' | 'quoteStatuses' | 'productTypes' | 'dealInterests';
+type SettingsTab = 'dealStatuses' | 'quoteStatuses' | 'productTypes' | 'dealInterests' | 'dealChannels';
 
 // Configuración del menú para iterar limpiamente
 const MENU_ITEMS: { id: SettingsTab; label: string; icon: string; description: string }[] = [
@@ -19,6 +20,12 @@ const MENU_ITEMS: { id: SettingsTab; label: string; icon: string; description: s
     label: 'Niveles de Interés', 
     icon: 'fa-solid fa-fire', 
     description: 'Clasificación de probabilidad.' 
+  },
+  { 
+    id: 'dealChannels', 
+    label: 'Canales', 
+    icon: 'fa-solid fa-bullhorn', 
+    description: 'Origen de los tratos.' 
   },
   { 
     id: 'quoteStatuses', 
@@ -47,6 +54,8 @@ const SettingsPage: React.FC = () => {
         return <SettingsProductTypes />;
       case 'dealInterests':
         return <SettingsDealInterests />;
+      case 'dealChannels':
+        return <SettingsDealChannels />;
       default:
         return null;
     }

@@ -61,6 +61,8 @@ const DealCreate: React.FC = () => {
       const defaultInterest = interestStatusesData.find((s: CustomStatus) => s.is_default) || interestStatusesData[0];
       const defaultInterestId = (defaultInterest?.id_status as string | undefined) || (defaultInterest as any)?.id_interest || '';
 
+      const today = new Date().toISOString().split('T')[0];
+
       let initialState: Partial<Deal> = {
         nombre_trato: '',
         valor_trato: '',
@@ -72,7 +74,7 @@ const DealCreate: React.FC = () => {
         id_user_owner: userId,
         id_user: userId,
         descripcion: '',
-        fecha_cierre_esperada: '',
+        fecha_cierre_esperada: today,
       };
 
       if (initialState.id_client_company) {
@@ -151,45 +153,49 @@ const DealCreate: React.FC = () => {
   };
 
   const renderStatusSelector = () => (
-    <div className="relative">
-      <select
-        name="id_deal_status"
-        value={deal.id_deal_status || ''}
-        onChange={handleInputChange}
-        required
-        className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
-      >
-        <option value="">-- Seleccionar Estado --</option>
-        {dealStatuses.map(status => (
-          <option key={status.id_status} value={status.id_status}>{status.name}</option>
-        ))}
-      </select>
-      <div className="absolute right-4 top-3.5 text-slate-400 pointer-events-none">
-        <i className="fa-solid fa-chevron-down text-xs"></i>
-      </div>
+    <div className="grid grid-cols-1 gap-2">
+      {dealStatuses.map(status => (
+        <button
+          key={status.id_status}
+          type="button"
+          onClick={() => setDeal(prev => ({ ...prev, id_deal_status: status.id_status }))}
+          className={`px-3 py-2 rounded-lg border text-sm font-bold text-left flex items-center gap-2 transition-all ${deal.id_deal_status === status.id_status ? 'ring-2 ring-brand-500' : 'hover:border-slate-300'}`}
+          style={{
+            backgroundColor: `${status.color || '#cccccc'}15`,
+            color: status.color || '#333333',
+            borderColor: `${status.color || '#cccccc'}40`
+          }}
+        >
+          {status.icon && <i className={status.icon}></i>}
+          {status.name}
+          {deal.id_deal_status === status.id_status && <i className="fa-solid fa-check ml-auto"></i>}
+        </button>
+      ))}
     </div>
   );
 
   const renderInterestSelector = () => (
-    <div className="relative">
-      <select
-        name="id_interest"
-        value={deal.id_interest || ''}
-        onChange={handleInputChange}
-        required
-        className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
-      >
-        <option value="">-- Seleccionar Interés --</option>
-        {interestStatuses.map(int => {
-          const valueId = (int as any).id_status || (int as any).id_interest || (int as any).id;
-          return (
-            <option key={valueId} value={valueId}>{int.name}</option>
-          );
-        })}
-      </select>
-      <div className="absolute right-4 top-3.5 text-slate-400 pointer-events-none">
-        <i className="fa-solid fa-chevron-down text-xs"></i>
-      </div>
+    <div className="grid grid-cols-1 gap-2">
+      {interestStatuses.map(int => {
+        const valueId = (int as any).id_status || (int as any).id_interest || (int as any).id;
+        return (
+          <button
+            key={valueId}
+            type="button"
+            onClick={() => setDeal(prev => ({ ...prev, id_interest: valueId }))}
+            className={`px-3 py-2 rounded-lg border text-sm font-bold text-left flex items-center gap-2 transition-all ${deal.id_interest === valueId ? 'ring-2 ring-brand-500' : 'hover:border-slate-300'}`}
+            style={{
+              backgroundColor: `${int.color || '#cccccc'}15`,
+              color: int.color || '#333333',
+              borderColor: `${int.color || '#cccccc'}40`
+            }}
+          >
+            {int.icon && <i className={int.icon}></i>}
+            {int.name}
+            {deal.id_interest === valueId && <i className="fa-solid fa-check ml-auto"></i>}
+          </button>
+        );
+      })}
     </div>
   );
 
@@ -238,7 +244,7 @@ const DealCreate: React.FC = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-12">
+    <div className="max-w-6xl mx-auto space-y-6 animate-fade-in pb-12">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* Header */}
@@ -257,77 +263,79 @@ const DealCreate: React.FC = () => {
 
       <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
         <div className="p-8 space-y-8">
-          {/* Section 1: General Info */}
-          <div>
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 flex items-center">
-              <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">1</span>
-              Detalles Principales
-            </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Section 1: General Info */}
+            <div>
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 flex items-center">
+                <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">1</span>
+                Detalles Principales
+              </h2>
 
-            <div className="space-y-5">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre del Trato</label>
-                <input
-                  name="nombre_trato"
-                  value={deal.nombre_trato || ''}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all placeholder:text-slate-300"
-                  placeholder="Ej. Implementación CRM para Cliente"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-5">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Valor Estimado</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre del Trato</label>
                   <input
-                    name="valor_trato"
-                    value={deal.valor_trato || ''}
+                    name="nombre_trato"
+                    value={deal.nombre_trato || ''}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
-                    placeholder="Ej. 15000"
+                    className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all placeholder:text-slate-300"
+                    placeholder="Ej. Implementación CRM para Cliente"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Fecha de Cierre Esperada</label>
-                  <input
-                    type="date"
-                    name="fecha_cierre_esperada"
-                    value={deal.fecha_cierre_esperada || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
-                  />
-                </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Estado Inicial</label>
-                  {renderStatusSelector()}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Valor Estimado</label>
+                    <input
+                      name="valor_trato"
+                      value={deal.valor_trato || ''}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
+                      placeholder="Ej. 15000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Fecha de Cierre Esperada</label>
+                    <input
+                      type="date"
+                      name="fecha_cierre_esperada"
+                      value={deal.fecha_cierre_esperada || ''}
+                      onChange={handleInputChange}
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nivel de Interés</label>
-                  {renderInterestSelector()}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Estado Inicial</label>
+                    {renderStatusSelector()}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nivel de Interés</label>
+                    {renderInterestSelector()}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Section 2: Client Info */}
-          <div>
-            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 flex items-center">
-              <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">2</span>
-              Información del Cliente
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Empresa Cliente</label>
-                {renderClientCompanySelector()}
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Contacto Principal</label>
-                {renderContactSelector()}
+            {/* Section 2: Client Info */}
+            <div>
+              <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 flex items-center">
+                <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">2</span>
+                Información del Cliente
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Empresa Cliente</label>
+                  {renderClientCompanySelector()}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Contacto Principal</label>
+                  {renderContactSelector()}
+                </div>
               </div>
             </div>
           </div>
