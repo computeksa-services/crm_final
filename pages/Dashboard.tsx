@@ -1,9 +1,33 @@
 import React from 'react';
+import { useAuth } from '../contexts/AuthContext';
 
 const Dashboard: React.FC = () => {
+  const { user } = useAuth();
+
+  console.log('📊 Dashboard - Usuario actual:', user);
+  console.log('📊 Dashboard - LocalStorage:', localStorage.getItem('user'));
+
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">Dashboard</h1>
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-slate-800">Bienvenido, {user?.name_user || 'Usuario'}</h1>
+          <p className="text-slate-500 mt-1">{user?.email_user}</p>
+        </div>
+        {user && (
+          <div className="flex items-center gap-4 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+            <img 
+              src={user.avatar_url || `https://ui-avatars.com/api/?name=${user.name_user}&background=random`} 
+              alt="Profile" 
+              className="w-12 h-12 rounded-full border border-slate-300" 
+            />
+            <div>
+              <p className="font-semibold text-slate-800">{user.name_user}</p>
+              <p className="text-xs text-slate-500 capitalize">{user.rol_user}</p>
+            </div>
+          </div>
+        )}
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {[

@@ -6,6 +6,8 @@ export default defineConfig({
   plugins: [react()],
   base: './', // Ensures relative paths for assets so it works on any subdirectory/VPS
   server: {
+    port: 5173,
+    strictPort: false,
     proxy: {
       '/api': {
         target: 'https://service.computeksa.com/webhook',

@@ -1,7 +1,9 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext'; // Importar
 import Layout from './components/Layout';
+import { googleClientId } from './services/oauthConfig';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import QuotesList from './pages/QuotesList';
@@ -36,11 +38,12 @@ const ProtectedRoute = () => {
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/" element={<ProtectedRoute />}>
             {/* Todas las rutas anidadas usarán Layout y estarán protegidas */}
             <Route index element={<Navigate to="/dashboard" />} />
@@ -66,6 +69,7 @@ const App: React.FC = () => {
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </GoogleOAuthProvider>
   );
 };
 

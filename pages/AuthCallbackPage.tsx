@@ -25,9 +25,8 @@ const AuthCallbackPage: React.FC = () => {
         }
 
         console.log('🔐 OAuth callback recibido:', { code, state });
-        console.log('📤 Enviando código al backend para intercambio...');
 
-        // Enviar el code al backend para obtener token y usuario
+        // Enviar el code al backend
         const response = await fetch('https://service.computeksa.com/webhook/api/auth/callback', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -40,22 +39,35 @@ const AuthCallbackPage: React.FC = () => {
         }
 
         const data = await response.json();
-        console.log('✅ Respuesta del backend:', data);
+        console.log('✅ Respuesta COMPLETA del backend:', data);
 
-        // Validar que tenemos los datos necesarios
-        if (!data.user) {
-          throw new Error('El servidor no devolvió información del usuario');
+        // Validar que sea un array y tenga datos
+        if (!Array.isArray(data) || data.length === 0) {
+          throw new Error('El backend no devolvió datos válidos');
         }
 
-        // Guardar usuario en el contexto de autenticación
-        login(data.user);
-
-        console.log('✅ Login completado. Redirigiendo al dashboard...');
+        // --- CORRECCIÓN AQUÍ ---
+        const authData = data[0]; // El objeto que contiene { token, user }
         
-        // Redirigir al dashboard después de 500ms para asegurar que los datos estén guardados
+        // 1. Extraemos el TOKEN y el USUARIO por separado
+        const token = authData.token;
+        const userData = authData.user;
+
+        if (!token) throw new Error('El servidor no devolvió el token de sesión');
+        if (!userData) throw new Error('El servidor no devolvió los datos del usuario');
+
+        console.log('🔑 Token a guardar:', token);
+        console.log('👤 Usuario a guardar:', userData);
+
+        // 2. Llamamos a login con AMBOS argumentos
+        // login(token: string, user: User)
+        login(token, userData);
+
+        console.log('✅ Login completado. Redirigiendo...');
+        
         setTimeout(() => {
           navigate('/dashboard');
-        }, 500);
+        }, 100);
 
       } catch (err: any) {
         console.error('❌ Error en callback:', err);
@@ -69,19 +81,19 @@ const AuthCallbackPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
-      <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full">
+      <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
         {loading && (
-          <div className="text-center">
-            <div className="animate-spin mb-4">
+          <>
+            <div className="animate-spin mb-4 inline-block">
               <i className="fa-solid fa-circle-notch text-brand-600 text-4xl"></i>
             </div>
-            <h2 className="text-lg font-semibold text-slate-800">Completando autenticación...</h2>
-            <p className="text-sm text-slate-600 mt-2">Por favor espera mientras te conectamos</p>
-          </div>
+            <h2 className="text-lg font-semibold text-slate-800">Iniciando sesión...</h2>
+            <p className="text-sm text-slate-600 mt-2">Estamos validando tus credenciales.</p>
+          </>
         )}
 
         {error && !loading && (
-          <div className="text-center">
+          <div className="animate-fade-in">
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
               <i className="fa-solid fa-circle-exclamation text-red-600 text-3xl block mb-2"></i>
               <p className="text-red-800 font-semibold">Error de autenticación</p>
