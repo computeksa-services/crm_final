@@ -21,6 +21,7 @@ import ProductsList from './pages/ProductsList';
 import SettingsPage from './pages/SettingsPage';
 import QuoteCreate from './pages/QuoteCreate'; // RUTA CORREGIDA
 import FinancialsList from './pages/FinancialsList';
+import AuthCallbackPage from './pages/AuthCallbackPage';
 
 // Componente para proteger rutas
 const ProtectedRoute = () => {
@@ -39,6 +40,7 @@ const App: React.FC = () => {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
           <Route path="/" element={<ProtectedRoute />}>
             {/* Todas las rutas anidadas usarán Layout y estarán protegidas */}
             <Route index element={<Navigate to="/dashboard" />} />
