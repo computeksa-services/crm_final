@@ -19,19 +19,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     // 1. Cargar sesión al iniciar la app
+    console.log("🔄 AuthContext: Cargando sesión desde localStorage...");
+    
     const storedToken = localStorage.getItem('token');
     const storedUser = localStorage.getItem('user');
+
+    console.log("   Token encontrado:", storedToken ? "✓" : "✗");
+    console.log("   Usuario encontrado:", storedUser ? "✓" : "✗");
 
     if (storedToken && storedUser) {
       try {
         const parsedUser = JSON.parse(storedUser);
+        console.log("   Usuario parseado:", parsedUser);
+        console.log("   Rol del usuario:", parsedUser?.rol_user);
+        
         setToken(storedToken);
         setUser(parsedUser);
+        console.log("✅ Sesión restaurada correctamente");
       } catch (e) {
-        console.error("Error al leer usuario del storage", e);
+        console.error("🔴 Error al leer usuario del storage", e);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
+    } else {
+      console.log("ℹ️ No hay sesión guardada");
     }
     setLoading(false);
   }, []);
@@ -39,7 +50,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = (newToken: string, newUser: User) => {
     console.log("🟢 AuthContext.login ejecutándose");
     console.log("   Token recibido:", newToken ? "Sí (Oculto)" : "No");
-    console.log("   Usuario recibido:", newUser);
+    console.log("   Usuario recibido:", JSON.stringify(newUser, null, 2));
+    console.log("   Rol del usuario:", newUser?.rol_user);
 
     // VALIDACIÓN DE SEGURIDAD
     if (typeof newUser !== 'object' || !newUser) {
@@ -54,6 +66,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 2. Persistir en LocalStorage
     localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
+    
+    console.log("✅ Sesión guardada en localStorage");
+    console.log("   localStorage.token:", localStorage.getItem('token') ? "✓" : "✗");
+    console.log("   localStorage.user:", localStorage.getItem('user') ? "✓" : "✗");
   };
 
   const logout = () => {

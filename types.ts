@@ -296,13 +296,24 @@ export interface QuoteItem {
 }
 
 export interface CalendarEvent {
-  id_evento: string;
-  titulo: string;
-  descripcion: string;
-  fecha_inicio: string; 
-  fecha_fin: string; 
-  tipo: 'REUNION' | 'LLAMADA' | 'TAREA' | 'DEADLINE';
-  id_user: string;
-  id_client_company?: string;
-  client_company_name?: string;
+  id: string;
+  title: string;
+  description: string;
+  start: string; 
+  end: string;
+  allDay: boolean;
+  type: 'REUNION' | 'LLAMADA' | 'TAREA' | 'DEADLINE';
+  meeting_url?: string | null;
+  meeting_platform?: 'GOOGLE_MEET' | 'ZOOM' | 'TEAMS' | 'NONE';
+  color?: string;
+  deal_title?: string | null;
+  deal_id?: string | null;
+  quote_number?: string | null;
+  quote_id?: string | null;
+  attendees?: Array<{
+    email: string;
+    avatar?: string | null;
+    status: 'needsAction' | 'accepted' | 'declined' | 'tentative';
+    is_organizer: boolean;
+  }>;
 }

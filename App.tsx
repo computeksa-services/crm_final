@@ -27,13 +27,22 @@ import AuthCallbackPage from './pages/AuthCallbackPage';
 
 // Componente para proteger rutas
 const ProtectedRoute = () => {
-  const { user, isLoading } = useAuth();
+  const { user, loading } = useAuth();
 
-  if (isLoading) {
-    return <div>Cargando sesión...</div>; // O un spinner
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin mb-4 inline-block">
+            <i className="fa-solid fa-circle-notch text-brand-600 text-4xl"></i>
+          </div>
+          <p className="text-slate-600">Cargando sesión...</p>
+        </div>
+      </div>
+    );
   }
 
-  return user ? <Layout><Outlet /></Layout> : <Navigate to="/login" />;
+  return user ? <Layout onLogout={() => {}}><Outlet /></Layout> : <Navigate to="/login" replace />;
 };
 
 const App: React.FC = () => {
