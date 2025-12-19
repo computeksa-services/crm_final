@@ -52,6 +52,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.log("   Token recibido:", newToken ? "Sí (Oculto)" : "No");
     console.log("   Usuario recibido:", JSON.stringify(newUser, null, 2));
     console.log("   Rol del usuario:", newUser?.rol_user);
+    console.log("   Avatar URL:", newUser?.avatar_url);
 
     // VALIDACIÓN DE SEGURIDAD
     if (typeof newUser !== 'object' || !newUser) {

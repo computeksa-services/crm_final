@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext'; 
+import { useAuth } from '../contexts/AuthContext';
+import { getImageUrl } from '../utils/imageUtils'; 
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -205,9 +206,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className={`flex items-center gap-3 transition-all duration-300 ${!isDesktopSidebarOpen ? 'justify-center' : ''}`}>
              <Link to="/profile" className="relative group">
                 <img 
-                    src={user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=6366f1&color=fff`} 
+                    src={getImageUrl(user?.avatar_url) || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=6366f1&color=fff`} 
                     alt="User" 
-                    className="w-9 h-9 rounded-full border border-slate-600 group-hover:border-brand-500 transition-colors" 
+                    className="w-9 h-9 rounded-full border border-slate-600 group-hover:border-brand-500 transition-colors"
+                    referrerPolicy="no-referrer"
+                    onLoad={() => console.log('✅ Avatar sidebar cargado:', getImageUrl(user?.avatar_url))}
+                    onError={(e) => {
+                      console.error('❌ Error cargando avatar sidebar');
+                      console.error('   URL original:', user?.avatar_url);
+                      console.error('   URL procesada:', getImageUrl(user?.avatar_url));
+                    }}
                 />
                 <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-slate-900 rounded-full"></span>
              </Link>
@@ -306,9 +314,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
              {/* Profile Link (Avatar mobile) */}
              <Link to="/profile" className="flex items-center gap-2 hover:bg-slate-50 p-1.5 pr-3 rounded-full border border-transparent hover:border-slate-200 transition-all">
                 <img 
-                    src={user?.avatar_url || "https://ui-avatars.com/api/?name=User&background=random"} 
+                    src={getImageUrl(user?.avatar_url) || "https://ui-avatars.com/api/?name=User&background=random"} 
                     alt="User" 
-                    className="w-8 h-8 rounded-full shadow-sm" 
+                    className="w-8 h-8 rounded-full shadow-sm"
+                    referrerPolicy="no-referrer"
+                    onLoad={() => console.log('✅ Avatar header cargado:', getImageUrl(user?.avatar_url))}
+                    onError={(e) => {
+                      console.error('❌ Error cargando avatar header');
+                      console.error('   URL original:', user?.avatar_url);
+                      console.error('   URL procesada:', getImageUrl(user?.avatar_url));
+                    }}
                 />
                 <i className="fa-solid fa-chevron-down text-[10px] text-slate-400 hidden sm:block"></i>
              </Link>

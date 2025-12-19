@@ -4,23 +4,30 @@
 
 /**
  * Convierte URLs de Google Drive al formato directo para mostrar imágenes
- * @param url - URL de la imagen de Google Drive
+ * @param url - URL de la imagen (Google Drive, Google Avatar, o cualquier URL)
  * @returns URL en formato correcto para usar en <img> src, o null si no hay URL
  */
 export const getImageUrl = (url: string | undefined | null): string | null => {
   if (!url) return null;
   
-  // Extraer FILE_ID de cualquier formato de URL de Google Drive
-  const match = url.match(/[-\w]{25,}/);
-  
-  if (match) {
-    const fileId = match[0];
-    // Usar el thumbnail service de Google Drive con tamaño grande
-    // Este endpoint funciona mejor con CORS y es más confiable
-    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+  // Si es URL de avatar de Google (lh3.googleusercontent.com), devolverla tal cual
+  if (url.includes('lh3.googleusercontent.com') || url.includes('googleusercontent.com')) {
+    return url;
   }
   
-  // Si no es Google Drive, devolver la URL tal cual
+  // Si es URL de Google Drive, convertirla al formato thumbnail
+  if (url.includes('drive.google.com')) {
+    // Extraer FILE_ID de cualquier formato de URL de Google Drive
+    const match = url.match(/[-\w]{25,}/);
+    
+    if (match) {
+      const fileId = match[0];
+      // Usar el thumbnail service de Google Drive con tamaño grande
+      return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
+    }
+  }
+  
+  // Si es cualquier otra URL, devolverla tal cual
   return url;
 };
 

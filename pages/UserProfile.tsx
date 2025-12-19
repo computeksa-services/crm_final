@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { User } from '../types';
 import Toast from '../components/Toast';
+import { getImageUrl } from '../utils/imageUtils';
 
 const UserProfile: React.FC = () => {
   const { user } = useAuth(); // Obtener usuario del contexto
@@ -81,9 +82,14 @@ const UserProfile: React.FC = () => {
              <div className="px-6 pb-6 text-center -mt-12">
                 <div className="relative inline-block">
                     <img 
-                        src={profileData.avatar_url || `https://ui-avatars.com/api/?name=${profileData.name_user}&background=random`} 
+                        src={getImageUrl(profileData.avatar_url) || `https://ui-avatars.com/api/?name=${profileData.name_user}&background=random`} 
                         alt="Profile" 
-                        className="w-24 h-24 rounded-full border-4 border-white shadow-md object-cover bg-white" 
+                        className="w-24 h-24 rounded-full border-4 border-white shadow-md object-cover bg-white"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          console.error('❌ Error cargando avatar en perfil:', profileData.avatar_url);
+                          e.currentTarget.src = `https://ui-avatars.com/api/?name=${profileData.name_user}&background=random`;
+                        }}
                     />
                     <div className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full" title="Activo"></div>
                 </div>
