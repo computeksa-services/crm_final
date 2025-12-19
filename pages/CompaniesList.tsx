@@ -17,6 +17,8 @@ const CompaniesList: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Partial<Tenant> | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Confirmation Modal
@@ -65,12 +67,16 @@ const CompaniesList: React.FC = () => {
   const handleAddNew = () => {
     setEditingTenant({ ruc: '', name_tenant: '', country: 'Ecuador', city: '', address: '', website: '', logo_url: '' });
     setIsEditMode(false);
+    setLogoFile(null);
+    setLogoPreview('');
     setIsModalOpen(true);
   };
 
   const handleEdit = (tenant: Tenant) => {
     setEditingTenant(tenant);
     setIsEditMode(true);
+    setLogoFile(null);
+    setLogoPreview(tenant.logo_url || '');
     setIsModalOpen(true);
   };
 
@@ -117,22 +123,34 @@ const CompaniesList: React.FC = () => {
   
   const performSubmit = async () => {
     if (!editingTenant) return;
+    if (!isEditMode && !logoFile) {
+      setToast({ message: 'Debes subir un logo en formato de archivo (PNG/JPG).', type: 'error' });
+      return;
+    }
     setSubmitting(true);
     
     try {
+      const buildFormData = (data: Partial<Tenant>, file?: File | null) => {
+        const formData = new FormData();
+        if (data.id_tenant) formData.append('id', data.id_tenant);
+        if (data.ruc) formData.append('ruc', data.ruc);
+        if (data.name_tenant) formData.append('name_tenant', data.name_tenant);
+        if (data.country) formData.append('country', data.country);
+        if (data.city) formData.append('city', data.city);
+        if (data.address) formData.append('address', data.address);
+        if (data.website) formData.append('website', data.website);
+        if (file) formData.append('logo', file);
+        return formData;
+      };
+
       if (isEditMode && editingTenant.id_tenant) {
         const response = await fetch('https://service.computeksa.com/webhook/api/tenants/update', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: editingTenant.id_tenant, ...editingTenant })
+          body: buildFormData(editingTenant, logoFile)
         });
         if (!response.ok) throw new Error('Error al actualizar tenant');
         const apiResponse = await response.json();
-        // FORCE LOCAL IMAGE PRIORITY: If we have a local Base64 image, use it.
-        // API responses might truncate long Base64 strings, breaking the image.
-        const logoToUse = editingTenant.logo_url && editingTenant.logo_url.startsWith('data:') 
-          ? editingTenant.logo_url 
-          : apiResponse.logo_url;
+        const logoToUse = apiResponse.logo_url || logoPreview || editingTenant.logo_url;
 
         const updated = { ...editingTenant, ...apiResponse, logo_url: logoToUse } as Tenant;
         setTenants(prev => prev.map(t => t.id_tenant === updated.id_tenant ? updated : t));
@@ -140,15 +158,11 @@ const CompaniesList: React.FC = () => {
       } else {
         const response = await fetch('https://service.computeksa.com/webhook/api/tenants/add', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(editingTenant)
+          body: buildFormData(editingTenant, logoFile)
         });
         if (!response.ok) throw new Error('Error al crear tenant');
         const apiResponse = await response.json();
-        // FORCE LOCAL IMAGE PRIORITY here too
-        const logoToUse = editingTenant.logo_url && editingTenant.logo_url.startsWith('data:') 
-          ? editingTenant.logo_url 
-          : apiResponse.logo_url;
+        const logoToUse = apiResponse.logo_url || logoPreview || editingTenant.logo_url;
 
         const newT = { ...editingTenant, ...apiResponse, logo_url: logoToUse } as Tenant;
         setTenants(prev => [newT, ...prev]);
@@ -167,24 +181,19 @@ const CompaniesList: React.FC = () => {
     setEditingTenant(prev => (prev ? { ...prev, [name]: value } : null));
   };
 
-  // Logic to convert Image to Base64
+  // Manejo de carga de imagen (archivo real, no base64)
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Check size (Max 800KB to prevent DB bloat)
       if (file.size > 800 * 1024) {
         setToast({ message: 'La imagen es muy pesada. Máximo 800KB.', type: 'error' });
         return;
       }
-
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result as string;
-        // Optional: Log length to debug if needed
-        // console.log("Base64 Length:", base64String.length);
-        setEditingTenant(prev => (prev ? { ...prev, logo_url: base64String } : null));
-      };
-      reader.readAsDataURL(file);
+      if (logoPreview) URL.revokeObjectURL(logoPreview);
+      const previewUrl = URL.createObjectURL(file);
+      setLogoFile(file);
+      setLogoPreview(previewUrl);
+      setEditingTenant(prev => (prev ? { ...prev, logo_url: previewUrl } : null));
     }
   };
 

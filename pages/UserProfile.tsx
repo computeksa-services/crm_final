@@ -233,11 +233,11 @@ const UserProfile: React.FC = () => {
                 </div>
                 <div>
                     <h3 className="font-bold text-slate-800 text-lg">Seguridad</h3>
-                    <p className="text-sm text-slate-500">Gestiona tu contraseña y sesiones.</p>
+                    <p className="text-sm text-slate-500">Tu acceso está protegido por Google OAuth.</p>
                 </div>
             </div>
             <div className="p-4 border border-dashed border-slate-200 rounded-xl text-center bg-slate-50">
-                <p className="text-sm text-slate-500">Para cambiar tu contraseña, contacta a un administrador.</p>
+                <p className="text-sm text-slate-500">Tu autenticación se realiza a través de tu cuenta de Google.</p>
             </div>
           </div>
 

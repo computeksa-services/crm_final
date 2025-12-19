@@ -9,6 +9,7 @@ interface Attendee {
   name?: string;
   type: 'contact' | 'user' | 'external';
   id?: string;
+  is_organizer?: boolean;
 }
 
 const Calendar: React.FC = () => {
@@ -25,7 +26,11 @@ const Calendar: React.FC = () => {
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -40,6 +45,10 @@ const Calendar: React.FC = () => {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [attendeeInput, setAttendeeInput] = useState('');
   const [showAttendeeSuggestions, setShowAttendeeSuggestions] = useState(false);
+
+  // Estado para confirmación de cambios
+  const [showConfirmChanges, setShowConfirmChanges] = useState(false);
+  const [originalEventData, setOriginalEventData] = useState<any>(null);
 
   // Detail Modal State
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -93,12 +102,55 @@ const Calendar: React.FC = () => {
         fetch(`https://service.computeksa.com/webhook/api/quotes?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
       ]);
       
-      const eventsData = eventsResponse.ok ? await eventsResponse.json() : [];
-      const clientsData = clientsResponse.ok ? await clientsResponse.json() : [];
-      const contactsData = contactsResponse.ok ? await contactsResponse.json() : [];
-      const usersData = usersResponse.ok ? await usersResponse.json() : [];
-      const dealsData = dealsResponse.ok ? await dealsResponse.json() : [];
-      const quotesData = quotesResponse.ok ? await quotesResponse.json() : [];
+      // Procesar eventos con mejor manejo de errores
+      let eventsData = [];
+      if (eventsResponse.ok) {
+        const eventsText = await eventsResponse.text();
+        console.log('📋 Events raw response:', eventsText);
+        if (eventsText.trim()) {
+          eventsData = JSON.parse(eventsText);
+        }
+      }
+      
+      let clientsData = [];
+      if (clientsResponse.ok) {
+        const clientsText = await clientsResponse.text();
+        if (clientsText.trim()) {
+          clientsData = JSON.parse(clientsText);
+        }
+      }
+      
+      let contactsData = [];
+      if (contactsResponse.ok) {
+        const contactsText = await contactsResponse.text();
+        if (contactsText.trim()) {
+          contactsData = JSON.parse(contactsText);
+        }
+      }
+      
+      let usersData = [];
+      if (usersResponse.ok) {
+        const usersText = await usersResponse.text();
+        if (usersText.trim()) {
+          usersData = JSON.parse(usersText);
+        }
+      }
+      
+      let dealsData = [];
+      if (dealsResponse.ok) {
+        const dealsText = await dealsResponse.text();
+        if (dealsText.trim()) {
+          dealsData = JSON.parse(dealsText);
+        }
+      }
+      
+      let quotesData = [];
+      if (quotesResponse.ok) {
+        const quotesText = await quotesResponse.text();
+        if (quotesText.trim()) {
+          quotesData = JSON.parse(quotesText);
+        }
+      }
       
       console.log('Events received:', eventsData);
       
@@ -175,7 +227,7 @@ const Calendar: React.FC = () => {
     
     try {
       const response = await fetch(
-        `https://service.computeksa.com/webhook/api/events/detail?id_evento=${eventId}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`
+        `https://service.computeksa.com/webhook/api/events/detail?id_event=${eventId}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`
       );
       
       if (!response.ok) {
@@ -201,6 +253,9 @@ const Calendar: React.FC = () => {
   // --- FORM HANDLERS ---
 
   const handleOpenModal = () => {
+    setIsEditing(false);
+    setEditingEventId(null);
+    
     const now = new Date();
     const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
     
@@ -370,6 +425,31 @@ const Calendar: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (isEditing) {
+      // Mostrar modal de confirmación de cambios
+      const changes = getEventChanges();
+      if (changes.length === 0) {
+        alert('No se detectaron cambios en el evento');
+        return;
+      }
+      setShowConfirmChanges(true);
+    } else {
+      await handleCreateEvent();
+    }
+  };
+
+  const confirmUpdateEvent = async () => {
+    setShowConfirmChanges(false);
+    await handleUpdateEvent();
+  };
+
+  const handleCreateEvent = async () => {
+    if (!formData.title || !formData.start || !formData.end) {
+      alert('Por favor completa todos los campos requeridos');
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -413,6 +493,223 @@ const Calendar: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleUpdateEvent = async () => {
+    if (!formData.title || !formData.start || !formData.end || !editingEventId) {
+      alert('Por favor completa todos los campos requeridos');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const payload = {
+        action: 'update',
+        id_user: user?.id_user,
+        id_tenant: user?.id_tenant,
+        event: {
+          id_event: editingEventId,
+          title: formData.title,
+          description: formData.description,
+          start: new Date(formData.start).toISOString(),
+          end: new Date(formData.end).toISOString(),
+          is_all_day: formData.is_all_day,
+          location: formData.location || undefined,
+          generate_meeting: formData.generate_meeting,
+          id_trato: formData.id_trato || undefined,
+          id_tenant: user?.id_tenant,
+          id_user: user?.id_user
+        },
+        attendees: attendees
+      };
+
+      console.log('Updating event:', payload);
+
+      const response = await fetch('https://service.computeksa.com/webhook/api/events/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al actualizar evento');
+      }
+      
+      await fetchData();
+      setIsModalOpen(false);
+      setIsEditing(false);
+      setEditingEventId(null);
+      setFormData({
+        title: '',
+        description: '',
+        start: '',
+        end: '',
+        is_all_day: false,
+        location: '',
+        generate_meeting: false,
+        id_trato: ''
+      });
+      setAttendees([]);
+    } catch (error) {
+      console.error("Error updating event", error);
+      alert(error instanceof Error ? error.message : "Error al actualizar el evento");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDeleteEvent = async () => {
+    const event = selectedEventDetail?.[0];
+    if (!event) {
+      alert('No se encontró el evento a eliminar');
+      return;
+    }
+
+    const id_event = event.id || event.id_event;
+    if (!id_event) {
+      alert('El evento no tiene un identificador válido');
+      return;
+    }
+
+    const payload = {
+      id_event,
+      id_tenant: user?.id_tenant,
+      id_trato: event.deal_id || null,
+      id_user: user?.id_user,
+    };
+
+    setDeleting(true);
+    try {
+      const response = await fetch('https://service.computeksa.com/webhook/api/events/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al eliminar evento');
+      }
+
+      // Ocultar de inmediato el evento eliminado para evitar confusión
+      setEvents(prev => prev.filter(e => (e as any).id !== id_event && (e as any).id_event !== id_event));
+
+      await fetchData();
+      setIsDetailModalOpen(false);
+      setShowDeleteConfirm(false);
+      setSelectedEventDetail(null);
+    } catch (error) {
+      console.error('Error deleting event', error);
+      alert(error instanceof Error ? error.message : 'Error al eliminar el evento');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const getEventChanges = () => {
+    if (!originalEventData) return [];
+    
+    const changes: string[] = [];
+    
+    // Comparar título
+    if (formData.title !== originalEventData.title) {
+      changes.push(`Título: "${originalEventData.title}" → "${formData.title}"`);
+    }
+    
+    // Comparar descripción
+    if (formData.description !== originalEventData.description) {
+      changes.push(`Descripción: ${originalEventData.description ? `"${originalEventData.description}"` : 'vacía'} → "${formData.description}"`);
+    }
+    
+    // Comparar fechas
+    if (formData.start !== originalEventData.start) {
+      const oldDate = new Date(originalEventData.start);
+      const newDate = new Date(formData.start);
+      changes.push(`Fecha inicio: ${oldDate.toLocaleString('es-ES')} → ${newDate.toLocaleString('es-ES')}`);
+    }
+    
+    if (formData.end !== originalEventData.end) {
+      const oldDate = new Date(originalEventData.end);
+      const newDate = new Date(formData.end);
+      changes.push(`Fecha fin: ${oldDate.toLocaleString('es-ES')} → ${newDate.toLocaleString('es-ES')}`);
+    }
+    
+    // Comparar ubicación
+    if (formData.location !== originalEventData.location) {
+      changes.push(`Ubicación: ${originalEventData.location || 'sin ubicación'} → ${formData.location || 'sin ubicación'}`);
+    }
+    
+    // Comparar todo el día
+    if (formData.is_all_day !== originalEventData.is_all_day) {
+      changes.push(`Todo el día: ${originalEventData.is_all_day ? 'Sí' : 'No'} → ${formData.is_all_day ? 'Sí' : 'No'}`);
+    }
+    
+    // Comparar asistentes
+    const oldEmails = originalEventData.attendees.map((a: any) => a.email).sort();
+    const newEmails = attendees.map((a: any) => a.email).sort();
+    
+    if (JSON.stringify(oldEmails) !== JSON.stringify(newEmails)) {
+      const added = newEmails.filter((e: string) => !oldEmails.includes(e));
+      const removed = oldEmails.filter((e: string) => !newEmails.includes(e));
+      
+      if (added.length > 0) {
+        changes.push(`Asistentes agregados: ${added.join(', ')}`);
+      }
+      if (removed.length > 0) {
+        changes.push(`Asistentes eliminados: ${removed.join(', ')}`);
+      }
+    }
+    
+    return changes;
+  };
+
+  const handleOpenEditModal = (event: any) => {
+    setEditingEventId(event.id);
+    
+    const eventAttendees = event.attendees && Array.isArray(event.attendees) 
+      ? event.attendees.map((att: any) => ({
+          email: att.email,
+          name: att.name || att.email,
+          type: att.email.includes('@') ? 'external' : 'user',
+          is_organizer: att.is_organizer || false
+        }))
+      : [];
+    
+    // Función para mantener la hora local sin convertir a UTC
+    const formatLocalDateTime = (dateString: string) => {
+      const date = new Date(dateString);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+    
+    const formDataValues = {
+      title: event.title,
+      description: event.description || '',
+      start: formatLocalDateTime(event.start),
+      end: formatLocalDateTime(event.end),
+      is_all_day: event.allDay || false,
+      location: event.location || '',
+      generate_meeting: false,
+      id_trato: event.deal_id || ''
+    };
+    
+    // Guardar datos originales para comparar después
+    setOriginalEventData({
+      ...formDataValues,
+      attendees: eventAttendees
+    });
+    
+    setFormData(formDataValues);
+    setAttendees(eventAttendees);
+    
+    setIsEditing(true);
+    setIsDetailModalOpen(false);
+    setIsModalOpen(true);
   };
 
   const upcomingEvents = getUpcomingEvents();
@@ -570,8 +867,25 @@ const Calendar: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl my-8">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <h2 className="text-lg font-bold text-slate-800">Nuevo Evento</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <h2 className="text-lg font-bold text-slate-800">{isEditing ? 'Editar Evento' : 'Nuevo Evento'}</h2>
+              <button onClick={() => {
+                setIsModalOpen(false);
+                if (isEditing) {
+                  setIsEditing(false);
+                  setEditingEventId(null);
+                  setFormData({
+                    title: '',
+                    description: '',
+                    start: '',
+                    end: '',
+                    is_all_day: false,
+                    location: '',
+                    generate_meeting: false,
+                    id_trato: ''
+                  });
+                  setAttendees([]);
+                }
+              }} className="text-slate-400 hover:text-slate-600">
                 <i className="fa-solid fa-times text-lg"></i>
               </button>
             </div>
@@ -824,24 +1138,39 @@ const Calendar: React.FC = () => {
                   <div className="mt-3 space-y-2">
                     {attendees.map((att, idx) => (
                       <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg">
-                        <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-2 flex-1">
                           <span className={`w-2 h-2 rounded-full ${
                             att.type === 'contact' ? 'bg-blue-500' :
                             att.type === 'user' ? 'bg-green-500' :
                             'bg-gray-500'
                           }`}></span>
-                          <div>
-                            <div className="text-sm font-medium text-slate-800">{att.name || att.email}</div>
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-slate-800 flex items-center gap-2">
+                              {att.name || att.email}
+                              {att.is_organizer && (
+                                <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-semibold">
+                                  <i className="fa-solid fa-crown mr-1"></i>
+                                  Organizador
+                                </span>
+                              )}
+                            </div>
                             {att.name && <div className="text-xs text-slate-500">{att.email}</div>}
                           </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeAttendee(att.email)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <i className="fa-solid fa-times"></i>
-                        </button>
+                        {!att.is_organizer ? (
+                          <button
+                            type="button"
+                            onClick={() => removeAttendee(att.email)}
+                            className="text-red-500 hover:text-red-700 transition-colors"
+                            title="Eliminar asistente"
+                          >
+                            <i className="fa-solid fa-times"></i>
+                          </button>
+                        ) : (
+                          <div className="text-slate-400 text-xs px-2" title="No puedes eliminar al organizador">
+                            <i className="fa-solid fa-lock"></i>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -862,7 +1191,7 @@ const Calendar: React.FC = () => {
                   className={`px-4 py-2 text-sm font-medium text-white bg-brand-600 hover:bg-brand-700 rounded-lg transition-colors shadow-sm flex items-center ${submitting ? 'opacity-70 cursor-wait' : ''}`}
                 >
                   {submitting && <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>}
-                  Guardar Evento
+                  {isEditing ? 'Actualizar Evento' : 'Guardar Evento'}
                 </button>
               </div>
 
@@ -1053,14 +1382,17 @@ const Calendar: React.FC = () => {
                                       </div>
                                     )}
                                     <div className="flex-1">
-                                      <div className="font-medium text-slate-800 flex items-center">
-                                        {attendee.email}
+                                      <div className="font-medium text-slate-800 flex items-center gap-2">
+                                        {attendee.name || attendee.email}
                                         {attendee.is_organizer && (
-                                          <span className="ml-2 text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
+                                          <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
                                             Organizador
                                           </span>
                                         )}
                                       </div>
+                                      {attendee.name && (
+                                        <div className="text-xs text-slate-500">{attendee.email}</div>
+                                      )}
                                       <div className={`text-xs ${status.color} flex items-center mt-1`}>
                                         <i className={`fa-solid fa-${status.icon} mr-1`}></i>
                                         {status.label}
@@ -1086,11 +1418,17 @@ const Calendar: React.FC = () => {
             {/* Footer */}
             <div className="px-6 py-4 border-t border-slate-100 flex justify-between items-center bg-slate-50">
               <div className="flex space-x-2">
-                <button className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors flex items-center">
+                <button 
+                  onClick={() => selectedEventDetail?.[0] && handleOpenEditModal(selectedEventDetail[0])}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors flex items-center"
+                >
                   <i className="fa-solid fa-edit mr-2"></i>
                   Editar
                 </button>
-                <button className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center">
+                <button 
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center border border-red-200"
+                >
                   <i className="fa-solid fa-trash mr-2"></i>
                   Eliminar
                 </button>
@@ -1101,6 +1439,101 @@ const Calendar: React.FC = () => {
               >
                 Cerrar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- DELETE CONFIRMATION MODAL --- */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-slate-100 bg-red-50 flex items-center">
+              <i className="fa-solid fa-triangle-exclamation text-red-600 mr-2"></i>
+              <h2 className="text-lg font-bold text-slate-800">¿Eliminar evento?</h2>
+            </div>
+            <div className="p-6 space-y-3 text-sm text-slate-700">
+              <p>Esta acción no se puede deshacer. Se eliminará el evento para todos los asistentes.</p>
+              <p className="text-slate-500">Confirma para continuar.</p>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-3 justify-end bg-slate-50">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                disabled={deleting}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleDeleteEvent}
+                disabled={deleting}
+                className={`px-4 py-2 text-sm font-medium rounded-lg flex items-center border ${deleting ? 'bg-red-100 text-red-400 border-red-200 cursor-not-allowed' : 'text-white bg-red-600 hover:bg-red-700 border-red-600'}`}
+              >
+                {deleting ? (
+                  <>
+                    <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>
+                    Eliminando...
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-trash mr-2"></i>
+                    Eliminar
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- CONFIRM CHANGES MODAL --- */}
+      {showConfirmChanges && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg">
+            <div className="px-6 py-4 border-b border-slate-100 bg-amber-50">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center">
+                <i className="fa-solid fa-exclamation-triangle text-amber-500 mr-2"></i>
+                Confirmar Cambios
+              </h2>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-slate-600 mb-4">
+                Se han detectado los siguientes cambios en el evento:
+              </p>
+              
+              <div className="bg-slate-50 rounded-lg p-4 mb-6 max-h-[300px] overflow-y-auto">
+                <ul className="space-y-2">
+                  {getEventChanges().map((change, idx) => (
+                    <li key={idx} className="flex items-start text-sm text-slate-700">
+                      <i className="fa-solid fa-arrow-right text-brand-500 mr-2 mt-1 flex-shrink-0"></i>
+                      <span>{change}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              
+              <p className="text-sm text-slate-500 mb-6">
+                ¿Estás seguro de que deseas guardar estos cambios?
+              </p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowConfirmChanges(false)}
+                  className="flex-1 py-2.5 px-4 border border-slate-300 rounded-lg text-slate-700 font-semibold hover:bg-slate-50 transition"
+                  disabled={submitting}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmUpdateEvent}
+                  className="flex-1 py-2.5 px-4 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-semibold transition flex items-center justify-center"
+                  disabled={submitting}
+                >
+                  {submitting && <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>}
+                  Confirmar Cambios
+                </button>
+              </div>
             </div>
           </div>
         </div>

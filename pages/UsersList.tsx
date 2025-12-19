@@ -105,20 +105,18 @@ const UsersList: React.FC = () => {
     setEditingUser({ 
       name_user: '', 
       email_user: '', 
-      password: '', 
       phone_user: '', 
       rol_user: 'usuario', 
       job_title: '',
       id_tenant: user.rol_user === 'superadmin' && tenants.length > 0 ? tenants[0]?.id_tenant : user.id_tenant,
-      status_user: 'Activo',
-      avatar_url: ''
+      status_user: 'Activo'
     });
     setIsEditMode(false);
     setIsModalOpen(true);
   };
 
   const handleEdit = (u: User) => {
-    setEditingUser({ ...u, password: '' });
+    setEditingUser(u);
     setIsEditMode(true);
     setIsModalOpen(true);
   };
@@ -167,15 +165,14 @@ const UsersList: React.FC = () => {
     const payload = {
         ...editingUser,
         id_tenant: editingUser.id_tenant || user.id_tenant,
-        id_current_user: user.id_user,
-        ...(isEditMode ? {} : { password: editingUser.password }),
+        id_current_user: user.id_user
     };
     
-    // Limpieza de datos nulos
+    // Convertir strings vacíos y undefined a null para que la BD los interprete como NULL
     const cleanedPayload = Object.fromEntries(
       Object.entries(payload).map(([key, value]) => [
         key,
-        (value === null || value === undefined || value === '') ? '__EMPTY__' : value
+        (value === null || value === undefined || value === '') ? null : value
       ])
     );
     
@@ -270,7 +267,7 @@ const UsersList: React.FC = () => {
                         <div className="flex items-center gap-4">
                           <img 
                             className="h-10 w-10 rounded-full object-cover border border-slate-200" 
-                            src={u.avatar_url || `https://ui-avatars.com/api/?name=${u.name_user}&background=random`} 
+                            src={u.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name_user)}&background=random&size=100`} 
                             alt="" 
                           />
                           <div>
@@ -411,14 +408,17 @@ const UsersList: React.FC = () => {
               
               {/* Sección Principal */}
               <div className="flex flex-col items-center mb-4">
-                  <div className="w-20 h-20 rounded-full bg-slate-100 border-2 border-dashed border-slate-300 flex items-center justify-center mb-2 overflow-hidden">
+                  <div className="w-20 h-20 rounded-full bg-slate-100 border-2 border-slate-300 flex items-center justify-center mb-2 overflow-hidden">
                       {editingUser.avatar_url ? (
                           <img src={editingUser.avatar_url} alt="" className="w-full h-full object-cover" />
                       ) : (
-                          <i className="fa-solid fa-user text-3xl text-slate-300"></i>
+                          <img 
+                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(editingUser.name_user || 'Usuario')}&background=random&size=128`} 
+                            alt="Avatar generado" 
+                            className="w-full h-full object-cover"
+                          />
                       )}
                   </div>
-                  <p className="text-xs text-slate-400">Avatar (Url automática)</p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -468,15 +468,6 @@ const UsersList: React.FC = () => {
                   <input type="text" name="phone_user" value={editingUser.phone_user || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="+593..." />
                 </div>
               </div>
-
-              {/* Password (Solo crear) */}
-              {!isEditMode && (
-                <div className="pt-2">
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Contraseña Inicial</label>
-                  <input type="password" name="password" required value={editingUser.password || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 bg-slate-50" placeholder="••••••••" />
-                  <p className="text-[10px] text-slate-400 mt-1">El usuario podrá cambiarla después.</p>
-                </div>
-              )}
 
               {/* Superadmin Tenant Selector */}
               {user?.rol_user === 'superadmin' && tenants.length > 0 && (

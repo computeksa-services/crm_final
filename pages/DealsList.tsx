@@ -343,12 +343,12 @@ const DealsList: React.FC = () => {
                 parseResponse(interestStatusesRes)
             ]);
 
-            setDeals(dealsData);
-            setCompanies(companiesData);
-            setContacts(contactsData);
-            setUsers(usersData);
-            setDealStatuses(statusesData);
-            setInterestStatuses(interestsData);
+            setDeals(Array.isArray(dealsData) ? dealsData : []);
+            setCompanies(Array.isArray(companiesData) ? companiesData : []);
+            setContacts(Array.isArray(contactsData) ? contactsData : []);
+            setUsers(Array.isArray(usersData) ? usersData : []);
+            setDealStatuses(Array.isArray(statusesData) ? statusesData : []);
+            setInterestStatuses(Array.isArray(interestsData) ? interestsData : []);
 
         } catch (e: any) {
             console.error("Error cargando datos:", e);
@@ -381,7 +381,7 @@ const DealsList: React.FC = () => {
 
     const processedDeals = useMemo(() => {
         // 1. Filtrar
-        let result = deals.filter(deal => {
+        let result = (Array.isArray(deals) ? deals : []).filter(deal => {
             const searchLower = searchTerm.toLowerCase();
             const matchesSearch =
                 (deal.nombre_trato || '').toLowerCase().includes(searchLower) ||

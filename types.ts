@@ -23,7 +23,6 @@ export interface User {
   id_tenant: string; // Foreign Key a Tenant
   name_user: string;
   email_user: string;
-  password?: string;
   phone_user?: string;
   rol_user: 'superadmin' | 'admin' | 'usuario';
   status_user: 'Activo' | 'Inactivo';
