@@ -75,7 +75,7 @@ const LoginPage: React.FC = () => {
     },
     flow: 'auth-code',
     // Scopes para Calendario y Gmail (además de los básicos)
-    scope: "openid profile email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.send"
+    scope: "openid profile email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify"
   });
 
   // --- 3. CONFIGURACIÓN MICROSOFT (POPUP MANUAL) ---
