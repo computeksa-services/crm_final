@@ -40,8 +40,15 @@ const NAV_GROUPS = [
 ];
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  // Estado para controlar sidebar en Desktop (contraído/expandido)
-  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(true);
+  // Estado para controlar sidebar en Desktop (contraído/expandido) - con persistencia en localStorage
+  const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(() => {
+    try {
+      const saved = localStorage.getItem('sidebar-desktop-open');
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
   // Estado para controlar sidebar en Móvil (abierto/cerrado)
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   // Estado para modal de confirmación de logout
@@ -53,6 +60,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const userRole = user?.rol_user || 'usuario';
+
+  // Guardar estado del sidebar en localStorage cuando cambia
+  useEffect(() => {
+    localStorage.setItem('sidebar-desktop-open', JSON.stringify(isDesktopSidebarOpen));
+  }, [isDesktopSidebarOpen]);
 
   useEffect(() => {
     if (!user?.id_tenant) {
@@ -154,7 +166,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <img src="/logo.png" alt="C" className="h-6 w-auto opacity-90"/>
               </div>
               <div className={`transition-all duration-300 ${!isDesktopSidebarOpen && 'md:opacity-0 md:w-0'}`}>
-                <span className="font-bold text-lg tracking-tight text-white block leading-none">COMPUTEKSA 360</span>
+                <span className="font-bold text-lg tracking-tight text-white block leading-none">CRM COMPUTEKSA</span>
                 <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">Workspace</span>
               </div>
            </div>

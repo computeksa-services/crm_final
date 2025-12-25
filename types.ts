@@ -279,6 +279,14 @@ export interface FinancialTransaction {
   created_by_name?: string;
   quote_number?: string;
   balance?: number; // total_value - paid_amount
+  balance_due?: number;
+  days_until_due?: number;
+  payment_status_code?: string;
+  payment_status_label?: string;
+  issue_date_input?: string;
+  due_date_input?: string;
+  payment_date_input?: string;
+  retention_date_input?: string;
 }
 
 // 10. QUOTE ITEMS (Artículos de la cotización)

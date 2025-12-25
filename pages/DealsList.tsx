@@ -956,10 +956,8 @@ const DealsList: React.FC = () => {
     };
 
     return (
+        <>
         <div className="w-full mx-auto px-2 md:px-4 lg:px-6 space-y-4 animate-fade-in pb-12">
-            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-            <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />
-
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
@@ -1146,7 +1144,11 @@ const DealsList: React.FC = () => {
                     </div>
                 </div>
             )}
-        </div>
+            </div>
+
+            {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+            <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />
+        </>
     );
 };
 

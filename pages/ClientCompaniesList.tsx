@@ -326,10 +326,8 @@ const ClientCompaniesList: React.FC = () => {
   };
 
   return (
+    <>
     <div className="max-w-7xl mx-auto space-y-6 animate-fade-in pb-12">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />
-
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -365,9 +363,10 @@ const ClientCompaniesList: React.FC = () => {
       <div className="flex justify-between items-center text-xs text-slate-400 px-2">
          <span>Mostrando {filteredCompanies.length} de {companies.length} empresas</span>
       </div>
+    </div>
 
-      {/* Create/Edit Modal */}
-      {isModalOpen && editingCompany && (
+    {/* Create/Edit Modal */}
+    {isModalOpen && editingCompany && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
@@ -461,7 +460,10 @@ const ClientCompaniesList: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
+
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />
+    </>
   );
 };
 

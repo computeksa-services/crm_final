@@ -1017,7 +1017,14 @@ deleteInterestStatus: async (id: string): Promise<void> => {
     quoteItems.push(newItem);
     return newItem;
   },
-  generatePDF: async (id:string) => quotes[0],
+  generatePDF: async (payload: { id_cotizacion: string; id_tenant: string; id_user: string }) => {
+    // Mock response similar to the expected API
+    return {
+      url_pdf: `https://example.com/pdf/${payload.id_cotizacion}.pdf`,
+      version: 1,
+      redirect_url: undefined,
+    } as any;
+  },
   sendQuote: async (id:string) => quotes[0],
   updateDecision: async (id: string, decision: UserDecision) => quotes[0]
 };

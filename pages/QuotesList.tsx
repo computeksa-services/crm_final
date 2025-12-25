@@ -6,213 +6,235 @@ import Toast from '../components/Toast';
 import ShareModal from '../components/ShareModal';
 import ConfirmModal from '../components/ConfirmModal';
 
-// InlineBadgeSelector Component
-interface InlineBadgeSelectorProps {
-  value: string;
-  valueId: string | number;
-  color?: string;
-  icon?: string;
-  items: { id: string | number; name: string; color?: string; icon?: string }[];
-  onSelect: (id: string | number) => void;
-}
-
-const InlineBadgeSelector: React.FC<InlineBadgeSelectorProps> = ({ value, valueId, color, icon, items, onSelect }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [dropdownCoords, setDropdownCoords] = useState({ top: 0, left: 0 });
-  const buttonRef = useRef<HTMLButtonElement>(null);
-
-  const handleOpen = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    
-    if (isOpen) {
-      setIsOpen(false);
-      return;
-    }
-
-    if (buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      const dropdownHeight = Math.min(items.length * 40, 280);
-      
-      const openUpwards = spaceBelow < dropdownHeight && spaceAbove > spaceBelow;
-      
-      setDropdownCoords({
-        top: openUpwards ? rect.top - dropdownHeight - 8 : rect.bottom + 8,
-        left: rect.left,
-      });
-      setIsOpen(true);
-    }
-  };
-
-  const handleSelect = (e: React.MouseEvent, id: string | number) => {
-    e.stopPropagation();
-    onSelect(id);
-    setIsOpen(false);
-  };
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (buttonRef.current && !buttonRef.current.contains(e.target as Node)) {
-        const dropdown = document.querySelector(`[data-dropdown-for="${valueId}"]`);
-        if (dropdown && !dropdown.contains(e.target as Node)) {
-          setIsOpen(false);
-        }
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen, valueId]);
-
-  const filteredItems = items.filter(item => item.id !== valueId);
-
-  return (
-    <div className="relative inline-block">
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={handleOpen}
-        className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold transition-all hover:shadow-md border"
-        style={{ 
-          backgroundColor: `${color || '#94a3b8'}20`, 
-          color: color || '#475569',
-          borderColor: `${color || '#94a3b8'}50`
-        }}
-      >
-        {icon && <i className={`${icon} mr-1.5`}></i>}
-        {value || 'Desconocido'}
-        <i className="fa-solid fa-chevron-down ml-1.5 text-[10px] opacity-60"></i>
-      </button>
-
-      {isOpen && (
-        <div
-          data-dropdown-for={valueId}
-          style={{
-            position: 'fixed',
-            top: `${dropdownCoords.top}px`,
-            left: `${dropdownCoords.left}px`,
-            zIndex: 9999,
-          }}
-          className="bg-white rounded-xl shadow-2xl border border-slate-200 py-2 min-w-[200px] max-h-[280px] overflow-y-auto"
-          onMouseLeave={() => setIsOpen(false)}
-        >
-          {filteredItems.length === 0 ? (
-            <div className="px-4 py-3 text-xs text-slate-400 text-center">No hay otras opciones</div>
-          ) : (
-            filteredItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={(e) => handleSelect(e, item.id)}
-                className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 transition-colors flex items-center gap-2"
-              >
-                <span
-                  className="inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold border"
-                  style={{ 
-                    backgroundColor: `${item.color || '#94a3b8'}20`, 
-                    color: item.color || '#475569',
-                    borderColor: `${item.color || '#94a3b8'}50`
-                  }}
-                >
-                  {item.icon && <i className={`${item.icon} mr-1.5`}></i>}
-                  {item.name}
-                </span>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
+// Tipo para el ordenamiento
+type SortConfig = {
+    key: keyof Quote | 'client_company_name' | 'owner_name' | 'estado_nombre';
+    direction: 'asc' | 'desc';
 };
 
-// StatusInterestFilter Component
-interface StatusFilterProps {
-  placeholder: string;
-  selectedId: string;
-  onChange: (val: string) => void;
-  items: { id: string; name: string; color?: string; icon?: string; count?: number }[];
-}
+// --- COMPONENTE INTERNO MEJORADO: Selector Inline con Posicionamiento Inteligente ---
+const InlineBadgeSelector: React.FC<{
+    valueId: string | number;
+    items: { id: string | number; name: string; color?: string; icon?: string }[];
+    onSelect: (id: string | number) => void;
+    disabled?: boolean;
+}> = ({ valueId, items, onSelect, disabled }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [coords, setCoords] = useState({ top: 0, left: 0, width: 224 });
+    const current = items.find(i => i.id === valueId);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const leaveTimeoutRef = useRef<number | null>(null);
 
-const StatusInterestFilter: React.FC<StatusFilterProps> = ({ placeholder, selectedId, onChange, items }) => {
-  const [open, setOpen] = useState(false);
-  const current = items.find(i => i.id === selectedId);
-  const containerRef = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleResize = () => setIsOpen(false);
+        window.addEventListener('resize', handleResize);
+        return () => {
+            window.removeEventListener('resize', handleResize);
+        };
+    }, [isOpen]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
+                buttonRef.current && !buttonRef.current.contains(e.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen]);
+
+    const handleOpen = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (disabled || !buttonRef.current) return;
+
+        if (isOpen) {
+            setIsOpen(false);
+            return;
+        }
+
+        const rect = buttonRef.current.getBoundingClientRect();
+        const dropdownHeight = Math.min(items.length * 36 + 10, 256);
+        const dropdownWidth = 224;
+
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const openUpwards = spaceBelow < dropdownHeight && rect.top > spaceBelow;
+        const top = openUpwards ? rect.top - dropdownHeight - 5 : rect.bottom + 5;
+
+        const spaceRight = window.innerWidth - rect.left;
+        let left = rect.left;
+        if (spaceRight < dropdownWidth) {
+            left = rect.right - dropdownWidth;
+        }
+
+        setCoords({ top, left, width: dropdownWidth });
+        setIsOpen(true);
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [open]);
 
-  return (
-    <div ref={containerRef} className="relative w-full md:w-auto md:min-w-[16rem] lg:min-w-[18rem] max-w-[26rem]" onMouseLeave={() => setOpen(false)}>
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg bg-white text-sm text-left flex items-center gap-2 hover:border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none"
-      >
-        {current ? (
-          <span
-            className="inline-flex items-center px-3 py-1 rounded-lg border text-xs font-bold"
-            style={{
-              backgroundColor: `${current.color || '#94a3b8'}20`,
-              color: current.color || '#475569',
-              borderColor: `${current.color || '#94a3b8'}50`
-            }}
-          >
-            {current.icon && <i className={`${current.icon} mr-1.5`}></i>}
-            {current.name}
-          </span>
-        ) : (
-          <span className="text-slate-500">{placeholder}</span>
-        )}
-        <span className="absolute right-3 top-2.5 text-slate-400 text-xs">
-          <i className="fa-solid fa-chevron-down"></i>
-        </span>
-      </button>
-
-      {open && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-auto">
-          <button
-            type="button"
-            onClick={() => { onChange(''); setOpen(false); }}
-            className="w-full text-left px-3 py-2 text-slate-600 hover:bg-slate-50 text-sm"
-          >
-            {placeholder}
-          </button>
-          <div className="border-t border-slate-100"></div>
-          {items.map(item => (
+    return (
+        <>
             <button
-              key={item.id}
-              type="button"
-              onClick={() => { onChange(item.id); setOpen(false); }}
-              className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center justify-between text-sm"
-            >
-              <span
-                className="inline-flex items-center px-3 py-1 rounded-lg border text-xs font-bold"
+                ref={buttonRef}
+                type="button"
+                onClick={handleOpen}
+                disabled={disabled}
+                className={`inline-flex items-center px-2 py-1 rounded-lg border text-[13px] font-bold whitespace-nowrap ${disabled ? 'cursor-not-allowed opacity-70' : 'hover:border-slate-300'}`}
                 style={{
-                  backgroundColor: `${item.color || '#94a3b8'}20`,
-                  color: item.color || '#475569',
-                  borderColor: `${item.color || '#94a3b8'}50`
+                    backgroundColor: `${current?.color || '#cccccc'}15`,
+                    color: current?.color || '#333333',
+                    borderColor: `${current?.color || '#cccccc'}40`
                 }}
-              >
-                {item.icon && <i className={`${item.icon} mr-1.5`}></i>}
-                {item.name}
-              </span>
-              {item.count !== undefined && <span className="text-xs text-slate-400 ml-2">({item.count})</span>}
+            >
+                {current?.icon && <i className={`${current.icon} mr-1.5`}></i>}
+                {current?.name || 'Seleccionar'}
+                {!disabled && <i className="fa-solid fa-chevron-down text-[10px] ml-1 text-slate-400"></i>}
             </button>
-          ))}
+
+            {isOpen && (
+                <div
+                    ref={dropdownRef}
+                    onMouseLeave={() => {
+                        leaveTimeoutRef.current = setTimeout(() => setIsOpen(false), 300);
+                    }}
+                    onMouseEnter={() => {
+                        if (leaveTimeoutRef.current) {
+                            clearTimeout(leaveTimeoutRef.current);
+                            leaveTimeoutRef.current = null;
+                        }
+                    }}
+                    className="fixed z-[9999] bg-white border border-slate-200 rounded-lg shadow-xl overflow-auto animate-fade-in"
+                    style={{
+                        top: coords.top,
+                        left: coords.left,
+                        width: coords.width,
+                        maxHeight: '256px'
+                    }}
+                >
+                    {items.filter(item => item.id !== valueId).map(item => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
+                            className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-sm border-b border-slate-50 last:border-0"
+                        >
+                            <span
+                                className="inline-flex items-center px-2 py-1 rounded-lg border text-[13px] font-bold"
+                                style={{
+                                    backgroundColor: `${item.color || '#cccccc'}15`,
+                                    color: item.color || '#333333',
+                                    borderColor: `${item.color || '#cccccc'}40`
+                                }}
+                            >
+                                {item.icon && <i className={`${item.icon} mr-1.5`}></i>}
+                                {item.name}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </>
+    );
+};
+
+// --- COMPONENTE INTERNO: Dropdown de Filtro Superior ---
+const StatusInterestFilter: React.FC<{
+    placeholder: string;
+    selectedId: string;
+    onChange: (val: string) => void;
+    items: { id: string; name: string; color?: string; icon?: string; count?: number }[];
+}> = ({ placeholder, selectedId, onChange, items }) => {
+    const [open, setOpen] = useState(false);
+    const current = items.find(i => i.id === selectedId);
+    const containerRef = useRef<HTMLDivElement>(null);
+    const leaveTimeoutRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        if (!open) return;
+        const handleClickOutside = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [open]);
+
+    const handleMouseLeave = () => {
+        leaveTimeoutRef.current = setTimeout(() => setOpen(false), 300);
+    };
+
+    const handleMouseEnter = () => {
+        if (leaveTimeoutRef.current) {
+            clearTimeout(leaveTimeoutRef.current);
+            leaveTimeoutRef.current = null;
+        }
+    };
+
+    return (
+        <div ref={containerRef} className="relative w-full md:w-auto md:min-w-[16rem] lg:min-w-[18rem] max-w-[26rem]" onMouseLeave={handleMouseLeave} onMouseEnter={handleMouseEnter}>
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg bg-white text-sm text-left flex items-center gap-2 hover:border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none"
+            >
+                {current ? (
+                    <span
+                        className="inline-flex items-center px-2 py-0.5 rounded-lg border text-[13px] font-bold"
+                        style={{
+                            backgroundColor: `${current.color || '#cccccc'}15`,
+                            color: current.color || '#333333',
+                            borderColor: `${current.color || '#cccccc'}40`
+                        }}
+                    >
+                        {current.icon && <i className={`${current.icon} mr-1.5`}></i>}
+                        {current.name}
+                    </span>
+                ) : (
+                    <span className="text-slate-500">{placeholder}</span>
+                )}
+                <span className="absolute right-3 top-2.5 text-slate-400 text-xs">
+                    <i className="fa-solid fa-chevron-down"></i>
+                </span>
+            </button>
+
+            {open && (
+                <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-auto">
+                    <button
+                        type="button"
+                        onClick={() => { onChange(''); setOpen(false); }}
+                        className="w-full text-left px-3 py-2 text-slate-600 hover:bg-slate-50 text-sm"
+                    >
+                        {placeholder}
+                    </button>
+                    <div className="border-t border-slate-100"></div>
+                    {items.map(item => (
+                        <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => { onChange(item.id); setOpen(false); }}
+                            className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center justify-between text-sm"
+                        >
+                            <span
+                                className="inline-flex items-center px-2 py-0.5 rounded-lg border text-[13px] font-bold"
+                                style={{
+                                    backgroundColor: `${item.color || '#cccccc'}15`,
+                                    color: item.color || '#333333',
+                                    borderColor: `${item.color || '#cccccc'}40`
+                                }}
+                            >
+                                {item.icon && <i className={`${item.icon} mr-1.5`}></i>}
+                                {item.name}
+                            </span>
+                            {item.count !== undefined && <span className="text-xs text-slate-400 ml-2">({item.count})</span>}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
-      )}
-    </div>
-  );
+    );
 };
 
 const QuotesList: React.FC = () => {
@@ -234,12 +256,13 @@ const QuotesList: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
-  // Filters State (New)
+  // Filters State
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [columnFilters, setColumnFilters] = useState<{[key: string]: string[]}>({});
   const [dateFilters, setDateFilters] = useState<{[key: string]: {start: string; end: string}}>({});
   const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'desc' });
 
   // Modals State
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -370,35 +393,47 @@ const QuotesList: React.FC = () => {
     }
   }, [editingQuote?.id_client_company, contacts]);
 
-  // Logic for Client-Side Filtering
-  const filteredQuotes = useMemo(() => {
-    return quotes.filter(quote => {
+  // --- MANEJO DE CLICKS FUERA DE FILTROS ---
+  useEffect(() => {
+    if (openFilterColumn === null) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-filter-column]')) {
+        setOpenFilterColumn(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [openFilterColumn]);
+
+  const requestSort = (key: SortConfig['key']) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  // Logic for Client-Side Filtering & Sorting
+  const filteredAndSortedQuotes = useMemo(() => {
+    // 1. Filtrar
+    let result = (Array.isArray(quotes) ? quotes : []).filter(quote => {
       const searchLower = searchTerm.toLowerCase();
-      const matchesSearch = 
+      const matchesSearch =
         (quote.formatted_no_cotizacion || '').toLowerCase().includes(searchLower) ||
         (quote.client_company_name || '').toLowerCase().includes(searchLower) ||
         (quote.nombre_cotizacion || '').toLowerCase().includes(searchLower) ||
         (quote.created_by_name || '').toLowerCase().includes(searchLower);
 
-      if (!matchesSearch) return false;
-
       const matchesStatus = statusFilter ? quote.id_quote_status?.toString() === statusFilter : true;
-      if (!matchesStatus) return false;
 
       const matchesColumnFilters = Object.entries(columnFilters).every(([col, values]) => {
         if (values.length === 0) return true;
-        if (col === 'estado_nombre') {
-          return values.includes(quote.estado_nombre || quote.estado || '');
-        }
-        if (col === 'client_company_name') {
-          return values.includes(quote.client_company_name || '');
-        }
-        if (col === 'owner_name') {
-          return values.includes(quote.created_by_name || '');
-        }
+        if (col === 'estado_nombre') return values.includes(quote.estado_nombre || quote.estado || '');
+        if (col === 'client_company_name') return values.includes(quote.client_company_name || '');
+        if (col === 'owner_name') return values.includes(quote.created_by_name || '');
         return true;
       });
-      if (!matchesColumnFilters) return false;
 
       const matchesDateFilters = Object.entries(dateFilters).every(([col, range]) => {
         if (!range.start && !range.end) return true;
@@ -420,11 +455,43 @@ const QuotesList: React.FC = () => {
         }
         return true;
       });
-      if (!matchesDateFilters) return false;
 
-      return true;
+      return matchesSearch && matchesStatus && matchesColumnFilters && matchesDateFilters;
     });
-  }, [quotes, searchTerm, statusFilter, columnFilters, dateFilters]);
+
+    // 2. Ordenar
+    result.sort((a, b) => {
+      let aValue = a[sortConfig.key as keyof Quote];
+      let bValue = b[sortConfig.key as keyof Quote];
+
+      if (sortConfig.key === 'client_company_name') {
+        aValue = a.client_company_name || '';
+        bValue = b.client_company_name || '';
+      } else if (sortConfig.key === 'owner_name') {
+        aValue = a.created_by_name || '';
+        bValue = b.created_by_name || '';
+      } else if (sortConfig.key === 'estado_nombre') {
+        aValue = a.estado_nombre || a.estado || '';
+        bValue = b.estado_nombre || b.estado || '';
+      }
+
+      if (aValue == null) return sortConfig.direction === 'asc' ? 1 : -1;
+      if (bValue == null) return sortConfig.direction === 'asc' ? -1 : 1;
+
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        const comparison = aValue.localeCompare(bValue);
+        return sortConfig.direction === 'asc' ? comparison : -comparison;
+      }
+
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+      }
+
+      return 0;
+    });
+
+    return result;
+  }, [quotes, searchTerm, statusFilter, columnFilters, dateFilters, sortConfig]);
 
   const handleRowClick = (id: string) => {
     navigate(`/quotes/${id}`);
@@ -507,6 +574,37 @@ const QuotesList: React.FC = () => {
     });
   };
 
+  const handleInlineUpdate = async (quote: Quote, updates: Partial<Quote>) => {
+    if (!user?.id_tenant || !user?.id_user) return;
+    const previousQuote = { ...quote };
+    setQuotes(prev => prev.map(q => q.id_cotizacion === quote.id_cotizacion ? { ...q, ...updates } : q));
+
+    try {
+      const payload = {
+        ...quote,
+        ...updates,
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+      };
+      const res = await fetch('/api/quotes/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('No se pudo actualizar');
+      setToast({ message: 'Cotización actualizada.', type: 'success' });
+    } catch (err) {
+      setQuotes(prev => prev.map(q => q.id_cotizacion === quote.id_cotizacion ? previousQuote : q));
+      setToast({ message: 'Error al actualizar.', type: 'error' });
+    }
+  };
+
+  // --- RENDERIZADO TABLA ---
+  const SortIcon = ({ column }: { column: string }) => {
+    if (sortConfig.key !== column) return <i className="fa-solid fa-sort text-slate-300 ml-1 text-xs"></i>;
+    return <i className={`fa-solid fa-sort-${sortConfig.direction === 'asc' ? 'up' : 'down'} text-brand-600 ml-1 text-xs`}></i>;
+  };
+
   const renderContent = () => {
     if (loading) {
       return (
@@ -539,7 +637,7 @@ const QuotesList: React.FC = () => {
       );
     }
 
-    if (filteredQuotes.length === 0) {
+    if (filteredAndSortedQuotes.length === 0) {
         return (
             <div className="p-12 text-center">
                 <i className="fa-solid fa-search text-3xl text-slate-200 mb-4"></i>
@@ -550,315 +648,229 @@ const QuotesList: React.FC = () => {
     }
 
     return (
-      <div className="overflow-x-auto min-h-[400px]">
-        <table className="w-full text-left border-collapse">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Detalle</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider relative overflow-visible">
-                <div className="flex items-center justify-between">
-                  <span>Cliente</span>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'client_company_name' ? null : 'client_company_name'); }}
-                    className={`ml-2 w-6 h-6 rounded flex items-center justify-center transition-all ${
-                      (columnFilters.client_company_name || []).length > 0 ? 'bg-brand-500 text-white' : 'hover:bg-slate-200 text-slate-400'
-                    }`}
-                  >
-                    <i className="fa-solid fa-filter text-[10px]"></i>
-                  </button>
-                </div>
-                {openFilterColumn === 'client_company_name' && (
-                  <div
-                    ref={(el) => adjustDropdownPosition(el)}
-                    className="bg-white rounded-xl shadow-2xl border border-slate-200 py-2 min-w-[220px] max-h-[280px] overflow-y-auto"
-                    onMouseLeave={() => setOpenFilterColumn(null)}
-                  >
-                    {getUniqueValues('client_company_name').map((val) => (
-                      <label key={val.value} className="flex items-center px-4 py-2 hover:bg-slate-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={(columnFilters.client_company_name || []).includes(val.value)}
-                          onChange={() => toggleColumnFilter('client_company_name', val.value)}
-                          className="mr-3 w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500"
-                        />
-                        <span className="text-sm text-slate-700 flex-1">{val.label}</span>
-                        <span className="text-xs text-slate-400">({val.count})</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider relative overflow-visible">
-                <div className="flex items-center justify-between">
-                  <span>Fecha</span>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'fecha_emision' ? null : 'fecha_emision'); }}
-                    className={`ml-2 w-6 h-6 rounded flex items-center justify-center transition-all ${
-                      (dateFilters.fecha_emision?.start || dateFilters.fecha_emision?.end) ? 'bg-brand-500 text-white' : 'hover:bg-slate-200 text-slate-400'
-                    }`}
-                  >
-                    <i className="fa-solid fa-calendar-days text-[10px]"></i>
-                  </button>
-                </div>
-                {openFilterColumn === 'fecha_emision' && (
-                  <div
-                    ref={(el) => adjustDropdownPosition(el)}
-                    className="bg-white rounded-xl shadow-2xl border border-slate-200 p-4 min-w-[240px]"
-                    onMouseLeave={() => setOpenFilterColumn(null)}
-                  >
-                    <div className="space-y-3">
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">Desde</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="date"
-                            value={dateFilters.fecha_emision?.start || ''}
-                            onChange={(e) => updateDateFilter('fecha_emision', 'start', e.target.value)}
-                            className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm"
-                          />
-                          {dateFilters.fecha_emision?.start && (
-                            <button
-                              type="button"
-                              onClick={() => clearDateFilter('fecha_emision', 'start')}
-                              className="w-7 h-7 rounded flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50"
-                            >
-                              <i className="fa-solid fa-times text-xs"></i>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1">Hasta</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="date"
-                            value={dateFilters.fecha_emision?.end || ''}
-                            onChange={(e) => updateDateFilter('fecha_emision', 'end', e.target.value)}
-                            className="flex-1 px-2 py-1.5 border border-slate-200 rounded-lg text-sm"
-                          />
-                          {dateFilters.fecha_emision?.end && (
-                            <button
-                              type="button"
-                              onClick={() => clearDateFilter('fecha_emision', 'end')}
-                              className="w-7 h-7 rounded flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50"
-                            >
-                              <i className="fa-solid fa-times text-xs"></i>
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider relative overflow-visible">
-                <div className="flex items-center justify-between">
-                  <span>Owner</span>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'owner_name' ? null : 'owner_name'); }}
-                    className={`ml-2 w-6 h-6 rounded flex items-center justify-center transition-all ${
-                      (columnFilters.owner_name || []).length > 0 ? 'bg-brand-500 text-white' : 'hover:bg-slate-200 text-slate-400'
-                    }`}
-                  >
-                    <i className="fa-solid fa-filter text-[10px]"></i>
-                  </button>
-                </div>
-                {openFilterColumn === 'owner_name' && (
-                  <div
-                    ref={(el) => adjustDropdownPosition(el)}
-                    className="bg-white rounded-xl shadow-2xl border border-slate-200 py-2 min-w-[220px] max-h-[280px] overflow-y-auto"
-                    onMouseLeave={() => setOpenFilterColumn(null)}
-                  >
-                    {getUniqueValues('owner_name').map((val) => (
-                      <label key={val.value} className="flex items-center px-4 py-2 hover:bg-slate-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={(columnFilters.owner_name || []).includes(val.value)}
-                          onChange={() => toggleColumnFilter('owner_name', val.value)}
-                          className="mr-3 w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500"
-                        />
-                        <span className="text-sm text-slate-700 flex-1">{val.label}</span>
-                        <span className="text-xs text-slate-400">({val.count})</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider relative overflow-visible">
-                <div className="flex items-center justify-between">
-                  <span>Estado</span>
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'estado_nombre' ? null : 'estado_nombre'); }}
-                    className={`ml-2 w-6 h-6 rounded flex items-center justify-center transition-all ${
-                      (columnFilters.estado_nombre || []).length > 0 ? 'bg-brand-500 text-white' : 'hover:bg-slate-200 text-slate-400'
-                    }`}
-                  >
-                    <i className="fa-solid fa-filter text-[10px]"></i>
-                  </button>
-                </div>
-                {openFilterColumn === 'estado_nombre' && (
-                  <div
-                    ref={(el) => adjustDropdownPosition(el)}
-                    className="bg-white rounded-xl shadow-2xl border border-slate-200 py-2 min-w-[220px] max-h-[280px] overflow-y-auto"
-                    onMouseLeave={() => setOpenFilterColumn(null)}
-                  >
-                    {getUniqueValues('estado_nombre').map((val) => (
-                      <label key={val.value} className="flex items-center px-4 py-2 hover:bg-slate-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={(columnFilters.estado_nombre || []).includes(val.value)}
-                          onChange={() => toggleColumnFilter('estado_nombre', val.value)}
-                          className="mr-3 w-4 h-4 text-brand-600 border-slate-300 rounded focus:ring-brand-500"
-                        />
-                        <span className="text-sm text-slate-700 flex-1">{val.label}</span>
-                        <span className="text-xs text-slate-400">({val.count})</span>
-                      </label>
-                    ))}
-                  </div>
-                )}
-              </th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Total</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {filteredQuotes.map((quote) => (
-              <tr 
-                key={quote.id_cotizacion} 
-                onClick={() => handleRowClick(quote.id_cotizacion)}
-                className="hover:bg-slate-50/80 transition-all cursor-pointer group"
-              >
-                <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                        <span className="font-bold text-brand-600 text-sm hover:underline flex items-center gap-1">
-                            #{quote.formatted_no_cotizacion || '---'}
-                            {quote.is_private && <i className="fa-solid fa-lock text-[10px] text-amber-500" title="Privado"></i>}
-                        </span>
-                        <span className="text-slate-700 font-medium text-sm mt-0.5 truncate max-w-[220px]">
-                            {quote.nombre_cotizacion || 'Sin Nombre'}
-                        </span>
-                    </div>
-                </td>
-                <td className="px-6 py-4">
-                    <div className="flex items-center">
-                        <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center mr-3 text-xs shrink-0">
-                             <i className="fa-solid fa-building"></i>
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-sm font-medium text-slate-700 truncate max-w-[200px]">{quote.client_company_name || 'N/A'}</span>
-                            <span className="text-xs text-slate-400 truncate max-w-[200px]">{quote.contact_full_name || quote.contact_name}</span>
-                        </div>
-                    </div>
-                </td>
-                <td className="px-6 py-4 text-slate-500 text-sm">
-                    {quote.fecha_emision_fmt || new Date(quote.fecha_emision).toLocaleDateString()}
-                </td>
-                <td className="px-6 py-4 text-sm text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs border border-slate-200">
-                      <i className="fa-solid fa-user"></i>
-                    </div>
-                    <div className="flex flex-col">
-                      <span className="font-medium text-slate-700 truncate max-w-[160px]">{quote.created_by_name || 'Sin asignar'}</span>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  {quote.access_level === 'EDIT' ? (
-                    <InlineBadgeSelector
-                      value={quote.estado_nombre || quote.estado || 'Desconocido'}
-                      valueId={quote.id_quote_status || 0}
-                      color={quote.estado_color}
-                      icon={quote.estado_icon}
-                      items={quoteStatuses.map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon }))}
-                      onSelect={async (id) => {
-                        if (!user?.id_tenant || !user?.id_user) return;
-                        try {
-                          const response = await fetch('/api/quotes/update', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                              id_cotizacion: quote.id_cotizacion,
-                              id_quote_status: id,
-                              id_tenant: user.id_tenant,
-                              id_user: user.id_user,
-                            }),
-                          });
-                          if (!response.ok) throw new Error('Error al actualizar estado');
-                          await fetchData();
-                          setToast({ message: 'Estado actualizado.', type: 'success' });
-                        } catch (error) {
-                          setToast({ message: 'Error al actualizar estado.', type: 'error' });
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span 
-                      className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border"
-                      style={{ 
-                          backgroundColor: `${quote.estado_color || '#cccccc'}15`, 
-                          color: quote.estado_color || '#333',
-                          borderColor: `${quote.estado_color || '#cccccc'}40`
-                      }}
-                    >
-                      {quote.estado_icon && <i className={`${quote.estado_icon} mr-1.5`}></i>}
-                      {quote.estado_nombre || quote.estado || 'Desconocido'}
-                    </span>
-                  )}
-                </td>
-                <td className="px-6 py-4 text-right">
-                    <span className="font-bold text-slate-700">{quote.total}</span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center justify-start space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      {quote.access_level === 'EDIT' && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleEdit(quote); }}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                          title="Editar"
-                        >
-                          <i className="fa-solid fa-pen-to-square"></i>
-                        </button>
-                      )}
-                      {quote.access_level === 'EDIT' && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setShareQuoteId(quote.id_cotizacion); setIsShareOpen(true); }}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
-                          title="Compartir"
-                        >
-                          <i className="fa-solid fa-user-plus"></i>
-                        </button>
-                      )}
-                      {quote.access_level === 'EDIT' && (
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleDeleteQuote(quote.id_cotizacion); }}
-                          className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                          title="Eliminar"
-                        >
-                          <i className="fa-solid fa-trash"></i>
-                        </button>
-                      )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+        <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse" style={{ minWidth: '1200px' }}>
+                <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-bold tracking-wider sticky top-0 z-10">
+                    <tr>
+                        <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors min-w-[40px]" onClick={() => requestSort('formatted_no_cotizacion')}>
+                            Nro. <SortIcon column="formatted_no_cotizacion" />
+                        </th>
+                        <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('nombre_cotizacion')}>
+                            Nombre <SortIcon column="nombre_cotizacion" />
+                        </th>
+                        <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('client_company_name')}>
+                            Cliente <SortIcon column="client_company_name" />
+                        </th>
+                        <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors text-right" onClick={() => requestSort('total')}>
+                            Total <SortIcon column="total" />
+                        </th>
+                        <th data-filter-column="estado_nombre" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-1 cursor-pointer" onClick={() => requestSort('estado_nombre')}>
+                                    Estado <SortIcon column="estado_nombre" />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'estado_nombre' ? null : 'estado_nombre'); }}
+                                    className={`p-1 rounded hover:bg-slate-200 transition-colors ${(columnFilters['estado_nombre'] || []).length > 0 ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
+                                    title="Filtrar por Estado"
+                                >
+                                    <i className="fa-solid fa-filter text-xs"></i>
+                                </button>
+                            </div>
+                            {openFilterColumn === 'estado_nombre' && (
+                                <div
+                                    className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-lg w-64 max-h-64 overflow-auto z-50"
+                                    onMouseLeave={() => setOpenFilterColumn(null)}
+                                >
+                                    {getUniqueValues('estado_nombre').map(val => (
+                                        <label key={val.value} className="px-3 py-2 hover:bg-slate-50 flex items-center gap-2 cursor-pointer text-sm text-slate-600 border-b border-slate-100 last:border-b-0">
+                                            <input type="checkbox" checked={(columnFilters['estado_nombre'] || []).includes(val.value)} onChange={() => toggleColumnFilter('estado_nombre', val.value)} className="w-4 h-4" />
+                                            <span className="flex-1">{val.label}</span>
+                                            <span className="text-xs text-slate-400">({val.count})</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </th>
+                        <th data-filter-column="owner_name" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-1 cursor-pointer" onClick={() => requestSort('created_by_name')}>
+                                    Owner <SortIcon column="owner_name" />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'owner_name' ? null : 'owner_name'); }}
+                                    className={`p-1 rounded hover:bg-slate-200 transition-colors ${(columnFilters['owner_name'] || []).length > 0 ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
+                                    title="Filtrar por Owner"
+                                >
+                                    <i className="fa-solid fa-filter text-xs"></i>
+                                </button>
+                            </div>
+                            {openFilterColumn === 'owner_name' && (
+                                <div
+                                    className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-lg w-64 max-h-64 overflow-auto z-50"
+                                    onMouseLeave={() => setOpenFilterColumn(null)}
+                                >
+                                    {getUniqueValues('owner_name').map(val => (
+                                        <label key={val.value} className="px-3 py-2 hover:bg-slate-50 flex items-center gap-2 cursor-pointer text-sm text-slate-600 border-b border-slate-100 last:border-b-0">
+                                            <input type="checkbox" checked={(columnFilters['owner_name'] || []).includes(val.value)} onChange={() => toggleColumnFilter('owner_name', val.value)} className="w-4 h-4" />
+                                            <span className="flex-1">{val.label}</span>
+                                            <span className="text-xs text-slate-400">({val.count})</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </th>
+                        <th data-filter-column="fecha_emision" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                            <div className="flex items-center gap-2">
+                                <div className="flex-1 cursor-pointer" onClick={() => requestSort('fecha_emision')}>
+                                    Fecha <SortIcon column="fecha_emision" />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'fecha_emision' ? null : 'fecha_emision'); }}
+                                    className={`p-1 rounded hover:bg-slate-200 transition-colors ${(dateFilters['fecha_emision']?.start || dateFilters['fecha_emision']?.end) ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
+                                    title="Filtrar por fecha"
+                                >
+                                    <i className="fa-solid fa-calendar text-xs"></i>
+                                </button>
+                            </div>
+                            {openFilterColumn === 'fecha_emision' && (
+                                <div
+                                    className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-lg p-3 w-64 z-50"
+                                    onMouseLeave={() => setOpenFilterColumn(null)}
+                                >
+                                    <div className="space-y-2">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-1">Desde</label>
+                                            <input type="date" value={dateFilters['fecha_emision']?.start || ''} onChange={(e) => updateDateFilter('fecha_emision', 'start', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-1">Hasta</label>
+                                            <input type="date" value={dateFilters['fecha_emision']?.end || ''} onChange={(e) => updateDateFilter('fecha_emision', 'end', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
+                                        </div>
+                                        {(dateFilters['fecha_emision']?.start || dateFilters['fecha_emision']?.end) && (
+                                            <button type="button" onClick={() => clearDateFilter('fecha_emision')} className="w-full px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded border border-red-200 transition-colors">
+                                                <i className="fa-solid fa-times mr-1"></i> Limpiar filtro
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </th>
+                        <th className="px-2 py-3 text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white" style={{ minHeight: '400px' }}>
+                    {filteredAndSortedQuotes.length === 0 ? (
+                        <tr>
+                            <td colSpan={9} className="px-4 py-12 text-center text-slate-500" style={{ minHeight: '400px' }}>
+                                <i className="fa-solid fa-filter text-2xl mb-2 block text-slate-300"></i>
+                                No hay resultados para los filtros aplicados.
+                            </td>
+                        </tr>
+                    ) : (
+                        <>
+                        {filteredAndSortedQuotes.map((quote) => (
+                            <tr key={quote.id_cotizacion} onClick={() => handleRowClick(quote.id_cotizacion)} className="hover:bg-slate-50/80 transition-all cursor-pointer group">
+                                <td className="px-2 sm:px-4 py-2 align-top">
+                                    <div className="flex flex-col whitespace-normal break-words">
+                                        <span className="font-bold text-brand-600 text-sm hover:underline">#{quote.formatted_no_cotizacion || '---'}</span>
+                                    </div>
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 align-top">
+                                    <div className="flex flex-col whitespace-normal break-words">
+                                        <span className="text-sm font-bold text-slate-700">{quote.nombre_cotizacion || 'Sin Nombre'}</span>
+                                    </div>
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 align-top">
+                                    <div className="flex flex-col whitespace-normal">
+                                        <div className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                                            <i className="fa-solid fa-building text-slate-400 text-xs"></i>
+                                            {quote.client_company_name}
+                                        </div>
+                                        <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                                            <i className="fa-solid fa-user text-slate-400 text-xs"></i>
+                                            <span>{quote.contact_full_name || quote.contact_name}</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-2 sm:px-4 py-2 text-right">
+                                    <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded text-sm">
+                                        {quote.total}
+                                    </span>
+                                </td>
+                                <td className="px-2 sm:px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                                    <InlineBadgeSelector
+                                        valueId={quote.id_quote_status || 0}
+                                        items={quoteStatuses.map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon }))}
+                                        disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                                        onSelect={(id) => {
+                                            if (id === quote.id_quote_status) return;
+                                            const st = quoteStatuses.find(s => s.id_status === id);
+                                            handleInlineUpdate(quote, {
+                                                id_quote_status: id,
+                                                estado_nombre: st?.name,
+                                                estado_color: st?.color,
+                                                estado_icon: st?.icon,
+                                            });
+                                        }}
+                                    />
+                                </td>
+                                <td className="px-2 sm:px-4 py-2">
+                                    <div className="flex items-center gap-2">
+                                        <img
+                                            src={`https://ui-avatars.com/api/?name=${quote.created_by_name || 'User'}&background=random`}
+                                            alt="Owner"
+                                            className="w-8 h-8 rounded-full border-2 border-white shadow-sm object-cover"
+                                        />
+                                        <span className="text-xs text-slate-600 whitespace-nowrap">{quote.created_by_name}</span>
+                                    </div>
+                                </td>
+                                <td className="px-2 sm:px-4 py-2">
+                                    <div className="text-xs text-slate-600 whitespace-nowrap">
+                                        <i className="fa-regular fa-calendar-plus text-slate-400 mr-1.5"></i>
+                                        {quote.fecha_emision_fmt || (quote.fecha_emision ? new Date(quote.fecha_emision).toLocaleDateString() : 'N/A')}
+                                    </div>
+                                </td>
+                                <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                                    <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                        {(quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
+                                            <>
+                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(quote); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Editar">
+                                                    <i className="fa-solid fa-pen-to-square text-xs"></i>
+                                                </button>
+                                                <button onClick={(e) => { e.stopPropagation(); setShareQuoteId(quote.id_cotizacion); setIsShareOpen(true); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Compartir">
+                                                    <i className="fa-solid fa-user-plus text-xs"></i>
+                                                </button>
+                                            </>
+                                        )}
+                                        {(quote.created_by === user?.id_user || user?.rol_user === 'admin') && (
+                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteQuote(quote.id_cotizacion); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
+                                                <i className="fa-solid fa-trash-can text-xs"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                        {filteredAndSortedQuotes.length < 6 && Array.from({ length: 6 - filteredAndSortedQuotes.length }).map((_, i) => (
+                            <tr key={`empty-${i}`} style={{ height: '60px' }}>
+                                <td colSpan={9}></td>
+                            </tr>
+                        ))}
+                        </>
+                    )}
+                </tbody>
+            </table>
+        </div>
     );
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 animate-fade-in pb-10">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      
+    <>
+    <div className="w-full mx-auto px-2 md:px-4 lg:px-6 space-y-4 animate-fade-in pb-12">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -870,41 +882,35 @@ const QuotesList: React.FC = () => {
         </Link>
       </div>
 
-      {/* Filters & Actions Bar */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center gap-3 md:gap-4 items-start justify-start flex-wrap">
-         <div className="relative w-full md:w-96">
+      {/* Filters Bar */}
+      <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex flex-col md:flex-row md:flex-wrap gap-3 items-center">
+        <div className="relative w-full md:flex-1 min-w-[260px]">
             <span className="absolute left-3 top-2.5 text-slate-400">
                 <i className="fa-solid fa-magnifying-glass"></i>
             </span>
-            <input 
-                type="text"
-                placeholder="Buscar por cliente, cotización..." 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-sm"
-            />
-         </div>
-         
-         <div className="flex items-center gap-2 w-full md:w-auto">
-             <StatusInterestFilter
-               placeholder="Todos los Estados"
-               selectedId={statusFilter}
-               onChange={setStatusFilter}
-               items={quoteStatuses.map(s => {
-                 const count = quotes.filter(q => q.id_quote_status?.toString() === s.id_status.toString()).length;
-                 return { id: s.id_status.toString(), name: s.name, color: s.color, icon: s.icon, count };
-               })}
-             />
-             {hasActiveFilters && (
-               <button
-                 onClick={clearAllFilters}
-                 className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium transition-all flex items-center"
-               >
-                 <i className="fa-solid fa-rotate-left mr-2 text-xs"></i>
-                 Restablecer
-               </button>
-             )}
-         </div>
+          <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-sm" />
+        </div>
+        <div className="flex items-center gap-2 w-full md:flex-1 flex-wrap justify-end">
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="p-2.5 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+              title="Quitar filtros"
+            >
+              <i className="fa-solid fa-filter-circle-xmark text-base"></i>
+            </button>
+          )}
+          <StatusInterestFilter
+            placeholder="Todos los Estados"
+            selectedId={statusFilter}
+            onChange={setStatusFilter}
+            items={quoteStatuses.map(s => {
+              const count = quotes.filter(q => q.id_quote_status?.toString() === s.id_status.toString()).length;
+              return { id: s.id_status.toString(), name: s.name, color: s.color, icon: s.icon, count };
+            })}
+          />
+        </div>
       </div>
 
       {/* Table Container aligned with DealsList */}
@@ -912,19 +918,20 @@ const QuotesList: React.FC = () => {
         <div style={{ maxHeight: 'calc(100vh - 300px)', minHeight: '350px', overflowY: 'auto', overflowX: 'hidden' }}>
           {renderContent()}
         </div>
-        {filteredQuotes.length > 0 && (
+        {filteredAndSortedQuotes.length > 0 && (
           <div className="px-4 py-4 text-xs text-slate-500 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
-            <span>Mostrando <span className="font-semibold text-slate-700">{filteredQuotes.length}</span> de <span className="font-semibold text-slate-700">{quotes.length}</span> registros</span>
-            <span className="text-lg font-bold text-brand-700">Total: ${filteredQuotes.reduce((sum, q) => {
+            <span>Mostrando <span className="font-semibold text-slate-700">{filteredAndSortedQuotes.length}</span> de <span className="font-semibold text-slate-700">{quotes.length}</span> registros</span>
+            <span className="text-lg font-bold text-brand-700">Total: ${filteredAndSortedQuotes.reduce((sum, q) => {
               const val = typeof q.total === 'string' ? parseFloat((q.total as string).replace(/[^0-9.-]+/g, '')) : (q.total as number);
               return sum + (isNaN(val as number) ? 0 : (val as number));
             }, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
           </div>
         )}
       </div>
+    </div>
 
-      {/* Edit Modal */}
-      {isModalOpen && editingQuote && (
+    {/* Edit Modal */}
+    {isModalOpen && editingQuote && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
@@ -1037,7 +1044,9 @@ const QuotesList: React.FC = () => {
           excludeUserIds={user ? [user.id_user] : []}
         />
       )}
-    </div>
+
+    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+    </>
   );
 };
 

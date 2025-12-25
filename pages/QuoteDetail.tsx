@@ -11,11 +11,23 @@ const QuoteDetail: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  type PdfVersion = {
+    id_version: string;
+    file_url: string;
+    version_number: number;
+    created_at: string;
+    generado_por: string;
+    avatar_url?: string;
+  };
+
   // --- ESTADOS ---
   const [quote, setQuote] = useState<Quote | null>(null);
   const [items, setItems] = useState<QuoteItem[]>([]);
   const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]);
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
+  const [pdfVersions, setPdfVersions] = useState<PdfVersion[]>([]);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   // Estados de UI
   const [loading, setLoading] = useState(true);
@@ -118,6 +130,26 @@ const QuoteDetail: React.FC = () => {
     fetchData();
   }, [fetchData]);
   
+    const fetchPdfVersions = useCallback(async () => {
+      if (!quote?.id_cotizacion || !user?.id_tenant || !user?.id_user) return;
+      setPdfLoading(true);
+      setPdfError(null);
+      try {
+        const res = await fetch(`/api/quotes/files?id_cotizacion=${quote.id_cotizacion}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        if (!res.ok) throw new Error('Error al obtener PDFs');
+        const data = await res.json();
+        setPdfVersions(Array.isArray(data) ? data : []);
+      } catch (e: any) {
+        setPdfError(e?.message || 'Error al obtener PDFs');
+        setPdfVersions([]);
+      } finally {
+        setPdfLoading(false);
+      }
+    }, [quote?.id_cotizacion, user?.id_tenant, user?.id_user]);
+
+    useEffect(() => {
+      fetchPdfVersions();
+    }, [fetchPdfVersions]);
   // Activar modo edición si viene por URL
   useEffect(() => {
     try {
@@ -301,51 +333,65 @@ const QuoteDetail: React.FC = () => {
   };
 
 const handleGeneratePDF = async () => {
-    if (!quote || !user) return;
+    if (!quote || !user?.id_user || !user?.id_tenant) {
+      setToast({ message: 'Faltan datos de usuario o cotización.', type: 'error' });
+      return;
+    }
+
     setProcessing(true);
     try {
-      // 1. Llamar al Webhook de n8n
-      const response = await fetch(`https://service.computeksa.com/webhook/api/quotes/generate-pdf`, { // URL inventada para el ejemplo
+      const payload = {
+        id_cotizacion: quote.id_cotizacion,
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+      };
+
+      const response = await fetch('/api/quotes/generate-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-            id_cotizacion: quote.id_cotizacion, 
-            id_tenant: user.id_tenant,
-            version_actual: quote.version 
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) throw new Error('Error al generar PDF.');
-      
-      const data = await response.json(); // Esperamos { url_pdf: "https://...", version: 1 }
 
-      // 2. Actualizar estado local
-      setQuote(prev => prev ? ({ 
-          ...prev, 
-          file_generado: data.url_pdf,
-          version: data.version
-      }) : null);
+      const data = await response.json();
+
+      const redirectUrl = data?.redirect_url || data?.redirect;
+      const pdfUrl = data?.url_pdf || data?.pdf_url || data?.url || data?.link;
+
+      if (redirectUrl) {
+        window.location.assign(redirectUrl);
+      } else if (pdfUrl) {
+        window.open(pdfUrl, '_blank');
+      }
+
+      // Refrescar datos locales (cotización y versiones) después de generar
+      await Promise.all([
+        fetchData(),
+        fetchPdfVersions(),
+      ]);
 
       setToast({ message: 'PDF generado con éxito.', type: 'success' });
-      
-      // Opcional: Abrir en nueva pestaña automáticamente
-      window.open(data.url_pdf, '_blank');
-
     } catch (e: any) {
-      setToast({ message: 'Error al generar el PDF.', type: 'error' });
+      setToast({ message: e?.message || 'Error al generar el PDF.', type: 'error' });
     } finally {
       setProcessing(false);
     }
   };
 
-  const handleSendQuote = async () => {
-    if (!quote || !user?.id_tenant || !user?.id_user) return;
+  const handleSendQuote = async (id_version?: string) => {
+    if (!quote || !user?.id_user) return;
     setProcessing(true);
     try {
-      const response = await fetch(`/api/quotes/${quote.id_cotizacion}/send`, {
+      const response = await fetch('/api/quotes/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_tenant: user.id_tenant, id_user: user.id_user }),
+        body: JSON.stringify({
+          id_cotizacion: quote.id_cotizacion,
+          id_user: user.id_user,
+          id_version: id_version || null,
+          id_trato: quote.id_trato || null,
+        }),
       });
       if (!response.ok) throw new Error('Error al enviar cotización.');
       
@@ -411,7 +457,7 @@ const handleGeneratePDF = async () => {
   const isReady = quote.estado === 'LISTO PARA ENVIAR';
   const isSent = quote.estado_decision !== UserDecision.PENDING;
   
-  const showGenerateBtn = hasItems && (isPending || !quote.file_generado);
+  const showGenerateBtn = hasItems;
   const showSendBtn = isReady; 
 
   return (
@@ -494,22 +540,6 @@ const handleGeneratePDF = async () => {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex-1">
            <div className="flex items-center gap-3 mb-2">
-             <button onClick={() => navigate('/quotes')} className="text-slate-400 hover:text-brand-600 transition-colors p-1">
-               <i className="fa-solid fa-arrow-left text-lg"></i>
-             </button>
-             
-             {/* Status Badge */}
-             <span 
-               className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border"
-               style={{ 
-                   backgroundColor: `${quote.estado_color || '#cccccc'}15`, 
-                   color: quote.estado_color || '#333',
-                   borderColor: `${quote.estado_color || '#cccccc'}40`
-                }}
-             >
-               {quote.estado_icon && <i className={`${quote.estado_icon} mr-1.5`}></i>}
-               {quote.estado_nombre || quote.estado}
-             </span>
              {quote.is_private && (
                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200 flex items-center">
                      <i className="fa-solid fa-lock mr-1 text-[10px]"></i> Privado
@@ -561,19 +591,55 @@ const handleGeneratePDF = async () => {
         
         <div className="flex flex-wrap items-center gap-3 justify-end">
            
-           {showGenerateBtn && (
-             <button 
-               onClick={handleGeneratePDF}
-               disabled={processing}
-               className="bg-white border border-slate-200 hover:border-indigo-500 text-slate-700 hover:text-indigo-600 px-4 py-2.5 rounded-xl shadow-sm hover:shadow-md font-medium transition-all flex items-center group">
-               {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2 text-indigo-500"></i> : <i className="fa-solid fa-file-pdf mr-2 text-slate-400 group-hover:text-indigo-500"></i>}
-               Generar PDF v{quote.version + 1}
-             </button>
-           )}
+           {/* Status Dropdown */}
+           {quoteStatuses.length > 0 && (() => {
+             const currentStatus = quoteStatuses.find(s => s.id_status === quote.id_quote_status);
+             return (
+               <select 
+                 value={quote.id_quote_status || ''}
+                 onChange={async (e) => {
+                   const newStatusId = e.target.value;
+                   if (newStatusId === quote.id_quote_status) return;
+                   try {
+                     setProcessing(true);
+                     const response = await fetch('https://service.computeksa.com/webhook/api/quotes/update-status', {
+                       method: 'PUT',
+                       headers: { 'Content-Type': 'application/json' },
+                       body: JSON.stringify({
+                         id_cotizacion: quote.id_cotizacion,
+                         id_quote_status: newStatusId,
+                         id_tenant: user?.id_tenant,
+                         id_user: user?.id_user
+                       })
+                     });
+                     if (response.ok) {
+                       setQuote({ ...quote, id_quote_status: newStatusId });
+                       setToast({ message: 'Estado actualizado correctamente', type: 'success' });
+                       await fetchData();
+                     }
+                   } catch (err) {
+                     setToast({ message: 'Error al actualizar estado', type: 'error' });
+                   } finally {
+                     setProcessing(false);
+                   }
+                 }}
+                 className="px-4 py-2.5 rounded-xl border font-medium transition-all outline-none focus:ring-2 focus:ring-offset-2"
+                 style={{
+                   backgroundColor: `${currentStatus?.color || '#cccccc'}15`,
+                   borderColor: `${currentStatus?.color || '#cccccc'}40`,
+                   color: currentStatus?.color || '#333'
+                 }}
+               >
+                 {quoteStatuses.map(s => (
+                   <option key={s.id_status} value={s.id_status}>{s.name}</option>
+                 ))}
+               </select>
+             );
+           })()}
 
            {showSendBtn && (
              <button 
-               onClick={handleSendQuote}
+              onClick={() => handleSendQuote(pdfVersions.length ? pdfVersions[0]?.id_version : undefined)}
                disabled={processing}
                className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-200 font-medium transition-all flex items-center">
                {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-paper-plane mr-2"></i>}
@@ -700,26 +766,109 @@ const handleGeneratePDF = async () => {
             )}
           </div>
 
-          {/* Files Section */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <h3 className="font-bold text-slate-800 mb-5 flex items-center">
-                <i className="fa-solid fa-paperclip text-slate-400 mr-2"></i> Documentos
-            </h3>
-            <div className="flex flex-wrap gap-4">
-              {quote.file_generado ? (
-                <a href={quote.file_generado} target="_blank" rel="noreferrer" className="flex items-center p-4 border border-slate-200 rounded-xl hover:border-indigo-500 hover:shadow-md hover:bg-indigo-50/30 transition-all group w-full sm:w-auto">
-                  <div className="w-12 h-12 bg-red-100 text-red-500 rounded-lg flex items-center justify-center mr-4 group-hover:scale-110 transition-transform">
-                    <i className="fa-solid fa-file-pdf text-xl"></i>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-slate-800 group-hover:text-indigo-700">Cotización PDF (v{quote.version})</p>
-                    <p className="text-xs text-slate-500 mt-1">Clic para visualizar</p>
-                  </div>
-                  <i className="fa-solid fa-external-link-alt ml-4 text-slate-300 group-hover:text-indigo-400 text-xs"></i>
-                </a>
-              ) : (
-                <div className="text-sm text-slate-500 bg-slate-50 p-4 rounded-xl border border-dashed border-slate-200 flex items-center w-full">
-                  <i className="fa-solid fa-info-circle mr-3 text-slate-400"></i> El documento PDF aún no ha sido generado.
+          {/* Historial de PDFs (en lugar de Documentos) */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white">
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-6 bg-indigo-500 rounded-full"></span>
+                <div>
+                  <h3 className="font-bold text-slate-800">Historial de PDFs</h3>
+                  <p className="text-xs text-slate-500">Versiones generadas y quién las creó.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {showGenerateBtn && (
+                  <button 
+                    onClick={handleGeneratePDF}
+                    disabled={processing}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2">
+                    {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-file-pdf"></i>}
+                    Generar PDF v{quote.version + 1}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={fetchPdfVersions}
+                  className="px-3 py-2 text-sm rounded-lg border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 transition-colors flex items-center gap-2"
+                >
+                  <i className="fa-solid fa-rotate-right"></i>
+                  Actualizar
+                </button>
+              </div>
+            </div>
+
+            <div className="px-6 py-4">
+              {pdfLoading && (
+                <div className="flex items-center gap-2 text-slate-500 text-sm">
+                  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  Cargando historial...
+                </div>
+              )}
+
+              {!pdfLoading && pdfError && (
+                <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  <span>{pdfError}</span>
+                  <button
+                    type="button"
+                    onClick={fetchPdfVersions}
+                    className="px-3 py-1.5 rounded bg-red-600 text-white text-xs hover:bg-red-700"
+                  >
+                    Reintentar
+                  </button>
+                </div>
+              )}
+
+              {!pdfLoading && !pdfError && pdfVersions.length === 0 && (
+                <div className="text-sm text-slate-500">Aún no se han generado PDFs para esta cotización.</div>
+              )}
+
+              {!pdfLoading && !pdfError && pdfVersions.length > 0 && (
+                <div className="divide-y divide-slate-100">
+                  {pdfVersions.map((pdf) => (
+                    <div key={pdf.id_version} className="py-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                          <i className="fa-solid fa-file-pdf"></i>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                            v{pdf.version_number}
+                            <span className="text-xs text-slate-400">{new Date(pdf.created_at).toLocaleString()}</span>
+                          </div>
+                          <div className="text-xs text-slate-500 truncate">
+                            Generado por {pdf.generado_por}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {pdf.avatar_url && (
+                          <img
+                            src={pdf.avatar_url}
+                            alt={pdf.generado_por}
+                            className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                          />
+                        )}
+                        <a
+                          href={pdf.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-2 text-sm rounded-lg border border-slate-200 hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-2"
+                        >
+                          <i className="fa-solid fa-arrow-up-right-from-square"></i>
+                          Abrir
+                        </a>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); handleSendQuote(pdf.id_version); }}
+                          disabled={processing}
+                          className="px-3 py-2 text-sm rounded-lg border border-emerald-200 text-emerald-700 hover:border-emerald-500 hover:text-emerald-800 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                          {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>}
+                          Enviar
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
