@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
+import CollectionModal from '../components/CollectionModal';
 import type { FinancialTransaction, ClientCompany } from '../types';
 
 type KpiSummary = {
@@ -527,6 +528,11 @@ const FinancialsList: React.FC = () => {
   const [editFormData, setEditFormData] = useState<Partial<FinancialTransaction>>({});
   const [editHasChanges, setEditHasChanges] = useState(false);
 
+  // Cobranza manual (enviar notificación y configurar recordatorios)
+  const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
+  const [collectionTransaction, setCollectionTransaction] = useState<FinancialTransaction | null>(null);
+  const [sendingCollection, setSendingCollection] = useState(false);
+
   // Guardar filtros en localStorage cuando cambien
   useEffect(() => {
     localStorage.setItem('financials-filters', JSON.stringify(filters));
@@ -745,6 +751,65 @@ const FinancialsList: React.FC = () => {
     }
   }, [user, dateRange]);
 
+  // Función ligera para actualizar solo los KPIs sin recargar todas las transacciones
+  const updateKpisOnly = useCallback(async () => {
+    if (!user?.id_tenant) return;
+    try {
+      const queryParams = new URLSearchParams({
+        id_tenant: user.id_tenant,
+        start_date: dateRange.start,
+        end_date: dateRange.end
+      });
+      
+      const response = await fetch(`https://service.computeksa.com/webhook/api/financials?${queryParams.toString()}`, {
+        headers: { 'Content-Type': 'application/json' }
+      });
+      
+      if (!response.ok) return;
+      const data = await response.json();
+
+      const parseNumber = (value: any) => {
+        const numeric = parseFloat(value ?? 0);
+        return Number.isFinite(numeric) ? numeric : 0;
+      };
+
+      let kpiBlock: any = null;
+
+      // Extraer KPIs de la respuesta
+      if (Array.isArray(data)) {
+        const first = data[0] || {};
+        if (first.kpis) {
+          kpiBlock = first.kpis;
+        }
+      } else if (data && typeof data === 'object') {
+        if ((data as any).kpis) kpiBlock = (data as any).kpis;
+      }
+
+      // Formato legado
+      if (!kpiBlock && Array.isArray(data)) {
+        const rawArray = data as any[];
+        if (rawArray.length > 0) {
+          const firstRow = rawArray[0] || {};
+          const hasKpiFields = ['ventas_mes', 'por_cobrar_total', 'vencido_total', 'cobrado_mes'].some(key => firstRow[key] !== undefined && firstRow[key] !== null);
+          if (hasKpiFields) {
+            kpiBlock = firstRow;
+          }
+        }
+      }
+
+      if (kpiBlock) {
+        setKpiSummary({
+          ventasMes: parseNumber(kpiBlock.ventas_periodo ?? kpiBlock.ventas_mes ?? kpiBlock.ventasMes),
+          porCobrarTotal: parseNumber(kpiBlock.por_cobrar_total ?? kpiBlock.porCobrarTotal),
+          vencidoTotal: parseNumber(kpiBlock.vencido_total ?? kpiBlock.vencidoTotal),
+          cobradoMes: parseNumber(kpiBlock.cobrado_periodo ?? kpiBlock.cobrado_mes ?? kpiBlock.cobradoMes),
+        });
+      }
+    } catch (error) {
+      console.error('Error updating KPIs:', error);
+    }
+  }, [user, dateRange]);
+
   const handleStatusClick = (tx: FinancialTransaction, newStatus: string) => {
     setStatusConfirmState({ isOpen: true, transaction: tx, newStatus });
   };
@@ -825,6 +890,7 @@ const FinancialsList: React.FC = () => {
 
       if (!response.ok) throw new Error('Error al actualizar el estado');
 
+      // Actualizar estado local SIN tocar KPIs
       setTransactions(prev => prev.map(item => {
         if (item.id_transaction === tx.id_transaction) {
           return {
@@ -838,8 +904,11 @@ const FinancialsList: React.FC = () => {
         }
         return item;
       }));
-
+      
       setToast({ message: 'Estado actualizado correctamente.', type: 'success' });
+      
+      // Recargar solo KPIs (sin parpadear la tabla)
+      setTimeout(() => updateKpisOnly(), 300);
     } catch (error: any) {
       console.error('Error updating status:', error);
       setToast({ message: error?.message || 'No se pudo actualizar el estado.', type: 'error' });
@@ -919,26 +988,42 @@ const FinancialsList: React.FC = () => {
     }
   };
 
-  // Notificar vencimiento
-  const handleNotifyOverdue = async (transaction: FinancialTransaction) => {
-    if (!user) return;
+  // Abrir modal de cobranza manual
+  const openCollectionModal = (transaction: FinancialTransaction) => {
+    setCollectionTransaction(transaction);
+    setIsCollectionModalOpen(true);
+  };
+
+  // Enviar notificación manual con selección de destinatarios
+  const handleSendCollection = async (modalData: { recipients: Array<{ email: string; name: string; type: string; id: string | null }>; update_automation: { enabled: boolean; frequency: number } }) => {
+    if (!collectionTransaction || !user) return;
+    setSendingCollection(true);
     try {
+      const payload = {
+        id_transaction: collectionTransaction.id_transaction,
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+        recipients: modalData.recipients,
+        update_automation: modalData.update_automation,
+      };
+
       const response = await fetch('https://service.computeksa.com/webhook/api/financials/notify-overdue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id_transaction: transaction.id_transaction,
-          id_tenant: user.id_tenant,
-          id_user: user.id_user,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) throw new Error('Error al notificar al cliente.');
 
-      setToast({ message: 'Cliente notificado sobre pago vencido.', type: 'success' });
+      setToast({ message: 'Notificación enviada correctamente.', type: 'success' });
+      setIsCollectionModalOpen(false);
+      setCollectionTransaction(null);
+      fetchTransactions();
     } catch (error: any) {
       console.error('Error notifying client:', error);
       setToast({ message: error?.message || 'No se pudo notificar al cliente.', type: 'error' });
+    } finally {
+      setSendingCollection(false);
     }
   };
 
@@ -956,15 +1041,7 @@ const FinancialsList: React.FC = () => {
   };
 
   const openNotifyConfirm = (transaction: FinancialTransaction) => {
-    setConfirmState({
-      isOpen: true,
-      title: '¿Notificar vencimiento?',
-      message: `Se enviará una notificación al cliente sobre el pago vencido de la factura #${transaction.invoice_number}.`,
-      onConfirm: () => {
-        handleNotifyOverdue(transaction);
-        setConfirmState(prev => ({ ...prev, isOpen: false }));
-      },
-    });
+    openCollectionModal(transaction);
   };
 
   // Edit handlers
@@ -1014,6 +1091,8 @@ const FinancialsList: React.FC = () => {
       setEditingTransaction(null);
       setEditFormData({});
       setEditHasChanges(false);
+      
+      // Recargar y recalcular KPIs
       fetchTransactions();
     } catch (error: any) {
       console.error('Error updating transaction:', error);
@@ -1669,10 +1748,10 @@ const FinancialsList: React.FC = () => {
                       <div className="font-semibold text-sm text-slate-800">{transaction.invoice_number}</div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="text-sm text-slate-600 max-w-xs">{transaction.description || '-'}</div>
+                      <div className="text-sm text-slate-400 max-w-xs italic">{transaction.description || 'Sin descripción'}</div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      <div className="text-sm font-semibold text-slate-700">{transaction.client_company_name || '-'}</div>
+                      <div className="text-sm font-semibold text-slate-400 italic">{transaction.client_company_name || 'Sin cliente'}</div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{getTypeBadge(transaction.transaction_type)}</td>
                     <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
@@ -1717,11 +1796,11 @@ const FinancialsList: React.FC = () => {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center gap-2">
-                        {transaction.status === 'VENCIDO' && (transaction.id_client_company || transaction.client_company_name || transaction.client_name) && (
+                        {transaction.status === 'VENCIDO' && (transaction.id_client_company || transaction.client_company_name) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); openNotifyConfirm(transaction); }}
-                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                            title="Notificar vencimiento"
+                            className={`p-2 rounded-lg transition-colors ${transaction.enable_automation ? 'text-green-600 hover:bg-green-50' : 'text-orange-600 hover:bg-orange-50'}`}
+                            title={transaction.enable_automation ? 'Automatización activa: se enviarán recordatorios' : 'Notificar vencimiento (activar automatización)'}
                           >
                             <i className="fa-solid fa-bell"></i>
                           </button>
@@ -1777,6 +1856,32 @@ const FinancialsList: React.FC = () => {
       onConfirm={confirmStatusChange}
       onClose={() => setStatusConfirmState({ isOpen: false, transaction: null, newStatus: '' })}
     />
+
+    {/* Cobranza manual (notificación + recordatorios) */}
+    {isCollectionModalOpen && collectionTransaction && (
+      <CollectionModal
+        isOpen={isCollectionModalOpen}
+        onClose={() => { setIsCollectionModalOpen(false); setCollectionTransaction(null); }}
+        onSend={handleSendCollection}
+        transactionData={{
+          // Identificadores (Mapeo seguro Inglés || Español)
+          id_transaction: collectionTransaction.id_transaction || (collectionTransaction as any).id_transaccion,
+          
+          invoice_number: collectionTransaction.invoice_number || (collectionTransaction as any).numero_factura,
+          
+          // --- AQUÍ ESTABA EL ERROR ---
+          // El SQL devuelve 'id_empresa_cliente', el modal quiere 'id_client_company'
+          id_client_company: collectionTransaction.id_client_company || (collectionTransaction as any).id_empresa_cliente,
+          
+          // Datos de Automatización
+          automation_enabled: (collectionTransaction as any)?.enable_automation,
+          automation_frequency: (collectionTransaction as any)?.automation_frequency,
+          
+          // Importante: Pasar los destinatarios guardados para que aparezcan marcados
+          automation_recipients: (collectionTransaction as any)?.automation_recipients
+        }}
+      />
+    )}
 
     {/* Payment Details Modal */}
     {paymentModalState.isOpen && (

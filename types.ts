@@ -287,6 +287,26 @@ export interface FinancialTransaction {
   due_date_input?: string;
   payment_date_input?: string;
   retention_date_input?: string;
+
+  // Recordatorios automáticos de cobranza (automations)
+  enable_automation?: boolean;
+  automation_frequency?: number; // Frecuencia en días
+  automation_recipients?: Array<{
+    id: string | null;
+    name: string;
+    type: 'contact' | 'team' | 'external';
+    email: string;
+  }>;
+  next_reminder_label?: string; // Texto formateado del próximo recordatorio (mapeado de v_proximo_recordatorio)
+
+  // Historial de notificaciones manuales o automáticas
+  notification_logs?: Array<{
+    tipo?: string;
+    fecha?: string;
+    enviado_por?: string;
+    estado_envio?: string;
+    destinatarios?: string;
+  }>;
 }
 
 // 10. QUOTE ITEMS (Artículos de la cotización)

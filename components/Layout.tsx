@@ -279,7 +279,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         
         {/* HEADER */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 z-20 shrink-0">
+        <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-5 z-20 shrink-0">
           <div className="flex items-center gap-4">
               {/* Botón Hamburger (Móvil) */}
               <button 
@@ -343,7 +343,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </header>
 
         {/* CONTENT SCROLLABLE AREA */}
-        <main className="flex-1 overflow-y-auto bg-slate-50/50 p-4 md:p-8 scroll-smooth">
+        <main className="flex-1 overflow-y-auto bg-slate-50/50 p-2 md:p-4 scroll-smooth">
           <div className="w-full">
              {children}
           </div>

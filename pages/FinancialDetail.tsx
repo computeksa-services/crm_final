@@ -2,9 +2,19 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
+import CollectionModal from '../components/CollectionModal';
 import { useAuth } from '../contexts/AuthContext';
 import type { FinancialTransaction, ClientCompany, Quote } from '../types';
 
+type ContactOption = {
+  id_client_company?: string;
+  id_contact?: string;
+  name?: string;
+  email?: string;
+  position?: string;
+  is_main?: boolean;
+  es_principal?: boolean;
+};
 const FinancialDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -18,8 +28,10 @@ const FinancialDetail: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [editData, setEditData] = useState<Partial<FinancialTransaction> | null>(null);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
+  const [companyContacts, setCompanyContacts] = useState<ContactOption[]>([]);
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
     title: '',
@@ -198,26 +210,31 @@ const FinancialDetail: React.FC = () => {
     }
   };
 
-  const handleNotifyOverdue = async () => {
+  const handleSendCollection = async (modalData: { recipients: Array<{ email: string; name: string; type: string; id: string | null }>; update_automation: { enabled: boolean; frequency: number } }) => {
     if (!transaction?.id_transaction || !user) return;
     setProcessing(true);
     try {
+      const payload = {
+        id_transaction: transaction.id_transaction,
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+        recipients: modalData.recipients,
+        update_automation: modalData.update_automation,
+      };
+
       const response = await fetch('https://service.computeksa.com/webhook/api/financials/notify-overdue', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id_transaction: transaction.id_transaction,
-          id_tenant: user.id_tenant,
-          id_user: user.id_user,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      if (!response.ok) throw new Error('Error al notificar al cliente.');
+      if (!response.ok) throw new Error('Error al procesar cobranza');
 
-      setToast({ message: 'Cliente notificado sobre pago vencido.', type: 'success' });
+      setToast({ message: 'Notificación enviada y configuración guardada.', type: 'success' });
+      setIsCollectionModalOpen(false);
     } catch (error: any) {
-      console.error('Error notifying client:', error);
-      setToast({ message: error?.message || 'No se pudo notificar al cliente.', type: 'error' });
+      console.error('Error sending collection notification:', error);
+      setToast({ message: error?.message || 'Error de conexión.', type: 'error' });
     } finally {
       setProcessing(false);
     }
@@ -291,7 +308,7 @@ const FinancialDetail: React.FC = () => {
           ? parseFloat(tx.saldo_pendiente)
           : totalValue - paidAmount);
 
-      setTransaction({
+      const normalizedTx = {
         ...tx,
         id_transaction: tx.id_transaction || tx.id_transaccion,
         transaction_type: tx.transaction_type || tx.tipo_transaccion,
@@ -307,20 +324,55 @@ const FinancialDetail: React.FC = () => {
         client_name: tx.client_name || tx.nombre_cliente_proveedor,
         client_company_name: tx.client_company_name || tx.nombre_cliente_proveedor,
         client_ruc: tx.client_ruc || tx.ruc_cliente_proveedor,
+        id_client_company: tx.id_client_company || tx.id_cliente_empresa || tx.id_cliente || tx.id_company || tx.id_empresa_cliente,
         subtotal: parseFloat(tx.subtotal || 0) || 0,
         tax_amount: parseFloat(tx.impuestos || tx.tax_amount || 0) || 0,
         retention_value: parseFloat(tx.valor_retencion || tx.retention_value || 0) || 0,
         total_value: totalValue,
         paid_amount: paidAmount,
         balance_due: balanceDue,
-      });
+        // Automations
+        enable_automation: tx.enable_automation === true,
+        automation_frequency: tx.automation_frequency ?? undefined,
+        automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : [],
+        next_reminder_label: tx.v_proximo_recordatorio ?? undefined,
+        notification_logs: Array.isArray(tx.notification_logs) ? tx.notification_logs : [],
+      } as FinancialTransaction;
+
+      setTransaction(normalizedTx);
+
+      // Fetch contacts for this company (same as company detail view)
+      if (normalizedTx.id_client_company) {
+        try {
+          const contactsResponse = await fetch(
+            `https://service.computeksa.com/webhook/api/clients/companies_contacts/detail?id_client_company=${normalizedTx.id_client_company}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`
+          );
+          if (contactsResponse.ok) {
+            const contactsText = await contactsResponse.text();
+            if (contactsText) {
+              const parsedContacts = JSON.parse(contactsText);
+              if (Array.isArray(parsedContacts)) {
+                const filtered = parsedContacts.filter((contact: ContactOption) =>
+                  contact.id_client_company === normalizedTx.id_client_company
+                );
+                setCompanyContacts(filtered);
+              }
+            }
+          }
+        } catch (err) {
+          console.error('Error loading company contacts:', err);
+          setCompanyContacts([]);
+        }
+      } else {
+        setCompanyContacts([]);
+      }
     } catch (error: any) {
       console.error('Error fetching financial transaction:', error);
       setToast({ message: error?.message || 'Error al cargar la transacción.', type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [id, navigate, user?.id_tenant]);
+  }, [id, navigate, user?.id_tenant, user?.id_user]);
 
   useEffect(() => {
     fetchData();
@@ -395,7 +447,7 @@ const FinancialDetail: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-fade-in">
+    <div className="w-full mx-auto space-y-6 pb-12 animate-fade-in px-4 lg:px-8">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />
 
@@ -403,7 +455,7 @@ const FinancialDetail: React.FC = () => {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex-1">
           <h1 className="text-3xl font-bold text-slate-800 tracking-tight">{transaction.invoice_number}</h1>
-          <p className="text-slate-500 mt-1 font-medium">{transaction.description || 'Sin descripción'}</p>
+          <p className="text-slate-400 mt-1 font-medium italic">{transaction.description || 'Sin descripción'}</p>
           <div className="flex items-center gap-2 mt-3">
             {getStatusBadge(transaction.status)}
             {getTypeBadge(transaction.transaction_type)}
@@ -431,9 +483,10 @@ const FinancialDetail: React.FC = () => {
           </div>
           {transaction.status === 'VENCIDO' && (
             <button
-              onClick={handleNotifyOverdue}
+              onClick={() => setIsCollectionModalOpen(true)}
               disabled={processing}
-              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl font-semibold transition-colors disabled:opacity-60"
+              className={`px-4 py-2 rounded-xl font-semibold transition-colors disabled:opacity-60 ${transaction.enable_automation ? 'bg-green-500 hover:bg-green-600 text-white' : 'bg-orange-500 hover:bg-orange-600 text-white'}`}
+              title={transaction.enable_automation ? 'Automatización activa: recordatorios en curso' : 'Notificar vencimiento'}
             >
               <i className="fa-solid fa-bell mr-2"></i>
               Notificar vencimiento
@@ -449,20 +502,24 @@ const FinancialDetail: React.FC = () => {
           <div className="w-12 h-12 rounded-lg bg-white/60 flex items-center justify-center text-lg">
             <i className="fa-solid fa-receipt"></i>
           </div>
-          <div>
-            <div className="text-xs uppercase font-bold opacity-80">Estado de pago</div>
-            <select
-              value={transaction.status || ''}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              disabled={processing}
-              className="text-lg font-bold bg-transparent border-none outline-none cursor-pointer"
-              style={{ color: 'inherit' }}
-            >
-              <option value="PENDIENTE">Pendiente</option>
-              <option value="PAGADO">Pagado</option>
-              <option value="VENCIDO">Vencido</option>
-              <option value="ANULADO">Anulado</option>
-            </select>
+          <div className="flex-1 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs uppercase font-bold opacity-80">Estado de pago</div>
+              <div className="text-lg font-bold" style={{ color: 'inherit' }}>{transaction.payment_status_label || transaction.status}</div>
+            </div>
+            <div className="relative">
+              <select
+                value={transaction.status || ''}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                disabled={processing}
+                className="appearance-none pr-9 pl-3 py-2 rounded-lg border border-white/60 bg-white/70 shadow-sm text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="PENDIENTE">Pendiente</option>
+                <option value="PAGADO">Pagado</option>
+                <option value="ANULADO">Anulado</option>
+              </select>
+              <i className="fa-solid fa-chevron-down absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none"></i>
+            </div>
           </div>
         </div>
 
@@ -473,7 +530,7 @@ const FinancialDetail: React.FC = () => {
           </div>
           <div>
             <div className="text-xs uppercase font-bold text-slate-600">Cliente</div>
-            <div className="text-lg font-bold text-slate-800">{transaction.client_company_name || 'Sin cliente'}</div>
+            <div className="text-lg font-bold text-slate-400 italic">{transaction.client_company_name || 'Sin cliente'}</div>
           </div>
         </div>
 
@@ -493,138 +550,239 @@ const FinancialDetail: React.FC = () => {
         </button>
       </div>
 
-      {/* Details Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-100 flex items-center">
-          <h3 className="font-bold text-slate-800 flex items-center">
-            <span className="w-2 h-6 bg-brand-500 rounded-full mr-3"></span>
-            Detalles de la Transacción
-          </h3>
-        </div>
-
-        <div className="p-6 space-y-6">
-          {/* Row 1: Dates */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <div className="text-xs uppercase font-bold text-slate-500 mb-1">Fecha de emisión</div>
-              <div className="text-lg font-semibold text-slate-800">
-                {transaction.issue_date_input || transaction.issue_date?.split('T')[0] || '-'}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase font-bold text-slate-500 mb-1">Fecha de vencimiento</div>
-              <div className="text-lg font-semibold text-slate-800">
-                {transaction.due_date_input || transaction.due_date?.split('T')[0] || '-'}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase font-bold text-slate-500 mb-1">Días de crédito</div>
-              <div className="text-lg font-semibold text-slate-800">{transaction.credit_days || 0} días</div>
-            </div>
+      {/* Layout principal con sidebar a la derecha */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+        {/* Details Card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden xl:col-span-2">
+          <div className="px-6 py-5 border-b border-slate-100 flex items-center">
+            <h3 className="font-bold text-slate-800 flex items-center">
+              <span className="w-2 h-6 bg-brand-500 rounded-full mr-3"></span>
+              Detalles de la Transacción
+            </h3>
           </div>
 
-          {/* Row 2: Amounts */}
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-6 pt-4 border-t border-slate-100">
-            <div>
-              <div className="text-xs uppercase font-bold text-slate-500 mb-1">Subtotal</div>
-              <div className="text-lg font-semibold text-slate-800">
-                ${parseFloat(transaction.subtotal as any || 0).toLocaleString('en-US', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
+          <div className="p-6 space-y-6">
+            {/* Row 1: Dates */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div>
+                <div className="text-xs uppercase font-bold text-slate-500 mb-1">Fecha de emisión</div>
+                <div className="text-lg font-semibold text-slate-800">
+                  {transaction.issue_date_input || transaction.issue_date?.split('T')[0] || '-'}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase font-bold text-slate-500 mb-1">Fecha de vencimiento</div>
+                <div className="text-lg font-semibold text-slate-800">
+                  {transaction.due_date_input || transaction.due_date?.split('T')[0] || '-'}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase font-bold text-slate-500 mb-1">Días de crédito</div>
+                <div className="text-lg font-semibold text-slate-800">{transaction.credit_days || 0} días</div>
               </div>
             </div>
-            <div>
-              <div className="text-xs uppercase font-bold text-slate-500 mb-1">Impuesto (IVA)</div>
-              <div className="text-lg font-semibold text-slate-800">
-                {transaction.tax_amount}% - $
-                {parseFloat(((parseFloat(transaction.subtotal as any || 0) * parseFloat(transaction.tax_amount as any || 0)) / 100).toString()).toLocaleString('en-US', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase font-bold text-slate-500 mb-1">Total</div>
-              <div className="text-lg font-bold text-brand-600">
-                ${parseFloat(transaction.total_value as any || 0).toLocaleString('en-US', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase font-bold text-slate-500 mb-1">Pagado</div>
-              <div className="text-lg font-semibold text-green-600">
-                ${parseFloat(transaction.paid_amount as any || 0).toLocaleString('en-US', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase font-bold text-slate-500 mb-1">Saldo pendiente</div>
-              <div className="text-lg font-semibold text-amber-600">
-                ${parseFloat((transaction.balance_due || transaction.balance || 0) as any).toLocaleString('en-US', {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </div>
-            </div>
-          </div>
 
-          {/* Payment Info if Paid */}
-          {transaction.status === 'PAGADO' && (
-            <div className="pt-4 border-t border-slate-100 space-y-4">
-              <h4 className="font-semibold text-slate-700">Información de Pago</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <div className="text-xs uppercase font-bold text-slate-500 mb-1">Fecha de pago</div>
-                  <div className="text-sm text-slate-800">{transaction.payment_date_input || transaction.payment_date?.split('T')[0] || '-'}</div>
+            {/* Row 2: Amounts */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 pt-4 border-t border-slate-100">
+              <div>
+                <div className="text-xs uppercase font-bold text-slate-500 mb-1">Subtotal</div>
+                <div className="text-lg font-semibold text-slate-800">
+                  ${parseFloat(transaction.subtotal as any || 0).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </div>
-                <div>
-                  <div className="text-xs uppercase font-bold text-slate-500 mb-1">Método</div>
-                  <div className="text-sm text-slate-800">{transaction.payment_method || '-'}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase font-bold text-slate-500 mb-1">Impuesto (IVA)</div>
+                <div className="text-lg font-semibold text-slate-800">
+                  {transaction.tax_amount}% - $
+                  {parseFloat(((parseFloat(transaction.subtotal as any || 0) * parseFloat(transaction.tax_amount as any || 0)) / 100).toString()).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </div>
-                <div>
-                  <div className="text-xs uppercase font-bold text-slate-500 mb-1">Referencia</div>
-                  <div className="text-sm text-slate-800">{transaction.payment_reference || '-'}</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase font-bold text-slate-500 mb-1">Total</div>
+                <div className="text-lg font-bold text-brand-600">
+                  ${parseFloat(transaction.total_value as any || 0).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase font-bold text-slate-500 mb-1">Pagado</div>
+                <div className="text-lg font-semibold text-green-600">
+                  ${parseFloat(transaction.paid_amount as any || 0).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase font-bold text-slate-500 mb-1">Saldo pendiente</div>
+                <div className="text-lg font-semibold text-amber-600">
+                  ${parseFloat((transaction.balance_due || transaction.balance || 0) as any).toLocaleString('en-US', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
                 </div>
               </div>
             </div>
-          )}
 
-          {/* Retention Info if Present */}
-          {transaction.has_retention && (
-            <div className="pt-4 border-t border-slate-100 space-y-4">
-              <h4 className="font-semibold text-slate-700">Información de Retención</h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <div className="text-xs uppercase font-bold text-slate-500 mb-1">Número de retención</div>
-                  <div className="text-sm text-slate-800">{transaction.retention_number || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-xs uppercase font-bold text-slate-500 mb-1">Fecha de retención</div>
-                  <div className="text-sm text-slate-800">{transaction.retention_date_input || transaction.retention_date?.split('T')[0] || '-'}</div>
-                </div>
-                <div>
-                  <div className="text-xs uppercase font-bold text-slate-500 mb-1">Valor de retención</div>
-                  <div className="text-sm text-slate-800">
-                    ${parseFloat(transaction.retention_value as any || 0).toLocaleString('en-US', {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+            {/* Payment Info if Paid */}
+            {transaction.status === 'PAGADO' && (
+              <div className="pt-4 border-t border-slate-100 space-y-4">
+                <h4 className="font-semibold text-slate-700">Información de Pago</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xs uppercase font-bold text-slate-500 mb-1">Fecha de pago</div>
+                    <div className="text-sm text-slate-800">{transaction.payment_date_input || transaction.payment_date?.split('T')[0] || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase font-bold text-slate-500 mb-1">Método</div>
+                    <div className="text-sm text-slate-800">{transaction.payment_method || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase font-bold text-slate-500 mb-1">Referencia</div>
+                    <div className="text-sm text-slate-800">{transaction.payment_reference || '-'}</div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Notes if Present */}
-          {transaction.notes && (
-            <div className="pt-4 border-t border-slate-100 space-y-2">
-              <h4 className="font-semibold text-slate-700">Notas</h4>
-              <p className="text-sm text-slate-600 whitespace-pre-wrap">{transaction.notes}</p>
+            {/* Retention Info if Present */}
+            {transaction.has_retention && (
+              <div className="pt-4 border-t border-slate-100 space-y-4">
+                <h4 className="font-semibold text-slate-700">Información de Retención</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <div className="text-xs uppercase font-bold text-slate-500 mb-1">Número de retención</div>
+                    <div className="text-sm text-slate-800">{transaction.retention_number || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase font-bold text-slate-500 mb-1">Fecha de retención</div>
+                    <div className="text-sm text-slate-800">{transaction.retention_date_input || transaction.retention_date?.split('T')[0] || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs uppercase font-bold text-slate-500 mb-1">Valor de retención</div>
+                    <div className="text-sm text-slate-800">
+                      ${parseFloat(transaction.retention_value as any || 0).toLocaleString('en-US', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Notes if Present */}
+            {transaction.notes && (
+              <div className="pt-4 border-t border-slate-100 space-y-2">
+                <h4 className="font-semibold text-slate-700">Notas</h4>
+                <p className="text-sm text-slate-600 whitespace-pre-wrap">{transaction.notes}</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Sidebar: Recordatorios e Historial */}
+        <div className="space-y-6">
+          <div className="space-y-4 bg-slate-50 rounded-2xl border border-slate-200 p-4">
+            <h4 className="font-semibold text-slate-700 flex items-center gap-2">
+              <i className="fa-solid fa-bell text-orange-500"></i>
+              Recordatorios automáticos
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-1 gap-3">
+              <div>
+                <div className="text-xs uppercase font-bold text-slate-500 mb-1">Estado</div>
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[13px] font-bold"
+                  style={{
+                    backgroundColor: `${(transaction.enable_automation ? '#10b981' : '#6b7280')}15`,
+                    color: transaction.enable_automation ? '#10b981' : '#6b7280',
+                    borderColor: `${(transaction.enable_automation ? '#10b981' : '#6b7280')}40`,
+                  }}
+                >
+                  <i className={`fa-solid ${transaction.enable_automation ? 'fa-circle-check' : 'fa-ban'}`}></i>
+                  {transaction.enable_automation ? 'Activados' : 'Desactivados'}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase font-bold text-slate-500 mb-1">Frecuencia</div>
+                <div className="text-sm text-slate-800">
+                  {transaction.enable_automation && transaction.automation_frequency ? `Cada ${transaction.automation_frequency} día(s)` : '-'}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase font-bold text-slate-500 mb-1">Próximo recordatorio</div>
+                <div className="text-sm text-slate-800">{transaction.next_reminder_label || '-'}</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs uppercase font-bold text-slate-500 mb-1">Destinatarios</div>
+              {Array.isArray(transaction.automation_recipients) && transaction.automation_recipients.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {transaction.automation_recipients.map((r: any, idx: number) => (
+                    <div key={`${r.email}-${idx}`} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-slate-50 flex items-center justify-center text-slate-600">
+                          <i className={`fa-solid ${r.type === 'team' ? 'fa-user-group' : r.type === 'contact' ? 'fa-id-badge' : 'fa-envelope'}`}></i>
+                        </div>
+                        <div>
+                          <div className="text-sm font-semibold text-slate-800">{r.name || r.email}</div>
+                          <div className="text-xs text-slate-500">{r.email}</div>
+                        </div>
+                      </div>
+                      <span className="text-[11px] font-bold px-2 py-0.5 rounded border bg-slate-50 text-slate-700">
+                        {r.type === 'team' ? 'Equipo' : r.type === 'contact' ? 'Contacto' : 'Externo'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-slate-500 italic">Sin destinatarios configurados.</div>
+              )}
+            </div>
+          </div>
+
+          {Array.isArray(transaction.notification_logs) && transaction.notification_logs.length > 0 && (
+            <div className="space-y-3 bg-white rounded-2xl border border-slate-200 p-4">
+              <h4 className="font-semibold text-slate-700 flex items-center gap-2">
+                <i className="fa-solid fa-clock-rotate-left text-slate-500"></i>
+                Historial de notificaciones
+              </h4>
+              <div className="overflow-hidden rounded-lg border border-slate-200">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-500 uppercase text-xs">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Fecha</th>
+                      <th className="px-3 py-2 text-left">Tipo</th>
+                      <th className="px-3 py-2 text-left">Enviado por</th>
+                      <th className="px-3 py-2 text-left">Estado</th>
+                      <th className="px-3 py-2 text-left">Destinatarios</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transaction.notification_logs.map((log, idx) => (
+                      <tr key={idx} className="border-t border-slate-100">
+                        <td className="px-3 py-2 text-slate-700">{log.fecha || '-'}</td>
+                        <td className="px-3 py-2 text-slate-700">{log.tipo || '-'}</td>
+                        <td className="px-3 py-2 text-slate-700">{log.enviado_por || '-'}</td>
+                        <td className="px-3 py-2">
+                          <span className="inline-flex px-2 py-1 rounded-lg border text-xs font-semibold bg-slate-50 text-slate-700">
+                            {log.estado_envio || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-slate-600 whitespace-pre-line break-words">{log.destinatarios || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>
@@ -927,6 +1085,22 @@ const FinancialDetail: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {isCollectionModalOpen && transaction && (
+        <CollectionModal
+          isOpen={isCollectionModalOpen}
+          onClose={() => setIsCollectionModalOpen(false)}
+          onSend={handleSendCollection}
+          transactionData={{
+            id_transaction: transaction.id_transaction,
+            invoice_number: transaction.invoice_number,
+            id_client_company: transaction.id_client_company,
+            automation_enabled: (transaction as any)?.enable_automation,
+            automation_frequency: (transaction as any)?.automation_frequency,
+          }}
+          preloadedContacts={companyContacts}
+        />
       )}
     </div>
   );
