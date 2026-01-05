@@ -915,7 +915,7 @@ const QuotesList: React.FC = () => {
 
       {/* Table Container aligned with DealsList */}
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-visible w-full flex flex-col">
-        <div style={{ maxHeight: 'calc(100vh - 300px)', minHeight: '350px', overflowY: 'auto', overflowX: 'hidden' }}>
+        <div style={{ maxHeight: 'calc(100vh - 300px)', minHeight: '350px', overflowY: 'auto', overflowX: 'auto' }}>
           {renderContent()}
         </div>
         {filteredAndSortedQuotes.length > 0 && (

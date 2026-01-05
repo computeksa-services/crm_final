@@ -156,6 +156,7 @@ export interface Deal {
   fecha_creacion?: string; // ISO Date String
   created_at?: string; // ISO Date String (nuevo formato backend)
   created_at_fmt?: string; // Fecha formateada "12/12/2025 20:24"
+  updated_at?: string; // ISO Date String (última actualización)
   fecha_cierre_esperada?: string; // ISO Date String
   descripcion?: string;
   created_by?: string; // ID del usuario que creó el trato

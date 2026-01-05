@@ -214,6 +214,32 @@ export const MockApi = {
 
   updateUserSync: async (provider: 'google' | 'outlook', status: boolean) => currentUser,
 
+  // --- DASHBOARD ---
+  getDashboardData: async (id_user: string, id_tenant: string): Promise<any> => {
+    if (USE_REAL_API) {
+      // POST to ensure ids travel in body (n8n friendly)
+      return apiFetch('/api/dashboard', 'POST', { id_user, id_tenant });
+    }
+
+    // Mock response aligned to backend shape
+    return new Promise(resolve => setTimeout(() => resolve([
+      {
+        dashboard_data: {
+          perfil: 'ADMIN',
+          resumen_financiero: {
+            ingreso_total: 1350,
+            por_cobrar: 1150,
+            transacciones_mes: 3
+          },
+          pipeline_ventas: [
+            { etapa: 'PROSPECCIÓN', monto: 16500 },
+            { etapa: 'CALIFICADO', monto: 1500 }
+          ]
+        }
+      }
+    ]), 400));
+  },
+
   // --- TENANTS ---
   getTenants: async (): Promise<Tenant[]> => {
     if (USE_REAL_API) {

@@ -2,6 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext'; // Importar
+import { DealFiltersProvider } from './contexts/DealFiltersContext';
 import Layout from './components/Layout';
 import { googleClientId } from './services/oauthConfig';
 import LandingPage from './pages/LandingPage';
@@ -52,38 +53,40 @@ const App: React.FC = () => {
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <AuthProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/auth/callback" element={<AuthCallbackPage />} />
-          <Route path="/app" element={<ProtectedRoute />}>
-            {/* Todas las rutas anidadas usarán Layout y estarán protegidas */}
-            <Route index element={<Navigate to="/app/dashboard" />} />
-            <Route path="dashboard" element={<Dashboard />} />
-            <Route path="quotes" element={<QuotesList />} />
-            <Route path="quotes/new" element={<QuoteCreate />} />
-            <Route path="quotes/:id" element={<QuoteDetail />} />
-            <Route path="deals" element={<DealsList />} />
-            <Route path="deals/new" element={<DealCreate />} />
-            <Route path="deals/:id" element={<DealDetail />} />
-            <Route path="financials" element={<FinancialsList />} />
-            <Route path="financials/new" element={<FinancialCreate />} />
-            <Route path="financials/:id" element={<FinancialDetail />} />
-            <Route path="calendar" element={<Calendar />} />
-            <Route path="profile" element={<UserProfile />} />
-            <Route path="users" element={<UsersList />} />
-            <Route path="companies" element={<CompaniesList />} />
-            <Route path="client-companies" element={<ClientCompaniesList />} />
-            <Route path="client-companies/:id" element={<ClientCompanyDetail />} />
-            <Route path="client-contacts" element={<ClientContactsList />} />
-            <Route path="client-contacts/:id" element={<ClientContactDetail />} />
-            <Route path="products" element={<ProductsList />} />
-            <Route path="settings" element={<SettingsPage />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+        <DealFiltersProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/auth/callback" element={<AuthCallbackPage />} />
+            <Route path="/app" element={<ProtectedRoute />}>
+              {/* Todas las rutas anidadas usarán Layout y estarán protegidas */}
+              <Route index element={<Navigate to="/app/dashboard" />} />
+              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="quotes" element={<QuotesList />} />
+              <Route path="quotes/new" element={<QuoteCreate />} />
+              <Route path="quotes/:id" element={<QuoteDetail />} />
+              <Route path="deals" element={<DealsList />} />
+              <Route path="deals/new" element={<DealCreate />} />
+              <Route path="deals/:id" element={<DealDetail />} />
+              <Route path="financials" element={<FinancialsList />} />
+              <Route path="financials/new" element={<FinancialCreate />} />
+              <Route path="financials/:id" element={<FinancialDetail />} />
+              <Route path="calendar" element={<Calendar />} />
+              <Route path="profile" element={<UserProfile />} />
+              <Route path="users" element={<UsersList />} />
+              <Route path="companies" element={<CompaniesList />} />
+              <Route path="client-companies" element={<ClientCompaniesList />} />
+              <Route path="client-companies/:id" element={<ClientCompanyDetail />} />
+              <Route path="client-contacts" element={<ClientContactsList />} />
+              <Route path="client-contacts/:id" element={<ClientContactDetail />} />
+              <Route path="products" element={<ProductsList />} />
+              <Route path="settings" element={<SettingsPage />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+        </DealFiltersProvider>
+      </AuthProvider>
     </GoogleOAuthProvider>
   );
 };
