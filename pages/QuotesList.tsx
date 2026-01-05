@@ -630,7 +630,7 @@ const QuotesList: React.FC = () => {
             </div>
             <h3 className="text-lg font-bold text-slate-700">No hay cotizaciones aún</h3>
             <p className="text-slate-500 max-w-sm mt-1 mb-6">Crea tu primera cotización profesional para enviar a tus clientes y cerrar más tratos.</p>
-            <Link to="/quotes/new" className="bg-brand-600 text-white px-5 py-2.5 rounded-xl shadow-md hover:bg-brand-700 transition-all">
+            <Link to="/app/quotes/new" className="bg-brand-600 text-white px-5 py-2.5 rounded-xl shadow-md hover:bg-brand-700 transition-all">
                 Crear Primera Cotización
             </Link>
         </div>
@@ -877,7 +877,7 @@ const QuotesList: React.FC = () => {
             <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Cotizaciones</h1>
             <p className="text-slate-500 text-sm mt-1">Gestiona, envía y monitorea tus propuestas comerciales.</p>
         </div>
-        <Link to="/quotes/new" className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-brand-200 text-sm font-medium transition-all flex items-center justify-center">
+        <Link to="/app/quotes/new" className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-brand-200 text-sm font-medium transition-all flex items-center justify-center">
           <i className="fa-solid fa-plus mr-2"></i> Nueva Cotización
         </Link>
       </div>

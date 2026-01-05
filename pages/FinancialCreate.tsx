@@ -250,7 +250,7 @@ const FinancialCreate: React.FC = () => {
       if (!response.ok) throw new Error('Error al crear la transacción.');
 
       setToast({ message: 'Transacción creada correctamente.', type: 'success' });
-      setTimeout(() => navigate('/financials'), 800);
+      setTimeout(() => navigate('/app/financials'), 800);
     } catch (error: any) {
       setToast({ message: error?.message || 'Error al guardar.', type: 'error' });
     } finally {
@@ -299,7 +299,7 @@ const FinancialCreate: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => navigate('/financials')} className="px-4 py-1.5 rounded-lg border border-slate-300 text-slate-600 font-bold hover:bg-white transition-colors text-xs bg-white">
+                    <button onClick={() => navigate('/app/financials')} className="px-4 py-1.5 rounded-lg border border-slate-300 text-slate-600 font-bold hover:bg-white transition-colors text-xs bg-white">
                         Cancelar
                     </button>
                     <button onClick={handleSave} disabled={saving || ((transaction.enable_automation || false) && selectedRecipients.length === 0)} className="px-5 py-1.5 rounded-lg bg-brand-600 text-white font-bold hover:bg-brand-700 shadow-md flex items-center gap-2 transition-all text-xs disabled:opacity-60">

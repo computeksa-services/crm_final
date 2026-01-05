@@ -511,7 +511,7 @@ const DealsList: React.FC = () => {
 
     const handleRowClick = (id: string) => navigate(`/deals/${id}`);
     const handleAddNew = () => {
-        navigate('/deals/new');
+        navigate('/app/deals/new');
     };
     const handleEdit = (deal: Deal) => {
         const rawValue = typeof deal.valor_trato === 'string' ? parseFloat((deal.valor_trato as string).replace(/[^0-9.-]+/g, "")) : deal.valor_trato;

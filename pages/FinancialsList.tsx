@@ -562,7 +562,7 @@ const FinancialsList: React.FC = () => {
     }
     if (user.rol_user !== 'admin' && user.rol_user !== 'superadmin') {
       setToast({ message: 'Acceso denegado. Solo administradores pueden ver finanzas.', type: 'error' });
-      setTimeout(() => navigate('/dashboard'), 2000);
+      setTimeout(() => navigate('/app/dashboard'), 2000);
     }
   }, [user, navigate]);
 
@@ -1318,7 +1318,7 @@ const FinancialsList: React.FC = () => {
 
   // New transaction template
   const createNewTransaction = () => {
-    navigate('/financials/new');
+    navigate('/app/financials/new');
   };
 
   if (!user || (user.rol_user !== 'admin' && user.rol_user !== 'superadmin')) {

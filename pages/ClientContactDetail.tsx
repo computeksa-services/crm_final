@@ -162,7 +162,7 @@ const ClientContactDetail: React.FC = () => {
     <div className="flex h-64 items-center justify-center">
         <div className="text-center bg-red-50 p-8 rounded-xl border border-red-100">
             <h3 className="text-lg font-bold text-red-700">Contacto no encontrado</h3>
-            <button onClick={() => navigate('/client-contacts')} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50">Volver</button>
+            <button onClick={() => navigate('/app/client-contacts')} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50">Volver</button>
         </div>
     </div>
   );

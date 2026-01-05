@@ -13,31 +13,47 @@ const NAV_GROUPS = [
   {
     title: 'General',
     items: [
-      { label: 'Dashboard', path: '/dashboard', icon: 'fa-chart-pie', roles: ['superadmin', 'admin', 'usuario'] },
-      { label: 'Calendario', path: '/calendar', icon: 'fa-calendar-days', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Dashboard', path: '/app/dashboard', icon: 'fa-chart-pie', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Calendario', path: '/app/calendar', icon: 'fa-calendar-days', roles: ['superadmin', 'admin', 'usuario'] },
     ]
   },
   {
     title: 'Ventas',
     items: [
-      { label: 'Cotizaciones', path: '/quotes', icon: 'fa-file-invoice-dollar', roles: ['superadmin', 'admin', 'usuario'] },
-      { label: 'Tratos', path: '/deals', icon: 'fa-handshake', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Cotizaciones', path: '/app/quotes', icon: 'fa-file-invoice-dollar', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Tratos', path: '/app/deals', icon: 'fa-handshake', roles: ['superadmin', 'admin', 'usuario'] },
     ]
   },
   {
     title: 'Directorio',
     items: [
-      { label: 'Empresas', path: '/client-companies', icon: 'fa-building', roles: ['superadmin', 'admin', 'usuario'] },
-      { label: 'Contactos', path: '/client-contacts', icon: 'fa-address-book', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Empresas', path: '/app/client-companies', icon: 'fa-building', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Contactos', path: '/app/client-contacts', icon: 'fa-address-book', roles: ['superadmin', 'admin', 'usuario'] },
     ]
   },
   {
     title: 'Inventario',
     items: [
-      { label: 'Productos', path: '/products', icon: 'fa-box-archive', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Productos', path: '/app/products', icon: 'fa-box-archive', roles: ['superadmin', 'admin', 'usuario'] },
     ]
   }
 ];
+
+// Mapeo de rutas a nombres de página legibles
+const PAGE_NAMES: { [key: string]: string } = {
+  'dashboard': 'Dashboard',
+  'quotes': 'Cotizaciones',
+  'deals': 'Tratos',
+  'financials': 'Cartera Financiera',
+  'calendar': 'Calendario',
+  'client-companies': 'Empresas Clientes',
+  'client-contacts': 'Contactos Clientes',
+  'products': 'Productos',
+  'users': 'Usuarios',
+  'settings': 'Ajustes',
+  'companies': 'Tenants',
+  'profile': 'Mi Perfil',
+};
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Estado para controlar sidebar en Desktop (contraído/expandido) - con persistencia en localStorage
@@ -159,16 +175,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         `}
       >
         {/* Logo Area */}
-        <div className={`h-16 flex items-center border-b border-slate-800 bg-slate-950/50 transition-all duration-300 ${isDesktopSidebarOpen ? 'px-4' : 'px-0 justify-center'}`}>
+        <div className={`h-16 flex items-center border-b border-slate-200 bg-white transition-all duration-300 ${isDesktopSidebarOpen ? 'px-4' : 'px-0 justify-center'}`}>
            <div 
-             className={`flex items-center cursor-pointer overflow-hidden ${isDesktopSidebarOpen ? 'gap-3 w-full' : 'justify-center'}`}
+             className={`flex items-center gap-3 cursor-pointer overflow-hidden w-full ${isDesktopSidebarOpen ? '' : 'justify-center'}`}
              onClick={() => navigate('/dashboard')}
            >
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-600 to-indigo-700 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-900/20">
-                  <img src="/logo.png" alt="C" className="h-6 w-6 object-contain opacity-90"/>
-              </div>
+              <img src="/logo.png" alt="COMPUTEKSA" className={`object-contain transition-all duration-300 ${isDesktopSidebarOpen ? 'h-10 w-10' : 'h-8 w-8'}`}/>
               <div className={`transition-all duration-300 overflow-hidden ${!isDesktopSidebarOpen && 'md:opacity-0 md:w-0'}`}>
-                <span className="font-bold text-lg tracking-tight text-white block leading-none whitespace-nowrap">CRM COMPUTEKSA</span>
+                <div className="flex items-baseline gap-1">
+                  <span className="font-bold text-sm tracking-tight text-slate-800">CRM</span>
+                  <span className="font-bold text-sm tracking-tight text-brand-600">COMPUTEKSA</span>
+                </div>
                 <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">Workspace</span>
               </div>
            </div>
@@ -204,11 +221,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </h3>
                  {!isDesktopSidebarOpen && <div className="h-px bg-slate-800 mx-2 my-1 md:block hidden"></div>}
                 
-                <NavLinkItem item={{ label: 'Ajustes', path: '/settings', icon: 'fa-sliders', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
-                <NavLinkItem item={{ label: 'Usuarios', path: '/users', icon: 'fa-users-cog', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
-                <NavLinkItem item={{ label: 'Cartera', path: '/financials', icon: 'fa-wallet', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
-                {user.rol_user === 'superadmin' && (
-                  <NavLinkItem item={{ label: 'Tenants', path: '/companies', icon: 'fa-server', roles: ['superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
+                <NavLinkItem item={{ label: 'Ajustes', path: '/app/settings', icon: 'fa-sliders', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
+                <NavLinkItem item={{ label: 'Usuarios', path: '/app/users', icon: 'fa-users-cog', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
+                <NavLinkItem item={{ label: 'Cartera', path: '/app/financials', icon: 'fa-wallet', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
+                {userRole === 'superadmin' && (
+                  <NavLinkItem item={{ label: 'Tenants', path: '/app/companies', icon: 'fa-server', roles: ['superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
                 )}
               </div>
             )}
@@ -218,7 +235,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* User Footer */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/30">
           <div className={`flex items-center transition-all duration-300 ${!isDesktopSidebarOpen ? 'justify-center' : 'gap-3'}`}>
-             <Link to="/profile" className="relative group shrink-0">
+             <Link to="/app/profile" className="relative group shrink-0">
                 <img 
                     src={getImageUrl(user?.avatar_url) || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=6366f1&color=fff`} 
                     alt="User" 
@@ -301,7 +318,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               
               {/* Breadcrumb / Page Title Placeholder (Opcional) */}
               <div className="hidden sm:block text-slate-400 text-sm">
-                 / <span className="text-slate-800 font-medium ml-2 capitalize">{location.pathname.split('/')[1] || 'Dashboard'}</span>
+                {(() => {
+                  const pathSegments = location.pathname.split('/').filter(Boolean);
+                  const pagePath = pathSegments[pathSegments.length - 1] || 'dashboard';
+                  const pageName = PAGE_NAMES[pagePath] || pagePath.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  return <> / <span className="text-slate-800 font-medium ml-2">{pageName}</span></>;
+                })()}
               </div>
           </div>
           
@@ -326,7 +348,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
              )}
              
              {/* Profile Link (Avatar mobile) */}
-             <Link to="/profile" className="flex items-center gap-2 hover:bg-slate-50 p-1.5 pr-3 rounded-full border border-transparent hover:border-slate-200 transition-all">
+             <Link to="/app/profile" className="flex items-center gap-2 hover:bg-slate-50 p-1.5 pr-3 rounded-full border border-transparent hover:border-slate-200 transition-all">
                 <img 
                     src={getImageUrl(user?.avatar_url) || "https://ui-avatars.com/api/?name=User&background=random"} 
                     alt="User" 

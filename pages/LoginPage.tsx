@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
@@ -6,7 +6,14 @@ import { enabledProviders, microsoftClientId, oauthRedirectUri } from '../servic
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user, loading } = useAuth();
+  
+  // Si el usuario ya está logueado, redirigir a dashboard
+  useEffect(() => {
+    if (!loading && user) {
+      navigate('/app/dashboard', { replace: true });
+    }
+  }, [user, loading, navigate]);
   
   // Estados para UI
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
@@ -47,7 +54,7 @@ const LoginPage: React.FC = () => {
       // Validamos que la respuesta tenga lo necesario
       if (data.token && data.user) {
         login(data.token, data.user);
-        navigate('/dashboard');
+        navigate('/app/dashboard');
       } else if (data.error) {
          throw new Error(data.message || 'Error de autenticación.');
       } else {
@@ -138,19 +145,31 @@ const LoginPage: React.FC = () => {
   };
 
   // --- RENDERIZADO ---
+  // Mostrar pantalla de carga mientras se verifica la sesión
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin mb-4 inline-block">
+            <i className="fa-solid fa-circle-notch text-brand-600 text-4xl"></i>
+          </div>
+          <p className="text-slate-600">Cargando sesión...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <div className="h-12 w-12 bg-brand-600 rounded-xl flex items-center justify-center shadow-lg transform rotate-3">
-             <i className="fa-solid fa-cube text-white text-2xl"></i>
-          </div>
+          <img src="/logo.png" alt="COMPUTEKSA 360" className="h-16 w-auto" />
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900">
           Iniciar Sesión
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600">
-          Accede a tu espacio de trabajo en <span className="font-bold text-brand-600">Computeksa 360</span>
+          Accede a tu espacio de trabajo en <span className="font-bold text-brand-600">CRM Computeksa</span>
         </p>
       </div>
 
@@ -230,7 +249,7 @@ const LoginPage: React.FC = () => {
       </div>
       
       <div className="fixed bottom-6 w-full text-center">
-          <p className="text-xs text-slate-400">© 2025 Computeksa CRM. Todos los derechos reservados.</p>
+          <p className="text-xs text-slate-400">© 2026 Computeksa CRM. Todos los derechos reservados.</p>
       </div>
     </div>
   );

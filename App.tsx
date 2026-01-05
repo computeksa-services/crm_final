@@ -4,6 +4,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext'; // Importar
 import Layout from './components/Layout';
 import { googleClientId } from './services/oauthConfig';
+import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
 import QuotesList from './pages/QuotesList';
@@ -53,11 +54,12 @@ const App: React.FC = () => {
       <AuthProvider>
         <BrowserRouter>
           <Routes>
+            <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
-          <Route path="/" element={<ProtectedRoute />}>
+          <Route path="/app" element={<ProtectedRoute />}>
             {/* Todas las rutas anidadas usarán Layout y estarán protegidas */}
-            <Route index element={<Navigate to="/dashboard" />} />
+            <Route index element={<Navigate to="/app/dashboard" />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="quotes" element={<QuotesList />} />
             <Route path="quotes/new" element={<QuoteCreate />} />

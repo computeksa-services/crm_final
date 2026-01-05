@@ -499,7 +499,7 @@ const handleGeneratePDF = async () => {
         <div className="text-center bg-red-50 p-8 rounded-xl border border-red-100">
             <i className="fa-solid fa-triangle-exclamation text-4xl text-red-400 mb-3"></i>
             <h3 className="text-lg font-bold text-red-700">Cotización no encontrada</h3>
-            <button onClick={() => navigate('/quotes')} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50">
+            <button onClick={() => navigate('/app/quotes')} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50">
                 Volver al listado
             </button>
         </div>

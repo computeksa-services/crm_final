@@ -17,11 +17,28 @@ export const getImageUrl = (url: string | undefined | null): string | null => {
   
   // Si es URL de Google Drive, convertirla al formato thumbnail
   if (url.includes('drive.google.com')) {
-    // Extraer FILE_ID de cualquier formato de URL de Google Drive
-    const match = url.match(/[-\w]{25,}/);
+    // Extraer FILE_ID de diferentes formatos de URL de Google Drive
+    let fileId = null;
     
-    if (match) {
-      const fileId = match[0];
+    // Formato: https://drive.google.com/uc?export=view&id=FILE_ID
+    const ucMatch = url.match(/[?&]id=([^&]+)/);
+    if (ucMatch) {
+      fileId = ucMatch[1];
+    } else {
+      // Formato: https://drive.google.com/file/d/FILE_ID/view
+      const fileMatch = url.match(/\/file\/d\/([^\/]+)/);
+      if (fileMatch) {
+        fileId = fileMatch[1];
+      } else {
+        // Cualquier otro formato, intentar extraer ID de 33-44 caracteres
+        const generalMatch = url.match(/[-\w]{25,}/);
+        if (generalMatch) {
+          fileId = generalMatch[0];
+        }
+      }
+    }
+    
+    if (fileId) {
       // Usar el thumbnail service de Google Drive con tamaño grande
       return `https://drive.google.com/thumbnail?id=${fileId}&sz=w400`;
     }

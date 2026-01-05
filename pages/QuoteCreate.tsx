@@ -151,9 +151,9 @@ const QuoteCreate: React.FC = () => {
         const dealId = queryParams.get('dealId');
 
         if (dealId) {
-          navigate(`/deals/${dealId}`);
+          navigate(`/app/deals/${dealId}`);
         } else {
-          navigate('/quotes');
+          navigate('/app/quotes');
         }
       }, 1500);
 

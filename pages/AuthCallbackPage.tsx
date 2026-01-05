@@ -66,7 +66,7 @@ const AuthCallbackPage: React.FC = () => {
         console.log('✅ Login completado. Redirigiendo...');
         
         setTimeout(() => {
-          navigate('/dashboard');
+          navigate('/app/dashboard');
         }, 100);
 
       } catch (err: any) {

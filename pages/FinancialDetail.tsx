@@ -274,7 +274,7 @@ const FinancialDetail: React.FC = () => {
       if (!txResponse.ok) {
         if (txResponse.status === 404) {
           setToast({ message: 'Transacción no encontrada.', type: 'error' });
-          setTimeout(() => navigate('/financials'), 800);
+          setTimeout(() => navigate('/app/financials'), 800);
         } else {
           throw new Error('Error al cargar la transacción.');
         }
@@ -296,7 +296,7 @@ const FinancialDetail: React.FC = () => {
 
       if (!tx) {
         setToast({ message: 'No se encontró la transacción.', type: 'error' });
-        setTimeout(() => navigate('/financials'), 800);
+        setTimeout(() => navigate('/app/financials'), 800);
         return;
       }
 
@@ -382,7 +382,7 @@ const FinancialDetail: React.FC = () => {
     if (!user) return;
     if (user.rol_user !== 'admin' && user.rol_user !== 'superadmin') {
       setToast({ message: 'Acceso denegado. Solo administradores pueden gestionar finanzas.', type: 'error' });
-      setTimeout(() => navigate('/dashboard'), 1500);
+      setTimeout(() => navigate('/app/dashboard'), 1500);
     }
   }, [navigate, user]);
 
@@ -402,7 +402,7 @@ const FinancialDetail: React.FC = () => {
           });
           if (!response.ok) throw new Error('Error al eliminar la transacción.');
           setToast({ message: 'Transacción eliminada.', type: 'success' });
-          setTimeout(() => navigate('/financials'), 800);
+          setTimeout(() => navigate('/app/financials'), 800);
         } catch (error: any) {
           console.error('Error deleting financial transaction:', error);
           setToast({ message: error?.message || 'No se pudo eliminar.', type: 'error' });
@@ -436,7 +436,7 @@ const FinancialDetail: React.FC = () => {
           <i className="fa-solid fa-triangle-exclamation text-4xl text-red-400 mb-3"></i>
           <h3 className="text-lg font-bold text-red-700">Transacción no encontrada</h3>
           <button
-            onClick={() => navigate('/financials')}
+            onClick={() => navigate('/app/financials')}
             className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50"
           >
             Volver al listado

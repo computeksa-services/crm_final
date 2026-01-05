@@ -81,7 +81,7 @@ const DealDetail: React.FC = () => {
         <div className="text-center bg-red-50 p-8 rounded-xl border border-red-100">
             <i className="fa-solid fa-triangle-exclamation text-4xl text-red-400 mb-3"></i>
             <h3 className="text-lg font-bold text-red-700">Trato no encontrado</h3>
-            <button onClick={() => navigate('/deals')} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50">
+            <button onClick={() => navigate('/app/deals')} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50">
                 Volver al listado
             </button>
         </div>
@@ -110,7 +110,7 @@ const DealDetail: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
             <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
-                    <button onClick={() => navigate('/deals')} className="text-slate-400 hover:text-brand-600 transition-colors p-1">
+                    <button onClick={() => navigate('/app/deals')} className="text-slate-400 hover:text-brand-600 transition-colors p-1">
                         <i className="fa-solid fa-arrow-left text-lg"></i>
                     </button>
                     <span 

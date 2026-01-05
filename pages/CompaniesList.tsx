@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'; // Importar
 import { Tenant } from '../types'; // Updated Type
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
+import { getImageUrl } from '../utils/imageUtils';
 
 const CompaniesList: React.FC = () => {
   const { user } = useAuth(); // Usar para validación de rol
@@ -246,10 +247,18 @@ const CompaniesList: React.FC = () => {
                 */}
                 <div className="w-24 h-16 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4 border border-slate-200 shadow-sm p-1">
                   {tenant.logo_url ? (
-                    <img src={tenant.logo_url} alt="Logo" className="w-full h-full object-contain" />
-                  ) : (
-                    <i className="fa-solid fa-image text-slate-300 text-xl"></i>
-                  )}
+                    <img 
+                      src={getImageUrl(tenant.logo_url) || tenant.logo_url} 
+                      alt="Logo" 
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        target.nextElementSibling?.classList.remove('hidden');
+                      }}
+                    />
+                  ) : null}
+                  <i className={`fa-solid fa-image text-slate-300 text-xl ${tenant.logo_url ? 'hidden' : ''}`}></i>
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-slate-800 leading-tight">{tenant.name_tenant}</h3>
@@ -292,7 +301,15 @@ const CompaniesList: React.FC = () => {
                <div className="flex flex-col items-center justify-center mb-6">
                  <div className="w-48 h-24 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden mb-2 bg-slate-50 relative group">
                     {editingTenant.logo_url ? (
-                      <img src={editingTenant.logo_url} alt="Preview" className="w-full h-full object-contain p-2" />
+                      <img 
+                        src={getImageUrl(editingTenant.logo_url) || editingTenant.logo_url} 
+                        alt="Preview" 
+                        className="w-full h-full object-contain p-2"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
                     ) : (
                       <div className="text-center text-slate-400">
                         <i className="fa-solid fa-cloud-upload-alt text-2xl"></i>

@@ -244,7 +244,7 @@ const ClientCompanyDetail: React.FC = () => {
     <div className="flex h-64 items-center justify-center">
         <div className="text-center bg-red-50 p-8 rounded-xl border border-red-100">
             <h3 className="text-lg font-bold text-red-700">Empresa no encontrada</h3>
-            <button onClick={() => navigate('/client-companies')} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50">Volver</button>
+            <button onClick={() => navigate('/app/client-companies')} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50">Volver</button>
         </div>
     </div>
   );
@@ -258,7 +258,7 @@ const ClientCompanyDetail: React.FC = () => {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div className="flex items-center gap-5">
-                <button onClick={() => navigate('/client-companies')} className="text-slate-400 hover:text-slate-600 transition-colors">
+                <button onClick={() => navigate('/app/client-companies')} className="text-slate-400 hover:text-slate-600 transition-colors">
                     <i className="fa-solid fa-arrow-left text-xl"></i>
                 </button>
                 <div className="w-16 h-16 bg-white border border-slate-200 rounded-xl flex items-center justify-center shadow-sm text-indigo-600 text-3xl">
