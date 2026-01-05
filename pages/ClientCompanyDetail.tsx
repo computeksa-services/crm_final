@@ -98,7 +98,7 @@ const ClientCompanyDetail: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  const handleContactRowClick = (contactId: string) => navigate(`/client-contacts/${contactId}`);
+  const handleContactRowClick = (contactId: string) => navigate(`/app/client-contacts/${contactId}`);
 
   // --- HANDLERS CONTACTO (Create/Edit/Delete) ---
   // ... (Mantenemos la lógica de contactos igual que antes)

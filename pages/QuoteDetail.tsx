@@ -1021,7 +1021,7 @@ const handleGeneratePDF = async () => {
                 </div>
                 <div>
                   <span className="text-xs text-slate-400 font-semibold block uppercase">Empresa</span>
-                  <Link to={`/client-companies/${quote.id_client_company}`} className="text-slate-800 font-bold hover:text-blue-600 transition-colors text-base">
+                  <Link to={`/app/client-companies/${quote.id_client_company}`} className="text-slate-800 font-bold hover:text-blue-600 transition-colors text-base">
                     {quote.client_company_name}
                   </Link>
                 </div>
@@ -1033,7 +1033,7 @@ const handleGeneratePDF = async () => {
                  </div>
                  <div>
                    <span className="text-xs text-slate-400 font-semibold block uppercase">Contacto</span>
-                   <Link to={`/client-contacts/${quote.id_contact}`} className="text-slate-700 font-medium hover:text-brand-600 transition-colors">
+                   <Link to={`/app/client-contacts/${quote.id_contact}`} className="text-slate-700 font-medium hover:text-brand-600 transition-colors">
                      {quote.contact_name}
                    </Link>
                  </div>
@@ -1069,7 +1069,7 @@ const handleGeneratePDF = async () => {
                  </div>
                  <div className="overflow-hidden">
                     <p className="text-xs text-slate-500 mb-0.5">Trato Asociado</p>
-                    <Link to={`/deals/${quote.id_trato}`} className="text-brand-700 font-bold hover:underline truncate block">
+                    <Link to={`/app/deals/${quote.id_trato}`} className="text-brand-700 font-bold hover:underline truncate block">
                       {quote.nombre_trato}
                     </Link>
                  </div>

@@ -1742,7 +1742,7 @@ const FinancialsList: React.FC = () => {
                   <tr
                     key={transaction.id_transaction}
                     className="hover:bg-slate-50 cursor-pointer"
-                    onClick={() => navigate(`/financials/${transaction.id_transaction}`)}
+                    onClick={() => navigate(`/app/financials/${transaction.id_transaction}`)}
                   >
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="font-semibold text-sm text-slate-800">{transaction.invoice_number}</div>

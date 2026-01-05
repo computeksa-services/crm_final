@@ -185,7 +185,7 @@ const DealCreate: React.FC = () => {
       }
 
       setToast({ message: 'Trato creado correctamente.', type: 'success' });
-      setTimeout(() => navigate(`/deals/${newId}`), 1000);
+      setTimeout(() => navigate(`/app/deals/${newId}`), 1000);
     } catch (e: any) {
       setToast({ message: e.message || 'Error en el proceso', type: 'error' });
       setProcessing(false);

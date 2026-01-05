@@ -89,7 +89,7 @@ const ClientCompaniesList: React.FC = () => {
   };
 
   // --- HANDLERS ---
-  const handleRowClick = (id: string) => navigate(`/client-companies/${id}`);
+  const handleRowClick = (id: string) => navigate(`/app/client-companies/${id}`);
 
   const handleAddNew = () => {
     if (!user?.id_tenant) return;

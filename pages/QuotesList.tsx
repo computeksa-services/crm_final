@@ -494,7 +494,7 @@ const QuotesList: React.FC = () => {
   }, [quotes, searchTerm, statusFilter, columnFilters, dateFilters, sortConfig]);
 
   const handleRowClick = (id: string) => {
-    navigate(`/quotes/${id}`);
+    navigate(`/app/quotes/${id}`);
   };
 
   const handleEdit = (quote: Quote) => {

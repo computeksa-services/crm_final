@@ -129,7 +129,7 @@ const DealDetail: React.FC = () => {
                 <h1 className="text-3xl font-bold text-slate-800 tracking-tight ml-8">{deal.nombre_trato}</h1>
                 <div className="ml-8 mt-2 flex items-center text-slate-500 text-sm">
                     <i className="fa-solid fa-building mr-2 text-slate-400"></i>
-                    Para <Link to={`/client-companies/${deal.id_client_company}`} className="text-brand-600 font-semibold hover:underline ml-1">{deal.client_company_name}</Link>
+                    Para <Link to={`/app/client-companies/${deal.id_client_company}`} className="text-brand-600 font-semibold hover:underline ml-1">{deal.client_company_name}</Link>
                 </div>
             </div>
 
@@ -178,7 +178,7 @@ const DealDetail: React.FC = () => {
 
                 <div>
                     <p className="text-xs text-slate-400 mb-1">Contacto Principal</p>
-                    <Link to={`/client-contacts/${deal.id_contact}`} className="flex items-center gap-2 group">
+                    <Link to={`/app/client-contacts/${deal.id_contact}`} className="flex items-center gap-2 group">
                         <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-brand-100 group-hover:text-brand-600 transition-colors">
                             <i className="fa-solid fa-user text-xs"></i>
                         </div>
@@ -233,7 +233,7 @@ const DealDetail: React.FC = () => {
                             <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wide">Documentos Generados</h4>
                             {(deal.access_level === 'EDIT' || user?.rol_user === 'admin') && (
                               <button 
-                                onClick={() => navigate(`/quotes/new?dealId=${deal.id_trato}&clientCompanyId=${deal.id_client_company}&contactId=${deal.id_contact}&dealName=${encodeURIComponent(deal.nombre_trato || '')}`)}
+                                onClick={() => navigate(`/app/quotes/new?dealId=${deal.id_trato}&clientCompanyId=${deal.id_client_company}&contactId=${deal.id_contact}&dealName=${encodeURIComponent(deal.nombre_trato || '')}`)}
                                 className="bg-white border border-slate-200 hover:border-brand-300 text-slate-600 hover:text-brand-600 px-4 py-2 rounded-xl shadow-sm text-sm font-medium transition-all flex items-center">
                                   <i className="fa-solid fa-plus mr-2 text-brand-500"></i> Nueva Cotización
                               </button>
@@ -255,7 +255,7 @@ const DealDetail: React.FC = () => {
                                                 <i className="fa-solid fa-file-invoice-dollar text-lg"></i>
                                             </div>
                                             <div>
-                                                <Link to={`/quotes/${q.id_cotizacion}`} className="font-bold text-slate-700 group-hover:text-brand-600 transition-colors block">
+                                                <Link to={`/app/quotes/${q.id_cotizacion}`} className="font-bold text-slate-700 group-hover:text-brand-600 transition-colors block">
                                                     {q.nombre_cotizacion || `Cotización #${q.formatted_no_cotizacion}`}
                                                 </Link>
                                                 <div className="flex items-center gap-2 mt-1">

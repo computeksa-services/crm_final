@@ -187,7 +187,7 @@ const ClientContactDetail: React.FC = () => {
                     <h1 className="text-2xl font-bold text-slate-800 tracking-tight">{contact.first_name} {contact.last_name}</h1>
                     <p className="text-sm text-slate-500 font-medium">{contact.position || 'Cargo no especificado'}</p>
                     {company && (
-                        <Link to={`/client-companies/${company.id_client_company}`} className="text-xs text-brand-600 hover:underline flex items-center gap-1 mt-1">
+                        <Link to={`/app/client-companies/${company.id_client_company}`} className="text-xs text-brand-600 hover:underline flex items-center gap-1 mt-1">
                             <i className="fa-solid fa-building"></i> {company.name_company}
                         </Link>
                     )}
@@ -237,7 +237,7 @@ const ClientContactDetail: React.FC = () => {
           </div>
           
           {company && (
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center gap-4 hover:border-brand-200 transition-colors cursor-pointer group" onClick={() => navigate(`/client-companies/${company.id_client_company}`)}>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center gap-4 hover:border-brand-200 transition-colors cursor-pointer group" onClick={() => navigate(`/app/client-companies/${company.id_client_company}`)}>
                  <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 text-xl shrink-0 group-hover:bg-indigo-100 transition-colors">
                    <i className="fa-solid fa-building"></i>
                  </div>

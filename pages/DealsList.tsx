@@ -509,7 +509,7 @@ const DealsList: React.FC = () => {
         return Array.from(values.values()).sort((a, b) => b.count - a.count);
     };
 
-    const handleRowClick = (id: string) => navigate(`/deals/${id}`);
+    const handleRowClick = (id: string) => navigate(`/app/deals/${id}`);
     const handleAddNew = () => {
         navigate('/app/deals/new');
     };

@@ -166,7 +166,7 @@ const ClientContactsList: React.FC = () => {
   };
 
   // --- HANDLERS ---
-  const handleRowClick = (id: string) => navigate(`/client-contacts/${id}`);
+  const handleRowClick = (id: string) => navigate(`/app/client-contacts/${id}`);
 
   const handleAddNew = () => {
     if (companies.length === 0) {
