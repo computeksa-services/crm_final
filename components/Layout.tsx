@@ -170,23 +170,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           fixed md:static inset-y-0 left-0 z-50
           bg-slate-900 text-white border-r border-slate-800
           flex flex-col transition-all duration-300 ease-in-out shadow-xl overflow-hidden
-          ${isMobileSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0'}
-          ${isDesktopSidebarOpen ? 'md:w-64' : 'md:w-16'}
+          ${isMobileSidebarOpen ? 'translate-x-0 w-52' : '-translate-x-full md:translate-x-0'}
+          ${isDesktopSidebarOpen ? 'md:w-52' : 'md:w-16'}
         `}
       >
         {/* Logo Area */}
         <div className={`h-16 flex items-center border-b border-slate-200 bg-white transition-all duration-300 ${isDesktopSidebarOpen ? 'px-4' : 'px-0 justify-center'}`}>
            <div 
              className={`flex items-center gap-3 cursor-pointer overflow-hidden w-full ${isDesktopSidebarOpen ? '' : 'justify-center'}`}
-             onClick={() => navigate('/dashboard')}
+             onClick={() => navigate('/app/dashboard')}
            >
               <img src="/logo.png" alt="COMPUTEKSA" className={`object-contain transition-all duration-300 ${isDesktopSidebarOpen ? 'h-10 w-10' : 'h-8 w-8'}`}/>
-              <div className={`transition-all duration-300 overflow-hidden ${!isDesktopSidebarOpen && 'md:opacity-0 md:w-0'}`}>
-                <div className="flex items-baseline gap-1">
+              <div className={`transition-all duration-300 ${!isDesktopSidebarOpen ? 'md:opacity-0 md:w-0 overflow-hidden' : 'overflow-visible'}`}>
+                <div className="flex flex-col leading-tight">
                   <span className="font-bold text-sm tracking-tight text-slate-800">CRM</span>
                   <span className="font-bold text-sm tracking-tight text-brand-600">COMPUTEKSA</span>
+                  <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">Workspace</span>
                 </div>
-                <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">Workspace</span>
               </div>
            </div>
         </div>

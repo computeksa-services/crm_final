@@ -20,6 +20,12 @@ const UserProfile: React.FC = () => {
     }
   }, [user]);
 
+  const activeProvider: 'google' | 'outlook' | null = profileData?.googleConnected
+    ? 'google'
+    : profileData?.outlookConnected
+    ? 'outlook'
+    : null;
+
   // Simulación de conexión (Aquí iría la lógica real de OAuth)
   const handleSyncToggle = async (provider: 'google' | 'outlook') => {
     if (!profileData) return;
@@ -103,11 +109,7 @@ const UserProfile: React.FC = () => {
                     </span>
                 </div>
 
-                <div className="mt-6 pt-6 border-t border-slate-100">
-                    <button className="w-full bg-white border border-slate-300 text-slate-700 py-2.5 rounded-xl hover:bg-slate-50 hover:border-slate-400 text-sm font-medium transition-all shadow-sm">
-                        Editar Información
-                    </button>
-                </div>
+                {/* Se oculta acción de edición hasta que exista flujo permitido */}
              </div>
           </div>
 
@@ -151,83 +153,85 @@ const UserProfile: React.FC = () => {
             </div>
             
             <div className="space-y-4">
-              
-              {/* Google Integration */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-200 rounded-xl hover:border-slate-300 transition-all bg-slate-50/50">
-                <div className="flex items-center gap-4 mb-4 sm:mb-0">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 p-2">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google" className="w-full h-full object-contain" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-800">Google Workspace</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Sincroniza Calendar y Gmail</p>
-                  </div>
-                </div>
-                
-                {profileData.googleConnected ? (
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center">
-                            <i className="fa-solid fa-check-circle mr-1.5"></i> Conectado
-                        </span>
-                        <button 
-                            onClick={() => handleSyncToggle('google')}
-                            disabled={syncing === 'google'}
-                            className="text-slate-400 hover:text-red-500 p-2 rounded-lg transition-colors text-sm"
-                            title="Desconectar"
-                        >
-                            {syncing === 'google' ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-power-off"></i>}
-                        </button>
+              {(activeProvider === 'google' || activeProvider === null) && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-200 rounded-xl hover:border-slate-300 transition-all bg-slate-50/50">
+                  <div className="flex items-center gap-4 mb-4 sm:mb-0">
+                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 via-yellow-400 to-blue-500 flex items-center justify-center text-white text-xl">
+                        <i className="fa-brands fa-google"></i>
+                      </div>
                     </div>
-                ) : (
-                    <button 
+                    <div>
+                      <p className="font-bold text-slate-800">Google Workspace</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Sincroniza Calendar y Gmail</p>
+                    </div>
+                  </div>
+                  {profileData.googleConnected ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center">
+                        <i className="fa-solid fa-check-circle mr-1.5"></i> Conectado
+                      </span>
+                      <button
                         onClick={() => handleSyncToggle('google')}
                         disabled={syncing === 'google'}
-                        className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm flex items-center"
-                    >
-                        {syncing === 'google' ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-brands fa-google mr-2"></i>}
-                        Conectar Cuenta
-                    </button>
-                )}
-              </div>
-
-              {/* Outlook Integration */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-200 rounded-xl hover:border-slate-300 transition-all bg-slate-50/50">
-                <div className="flex items-center gap-4 mb-4 sm:mb-0">
-                  <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 p-2">
-                    <img src="https://upload.wikimedia.org/wikipedia/commons/d/df/Microsoft_Office_Outlook_%282018%E2%80%93present%29.svg" alt="Outlook" className="w-full h-full object-contain" />
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-800">Microsoft Outlook</p>
-                    <p className="text-xs text-slate-500 mt-0.5">Sincroniza Calendario y Contactos</p>
-                  </div>
-                </div>
-
-                {profileData.outlookConnected ? (
-                    <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center">
-                            <i className="fa-solid fa-check-circle mr-1.5"></i> Conectado
-                        </span>
-                        <button 
-                            onClick={() => handleSyncToggle('outlook')}
-                            disabled={syncing === 'outlook'}
-                            className="text-slate-400 hover:text-red-500 p-2 rounded-lg transition-colors text-sm"
-                            title="Desconectar"
-                        >
-                            {syncing === 'outlook' ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-power-off"></i>}
-                        </button>
+                        className="text-slate-400 hover:text-red-500 p-2 rounded-lg transition-colors text-sm"
+                        title="Desconectar"
+                      >
+                        {syncing === 'google' ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-power-off"></i>}
+                      </button>
                     </div>
-                ) : (
-                    <button 
+                  ) : (
+                    <button
+                      onClick={() => handleSyncToggle('google')}
+                      disabled={syncing === 'google'}
+                      className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm flex items-center"
+                    >
+                      {syncing === 'google' ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-brands fa-google mr-2"></i>}
+                      Conectar Cuenta
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {(activeProvider === 'outlook' || (activeProvider === null && !profileData.googleConnected)) && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-200 rounded-xl hover:border-slate-300 transition-all bg-slate-50/50">
+                  <div className="flex items-center gap-4 mb-4 sm:mb-0">
+                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 flex items-center justify-center text-white text-xl">
+                        <i className="fa-brands fa-microsoft"></i>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="font-bold text-slate-800">Microsoft Outlook</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Sincroniza Calendario y Contactos</p>
+                    </div>
+                  </div>
+                  {profileData.outlookConnected ? (
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center">
+                        <i className="fa-solid fa-check-circle mr-1.5"></i> Conectado
+                      </span>
+                      <button
                         onClick={() => handleSyncToggle('outlook')}
                         disabled={syncing === 'outlook'}
-                        className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm flex items-center"
+                        className="text-slate-400 hover:text-red-500 p-2 rounded-lg transition-colors text-sm"
+                        title="Desconectar"
+                      >
+                        {syncing === 'outlook' ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-power-off"></i>}
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleSyncToggle('outlook')}
+                      disabled={syncing === 'outlook'}
+                      className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm flex items-center"
                     >
-                        {syncing === 'outlook' ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-brands fa-microsoft mr-2"></i>}
-                        Conectar Cuenta
+                      {syncing === 'outlook' ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-brands fa-microsoft mr-2"></i>}
+                      Conectar Cuenta
                     </button>
-                )}
-              </div>
-
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
