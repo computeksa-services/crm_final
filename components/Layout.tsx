@@ -110,23 +110,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <Link 
           to={item.path}
           onClick={() => setIsMobileSidebarOpen(false)} // Cerrar menú móvil al hacer click
-          className={`flex items-center px-3 py-2.5 my-1 rounded-xl transition-all duration-200 group-hover:bg-slate-800 ${
+          className={`flex items-center transition-all duration-200 group-hover:bg-slate-800 ${
+            isCollapsed ? 'justify-center px-0 py-2 my-0.5 rounded-lg' : 'px-2 py-2 my-0.5 rounded-lg'
+          } ${
             isActive 
-              ? 'bg-brand-600 text-white shadow-lg shadow-brand-900/20' 
+              ? 'bg-brand-600 text-white shadow-md' 
               : 'text-slate-400 hover:text-white'
           }`}
         >
-          <div className={`w-8 flex justify-center items-center transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}>
-             <i className={`fa-solid ${item.icon} text-lg`}></i>
+          <div className={`flex justify-center items-center transition-transform duration-200 ${isCollapsed ? 'w-10' : 'w-7'} ${isActive ? 'scale-105' : ''}`}>
+             <i className={`fa-solid ${item.icon} text-base`}></i>
           </div>
           
-          <span className={`ml-3 font-medium text-sm whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 w-auto'}`}>
+          <span className={`ml-2 font-medium text-sm whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 w-auto'}`}>
             {item.label}
           </span>
 
           {/* Tooltip para modo contraído */}
           {isCollapsed && (
-            <div className="absolute left-14 top-1/2 -translate-y-1/2 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-md border border-slate-700">
+            <div className="absolute left-12 top-1/2 -translate-y-1/2 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-md border border-slate-700">
               {item.label}
             </div>
           )}
@@ -151,38 +153,38 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         className={`
           fixed md:static inset-y-0 left-0 z-50
           bg-slate-900 text-white border-r border-slate-800
-          flex flex-col transition-all duration-300 ease-in-out shadow-xl
+          flex flex-col transition-all duration-300 ease-in-out shadow-xl overflow-hidden
           ${isMobileSidebarOpen ? 'translate-x-0 w-64' : '-translate-x-full md:translate-x-0'}
-          ${isDesktopSidebarOpen ? 'md:w-64' : 'md:w-20'}
+          ${isDesktopSidebarOpen ? 'md:w-64' : 'md:w-16'}
         `}
       >
         {/* Logo Area */}
-        <div className="h-16 flex items-center px-4 border-b border-slate-800 bg-slate-950/50">
+        <div className={`h-16 flex items-center border-b border-slate-800 bg-slate-950/50 transition-all duration-300 ${isDesktopSidebarOpen ? 'px-4' : 'px-0 justify-center'}`}>
            <div 
-             className="flex items-center gap-3 cursor-pointer w-full overflow-hidden" 
+             className={`flex items-center cursor-pointer overflow-hidden ${isDesktopSidebarOpen ? 'gap-3 w-full' : 'justify-center'}`}
              onClick={() => navigate('/dashboard')}
            >
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-600 to-indigo-700 flex items-center justify-center shrink-0 shadow-lg shadow-indigo-900/20">
-                  <img src="/logo.png" alt="C" className="h-6 w-auto opacity-90"/>
+                  <img src="/logo.png" alt="C" className="h-6 w-6 object-contain opacity-90"/>
               </div>
-              <div className={`transition-all duration-300 ${!isDesktopSidebarOpen && 'md:opacity-0 md:w-0'}`}>
-                <span className="font-bold text-lg tracking-tight text-white block leading-none">CRM COMPUTEKSA</span>
+              <div className={`transition-all duration-300 overflow-hidden ${!isDesktopSidebarOpen && 'md:opacity-0 md:w-0'}`}>
+                <span className="font-bold text-lg tracking-tight text-white block leading-none whitespace-nowrap">CRM COMPUTEKSA</span>
                 <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">Workspace</span>
               </div>
            </div>
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 py-6 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-          <ul className="space-y-6 px-3">
+        <nav className="flex-1 py-4 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+          <ul className="space-y-1 px-2">
             {NAV_GROUPS.map((group, idx) => (
               <div key={idx}>
                 {/* Título de Grupo (Solo si está expandido) */}
-                <h3 className={`px-3 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider transition-opacity duration-300 ${(!isDesktopSidebarOpen || !group.title) && 'md:opacity-0 md:hidden'}`}>
+                <h3 className={`px-2 mb-1 mt-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider transition-opacity duration-300 ${(!isDesktopSidebarOpen || !group.title) && 'md:opacity-0 md:hidden'}`}>
                   {group.title}
                 </h3>
                 {/* Separador simple para modo contraído */}
-                {!isDesktopSidebarOpen && idx > 0 && <div className="h-px bg-slate-800 mx-2 my-2 md:block hidden"></div>}
+                {!isDesktopSidebarOpen && idx > 0 && <div className="h-px bg-slate-800 mx-2 my-1 md:block hidden"></div>}
 
                 {group.items.map(item => (
                   <NavLinkItem 
@@ -197,10 +199,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {/* Configuración (Admin/Superadmin) */}
             {user && (user.rol_user === 'admin' || user.rol_user === 'superadmin') && (
               <div>
-                <h3 className={`px-3 mb-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider transition-opacity duration-300 ${!isDesktopSidebarOpen && 'md:opacity-0 md:hidden'}`}>
+                <h3 className={`px-2 mb-1 mt-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider transition-opacity duration-300 ${!isDesktopSidebarOpen && 'md:opacity-0 md:hidden'}`}>
                   Administración
                 </h3>
-                 {!isDesktopSidebarOpen && <div className="h-px bg-slate-800 mx-2 my-2 md:block hidden"></div>}
+                 {!isDesktopSidebarOpen && <div className="h-px bg-slate-800 mx-2 my-1 md:block hidden"></div>}
                 
                 <NavLinkItem item={{ label: 'Ajustes', path: '/settings', icon: 'fa-sliders', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
                 <NavLinkItem item={{ label: 'Usuarios', path: '/users', icon: 'fa-users-cog', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
@@ -214,13 +216,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </nav>
 
         {/* User Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-950/30">
-          <div className={`flex items-center gap-3 transition-all duration-300 ${!isDesktopSidebarOpen ? 'justify-center' : ''}`}>
-             <Link to="/profile" className="relative group">
+        <div className="p-3 border-t border-slate-800 bg-slate-950/30">
+          <div className={`flex items-center transition-all duration-300 ${!isDesktopSidebarOpen ? 'justify-center' : 'gap-3'}`}>
+             <Link to="/profile" className="relative group shrink-0">
                 <img 
                     src={getImageUrl(user?.avatar_url) || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=6366f1&color=fff`} 
                     alt="User" 
-                    className="w-9 h-9 rounded-full border border-slate-600 group-hover:border-brand-500 transition-colors"
+                    className="w-10 h-10 rounded-full border-2 border-slate-600 group-hover:border-brand-500 transition-colors"
                     referrerPolicy="no-referrer"
                     onLoad={() => console.log('✅ Avatar sidebar cargado:', getImageUrl(user?.avatar_url))}
                     onError={(e) => {
@@ -229,7 +231,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       console.error('   URL procesada:', getImageUrl(user?.avatar_url));
                     }}
                 />
-                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-slate-900 rounded-full"></span>
+                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-900 rounded-full"></span>
              </Link>
              
              <div className={`flex-1 overflow-hidden transition-all duration-300 ${!isDesktopSidebarOpen && 'md:w-0 md:opacity-0'}`}>

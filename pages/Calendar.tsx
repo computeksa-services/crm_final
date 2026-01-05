@@ -78,7 +78,8 @@ const Calendar: React.FC = () => {
     is_all_day: false,
     location: '',
     generate_meeting: false,
-    id_trato: ''
+    id_trato: '',
+    id_client_company: ''
   });
   
   const [attendees, setAttendees] = useState<Attendee[]>([]);
@@ -367,7 +368,8 @@ const Calendar: React.FC = () => {
       is_all_day: false,
       location: '',
       generate_meeting: false,
-      id_trato: ''
+      id_trato: '',
+      id_client_company: ''
     });
     setAttendees([]);
     setAttendeeInput('');
@@ -638,7 +640,8 @@ const Calendar: React.FC = () => {
         is_all_day: false,
         location: '',
         generate_meeting: false,
-        id_trato: ''
+        id_trato: '',
+        id_client_company: ''
       });
       setAttendees([]);
     } catch (error) {
@@ -785,7 +788,8 @@ const Calendar: React.FC = () => {
       is_all_day: event.allDay || false,
       location: event.location || '',
       generate_meeting: false,
-      id_trato: event.deal_id || ''
+      id_trato: event.deal_id || '',
+      id_client_company: ''
     };
     
     // Guardar datos originales para comparar después
@@ -979,7 +983,8 @@ const Calendar: React.FC = () => {
                     is_all_day: false,
                     location: '',
                     generate_meeting: false,
-                    id_trato: ''
+                    id_trato: '',
+                    id_client_company: ''
                   });
                   setAttendees([]);
                 }

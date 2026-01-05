@@ -167,6 +167,11 @@ const DealsList: React.FC = () => {
     const [dateFilters, setDateFilters] = useState<{ [key: string]: { start: string; end: string } }>({});
     const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'desc' });
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+        // Cargar estado del sidebar desde localStorage
+        const saved = localStorage.getItem('dealsSidebarOpen');
+        return saved !== null ? JSON.parse(saved) : true;
+    });
 
     // --- ESTADOS DE MODALES ---
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -191,11 +196,16 @@ const DealsList: React.FC = () => {
         isDestructive: false,
     });
 
-    // --- ESC KEY HANDLER ---
+    // Guardar estado del sidebar en localStorage
+    useEffect(() => {
+        localStorage.setItem('dealsSidebarOpen', JSON.stringify(isSidebarOpen));
+    }, [isSidebarOpen]);
+
+    // Manejo de teclas para cerrar modales
     useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                // Primero cerrar confirmación si está abierta
+                // Cerrar confirmación primero si está abierta
                 if (confirmState.isOpen) {
                     setConfirmState(prev => ({ ...prev, isOpen: false }));
                 }
@@ -631,19 +641,19 @@ const DealsList: React.FC = () => {
 
         return (
             <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse" style={{ minWidth: '1200px' }}>
+                <table className="w-full text-left border-collapse table-auto">
                     <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-bold tracking-wider sticky top-0 z-10">
                         <tr>
-                            <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors min-w-[240px]" onClick={() => requestSort('nombre_trato')}>
+                            <th className="px-2 sm:px-3 py-2 cursor-pointer hover:bg-slate-100 transition-colors w-1/4 min-w-[180px]" onClick={() => requestSort('nombre_trato')}>
                                 Trato <SortIcon column="nombre_trato" />
                             </th>
-                            <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('client_company_name')}>
+                            <th className="px-2 sm:px-3 py-2 cursor-pointer hover:bg-slate-100 transition-colors w-1/4 min-w-[160px]" onClick={() => requestSort('client_company_name')}>
                                 Cliente <SortIcon column="client_company_name" />
                             </th>
-                            <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors text-right" onClick={() => requestSort('valor_trato')}>
+                            <th className="px-2 sm:px-3 py-2 cursor-pointer hover:bg-slate-100 transition-colors w-1/6 min-w-[100px] text-right" onClick={() => requestSort('valor_trato')}>
                                 Valor <SortIcon column="valor_trato" />
                             </th>
-                            <th data-filter-column="estado_nombre" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                            <th data-filter-column="estado_nombre" className="px-2 sm:px-3 py-2 hover:bg-slate-100 transition-colors relative group w-1/6 min-w-[110px]">
                                 <div className="flex items-center gap-2">
                                     <div className="flex-1 cursor-pointer" onClick={() => requestSort('estado_nombre')}>
                                         Estado <SortIcon column="estado_nombre" />
@@ -673,7 +683,7 @@ const DealsList: React.FC = () => {
                                     </div>
                                 )}
                             </th>
-                            <th data-filter-column="interes_nombre" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                            <th data-filter-column="interes_nombre" className="px-2 sm:px-3 py-2 hover:bg-slate-100 transition-colors relative group w-1/6 min-w-[110px]">
                                 <div className="flex items-center gap-2">
                                     <div className="flex-1 cursor-pointer" onClick={() => requestSort('interes_nombre')}>
                                         Interés <SortIcon column="interes_nombre" />
@@ -703,7 +713,7 @@ const DealsList: React.FC = () => {
                                     </div>
                                 )}
                             </th>
-                            <th data-filter-column="owner_name" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                            <th data-filter-column="owner_name" className="px-2 sm:px-3 py-2 hover:bg-slate-100 transition-colors relative group w-1/6 min-w-[100px]">
                                 <div className="flex items-center gap-2">
                                     <div className="flex-1 cursor-pointer" onClick={() => requestSort('owner_name')}>
                                         Owner <SortIcon column="owner_name" />
@@ -733,7 +743,7 @@ const DealsList: React.FC = () => {
                                     </div>
                                 )}
                             </th>
-                            <th data-filter-column="created_at" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                            <th data-filter-column="created_at" className="px-2 sm:px-3 py-2 hover:bg-slate-100 transition-colors relative group w-1/6 min-w-[100px]">
                                 <div className="flex items-center gap-2">
                                     <div className="flex-1 cursor-pointer" onClick={() => requestSort('created_at')}>
                                         Creado <SortIcon column="created_at" />
@@ -771,7 +781,7 @@ const DealsList: React.FC = () => {
                                     </div>
                                 )}
                             </th>
-                            <th data-filter-column="updated_at" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
+                            <th data-filter-column="updated_at" className="px-2 sm:px-3 py-2 hover:bg-slate-100 transition-colors relative group w-1/6 min-w-[100px]">
                                 <div className="flex items-center gap-2">
                                     <div className="flex-1 cursor-pointer" onClick={() => requestSort('updated_at')}>
                                         Last Update <SortIcon column="updated_at" />
@@ -809,7 +819,7 @@ const DealsList: React.FC = () => {
                                     </div>
                                 )}
                             </th>
-                            <th className="px-2 py-3 text-center">Acciones</th>
+                            <th className="px-2 py-2 text-center w-auto min-w-[80px]">Acciones</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white" style={{ minHeight: '400px' }}>
@@ -826,20 +836,20 @@ const DealsList: React.FC = () => {
                                 <tr key={deal.id_trato} onClick={() => handleRowClick(deal.id_trato)} className="hover:bg-slate-50/80 transition-all cursor-pointer group">
 
                                     {/* 1. Nombre Trato */}
-                                    <td className="px-2 sm:px-4 py-2 align-top">
+                                    <td className="px-2 sm:px-3 py-1.5 align-top">
                                         <div className="flex flex-col whitespace-normal break-words">
-                                            <span className="font-bold text-brand-600 text-sm hover:underline">{deal.nombre_trato}</span>
+                                            <span className="font-bold text-brand-600 text-xs hover:underline">{deal.nombre_trato}</span>
                                         </div>
                                     </td>
 
                                     {/* 3. Cliente (Empresa + Contacto) */}
-                                    <td className="px-2 sm:px-4 py-2 align-top">
+                                    <td className="px-2 sm:px-3 py-1.5 align-top">
                                         <div className="flex flex-col whitespace-normal">
-                                            <div className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                                            <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                                                 <i className="fa-solid fa-building text-slate-400 text-xs"></i>
                                                 {deal.client_company_name}
                                             </div>
-                                            <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                                            <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1.5">
                                                 <i className="fa-solid fa-user text-slate-400 text-xs"></i>
                                                 <span>{deal.contact_full_name}</span>
                                             </div>
@@ -847,14 +857,14 @@ const DealsList: React.FC = () => {
                                     </td>
 
                                     {/* 3. Valor */}
-                                    <td className="px-2 sm:px-4 py-2 text-right">
-                                        <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded text-sm">
+                                    <td className="px-2 sm:px-3 py-1.5 text-right">
+                                        <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-xs">
                                             {deal.valor_trato}
                                         </span>
                                     </td>
 
                                     {/* 4. Estado (editable) */}
-                                    <td className="px-2 sm:px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-2 sm:px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
                                         <InlineBadgeSelector
                                             valueId={deal.id_deal_status}
                                             items={dealStatuses.map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon }))}
@@ -873,7 +883,7 @@ const DealsList: React.FC = () => {
                                     </td>
 
                                     {/* 5. Interés (editable) */}
-                                    <td className="px-2 sm:px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-2 sm:px-3 py-1.5" onClick={(e) => e.stopPropagation()}>
                                         <InlineBadgeSelector
                                             valueId={deal.id_interest}
                                             items={interestStatuses.map(i => ({ id: i.id_interest, name: i.name, color: i.color, icon: i.icon }))}
@@ -892,49 +902,49 @@ const DealsList: React.FC = () => {
                                     </td>
 
                                     {/* 6. Propietario (Avatar) */}
-                                    <td className="px-2 sm:px-4 py-2">
+                                    <td className="px-2 sm:px-3 py-1.5">
                                         <div className="flex items-center gap-2" title={deal.owner_name}>
                                             <img
                                                 src={deal.created_by_avatar || `https://ui-avatars.com/api/?name=${deal.owner_name}&background=random`}
                                                 alt="Owner"
-                                                className="w-8 h-8 rounded-full border-2 border-white shadow-sm object-cover"
+                                                className="w-6 h-6 rounded-full border-2 border-white shadow-sm object-cover"
                                             />
-                                            <span className="text-xs text-slate-600 whitespace-nowrap">{deal.owner_name}</span>
+                                            <span className="text-[10px] text-slate-600 whitespace-nowrap">{deal.owner_name}</span>
                                         </div>
                                     </td>
 
                                     {/* 7. Fecha Creación */}
-                                    <td className="px-2 sm:px-4 py-2">
-                                        <div className="text-xs text-slate-600 whitespace-nowrap">
-                                            <i className="fa-regular fa-calendar-plus text-slate-400 mr-1.5"></i>
+                                    <td className="px-2 sm:px-3 py-1.5">
+                                        <div className="text-[10px] text-slate-600 whitespace-nowrap">
+                                            <i className="fa-regular fa-calendar-plus text-slate-400 mr-1"></i>
                                             {deal.created_at_fmt || deal.fecha_creacion?.split('T')[0] || 'N/A'}
                                         </div>
                                     </td>
 
                                     {/* 8. Fecha Actualización */}
-                                    <td className="px-2 sm:px-4 py-2">
-                                        <div className="text-xs text-slate-600 whitespace-nowrap">
-                                            <i className="fa-regular fa-calendar-check text-slate-400 mr-1.5"></i>
+                                    <td className="px-2 sm:px-3 py-1.5">
+                                        <div className="text-[10px] text-slate-600 whitespace-nowrap">
+                                            <i className="fa-regular fa-calendar-check text-slate-400 mr-1"></i>
                                             {deal.updated_at_fmt || deal.updated_at?.split('T')[0] || 'N/A'}
                                         </div>
                                     </td>
 
                                     {/* 9. Acciones */}
-                                    <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <td className="px-2 py-1.5 text-right" onClick={(e) => e.stopPropagation()}>
+                                        <div className="flex items-center gap-0.5 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
                                             {(deal.access_level === 'EDIT' || user?.rol_user === 'admin') && (
                                                 <>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(deal); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Editar">
-                                                        <i className="fa-solid fa-pen-to-square text-xs"></i>
+                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(deal); }} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded transition-colors" title="Editar">
+                                                        <i className="fa-solid fa-pen-to-square text-[10px]"></i>
                                                     </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); openShareModal(deal.id_trato); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Compartir">
-                                                        <i className="fa-solid fa-user-plus text-xs"></i>
+                                                    <button onClick={(e) => { e.stopPropagation(); openShareModal(deal.id_trato); }} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors" title="Compartir">
+                                                        <i className="fa-solid fa-user-plus text-[10px]"></i>
                                                     </button>
                                                 </>
                                             )}
                                             {(deal.created_by === user?.id_user || user?.rol_user === 'admin') && (
-                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(deal.id_trato); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
-                                                    <i className="fa-solid fa-trash-can text-xs"></i>
+                                                <button onClick={(e) => { e.stopPropagation(); handleDelete(deal.id_trato); }} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Eliminar">
+                                                    <i className="fa-solid fa-trash-can text-[10px]"></i>
                                                 </button>
                                             )}
                                         </div>
@@ -943,7 +953,7 @@ const DealsList: React.FC = () => {
                             ))}
                             {/* Filas vacías para mantener altura mínima */}
                             {processedDeals.length < 6 && Array.from({ length: 6 - processedDeals.length }).map((_, i) => (
-                                <tr key={`empty-${i}`} style={{ height: '60px' }}>
+                                <tr key={`empty-${i}`} style={{ height: '40px' }}>
                                     <td colSpan={9}></td>
                                 </tr>
                             ))}
@@ -957,17 +967,87 @@ const DealsList: React.FC = () => {
 
     return (
         <>
-        <div className="w-full mx-auto px-2 md:px-4 lg:px-6 space-y-4 animate-fade-in pb-12">
-            {/* Header Section */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Tratos</h1>
-                    <p className="text-slate-500 text-sm mt-1">Gestiona y monitorea tus oportunidades de venta.</p>
+        <div className="w-full flex gap-4 animate-fade-in pb-12">
+            
+            {/* SIDEBAR - Filtros por Estado */}
+            {isSidebarOpen && (
+                <div className="bg-white border-r border-slate-200 shadow-sm flex flex-col" style={{ width: 'fit-content', minWidth: '140px' }}>
+                    {/* Header del Sidebar */}
+                    <div className="px-2 py-2 border-b border-slate-200 flex items-center justify-between gap-2">
+                        <h3 className="font-semibold text-slate-700 text-xs">Estados</h3>
+                        <button 
+                            onClick={() => setIsSidebarOpen(false)}
+                            className="p-1 hover:bg-slate-100 rounded transition-colors"
+                            title="Cerrar"
+                        >
+                            <i className="fa-solid fa-times text-xs text-slate-400"></i>
+                        </button>
+                    </div>
+
+                    {/* Lista de Estados */}
+                    <div className="flex-1 overflow-y-auto py-1">
+                        {dealStatuses.map(status => {
+                            const count = deals.filter(d => d.id_deal_status === status.id_status).length;
+                            const isSelected = statusFilter === status.id_status;
+                            
+                            return (
+                                <button
+                                    key={status.id_status}
+                                    onClick={() => setStatusFilter(isSelected ? '' : status.id_status)}
+                                    className={`w-full px-2 py-1.5 text-left transition-colors flex items-center gap-2 ${isSelected ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                                    style={isSelected ? { 
+                                        backgroundColor: `${status.color}15`,
+                                        borderLeft: `3px solid ${status.color}`
+                                    } : {}}
+                                >
+                                    {/* Icono del estado */}
+                                    {status.icon && (
+                                        <i 
+                                            className={`${status.icon} flex-shrink-0 text-sm`}
+                                            style={{ color: status.color || '#666' }}
+                                        ></i>
+                                    )}
+                                    {!status.icon && (
+                                        <div
+                                            className="w-2 h-2 rounded-full flex-shrink-0"
+                                            style={{ backgroundColor: status.color || '#ccc' }}
+                                        ></div>
+                                    )}
+                                    
+                                    <div className="flex-1 flex items-baseline gap-1 min-w-0">
+                                        <span className="text-xs font-medium text-slate-800 truncate">{status.name}</span>
+                                        <span className="text-[10px] text-slate-500 font-semibold whitespace-nowrap">({count})</span>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
-                <button onClick={handleAddNew} className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-brand-200 text-sm font-medium transition-all flex items-center justify-center">
-                    <i className="fa-solid fa-plus mr-2"></i> Nuevo Trato
+            )}
+            
+            {/* Botón para abrir sidebar cuando está cerrado */}
+            {!isSidebarOpen && (
+                <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    className="bg-white border-r border-slate-200 px-2 py-2 hover:bg-slate-50 transition-colors flex items-center justify-center"
+                    title="Mostrar filtros"
+                >
+                    <i className="fa-solid fa-filter text-slate-400"></i>
                 </button>
-            </div>
+            )}
+
+            {/* MAIN CONTENT */}
+            <div className="flex-1 mx-auto px-2 md:px-4 lg:px-6 space-y-4">
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Tratos</h1>
+                        <p className="text-slate-500 text-sm mt-1">Gestiona y monitorea tus oportunidades de venta.</p>
+                    </div>
+                    <button onClick={handleAddNew} className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-brand-200 text-sm font-medium transition-all flex items-center justify-center">
+                        <i className="fa-solid fa-plus mr-2"></i> Nuevo Trato
+                    </button>
+                </div>
 
             {/* Filters Bar */}
             <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex flex-col md:flex-row md:flex-wrap gap-3 items-center">
@@ -1144,10 +1224,10 @@ const DealsList: React.FC = () => {
                     </div>
                 </div>
             )}
-            </div>
-
             {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
             <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />
+            </div>
+        </div>
         </>
     );
 };
