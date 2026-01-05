@@ -1,15 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useDealFilters } from '../contexts/DealFiltersContext';
 import { getImageUrl } from '../utils/imageUtils';
-
-interface DealStatus {
-  id_status: string;
-  name: string;
-  color: string;
-  icon?: string;
-}
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -80,9 +72,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const [tenantName, setTenantName] = useState<string | null>(null);
   
-  // Usar contexto para filtros de Tratos
-  const { dealStatuses, statusFilter, setStatusFilter, expandedMenu, setExpandedMenu, deals } = useDealFilters();
-  
   const { user, logout } = useAuth(); 
   const location = useLocation();
   const navigate = useNavigate();
@@ -128,109 +117,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   // Función auxiliar para renderizar links
-  const NavLinkItem = ({ item, isCollapsed, submenu, isExpanded, onToggleExpand, deals }: { item: any, isCollapsed: boolean, submenu?: DealStatus[], isExpanded?: boolean, onToggleExpand?: () => void, deals?: any[] }) => {
+  const NavLinkItem = ({ item, isCollapsed }: { item: any, isCollapsed: boolean }) => {
     if (!item.roles.includes(userRole)) return null;
     const isActive = location.pathname.startsWith(item.path);
-    const hasSubmenu = submenu && submenu.length > 0;
 
-    // Si tiene submenu, renderizar con expansión
-    if (hasSubmenu) {
-      return (
-        <div>
-          <li className="relative group">
-            <div className="flex items-center gap-0">
-              {/* Link para navegar a la página */}
-              <Link 
-                to={item.path}
-                onClick={() => setIsMobileSidebarOpen(false)}
-                className={`flex-1 flex items-center transition-all duration-200 group-hover:bg-slate-800 ${
-                  isCollapsed ? 'justify-center px-0 py-2 my-0.5 rounded-lg' : 'px-2 py-2 my-0.5 rounded-lg'
-                } ${
-                  isActive 
-                    ? 'bg-brand-600 text-white shadow-md' 
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <div className={`flex justify-center items-center transition-transform duration-200 ${isCollapsed ? 'w-10' : 'w-7'} ${isActive ? 'scale-105' : ''}`}>
-                   <i className={`fa-solid ${item.icon} text-base`}></i>
-                </div>
-                
-                <span className={`ml-2 font-medium text-sm whitespace-nowrap transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 w-auto'}`}>
-                  {item.label}
-                </span>
-              </Link>
-
-              {/* Botón para expandir/contraer submenu */}
-              {!isCollapsed && (
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    onToggleExpand?.();
-                  }}
-                  className="px-2 py-2 text-slate-400 hover:text-white transition-colors"
-                >
-                  <i className={`fa-solid fa-chevron-down text-xs transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}></i>
-                </button>
-              )}
-
-              {/* Tooltip para modo contraído */}
-              {isCollapsed && (
-                <div className="absolute left-12 top-1/2 -translate-y-1/2 bg-slate-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-md border border-slate-700">
-                  {item.label}
-                </div>
-              )}
-            </div>
-          </li>
-
-          {/* Submenu Items - solo mostrar si está expandido y no está colapsado */}
-          {isExpanded && !isCollapsed && (
-            <div className="ml-2 mt-1 space-y-1 border-l border-slate-700 pl-2">
-              {submenu.map(status => {
-                const count = deals?.filter(d => d.id_deal_status === status.id_status).length || 0;
-                const isSelected = statusFilter === status.id_status;
-                
-                return (
-                  <button
-                    key={status.id_status}
-                    onClick={() => {
-                      setStatusFilter(isSelected ? '' : status.id_status);
-                      setIsMobileSidebarOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left transition-colors text-xs ${
-                      isSelected 
-                        ? 'text-white' 
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                    }`}
-                    style={isSelected ? { 
-                      backgroundColor: `${status.color}25`,
-                      borderLeft: `3px solid ${status.color}`
-                    } : {}}
-                  >
-                    {/* Icono del estado */}
-                    {status.icon ? (
-                      <i 
-                        className={`${status.icon} flex-shrink-0`}
-                        style={{ color: status.color || '#666' }}
-                      ></i>
-                    ) : (
-                      <div
-                        className="w-2 h-2 rounded-full flex-shrink-0"
-                        style={{ backgroundColor: status.color || '#ccc' }}
-                      ></div>
-                    )}
-                    
-                    <span className="truncate flex-1">{status.name}</span>
-                    <span className="text-[10px] text-slate-500 whitespace-nowrap">({count})</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    // Si no tiene submenu, renderizar como link normal
     return (
       <li className="relative group">
         <Link 
@@ -318,10 +208,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     key={item.path} 
                     item={item} 
                     isCollapsed={!isDesktopSidebarOpen}
-                    submenu={item.path === '/app/deals' ? dealStatuses : undefined}
-                    isExpanded={item.path === '/app/deals' ? expandedMenu === 'deals' : undefined}
-                    onToggleExpand={item.path === '/app/deals' ? () => setExpandedMenu(expandedMenu === 'deals' ? null : 'deals') : undefined}
-                    deals={item.path === '/app/deals' ? deals : undefined}
+
                   />
                 ))}
               </div>

@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: './', // Ensures relative paths for assets so it works on any subdirectory/VPS
+  base: '/', // Ruta base absoluta para que React Router funcione correctamente
   server: {
     port: 5173,
     strictPort: false,
@@ -22,4 +22,8 @@ export default defineConfig({
     strictPort: true,
     open: true,
   },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+  }
 })
