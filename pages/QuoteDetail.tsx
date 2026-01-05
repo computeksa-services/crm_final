@@ -40,6 +40,20 @@ const QuoteDetail: React.FC = () => {
   // Estados de Formulario Modal
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [itemQuantity, setItemQuantity] = useState<number>(1);
+  
+  // Estados para crear productos desde el modal
+  const [isCreatingProduct, setIsCreatingProduct] = useState(false);
+  const [productTypes, setProductTypes] = useState<any[]>([]);
+  const [newProduct, setNewProduct] = useState<any>({
+    codigo: '',
+    descripcion: '',
+    tipo: 'BIEN',
+    categoria: '',
+    precio_unitario: 0,
+    imagen_url: ''
+  });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   // Estado de Confirmación
   const [confirmState, setConfirmState] = useState({
@@ -115,6 +129,15 @@ const QuoteDetail: React.FC = () => {
           .then(data => setAvailableProducts(data))
           .catch(() => {})
       );
+      
+      // Tipos de productos
+      promises.push(
+        fetch(`https://service.computeksa.com/webhook/api/products_type?id_tenant=${tenantId}`)
+          .then(res => res.ok ? res.text() : null)
+          .then(text => text ? JSON.parse(text) : [])
+          .then(data => setProductTypes(data))
+          .catch(() => {})
+      );
 
       await Promise.all(promises);
 
@@ -177,13 +200,183 @@ const QuoteDetail: React.FC = () => {
     // Si no se puede extraer, devolver la URL original
     return url;
   };
+  
+  const getNextProductCode = () => {
+    if (availableProducts.length === 0) return 'COD-001';
+    
+    const codes = availableProducts
+      .map(p => p.codigo || '')
+      .filter(c => c.startsWith('COD-'))
+      .map(c => parseInt(c.replace('COD-', '')) || 0)
+      .sort((a, b) => b - a);
+    
+    const nextNum = (codes[0] || 0) + 1;
+    return `COD-${String(nextNum).padStart(3, '0')}`;
+  };
 
   const handleAddItem = () => {
     if (!quote || (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin')) {
       setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
       return;
     }
+    setIsCreatingProduct(false);
+    setSelectedProductId(null);
+    setItemQuantity(1);
     setIsProductModalOpen(true);
+  };
+  
+  const handleToggleCreateProduct = () => {
+    setIsCreatingProduct(!isCreatingProduct);
+    if (!isCreatingProduct) {
+      // Inicializar nuevo producto con valores por defecto
+      setNewProduct({
+        codigo: '',
+        descripcion: '',
+        tipo: productTypes.length > 0 ? productTypes[0].type : 'BIEN',
+        categoria: '',
+        precio_unitario: 0,
+        imagen_url: ''
+      });
+      setImageFile(null);
+    }
+  };
+  
+  const handleProductInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setNewProduct((prev: any) => ({ ...prev, [name]: value }));
+  };
+  
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 800 * 1024) {
+        setToast({ message: 'Imagen muy pesada (Max 800KB).', type: 'error' });
+        return;
+      }
+      
+      setImageFile(file);
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setNewProduct((prev: any) => ({ ...prev, imagen_url: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+  
+  const handleCreateAndAddProduct = async () => {
+    if (!newProduct.descripcion || !newProduct.tipo || !user?.id_tenant) {
+      setToast({ message: 'Descripción y Tipo son obligatorios.', type: 'error' });
+      return;
+    }
+    
+    setProcessing(true);
+    
+    try {
+      // 1. Crear el producto
+      const formData = new FormData();
+      formData.append('id_product', '');
+      formData.append('id_tenant', user.id_tenant);
+      formData.append('codigo', newProduct.codigo || '');
+      formData.append('descripcion', newProduct.descripcion);
+      formData.append('tipo', newProduct.tipo);
+      formData.append('categoria', newProduct.categoria || '');
+      formData.append('precio_unitario', String(Number(newProduct.precio_unitario)));
+      formData.append('imagen_subida', String(!!imageFile));
+      
+      if (imageFile) {
+        formData.append('imagen', imageFile);
+      }
+      
+      const createResponse = await fetch('https://service.computeksa.com/webhook/api/products', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!createResponse.ok) throw new Error('Error al crear el producto.');
+      
+      // 2. Recargar la lista de productos para obtener el recién creado
+      const productsResponse = await fetch(`https://service.computeksa.com/webhook/api/products?id_tenant=${user.id_tenant}`);
+      if (!productsResponse.ok) throw new Error('Producto creado pero no se pudo recargar la lista.');
+      
+      const productsText = await productsResponse.text();
+      const updatedProducts = productsText ? JSON.parse(productsText) : [];
+      
+      // 3. Buscar el producto recién creado por descripción
+      const createdProduct = updatedProducts.find((p: any) => 
+        p.descripcion === newProduct.descripcion && 
+        p.tipo === newProduct.tipo &&
+        p.categoria === (newProduct.categoria || '')
+      );
+      
+      if (!createdProduct || !createdProduct.id_product) {
+        // El producto se creó pero no lo encontramos, actualizar lista y cerrar
+        setAvailableProducts(updatedProducts);
+        setToast({ message: 'Producto creado. Selecciónalo de la lista para añadirlo.', type: 'success' });
+        setIsCreatingProduct(false);
+        setNewProduct({
+          codigo: '',
+          descripcion: '',
+          tipo: 'BIEN',
+          categoria: '',
+          precio_unitario: 0,
+          imagen_url: ''
+        });
+        setImageFile(null);
+        setProcessing(false);
+        return;
+      }
+      
+      // 4. Actualizar la lista de productos disponibles
+      setAvailableProducts(updatedProducts);
+      
+      // 5. Añadir el producto a la cotización
+      const precioUnitario = parseFloat(newProduct.precio_unitario) || 0;
+      const subtotalItem = itemQuantity * precioUnitario;
+      
+      const addItemPayload = {
+        id_cotizacion: quote?.id_cotizacion,
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+        descripcion: newProduct.descripcion,
+        cantidad: itemQuantity,
+        precio_unitario: precioUnitario,
+        subtotal: subtotalItem,
+        id_producto: createdProduct.id_product
+      };
+      
+      const addResponse = await fetch('https://service.computeksa.com/webhook/api/products-selected', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(addItemPayload),
+      });
+      
+      if (!addResponse.ok) throw new Error('Producto creado pero no se pudo añadir a la cotización.');
+      
+      setToast({ message: 'Producto creado y añadido correctamente.', type: 'success' });
+      
+      // Limpiar modal y estados
+      setIsProductModalOpen(false);
+      setIsCreatingProduct(false);
+      setNewProduct({
+        codigo: '',
+        descripcion: '',
+        tipo: 'BIEN',
+        categoria: '',
+        precio_unitario: 0,
+        imagen_url: ''
+      });
+      setImageFile(null);
+      setItemQuantity(1);
+      
+      // Recargar datos
+      fetchData();
+      
+    } catch (e: any) {
+      setToast({ message: e.message || 'Error al crear el producto.', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleProductSelection = async () => {
@@ -528,90 +721,230 @@ const handleGeneratePDF = async () => {
       {/* Product Selection Modal */}
       {isProductModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
               <h2 className="text-lg font-bold text-slate-800 flex items-center">
                 <span className="w-8 h-8 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center mr-3 text-sm">
-                    <i className="fa-solid fa-box-open"></i>
+                    <i className={`fa-solid ${isCreatingProduct ? 'fa-plus' : 'fa-box-open'}`}></i>
                 </span>
-                Seleccionar Artículo
+                {isCreatingProduct ? 'Crear Nuevo Producto' : 'Seleccionar Artículo'}
               </h2>
               <button onClick={() => setIsProductModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center">
                 <i className="fa-solid fa-times"></i>
               </button>
             </div>
+            
             <div className="p-6 space-y-5 overflow-y-auto">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Producto</label>
-                <div className="relative">
-                    <select 
-                    value={selectedProductId || ''} 
-                    onChange={(e) => setSelectedProductId(e.target.value)}
-                    required 
-                    className="w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none appearance-none transition-all"
-                    >
-                    <option value="">-- Buscar Producto --</option>
-                    {availableProducts.map(p => (
-                        <option key={p.id_product} value={p.id_product}>
-                        {p.descripcion} ({p.codigo})
-                        </option>
-                    ))}
-                    </select>
-                    <div className="absolute right-4 top-3.5 text-slate-400 pointer-events-none">
-                        <i className="fa-solid fa-chevron-down text-xs"></i>
-                    </div>
-                </div>
+              {/* Toggle entre seleccionar y crear */}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingProduct(false)}
+                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${!isCreatingProduct ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                >
+                  <i className="fa-solid fa-list mr-2"></i>
+                  Seleccionar Existente
+                </button>
+                <button
+                  type="button"
+                  onClick={handleToggleCreateProduct}
+                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${isCreatingProduct ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                >
+                  <i className="fa-solid fa-plus mr-2"></i>
+                  Crear Nuevo
+                </button>
               </div>
-
-              {/* Preview del producto seleccionado con imagen */}
-              {selectedProductId && selectedProductId.length > 0 && (() => {
-                const selectedProduct = availableProducts.find(p => p.id_product.toString() === selectedProductId);
-                return selectedProduct ? (
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                    <div className="flex items-start gap-4">
-                      {selectedProduct.imagen && (
-                        <div className="flex-shrink-0">
-                          <img
-                            src={convertGoogleDriveUrl(selectedProduct.imagen)}
-                            alt={selectedProduct.descripcion}
-                            className="h-16 w-16 object-cover rounded-lg border border-slate-200"
-                            onError={(e) => {
-                              const target = e.target as HTMLImageElement;
-                              target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2UyZTgtZjAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjOTRhM2I4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+U2luIGltYWdlbjwvdGV4dD48L3N2Zz4=';
-                            }}
-                          />
+              
+              {!isCreatingProduct ? (
+                /* MODO SELECCIÓN */
+                <>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Producto</label>
+                    <div className="relative">
+                        <select 
+                        value={selectedProductId || ''} 
+                        onChange={(e) => setSelectedProductId(e.target.value)}
+                        required 
+                        className="w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none appearance-none transition-all"
+                        >
+                        <option value="">-- Buscar Producto --</option>
+                        {availableProducts.map(p => (
+                            <option key={p.id_product} value={p.id_product}>
+                            {p.descripcion} ({p.codigo})
+                            </option>
+                        ))}
+                        </select>
+                        <div className="absolute right-4 top-3.5 text-slate-400 pointer-events-none">
+                            <i className="fa-solid fa-chevron-down text-xs"></i>
                         </div>
-                      )}
-                      <div className="flex-grow">
-                        <p className="text-sm font-medium text-slate-900">
-                          {selectedProduct.descripcion}
-                        </p>
-                        <p className="text-xs text-slate-600 mt-1">
-                          Código: {selectedProduct.codigo}
-                        </p>
-                        {selectedProduct.precio && (
-                          <p className="text-xs text-slate-600 mt-1">
-                            Precio: ${selectedProduct.precio.toFixed(2)}
-                          </p>
-                        )}
-                      </div>
                     </div>
                   </div>
-                ) : null;
-              })()}
 
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cantidad</label>
-                <input 
-                  type="number" 
-                  value={itemQuantity} 
-                  onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
-                  min="1" 
-                  required 
-                  className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
-                />
-              </div>
+                  {/* Preview del producto seleccionado con imagen */}
+                  {selectedProductId && selectedProductId.length > 0 && (() => {
+                    const selectedProduct = availableProducts.find(p => p.id_product.toString() === selectedProductId);
+                    return selectedProduct ? (
+                      <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                        <div className="flex items-start gap-4">
+                          {selectedProduct.imagen && (
+                            <div className="flex-shrink-0">
+                              <img
+                                src={convertGoogleDriveUrl(selectedProduct.imagen)}
+                                alt={selectedProduct.descripcion}
+                                className="h-16 w-16 object-cover rounded-lg border border-slate-200"
+                                onError={(e) => {
+                                  const target = e.target as HTMLImageElement;
+                                  target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2UyZThmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5NGEzYjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5TaW4gaW1hZ2VuPC90ZXh0Pjwvc3ZnPg==';
+                                }}
+                              />
+                            </div>
+                          )}
+                          <div className="flex-grow">
+                            <p className="text-sm font-medium text-slate-900">
+                              {selectedProduct.descripcion}
+                            </p>
+                            <p className="text-xs text-slate-600 mt-1">
+                              Código: {selectedProduct.codigo}
+                            </p>
+                            {selectedProduct.precio && (
+                              <p className="text-xs text-slate-600 mt-1">
+                                Precio: ${selectedProduct.precio.toFixed(2)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null;
+                  })()}
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cantidad</label>
+                    <input 
+                      type="number" 
+                      value={itemQuantity} 
+                      onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
+                      min="1" 
+                      required 
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
+                    />
+                  </div>
+                </>
+              ) : (
+                /* MODO CREACIÓN */
+                <>
+                  {/* Image Upload */}
+                  <div className="flex gap-6 items-start">
+                      <div 
+                        className="w-32 h-32 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden bg-slate-50 relative group cursor-pointer hover:border-brand-400 transition-colors flex-shrink-0" 
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        {newProduct.imagen_url ? (
+                            <img src={convertGoogleDriveUrl(newProduct.imagen_url)} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                            <div className="text-center p-2">
+                                <i className="fa-solid fa-cloud-arrow-up text-3xl text-slate-300 mb-1"></i>
+                                <p className="text-[11px] text-slate-400 font-medium">Subir foto</p>
+                            </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
+                            Cambiar
+                        </div>
+                      </div>
+                      <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
+                      
+                      <div className="flex-1 space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                                  Código <span className="text-slate-400 font-normal">(Opcional)</span>
+                                </label>
+                                <div className="space-y-2">
+                                  <input 
+                                      name="codigo" 
+                                      value={newProduct.codigo || ''} 
+                                      onChange={handleProductInputChange} 
+                                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm" 
+                                      placeholder="Dejar vacío para autogenerar"
+                                  />
+                                  {!newProduct.codigo && (
+                                    <p className="text-xs text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                                      💡 Se generará: <span className="font-mono font-bold text-brand-600">{getNextProductCode()}</span>
+                                    </p>
+                                  )}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Categoría</label>
+                                <input 
+                                    name="categoria" 
+                                    value={newProduct.categoria || ''} 
+                                    onChange={handleProductInputChange} 
+                                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" 
+                                    placeholder="Ej. Hardware"
+                                />
+                            </div>
+                      </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Descripción <span className="text-red-500">*</span></label>
+                    <textarea 
+                        name="descripcion" 
+                        rows={4} 
+                        required 
+                        value={newProduct.descripcion || ''} 
+                        onChange={handleProductInputChange} 
+                        className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+                        placeholder="Detalles del producto o servicio..."
+                    ></textarea>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tipo <span className="text-red-500">*</span></label>
+                        <div className="relative">
+                            <select 
+                                name="tipo" 
+                                value={newProduct.tipo || ''} 
+                                onChange={handleProductInputChange} 
+                                required
+                                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
+                            >
+                                {productTypes.map((pt: any) => <option key={pt.id_product_type} value={pt.type}>{pt.type}</option>)}
+                            </select>
+                            <div className="absolute right-3 top-3 text-slate-400 pointer-events-none text-xs"><i className="fa-solid fa-chevron-down"></i></div>
+                        </div>
+                    </div>
+                    <div className="col-span-2">
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Precio Unitario</label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-2.5 text-slate-400">$</span>
+                            <input 
+                                type="number" 
+                                name="precio_unitario" 
+                                step="0.01" 
+                                value={newProduct.precio_unitario || ''} 
+                                onChange={handleProductInputChange} 
+                                className="w-full pl-7 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" 
+                            />
+                        </div>
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cantidad a Añadir</label>
+                    <input 
+                      type="number" 
+                      value={itemQuantity} 
+                      onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
+                      min="1" 
+                      required 
+                      className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
+                    />
+                  </div>
+                </>
+              )}
             </div>
+            
             <div className="flex justify-end p-6 border-t border-slate-100 bg-slate-50 gap-3">
               <button 
                 type="button" 
@@ -622,12 +955,12 @@ const handleGeneratePDF = async () => {
               </button>
               <button 
                 type="button" 
-                onClick={handleProductSelection} 
-                disabled={processing || !selectedProductId}
+                onClick={isCreatingProduct ? handleCreateAndAddProduct : handleProductSelection} 
+                disabled={processing || (!isCreatingProduct && !selectedProductId) || (isCreatingProduct && !newProduct.descripcion)}
                 className="px-5 py-2.5 rounded-xl bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg shadow-brand-200 disabled:opacity-70 disabled:shadow-none flex items-center transition-all"
               >
                 {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-plus mr-2"></i>}
-                Añadir al Presupuesto
+                {isCreatingProduct ? 'Crear y Añadir' : 'Añadir al Presupuesto'}
               </button>
             </div>
           </div>
