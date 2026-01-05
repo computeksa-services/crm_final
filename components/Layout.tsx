@@ -76,7 +76,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
     const fetchTenantName = async () => {
       try {
-        const response = await fetch(`https://service.computeksa.com/webhook/api/tenants/detail?id_tenant=${user.id_tenant}`);
+        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/detail?id_tenant=${user.id_tenant}`);
         if (response.ok) {
           const data = await response.json();
           const name = Array.isArray(data) ? data[0]?.name_tenant : data.name_tenant;

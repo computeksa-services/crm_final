@@ -43,7 +43,7 @@ const SettingsDealInterests: React.FC = () => {
     if (!user?.id_tenant) return;
     setLoading(true);
     try {
-      const response = await fetch(`https://service.computeksa.com/webhook/api/statuses/interests?id_tenant=${user.id_tenant}`);
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${user.id_tenant}`);
       if (!response.ok) {
         if(response.status === 404) setInterests([]);
         else throw new Error('Failed to fetch deal interests');
@@ -97,7 +97,7 @@ const SettingsDealInterests: React.FC = () => {
       const updatePromises = interests.map((item, index) => {
         const newOrder = index + 1;
         const payload = { ...item, status_order: newOrder, id_tenant: user.id_tenant };
-        return fetch(`https://service.computeksa.com/webhook/api/statuses/interests/update`, {
+        return fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -141,8 +141,8 @@ const SettingsDealInterests: React.FC = () => {
     const payload = { ...editingInterest, id_tenant: user.id_tenant };
     const isUpdating = 'id_interest' in editingInterest;
     const url = isUpdating 
-        ? `https://service.computeksa.com/webhook/api/statuses/interests/update` 
-        : `https://service.computeksa.com/webhook/api/statuses/interests`;
+        ? `${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests/update` 
+        : `${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests`;
 
     try {
       const response = await fetch(url, { 
@@ -168,7 +168,7 @@ const SettingsDealInterests: React.FC = () => {
       message: '¿Estás seguro? Esto podría afectar a tratos existentes.',
       onConfirm: async () => {
         try {
-          const response = await fetch(`https://service.computeksa.com/webhook/api/statuses/interests/delete`, {
+          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_interest: id, id_tenant: user?.id_tenant }),

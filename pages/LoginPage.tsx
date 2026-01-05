@@ -17,7 +17,7 @@ const LoginPage: React.FC = () => {
     try {
       setError('');
       // URL de tu Webhook en n8n
-      const endpoint = 'https://service.computeksa.com/webhook/api/auth/callback'; 
+      const endpoint = `${import.meta.env.VITE_WEBHOOK_URL}/api/auth/callback`; 
       
       // Determinamos el redirect_uri correcto según el proveedor
       // Google (Popup) requiere la palabra clave 'postmessage'

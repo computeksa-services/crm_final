@@ -160,12 +160,39 @@ const QuoteDetail: React.FC = () => {
   
   // --- HANDLERS (LOGICA SIMPLIFICADA) ---
 
+  const convertGoogleDriveUrl = (url: string): string => {
+    if (!url) return '';
+    
+    // Si ya es una URL de proxy, devolverla
+    if (url.includes('images.weserv.nl')) return url;
+    
+    // Extraer el ID del archivo de URL de Google Drive
+    const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      const directUrl = `https://drive.google.com/uc?id=${match[1]}&export=view`;
+      // Usar un proxy para evitar problemas de CORS
+      return `https://images.weserv.nl/?url=${encodeURIComponent(directUrl)}&n=-1`;
+    }
+    
+    // Si no se puede extraer, devolver la URL original
+    return url;
+  };
+
   const handleAddItem = () => {
+    if (!quote || (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin')) {
+      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
+      return;
+    }
     setIsProductModalOpen(true);
   };
 
   const handleProductSelection = async () => {
     if (!selectedProductId || !quote || !user?.id_tenant || !user?.id_user) return;
+    
+    if (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
+      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
+      return;
+    }
 
     const selectedProduct = availableProducts.find(p => p.id_product === selectedProductId);
     if (!selectedProduct) {
@@ -220,6 +247,11 @@ const QuoteDetail: React.FC = () => {
   const handleUpdateItem = async (itemId: string, newCantidad: number, newPrecioUnitario: number) => {
     if (!quote || !user?.id_tenant || !user?.id_user || !itemId) return;
     
+    if (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
+      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
+      return;
+    }
+    
     // Evitar llamadas innecesarias
     const currentItem = items.find(i => (i.id_articulo_cot || i.id_quote_item) === itemId);
     const cantidadAnt = parseFloat(currentItem?.cantidad as any) || 0;
@@ -262,6 +294,11 @@ const QuoteDetail: React.FC = () => {
   };
 
   const handleDeleteItem = (itemId: string) => {
+    if (!quote || (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin')) {
+      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
+      return;
+    }
+    
     setConfirmState({
       isOpen: true,
       title: 'Eliminar Artículo',
@@ -304,6 +341,12 @@ const QuoteDetail: React.FC = () => {
 
   const handleSaveHeader = async () => {
     if (!quote || !user) return;
+    
+    if (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
+      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
+      return;
+    }
+    
     setProcessing(true);
     try {
         const response = await fetch('/api/quotes/update', {
@@ -335,6 +378,11 @@ const QuoteDetail: React.FC = () => {
 const handleGeneratePDF = async () => {
     if (!quote || !user?.id_user || !user?.id_tenant) {
       setToast({ message: 'Faltan datos de usuario o cotización.', type: 'error' });
+      return;
+    }
+    
+    if (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
+      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
       return;
     }
 
@@ -381,6 +429,12 @@ const handleGeneratePDF = async () => {
 
   const handleSendQuote = async (id_version?: string) => {
     if (!quote || !user?.id_user) return;
+    
+    if (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
+      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
+      return;
+    }
+    
     setProcessing(true);
     try {
       const response = await fetch('/api/quotes/send', {
@@ -453,8 +507,14 @@ const handleGeneratePDF = async () => {
   );
 
   const hasItems = items.length > 0;
-  const isPending = !['ENVIADO', 'APROBADO', 'NEGOCIACION'].includes(quote.estado || '');
-  const isReady = quote.estado === 'LISTO PARA ENVIAR';
+  
+  // Encontrar el status actual
+  const currentStatus = quoteStatuses.find(s => s.id_status === quote.id_quote_status);
+  const currentStatusCategory = currentStatus?.status_category;
+  
+  // Estados finales que bloquean modificaciones basados en la categoría del sistema
+  const canEditItems = currentStatusCategory !== 'ACCEPTED' && currentStatusCategory !== 'REJECTED';
+  const isReady = currentStatusCategory === 'SENT';
   const isSent = quote.estado_decision !== UserDecision.PENDING;
   
   const showGenerateBtn = hasItems;
@@ -502,6 +562,44 @@ const handleGeneratePDF = async () => {
                     </div>
                 </div>
               </div>
+
+              {/* Preview del producto seleccionado con imagen */}
+              {selectedProductId && selectedProductId.length > 0 && (() => {
+                const selectedProduct = availableProducts.find(p => p.id_product.toString() === selectedProductId);
+                return selectedProduct ? (
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                    <div className="flex items-start gap-4">
+                      {selectedProduct.imagen && (
+                        <div className="flex-shrink-0">
+                          <img
+                            src={convertGoogleDriveUrl(selectedProduct.imagen)}
+                            alt={selectedProduct.descripcion}
+                            className="h-16 w-16 object-cover rounded-lg border border-slate-200"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2UyZTgtZjAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjOTRhM2I4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+U2luIGltYWdlbjwvdGV4dD48L3N2Zz4=';
+                            }}
+                          />
+                        </div>
+                      )}
+                      <div className="flex-grow">
+                        <p className="text-sm font-medium text-slate-900">
+                          {selectedProduct.descripcion}
+                        </p>
+                        <p className="text-xs text-slate-600 mt-1">
+                          Código: {selectedProduct.codigo}
+                        </p>
+                        {selectedProduct.precio && (
+                          <p className="text-xs text-slate-600 mt-1">
+                            Precio: ${selectedProduct.precio.toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
+
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cantidad</label>
                 <input 
@@ -557,7 +655,8 @@ const handleGeneratePDF = async () => {
                <div className="flex-1 w-full sm:w-auto">
                     <label className="text-xs font-bold text-slate-400 block mb-1">Nombre</label>
                     <input 
-                        className="px-3 py-2 border border-slate-300 rounded-lg w-full focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
+                        disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                        className="px-3 py-2 border border-slate-300 rounded-lg w-full focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         value={quote.nombre_cotizacion || ''}
                         onChange={(e) => setQuote({ ...quote, nombre_cotizacion: e.target.value })}
                     />
@@ -565,7 +664,8 @@ const handleGeneratePDF = async () => {
                <div className="w-full sm:w-auto">
                     <label className="text-xs font-bold text-slate-400 block mb-1">Etapa</label>
                     <select 
-                        className="px-3 py-2 border border-slate-300 rounded-lg w-full bg-white focus:ring-2 focus:ring-brand-500 outline-none"
+                        disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                        className="px-3 py-2 border border-slate-300 rounded-lg w-full bg-white focus:ring-2 focus:ring-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
                         value={quote.id_quote_status || ''}
                         onChange={(e) => setQuote({ ...quote, id_quote_status: e.target.value })}
                     >
@@ -596,6 +696,7 @@ const handleGeneratePDF = async () => {
              const currentStatus = quoteStatuses.find(s => s.id_status === quote.id_quote_status);
              return (
                <select 
+                 disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
                  value={quote.id_quote_status || ''}
                  onChange={async (e) => {
                    const newStatusId = e.target.value;
@@ -623,7 +724,7 @@ const handleGeneratePDF = async () => {
                      setProcessing(false);
                    }
                  }}
-                 className="px-4 py-2.5 rounded-xl border font-medium transition-all outline-none focus:ring-2 focus:ring-offset-2"
+                 className="px-4 py-2.5 rounded-xl border font-medium transition-all outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                  style={{
                    backgroundColor: `${currentStatus?.color || '#cccccc'}15`,
                    borderColor: `${currentStatus?.color || '#cccccc'}40`,
@@ -640,8 +741,8 @@ const handleGeneratePDF = async () => {
            {showSendBtn && (
              <button 
               onClick={() => handleSendQuote(pdfVersions.length ? pdfVersions[0]?.id_version : undefined)}
-               disabled={processing}
-               className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-200 font-medium transition-all flex items-center">
+               disabled={processing || !(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+               className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-200 font-medium transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
                {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-paper-plane mr-2"></i>}
                Enviar al Cliente
              </button>
@@ -673,7 +774,7 @@ const handleGeneratePDF = async () => {
                 <span className="w-2 h-6 bg-brand-500 rounded-full mr-3"></span>
                 Artículos
               </h3>
-              {isPending && (
+              {canEditItems && (quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
                 <button 
                     onClick={handleAddItem} 
                     className="text-sm bg-brand-50 hover:bg-brand-100 text-brand-700 px-4 py-2 rounded-lg transition-colors font-medium flex items-center"
@@ -723,32 +824,36 @@ const handleGeneratePDF = async () => {
                             <td className="px-4 py-4 text-right">
                                 <input 
                                     type="number"
+                                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
                                     defaultValue={cantidad}
                                     onBlur={(e) => handleUpdateItem(item.id_articulo_cot || item.id_quote_item || '', parseInt(e.target.value) || 1, precioUnitario)}
                                     min="1" 
-                                    className="w-full px-2 py-1.5 bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded text-right font-medium text-slate-700 outline-none transition-all"
+                                    className="w-full px-2 py-1.5 bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded text-right font-medium text-slate-700 outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                             </td>
                             <td className="px-4 py-4 text-right">
                                 <input 
                                     type="number"
+                                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
                                     defaultValue={precioUnitario.toFixed(2)}
                                     onBlur={(e) => handleUpdateItem(item.id_articulo_cot || item.id_quote_item || '', cantidad, parseFloat(e.target.value) || 0)}
                                     step="0.01"
-                                    className="w-full px-2 py-1.5 bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded text-right font-medium text-slate-700 outline-none transition-all"
+                                    className="w-full px-2 py-1.5 bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded text-right font-medium text-slate-700 outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50"
                                 />
                             </td>
                             <td className="px-6 py-4 text-right font-bold text-slate-700">
                                 {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                             <td className="px-4 py-4 text-center">
-                                <button 
-                                onClick={() => handleDeleteItem(item.id_articulo_cot || item.id_quote_item || '')}
-                                className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                title="Eliminar artículo"
-                                >
-                                <i className="fa-solid fa-trash-alt"></i>
-                                </button>
+                                {(quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
+                                  <button 
+                                  onClick={() => handleDeleteItem(item.id_articulo_cot || item.id_quote_item || '')}
+                                  className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                  title="Eliminar artículo"
+                                  >
+                                  <i className="fa-solid fa-trash-alt"></i>
+                                  </button>
+                                )}
                             </td>
                         </tr>
                         )
@@ -780,8 +885,8 @@ const handleGeneratePDF = async () => {
                 {showGenerateBtn && (
                   <button 
                     onClick={handleGeneratePDF}
-                    disabled={processing}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2">
+                    disabled={processing || !(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
                     {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-file-pdf"></i>}
                     Generar PDF v{quote.version + 1}
                   </button>

@@ -53,7 +53,7 @@ const ClientCompanyDetail: React.FC = () => {
 
     try {
       // 1. Obtener Empresa
-      const companyResponse = await fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_client_company=${id}&id_tenant=${tenantId}&id_user=${userId}`);
+      const companyResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_client_company=${id}&id_tenant=${tenantId}&id_user=${userId}`);
       if (!companyResponse.ok) throw new Error(`Error al cargar empresa.`);
       
       const companyText = await companyResponse.text();
@@ -71,7 +71,7 @@ const ClientCompanyDetail: React.FC = () => {
       }
 
       // 2. Obtener Contactos
-      const contactsResponse = await fetch(`https://service.computeksa.com/webhook/api/clients/contacts?id_client_company=${foundCompany.id_client_company}&id_tenant=${tenantId}&id_user=${userId}`);
+      const contactsResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_client_company=${foundCompany.id_client_company}&id_tenant=${tenantId}&id_user=${userId}`);
       if (contactsResponse.ok) {
         const contactsText = await contactsResponse.text();
         if (contactsText) {
@@ -130,7 +130,7 @@ const ClientCompanyDetail: React.FC = () => {
         if (!user?.id_tenant) return;
         setSubmitting(true);
         try {
-          await fetch(`https://service.computeksa.com/webhook/api/clients/contacts/delete`, {
+          await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_contact: contact.id_contact, id_tenant: user.id_tenant, id_user: user.id_user }),
@@ -154,8 +154,8 @@ const ClientCompanyDetail: React.FC = () => {
     const payload = { ...editingContact, id_client_company: id, id_tenant: user.id_tenant, id_user: user.id_user };
     try {
       const url = isEditMode && payload.id_contact
-        ? `https://service.computeksa.com/webhook/api/clients/contacts/update`
-        : `https://service.computeksa.com/webhook/api/clients/contacts`;
+        ? `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/update`
+        : `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts`;
       await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       setToast({ message: isEditMode ? 'Contacto actualizado.' : 'Contacto creado.', type: 'success' });
       setIsModalOpen(false);
@@ -176,7 +176,7 @@ const ClientCompanyDetail: React.FC = () => {
   const openShareModal = async () => {
     if (!user?.id_tenant) return;
     try {
-      const res = await fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       if (!res.ok) throw new Error('Error');
       const data = await res.json();
       const activos = Array.isArray(data)
@@ -209,7 +209,7 @@ const ClientCompanyDetail: React.FC = () => {
     setShareSubmitting(true);
     try {
       const requests = shareTargets.map(target =>
-        fetch('https://service.computeksa.com/webhook/api/companies/share', {
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/companies/share`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

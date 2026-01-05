@@ -1,7 +1,7 @@
 import { Quote, QuoteItem, UserDecision, CalendarEvent, User, Tenant, ClientCompany, ClientContact, Deal, DealPermission, Product, CustomStatus } from '../types';
 
 const USE_REAL_API = true; // Cambiar a true cuando configures n8n
-const N8N_BASE_URL = 'https://service.computeksa.com/webhook'; 
+const N8N_BASE_URL = import.meta.env.VITE_WEBHOOK_URL; 
 
 // CONSTANTE PARA EVITAR ERRORES DE PARÁMETROS EN N8N
 const EMPTY_FLAG = '__EMPTY__';

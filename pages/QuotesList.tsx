@@ -821,7 +821,7 @@ const QuotesList: React.FC = () => {
                                 <td className="px-2 sm:px-4 py-2">
                                     <div className="flex items-center gap-2">
                                         <img
-                                            src={`https://ui-avatars.com/api/?name=${quote.created_by_name || 'User'}&background=random`}
+                                            src={quote.created_by_avatar || `https://ui-avatars.com/api/?name=${quote.created_by_name || 'User'}&background=random`}
                                             alt="Owner"
                                             className="w-8 h-8 rounded-full border-2 border-white shadow-sm object-cover"
                                         />

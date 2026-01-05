@@ -316,12 +316,12 @@ const DealsList: React.FC = () => {
 
         try {
             const [dealsRes, companiesRes, contactsRes, usersRes, dealStatusesRes, interestStatusesRes] = await Promise.all([
-                fetch(`https://service.computeksa.com/webhook/api/deals?id_tenant=${tenantId}&id_user=${userId}`),
-                fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`),
-                fetch(`https://service.computeksa.com/webhook/api/clients/contacts?id_tenant=${tenantId}&id_user=${userId}`),
-                fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${tenantId}&id_user=${userId}`),
-                fetch(`https://service.computeksa.com/webhook/api/statuses/deals?id_tenant=${tenantId}&id_user=${userId}`),
-                fetch(`https://service.computeksa.com/webhook/api/statuses/interests?id_tenant=${tenantId}&id_user=${userId}`)
+                fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals?id_tenant=${tenantId}&id_user=${userId}`),
+                fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`),
+                fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${tenantId}&id_user=${userId}`),
+                fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${tenantId}&id_user=${userId}`),
+                fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${tenantId}&id_user=${userId}`),
+                fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${tenantId}&id_user=${userId}`)
             ]);
 
             const parseResponse = async (res: Response) => {
@@ -514,7 +514,7 @@ const DealsList: React.FC = () => {
             isOpen: true, title: 'Eliminar Trato', message: '¿Estás seguro?', isDestructive: true,
             onConfirm: async () => {
                 try {
-                    await fetch(`https://service.computeksa.com/webhook/api/deals/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id_trato: id, id_tenant: user?.id_tenant, id_user: user?.id_user }) });
+                    await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id_trato: id, id_tenant: user?.id_tenant, id_user: user?.id_user }) });
                     setToast({ message: 'Eliminado.', type: 'success' });
                     fetchData();
                 } catch { setToast({ message: 'Error.', type: 'error' }); } finally { setConfirmState(prev => ({ ...prev, isOpen: false })); }
@@ -534,7 +534,7 @@ const DealsList: React.FC = () => {
                 setSubmitting(true);
                 const payload = { ...editingDeal, id_tenant: user.id_tenant, id_user: user.id_user, valor_trato: parseFloat(editingDeal.valor_trato as any) || 0 };
                 try {
-                    const url = isEditMode ? `https://service.computeksa.com/webhook/api/deals/update` : `https://service.computeksa.com/webhook/api/deals`;
+                    const url = isEditMode ? `${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update` : `${import.meta.env.VITE_WEBHOOK_URL}/api/deals`;
                     await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                     setToast({ message: isEditMode ? 'Actualizado.' : 'Creado.', type: 'success' });
                     setIsModalOpen(false); fetchData();
@@ -568,7 +568,7 @@ const DealsList: React.FC = () => {
                 descripcion: deal.descripcion,
                 ...updates
             };
-            const res = await fetch('https://service.computeksa.com/webhook/api/deals/update', {
+            const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -895,7 +895,7 @@ const DealsList: React.FC = () => {
                                     <td className="px-2 sm:px-4 py-2">
                                         <div className="flex items-center gap-2" title={deal.owner_name}>
                                             <img
-                                                src={deal.owner_avatar || `https://ui-avatars.com/api/?name=${deal.owner_name}&background=random`}
+                                                src={deal.created_by_avatar || `https://ui-avatars.com/api/?name=${deal.owner_name}&background=random`}
                                                 alt="Owner"
                                                 className="w-8 h-8 rounded-full border-2 border-white shadow-sm object-cover"
                                             />

@@ -35,7 +35,7 @@ const SettingsDealChannels: React.FC = () => {
     if (!user?.id_tenant) return;
     setLoading(true);
     try {
-      const response = await fetch(`https://service.computeksa.com/webhook/api/channel?id_tenant=${user.id_tenant}`);
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel?id_tenant=${user.id_tenant}`);
       if (!response.ok) {
         if (response.status === 404) setChannels([]);
         else throw new Error('Failed to fetch channels');
@@ -77,7 +77,7 @@ const SettingsDealChannels: React.FC = () => {
       await Promise.all(
         channels.map((item, index) => {
           const payload = { ...item, status_order: index + 1, id_tenant: user.id_tenant };
-          return fetch('https://service.computeksa.com/webhook/api/channel/update', {
+          return fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel/update`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -129,8 +129,8 @@ const SettingsDealChannels: React.FC = () => {
     const payload = { ...editingChannel, id_tenant: user.id_tenant } as Partial<DealChannel>;
     const isUpdating = 'id_channel' in (editingChannel as any);
     const url = isUpdating
-      ? 'https://service.computeksa.com/webhook/api/channel/update'
-      : 'https://service.computeksa.com/webhook/api/channel';
+      ? `${import.meta.env.VITE_WEBHOOK_URL}/api/channel/update`
+      : `${import.meta.env.VITE_WEBHOOK_URL}/api/channel`;
     try {
       const response = await fetch(url, {
         method: 'POST',
@@ -153,7 +153,7 @@ const SettingsDealChannels: React.FC = () => {
       message: '¿Estás seguro? Los tratos asociados podrían quedar huérfanos.',
       onConfirm: async () => {
         try {
-          const response = await fetch('https://service.computeksa.com/webhook/api/channel/delete', {
+          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_channel: id, id_tenant: user?.id_tenant }),

@@ -29,7 +29,7 @@ const DealDetail: React.FC = () => {
 
     try {
       const [dealRes, quotesRes] = await Promise.all([
-        fetch(`https://service.computeksa.com/webhook/api/deals/detail?id_trato=${id}&id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${id}&id_tenant=${tenantId}&id_user=${userId}`),
         fetch(`/api/quotes?id_tenant=${tenantId}&id_user=${userId}&id_trato=${id}`),
       ]);
 
@@ -220,7 +220,9 @@ const DealDetail: React.FC = () => {
             <div className="flex border-b border-slate-200 bg-white sticky top-0 z-10">
                 <TabButton tab="quotes" label="Cotizaciones" icon="fa-file-invoice-dollar" />
                 <TabButton tab="activity" label="Actividad" icon="fa-chart-line" />
-                <TabButton tab="permissions" label="Permisos" icon="fa-user-lock" />
+                {(deal.access_level === 'EDIT' || user?.rol_user === 'admin') && (
+                  <TabButton tab="permissions" label="Permisos" icon="fa-user-lock" />
+                )}
             </div>
 
             {/* Tab Content */}

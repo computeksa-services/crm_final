@@ -71,7 +71,7 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
 
       // 1. CARGAR USUARIOS INTERNOS (EQUIPO)
       setLoadingUsers(true);
-      fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${tenantId}&id_user=${userId}`)
+      fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${tenantId}&id_user=${userId}`)
         .then(r => r.ok ? r.json() : [])
         .then(data => {
             const cleanUsers = (Array.isArray(data) ? data : []).map((u: any) => ({
@@ -89,7 +89,7 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
       if (companyId) {
           setLoadingContacts(true);
           // Llamada a la API de contactos filtrando por la empresa
-          const urlContacts = `https://service.computeksa.com/webhook/api/clients/companies_contacts/detail?id_tenant=${tenantId}&id_user=${userId}&id_client_company=${companyId}`;
+          const urlContacts = `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies_contacts/detail?id_tenant=${tenantId}&id_user=${userId}&id_client_company=${companyId}`;
           console.log("   Llamando API Contactos:", urlContacts);
 
           fetch(urlContacts)

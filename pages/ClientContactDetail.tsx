@@ -38,7 +38,7 @@ const ClientContactDetail: React.FC = () => {
 
     try {
       // 1. Obtener Contacto
-      const contactResponse = await fetch(`https://service.computeksa.com/webhook/api/clients/contacts/detail?id_contact=${id}&id_tenant=${tenantId}&id_user=${userId}`);
+      const contactResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/detail?id_contact=${id}&id_tenant=${tenantId}&id_user=${userId}`);
       if (!contactResponse.ok) {
         if (contactResponse.status === 404) {
           setContact(null);
@@ -63,7 +63,7 @@ const ClientContactDetail: React.FC = () => {
 
       // 2. Obtener Empresa (si existe)
       if (foundContact.id_client_company) {
-        const companyResponse = await fetch(`https://service.computeksa.com/webhook/api/clients/companies/detail?id_client_company=${foundContact.id_client_company}&id_tenant=${tenantId}&id_user=${userId}`);
+        const companyResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/detail?id_client_company=${foundContact.id_client_company}&id_tenant=${tenantId}&id_user=${userId}`);
         if (companyResponse.ok) {
           const companyText = await companyResponse.text();
           let parsed: any = null;
@@ -94,7 +94,7 @@ const ClientContactDetail: React.FC = () => {
   const openShareModal = async () => {
     if (!user?.id_tenant) return;
     try {
-      const res = await fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       if (!res.ok) throw new Error('Error cargando usuarios');
       const data = await res.json();
       const activos = Array.isArray(data)
@@ -127,7 +127,7 @@ const ClientContactDetail: React.FC = () => {
     setShareSubmitting(true);
     try {
       const requests = shareTargets.map(target =>
-        fetch('https://service.computeksa.com/webhook/api/contacts/share', {
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/contacts/share`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

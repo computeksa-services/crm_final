@@ -761,7 +761,7 @@ const FinancialsList: React.FC = () => {
         end_date: dateRange.end
       });
       
-      const response = await fetch(`https://service.computeksa.com/webhook/api/financials?${queryParams.toString()}`, {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials?${queryParams.toString()}`, {
         headers: { 'Content-Type': 'application/json' }
       });
       
@@ -882,7 +882,7 @@ const FinancialsList: React.FC = () => {
         payload.retention_value = parseFloat(tx.retention_value as any || 0) || 0;
       }
 
-      const response = await fetch('https://service.computeksa.com/webhook/api/financials/update', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -919,7 +919,7 @@ const FinancialsList: React.FC = () => {
 
   const fetchClientCompanies = async () => {
     try {
-      const response = await fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${user?.id_tenant}&id_user=${user?.id_user}`);
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user?.id_tenant}&id_user=${user?.id_user}`);
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -972,7 +972,7 @@ const FinancialsList: React.FC = () => {
   // Delete
   const handleDelete = async (id: string) => {
     try {
-      const response = await fetch('https://service.computeksa.com/webhook/api/financials/delete', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_transaction: id }),
@@ -1007,7 +1007,7 @@ const FinancialsList: React.FC = () => {
         update_automation: modalData.update_automation,
       };
 
-      const response = await fetch('https://service.computeksa.com/webhook/api/financials/notify-overdue', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/notify-overdue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -1079,7 +1079,7 @@ const FinancialsList: React.FC = () => {
         id_tenant: user.id_tenant,
       };
 
-      const response = await fetch('https://service.computeksa.com/webhook/api/financials/update', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

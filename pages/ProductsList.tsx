@@ -13,7 +13,14 @@ const ProductsList: React.FC = () => {
   
   // UI & Filtros
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list'); // Nuevo: Alternar vista
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
+    // Cargar la vista guardada desde localStorage
+    if (typeof window !== 'undefined') {
+      const savedViewMode = localStorage.getItem('productListViewMode') as 'list' | 'grid' | null;
+      return savedViewMode || 'list';
+    }
+    return 'list';
+  });
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -25,6 +32,7 @@ const ProductsList: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -85,7 +93,39 @@ const ProductsList: React.FC = () => {
   }, [products, searchTerm, typeFilter]);
 
   // --- HANDLERS ---
+  const getNextProductCode = () => {
+    if (products.length === 0) return 'COD-001';
+    
+    const codes = products
+      .map(p => p.codigo || '')
+      .filter(c => c.startsWith('COD-'))
+      .map(c => parseInt(c.replace('COD-', '')) || 0)
+      .sort((a, b) => b - a);
+    
+    const nextNum = (codes[0] || 0) + 1;
+    return `COD-${String(nextNum).padStart(3, '0')}`;
+  };
+
+  const convertGoogleDriveUrl = (url: string): string => {
+    if (!url) return '';
+    
+    // Si ya es una URL de proxy, devolverla
+    if (url.includes('images.weserv.nl')) return url;
+    
+    // Extraer el ID del archivo de URL de Google Drive
+    const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      const directUrl = `https://drive.google.com/uc?id=${match[1]}&export=view`;
+      // Usar un proxy para evitar problemas de CORS
+      return `https://images.weserv.nl/?url=${encodeURIComponent(directUrl)}&n=-1`;
+    }
+    
+    // Si no se puede extraer, devolver la URL original
+    return url;
+  };
+
   const handleAddNew = () => {
+    const nextCode = getNextProductCode();
     setEditingProduct({
       id_product: '',
       id_tenant: user?.id_tenant || '',
@@ -144,34 +184,48 @@ const ProductsList: React.FC = () => {
     e.preventDefault();
     if (!editingProduct || !user?.id_tenant) return;
     
-    if(!editingProduct.descripcion || !editingProduct.precio_unitario) {
-        setToast({ message: 'Descripción y Precio son obligatorios.', type: 'error' });
+    if(!editingProduct.descripcion || !editingProduct.tipo) {
+        setToast({ message: 'Descripción y Tipo son obligatorios.', type: 'error' });
         return;
     }
 
     setSubmitting(true);
     
-    const payload = {
-      ...editingProduct,
-      id_tenant: user.id_tenant,
-      // Asegurar números
-      precio_unitario: Number(editingProduct.precio_unitario)
-    };
-
     try {
       const url = isEditMode 
         ? 'https://service.computeksa.com/webhook/api/products/update' 
         : 'https://service.computeksa.com/webhook/api/products';
 
+      // Crear FormData para enviar producto e imagen por separado
+      const formData = new FormData();
+      
+      // Agregar datos del producto
+      formData.append('id_product', editingProduct.id_product || '');
+      formData.append('id_tenant', user.id_tenant);
+      formData.append('codigo', editingProduct.codigo || '');
+      formData.append('descripcion', editingProduct.descripcion);
+      formData.append('tipo', editingProduct.tipo);
+      formData.append('categoria', editingProduct.categoria || '');
+      formData.append('precio_unitario', String(Number(editingProduct.precio_unitario)));
+      
+      // Indicar si se subió una foto (booleano)
+      formData.append('imagen_subida', String(!!imageFile));
+      
+      // Agregar archivo de imagen si existe (intacto, sin convertir a base64)
+      if (imageFile) {
+        formData.append('imagen', imageFile);
+      }
+
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: formData,
+        // NO incluir Content-Type header - el navegador lo establecerá automáticamente con multipart/form-data
       });
 
       if (!response.ok) throw new Error(isEditMode ? 'Error al actualizar.' : 'Error al crear.');
       
       setToast({ message: isEditMode ? 'Artículo actualizado.' : 'Artículo creado.', type: 'success' });
+      setImageFile(null); // Limpiar el archivo
       setIsModalOpen(false);
       fetchData();
 
@@ -194,6 +248,11 @@ const ProductsList: React.FC = () => {
         setToast({ message: 'Imagen muy pesada (Max 800KB).', type: 'error' });
         return;
       }
+      
+      // Guardar el archivo intacto sin convertir a base64
+      setImageFile(file);
+      
+      // Mostrar preview de la imagen
       const reader = new FileReader();
       reader.onloadend = () => {
         setEditingProduct(prev => (prev ? { ...prev, imagen_url: reader.result as string } : null));
@@ -258,7 +317,7 @@ const ProductsList: React.FC = () => {
                             <td className="px-6 py-3">
                                 <div className="w-12 h-12 bg-white border border-slate-200 rounded-lg flex items-center justify-center overflow-hidden">
                                     {p.imagen_url ? (
-                                        <img src={p.imagen_url} alt="" className="w-full h-full object-cover" />
+                                        <img src={convertGoogleDriveUrl(p.imagen_url)} alt="" className="w-full h-full object-cover" />
                                     ) : (
                                         <i className="fa-solid fa-image text-slate-300"></i>
                                     )}
@@ -306,7 +365,7 @@ const ProductsList: React.FC = () => {
                 >
                     <div className="aspect-square bg-slate-50 flex items-center justify-center overflow-hidden relative">
                         {p.imagen_url ? (
-                            <img src={p.imagen_url} alt="" className="w-full h-full object-cover" />
+                            <img src={convertGoogleDriveUrl(p.imagen_url)} alt="" className="w-full h-full object-cover" />
                         ) : (
                             <i className="fa-solid fa-box-open text-4xl text-slate-300"></i>
                         )}
@@ -361,14 +420,20 @@ const ProductsList: React.FC = () => {
             {/* View Toggler */}
             <div className="bg-white border border-slate-200 p-1 rounded-lg flex shadow-sm">
                 <button 
-                    onClick={() => setViewMode('list')}
+                    onClick={() => {
+                      setViewMode('list');
+                      localStorage.setItem('productListViewMode', 'list');
+                    }}
                     className={`p-2 rounded-md transition-all ${viewMode === 'list' ? 'bg-slate-100 text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                     title="Vista Lista"
                 >
                     <i className="fa-solid fa-list"></i>
                 </button>
                 <button 
-                    onClick={() => setViewMode('grid')}
+                    onClick={() => {
+                      setViewMode('grid');
+                      localStorage.setItem('productListViewMode', 'grid');
+                    }}
                     className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-slate-100 text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
                     title="Vista Galería"
                 >
@@ -420,7 +485,7 @@ const ProductsList: React.FC = () => {
       {/* Create/Edit Modal */}
       {isModalOpen && editingProduct && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
               <h2 className="text-lg font-bold text-slate-800">{isEditMode ? 'Editar Artículo' : 'Nuevo Artículo'}</h2>
               <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-colors">
@@ -428,20 +493,20 @@ const ProductsList: React.FC = () => {
               </button>
             </div>
             
-            <form onSubmit={handleFormSubmit} className="overflow-y-auto p-6 space-y-5">
+            <form onSubmit={handleFormSubmit} className="overflow-y-auto p-6 space-y-6">
               
               {/* Image Upload */}
-              <div className="flex gap-5 items-start">
+              <div className="flex gap-6 items-start">
                   <div 
-                    className="w-28 h-28 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden bg-slate-50 relative group cursor-pointer hover:border-brand-400 transition-colors" 
+                    className="w-32 h-32 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden bg-slate-50 relative group cursor-pointer hover:border-brand-400 transition-colors flex-shrink-0" 
                     onClick={() => fileInputRef.current?.click()}
                   >
                     {editingProduct.imagen_url ? (
-                        <img src={editingProduct.imagen_url} alt="" className="w-full h-full object-cover" />
+                        <img src={convertGoogleDriveUrl(editingProduct.imagen_url)} alt="" className="w-full h-full object-cover" />
                     ) : (
                         <div className="text-center p-2">
-                            <i className="fa-solid fa-cloud-arrow-up text-2xl text-slate-300 mb-1"></i>
-                            <p className="text-[10px] text-slate-400">Subir foto</p>
+                            <i className="fa-solid fa-cloud-arrow-up text-3xl text-slate-300 mb-1"></i>
+                            <p className="text-[11px] text-slate-400 font-medium">Subir foto</p>
                         </div>
                     )}
                     <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
@@ -450,16 +515,25 @@ const ProductsList: React.FC = () => {
                   </div>
                   <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
                   
-                  <div className="flex-1 space-y-4">
+                  <div className="flex-1 space-y-5">
                         <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Código (Opcional)</label>
-                            <input 
-                                name="codigo" 
-                                value={editingProduct.codigo || ''} 
-                                onChange={handleInputChange} 
-                                className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm" 
-                                placeholder="PROD-001"
-                            />
+                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                              Código <span className="text-slate-400 font-normal">(Opcional)</span>
+                            </label>
+                            <div className="space-y-2">
+                              <input 
+                                  name="codigo" 
+                                  value={editingProduct.codigo || ''} 
+                                  onChange={handleInputChange} 
+                                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm" 
+                                  placeholder="Dejar vacío para generar automáticamente"
+                              />
+                              {!editingProduct.codigo && (
+                                <p className="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                                  💡 Se generará automáticamente: <span className="font-mono font-bold text-brand-600">{getNextProductCode()}</span>
+                                </p>
+                              )}
+                            </div>
                         </div>
                         <div>
                             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Categoría</label>
@@ -467,7 +541,7 @@ const ProductsList: React.FC = () => {
                                 name="categoria" 
                                 value={editingProduct.categoria || ''} 
                                 onChange={handleInputChange} 
-                                className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" 
+                                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" 
                                 placeholder="Ej. Hardware"
                             />
                         </div>
@@ -475,45 +549,45 @@ const ProductsList: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Descripción</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Descripción <span className="text-red-500">*</span></label>
                 <textarea 
                     name="descripcion" 
-                    rows={3} 
+                    rows={4} 
                     required 
                     value={editingProduct.descripcion || ''} 
                     onChange={handleInputChange} 
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 resize-none"
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 resize-none"
                     placeholder="Detalles del producto o servicio..."
                 ></textarea>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tipo</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tipo <span className="text-red-500">*</span></label>
                     <div className="relative">
                         <select 
                             name="tipo" 
                             value={editingProduct.tipo || ''} 
                             onChange={handleInputChange} 
-                            className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
+                            required
+                            className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
                         >
                             {productTypes.map(pt => <option key={pt.id_product_type} value={pt.type}>{pt.type}</option>)}
                         </select>
                         <div className="absolute right-3 top-3 text-slate-400 pointer-events-none text-xs"><i className="fa-solid fa-chevron-down"></i></div>
                     </div>
                 </div>
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Precio Unitario</label>
+                <div className="col-span-2">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Precio Unitario (Opcional)</label>
                     <div className="relative">
-                        <span className="absolute left-3 top-2 text-slate-400">$</span>
+                        <span className="absolute left-3 top-2.5 text-slate-400">$</span>
                         <input 
                             type="number" 
                             name="precio_unitario" 
                             step="0.01" 
-                            value={editingProduct.precio_unitario || 0} 
+                            value={editingProduct.precio_unitario || ''} 
                             onChange={handleInputChange} 
-                            required 
-                            className="w-full pl-7 pr-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" 
+                            className="w-full pl-7 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" 
                         />
                     </div>
                 </div>

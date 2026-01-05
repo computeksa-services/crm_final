@@ -50,6 +50,7 @@ export interface DealStatus {
   status_order: number;
   is_default: boolean;
   icon: string;
+  status_category?: 'OPEN' | 'WON' | 'LOST';
 }
 
 export interface QuoteStatus {
@@ -60,6 +61,7 @@ export interface QuoteStatus {
   status_order: number;
   is_default: boolean;
   icon: string;
+  status_category?: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED';
 }
 
 // NUEVA INTERFAZ PARA INTERESES DE TRATOS

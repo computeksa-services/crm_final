@@ -41,8 +41,8 @@ const ClientCompaniesList: React.FC = () => {
 
     try {
       const [companiesRes, usersRes] = await Promise.all([
-        fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${tenantId}&id_user=${userId}`)
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${tenantId}&id_user=${userId}`)
       ]);
 
       const parseResponse = async (res: Response) => {
@@ -126,7 +126,7 @@ const ClientCompaniesList: React.FC = () => {
         if (!user?.id_tenant) return;
         setSubmitting(true);
         try {
-          const response = await fetch(`https://service.computeksa.com/webhook/api/clients/companies/delete`, {
+          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -170,8 +170,8 @@ const ClientCompaniesList: React.FC = () => {
 
     try {
       const url = isEditMode 
-        ? `https://service.computeksa.com/webhook/api/clients/companies/update`
-        : `https://service.computeksa.com/webhook/api/clients/companies`;
+        ? `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/update`
+        : `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies`;
 
       const response = await fetch(url, {
         method: 'POST',

@@ -23,7 +23,7 @@ const SettingsProductTypes: React.FC = () => {
     if (!user?.id_tenant) return;
     setLoading(true);
     try {
-      const response = await fetch(`https://service.computeksa.com/webhook/api/products_type?id_tenant=${user.id_tenant}`);
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`);
       if (!response.ok) {
         if(response.status === 404) {
           setProductTypes([]);
@@ -67,8 +67,8 @@ const SettingsProductTypes: React.FC = () => {
     
     const isUpdating = 'id_product_type' in editingType;
     const url = isUpdating 
-        ? 'https://service.computeksa.com/webhook/api/products_type/update' 
-        : 'https://service.computeksa.com/webhook/api/products_type';
+        ? `${import.meta.env.VITE_WEBHOOK_URL}/api/products_type/update` 
+        : `${import.meta.env.VITE_WEBHOOK_URL}/api/products_type`;
 
     try {
       const response = await fetch(url, {
@@ -95,7 +95,7 @@ const SettingsProductTypes: React.FC = () => {
       message: '¿Estás seguro? Eliminar este tipo podría afectar a productos existentes.',
       onConfirm: async () => {
         try {
-          const response = await fetch('https://service.computeksa.com/webhook/api/products_type/delete', {
+          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_product_type: id, id_tenant: user?.id_tenant }),

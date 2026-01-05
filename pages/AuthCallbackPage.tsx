@@ -27,7 +27,7 @@ const AuthCallbackPage: React.FC = () => {
         console.log('🔐 OAuth callback recibido:', { code, state });
 
         // Enviar el code al backend
-        const response = await fetch('https://service.computeksa.com/webhook/api/auth/callback', {
+        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/auth/callback`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code, state }),

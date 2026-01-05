@@ -43,7 +43,7 @@ const CompaniesList: React.FC = () => {
     const userId = user.id_user;
 
     try {
-      const response = await fetch(`https://service.computeksa.com/webhook/api/tenants?id_user=${userId}`);
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants?id_user=${userId}`);
       if (!response.ok) {
         if (response.status === 404) setTenants([]);
         else throw new Error('Error al cargar tenants');
@@ -90,7 +90,7 @@ const CompaniesList: React.FC = () => {
         const original = [...tenants];
         setTenants(prev => prev.filter(t => t.id_tenant !== id));
         try {
-          const response = await fetch('https://service.computeksa.com/webhook/api/tenants/delete', {
+          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: id })
@@ -144,7 +144,7 @@ const CompaniesList: React.FC = () => {
       };
 
       if (isEditMode && editingTenant.id_tenant) {
-        const response = await fetch('https://service.computeksa.com/webhook/api/tenants/update', {
+        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/update`, {
           method: 'POST',
           body: buildFormData(editingTenant, logoFile)
         });
@@ -156,7 +156,7 @@ const CompaniesList: React.FC = () => {
         setTenants(prev => prev.map(t => t.id_tenant === updated.id_tenant ? updated : t));
         setToast({ message: 'Tenant actualizado.', type: 'success' });
       } else {
-        const response = await fetch('https://service.computeksa.com/webhook/api/tenants/add', {
+        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/add`, {
           method: 'POST',
           body: buildFormData(editingTenant, logoFile)
         });

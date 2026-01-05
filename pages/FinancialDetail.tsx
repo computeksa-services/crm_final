@@ -125,7 +125,7 @@ const FinancialDetail: React.FC = () => {
         created_by: transaction.created_by || user?.id_user,
       };
 
-      const response = await fetch('https://service.computeksa.com/webhook/api/financials/update', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -154,7 +154,7 @@ const FinancialDetail: React.FC = () => {
         created_by: editData.created_by || user.id_user,
       };
 
-      const response = await fetch('https://service.computeksa.com/webhook/api/financials/update', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -190,7 +190,7 @@ const FinancialDetail: React.FC = () => {
         created_by: transaction.created_by || user.id_user,
       };
 
-      const response = await fetch('https://service.computeksa.com/webhook/api/financials/update', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -222,7 +222,7 @@ const FinancialDetail: React.FC = () => {
         update_automation: modalData.update_automation,
       };
 
-      const response = await fetch('https://service.computeksa.com/webhook/api/financials/notify-overdue', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/notify-overdue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -551,9 +551,10 @@ const FinancialDetail: React.FC = () => {
       </div>
 
       {/* Layout principal con sidebar a la derecha */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-        {/* Details Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden xl:col-span-2">
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
+          {/* Details Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden xl:col-span-2">
           <div className="px-6 py-5 border-b border-slate-100 flex items-center">
             <h3 className="font-bold text-slate-800 flex items-center">
               <span className="w-2 h-6 bg-brand-500 rounded-full mr-3"></span>
@@ -748,45 +749,47 @@ const FinancialDetail: React.FC = () => {
               )}
             </div>
           </div>
-
-          {Array.isArray(transaction.notification_logs) && transaction.notification_logs.length > 0 && (
-            <div className="space-y-3 bg-white rounded-2xl border border-slate-200 p-4">
-              <h4 className="font-semibold text-slate-700 flex items-center gap-2">
-                <i className="fa-solid fa-clock-rotate-left text-slate-500"></i>
-                Historial de notificaciones
-              </h4>
-              <div className="overflow-hidden rounded-lg border border-slate-200">
-                <table className="min-w-full text-sm">
-                  <thead className="bg-slate-50 text-slate-500 uppercase text-xs">
-                    <tr>
-                      <th className="px-3 py-2 text-left">Fecha</th>
-                      <th className="px-3 py-2 text-left">Tipo</th>
-                      <th className="px-3 py-2 text-left">Enviado por</th>
-                      <th className="px-3 py-2 text-left">Estado</th>
-                      <th className="px-3 py-2 text-left">Destinatarios</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {transaction.notification_logs.map((log, idx) => (
-                      <tr key={idx} className="border-t border-slate-100">
-                        <td className="px-3 py-2 text-slate-700">{log.fecha || '-'}</td>
-                        <td className="px-3 py-2 text-slate-700">{log.tipo || '-'}</td>
-                        <td className="px-3 py-2 text-slate-700">{log.enviado_por || '-'}</td>
-                        <td className="px-3 py-2">
-                          <span className="inline-flex px-2 py-1 rounded-lg border text-xs font-semibold bg-slate-50 text-slate-700">
-                            {log.estado_envio || 'N/A'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-slate-600 whitespace-pre-line break-words">{log.destinatarios || '-'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+        </div>
         </div>
       </div>
+
+      {/* Historial de Notificaciones - Full Width Below */}
+      {Array.isArray(transaction.notification_logs) && transaction.notification_logs.length > 0 && (
+        <div className="space-y-3 bg-white rounded-2xl border border-slate-200 p-4">
+          <h4 className="font-semibold text-slate-700 flex items-center gap-2">
+            <i className="fa-solid fa-clock-rotate-left text-slate-500"></i>
+            Historial de notificaciones
+          </h4>
+          <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 text-slate-500 uppercase text-xs">
+                <tr>
+                  <th className="px-3 py-2 text-left">Fecha</th>
+                  <th className="px-3 py-2 text-left">Tipo</th>
+                  <th className="px-3 py-2 text-left">Enviado por</th>
+                  <th className="px-3 py-2 text-left">Estado</th>
+                  <th className="px-3 py-2 text-left">Destinatarios</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transaction.notification_logs.map((log, idx) => (
+                  <tr key={idx} className="border-t border-slate-100">
+                    <td className="px-3 py-2 text-slate-700">{log.fecha || '-'}</td>
+                    <td className="px-3 py-2 text-slate-700">{log.tipo || '-'}</td>
+                    <td className="px-3 py-2 text-slate-700">{log.enviado_por || '-'}</td>
+                    <td className="px-3 py-2">
+                      <span className="inline-flex px-2 py-1 rounded-lg border text-xs font-semibold bg-slate-50 text-slate-700">
+                        {log.estado_envio || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-slate-600 whitespace-pre-line break-words">{log.destinatarios || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {isEditModalOpen && editData && (

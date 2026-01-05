@@ -54,8 +54,8 @@ const ShareModal: React.FC<ShareModalProps> = ({ entity, id, isOpen, onClose, on
       // Compartir con todos los usuarios seleccionados
       const sharePromises = selectedUserIds.map(targetUserId => {
         const url = entity === 'deal'
-          ? 'https://service.computeksa.com/webhook/api/deals/share'
-          : 'https://service.computeksa.com/webhook/api/quotes/share';
+          ? `${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share`
+          : `${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/share`;
         const payload = entity === 'deal'
           ? { id_tenant: user.id_tenant, id_trato: id, id_user_target: targetUserId, permission_level: level }
           : { id_tenant: user.id_tenant, id_cotizacion: id, id_user_target: targetUserId, permission_level: level };

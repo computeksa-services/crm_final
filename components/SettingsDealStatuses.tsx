@@ -43,7 +43,7 @@ const SettingsDealStatuses: React.FC = () => {
     if (!user?.id_tenant) return;
     setLoading(true);
     try {
-      const response = await fetch(`https://service.computeksa.com/webhook/api/statuses/deals?id_tenant=${user.id_tenant}`);
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}`);
       if (!response.ok) {
         if(response.status === 404) setStatuses([]);
         else throw new Error('Failed to fetch deal statuses');
@@ -98,7 +98,7 @@ const SettingsDealStatuses: React.FC = () => {
         const newOrder = index + 1;
         const payload = { ...item, status_order: newOrder, id_tenant: user.id_tenant };
         // Nota: Asegúrate de que tu API de update soporte actualizar solo el orden sin borrar otros campos
-        return fetch(`https://service.computeksa.com/webhook/api/statuses/deals/update`, {
+        return fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -123,7 +123,8 @@ const SettingsDealStatuses: React.FC = () => {
         color: PRESET_COLORS[0], 
         icon: 'fa-solid fa-layer-group', 
         status_order: newOrder, 
-        is_default: false 
+        is_default: false,
+        status_category: 'OPEN' 
     });
     setIsModalOpen(true);
   };
@@ -138,12 +139,17 @@ const SettingsDealStatuses: React.FC = () => {
       setToast({ message: 'El nombre es obligatorio.', type: 'error' });
       return;
     }
+    
+    if (!editingStatus.status_category) {
+      setToast({ message: 'El comportamiento del sistema es obligatorio.', type: 'error' });
+      return;
+    }
 
     const payload = { ...editingStatus, id_tenant: user.id_tenant };
     const isUpdating = 'id_status' in editingStatus;
     const url = isUpdating 
-        ? 'https://service.computeksa.com/webhook/api/statuses/deals/update' 
-        : 'https://service.computeksa.com/webhook/api/statuses/deals';
+        ? `${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals/update` 
+        : `${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals`;
 
     try {
       const response = await fetch(url, { 
@@ -169,7 +175,7 @@ const SettingsDealStatuses: React.FC = () => {
       message: '¿Estás seguro? Los tratos en este estado podrían quedar huérfanos.',
       onConfirm: async () => {
         try {
-          const response = await fetch('https://service.computeksa.com/webhook/api/statuses/deals/delete', {
+          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_status: id, id_tenant: user?.id_tenant }),
@@ -190,99 +196,198 @@ const SettingsDealStatuses: React.FC = () => {
       </div>
   );
 
+  // Agrupar estados por categoría
+  const openStatuses = statuses.filter(s => s.status_category === 'OPEN' || !s.status_category);
+  const wonStatuses = statuses.filter(s => s.status_category === 'WON');
+  const lostStatuses = statuses.filter(s => s.status_category === 'LOST');
+
+  const handleDragOverCategory = (e: React.DragEvent, category: 'OPEN' | 'WON' | 'LOST') => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDropOnCategory = async (e: React.DragEvent, category: 'OPEN' | 'WON' | 'LOST') => {
+    e.preventDefault();
+    if (draggedItemIndex === null) return;
+
+    const draggedStatus = statuses[draggedItemIndex];
+    if (draggedStatus.status_category === category) return; // Ya está en esta categoría
+
+    // Actualizar categoría
+    const updatedStatus = { ...draggedStatus, status_category: category, id_tenant: user?.id_tenant };
+    
+    try {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedStatus)
+      });
+
+      if (!response.ok) throw new Error('Error al actualizar');
+      
+      setToast({ message: `Estado movido a ${category === 'OPEN' ? 'Abierto' : category === 'WON' ? 'Ganado' : 'Perdido'}`, type: 'success' });
+      fetchData();
+    } catch (error) {
+      setToast({ message: 'Error al cambiar categoría', type: 'error' });
+    } finally {
+      setDraggedItemIndex(null);
+    }
+  };
+
+  const renderStatusCard = (status: DealStatus, index: number) => (
+    <div 
+      key={status.id_status} 
+      draggable
+      onDragStart={() => handleDragStart(statuses.findIndex(s => s.id_status === status.id_status))}
+      onDragEnd={handleDragEnd}
+      className={`group flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all cursor-grab active:cursor-grabbing ${draggedItemIndex === statuses.findIndex(s => s.id_status === status.id_status) ? 'opacity-50 scale-95' : ''}`}
+    >
+      <div className="flex items-center gap-3">
+        <div className="text-slate-300 group-hover:text-slate-500">
+          <i className="fa-solid fa-grip-vertical text-sm"></i>
+        </div>
+
+        <div 
+          className="w-9 h-9 rounded-lg flex items-center justify-center shadow-sm"
+          style={{ 
+            backgroundColor: `${status.color}15`, 
+            color: status.color 
+          }}
+        >
+          <i className={status.icon}></i>
+        </div>
+        <div>
+          <span 
+            className="block font-bold text-sm"
+            style={{ color: status.color }}
+          >
+            {status.name}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button 
+          onClick={() => handleEdit(status)} 
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+          title="Editar"
+        >
+          <i className="fa-solid fa-pen-to-square text-xs"></i>
+        </button>
+        <button 
+          onClick={() => handleDelete(status.id_status)} 
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+          title="Eliminar"
+        >
+          <i className="fa-solid fa-trash-can text-xs"></i>
+        </button>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="max-w-4xl mx-auto mt-6 animate-fade-in pb-20">
+    <div className="max-w-5xl mx-auto mt-6 animate-fade-in pb-20">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} isDestructive={true} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} />
 
       <div className="flex justify-between items-center mb-6">
         <div>
             <h3 className="text-lg font-bold text-slate-800">Estados del Pipeline</h3>
-            <p className="text-sm text-slate-500">Define las etapas por las que pasan tus tratos.</p>
+            <p className="text-sm text-slate-500">Arrastra los estados entre categorías para cambiar su comportamiento.</p>
         </div>
-        <div className="flex items-center gap-3">
-            {orderChanged && (
-                <button 
-                    onClick={saveNewOrder} 
-                    disabled={savingOrder}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl shadow-lg shadow-indigo-200 font-medium transition-all flex items-center animate-pulse"
-                >
-                    {savingOrder ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-floppy-disk mr-2"></i>}
-                    Guardar Orden
-                </button>
-            )}
-
-            <button 
-                onClick={handleAddNew} 
-                className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl shadow-sm font-medium transition-all flex items-center"
-            >
-            <i className="fa-solid fa-plus mr-2"></i> Nuevo
-            </button>
-        </div>
+        <button 
+            onClick={handleAddNew} 
+            className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl shadow-sm font-medium transition-all flex items-center"
+        >
+          <i className="fa-solid fa-plus mr-2"></i> Nuevo
+        </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        {statuses.length === 0 ? (
-            <div className="p-12 text-center text-slate-400">
-                <i className="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i>
-                <p>No hay estados configurados.</p>
+      {statuses.length === 0 ? (
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center text-slate-400">
+          <i className="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i>
+          <p>No hay estados configurados.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          
+          {/* ABIERTO */}
+          <div 
+            onDragOver={(e) => handleDragOverCategory(e, 'OPEN')}
+            onDrop={(e) => handleDropOnCategory(e, 'OPEN')}
+            className="bg-white rounded-2xl shadow-sm border-2 border-emerald-200 overflow-hidden"
+          >
+            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 text-white">
+              <div className="flex items-center gap-2 mb-1">
+                <i className="fa-solid fa-circle-dot"></i>
+                <h4 className="font-bold text-sm uppercase tracking-wide">Abierto</h4>
+              </div>
+              <p className="text-xs text-emerald-100">En proceso</p>
             </div>
-        ) : (
-            <div className="divide-y divide-slate-100">
-            {statuses.map((status, index) => (
-                <div 
-                    key={status.id_status} 
-                    draggable
-                    onDragStart={() => handleDragStart(index)}
-                    onDragOver={(e) => handleDragOver(e, index)}
-                    onDragEnd={handleDragEnd}
-                    className={`group flex items-center justify-between p-4 transition-colors cursor-grab active:cursor-grabbing ${draggedItemIndex === index ? 'bg-slate-50 opacity-50 border-2 border-dashed border-slate-300' : 'hover:bg-slate-50'}`}
-                >
-                    <div className="flex items-center gap-4">
-                        <div className="text-slate-300 group-hover:text-slate-500 cursor-grab">
-                            <i className="fa-solid fa-grip-vertical"></i>
-                        </div>
-
-                        <div 
-                            className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-sm transition-colors"
-                            style={{ 
-                                backgroundColor: `${status.color}15`, 
-                                color: status.color 
-                            }}
-                        >
-                            <i className={status.icon}></i>
-                        </div>
-                        <div>
-                            <span 
-                                className="block font-bold text-base"
-                                style={{ color: status.color }}
-                            >
-                                {status.name}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button 
-                            onClick={() => handleEdit(status)} 
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                            title="Editar"
-                        >
-                            <i className="fa-solid fa-pen-to-square"></i>
-                        </button>
-                        <button 
-                            onClick={() => handleDelete(status.id_status)} 
-                            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                            title="Eliminar"
-                        >
-                            <i className="fa-solid fa-trash-can"></i>
-                        </button>
-                    </div>
+            <div className="p-3 space-y-2 min-h-[200px]">
+              {openStatuses.length === 0 ? (
+                <div className="text-center text-slate-400 text-xs py-8">
+                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
+                  <p>Arrastra estados aquí</p>
                 </div>
-            ))}
+              ) : (
+                openStatuses.map((status, idx) => renderStatusCard(status, idx))
+              )}
             </div>
-        )}
-      </div>
+          </div>
+
+          {/* GANADO */}
+          <div 
+            onDragOver={(e) => handleDragOverCategory(e, 'WON')}
+            onDrop={(e) => handleDropOnCategory(e, 'WON')}
+            className="bg-white rounded-2xl shadow-sm border-2 border-blue-200 overflow-hidden"
+          >
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 text-white">
+              <div className="flex items-center gap-2 mb-1">
+                <i className="fa-solid fa-trophy"></i>
+                <h4 className="font-bold text-sm uppercase tracking-wide">Ganado</h4>
+              </div>
+              <p className="text-xs text-blue-100">Venta cerrada</p>
+            </div>
+            <div className="p-3 space-y-2 min-h-[200px]">
+              {wonStatuses.length === 0 ? (
+                <div className="text-center text-slate-400 text-xs py-8">
+                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
+                  <p>Arrastra estados aquí</p>
+                </div>
+              ) : (
+                wonStatuses.map((status, idx) => renderStatusCard(status, idx))
+              )}
+            </div>
+          </div>
+
+          {/* PERDIDO */}
+          <div 
+            onDragOver={(e) => handleDragOverCategory(e, 'LOST')}
+            onDrop={(e) => handleDropOnCategory(e, 'LOST')}
+            className="bg-white rounded-2xl shadow-sm border-2 border-red-200 overflow-hidden"
+          >
+            <div className="bg-gradient-to-r from-red-500 to-red-600 p-4 text-white">
+              <div className="flex items-center gap-2 mb-1">
+                <i className="fa-solid fa-circle-xmark"></i>
+                <h4 className="font-bold text-sm uppercase tracking-wide">Perdido</h4>
+              </div>
+              <p className="text-xs text-red-100">Venta fallida</p>
+            </div>
+            <div className="p-3 space-y-2 min-h-[200px]">
+              {lostStatuses.length === 0 ? (
+                <div className="text-center text-slate-400 text-xs py-8">
+                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
+                  <p>Arrastra estados aquí</p>
+                </div>
+              ) : (
+                lostStatuses.map((status, idx) => renderStatusCard(status, idx))
+              )}
+            </div>
+          </div>
+
+        </div>
+      )}
 
       {/* Modal Simplificado */}
       {isModalOpen && editingStatus && (
@@ -326,6 +431,25 @@ const SettingsDealStatuses: React.FC = () => {
                     placeholder="Ej. En Negociación"
                     autoFocus
                 />
+              </div>
+
+              {/* Comportamiento del Sistema */}
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                  Comportamiento del Sistema <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={editingStatus.status_category || 'OPEN'}
+                  onChange={(e) => setEditingStatus({ ...editingStatus, status_category: e.target.value as 'OPEN' | 'WON' | 'LOST' })}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all bg-white"
+                >
+                  <option value="OPEN">🟢 Abierto - El trato sigue en curso</option>
+                  <option value="WON">🎉 Ganado - Éxito, venta cerrada</option>
+                  <option value="LOST">❌ Perdido - Venta fallida</option>
+                </select>
+                <p className="text-xs text-slate-400 mt-1.5">
+                  Define cómo se comporta este estado en la lógica del sistema
+                </p>
               </div>
 
               {/* Color Picker */}

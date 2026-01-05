@@ -21,8 +21,46 @@ const Calendar: React.FC = () => {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('day');
+  const [currentDate, setCurrentDateState] = useState<Date>(() => {
+    try {
+      const saved = localStorage.getItem('calendar-current-date');
+      return saved ? new Date(saved) : new Date();
+    } catch {
+      return new Date();
+    }
+  });
+
+  // Wrapper para setCurrentDate que también guarda en localStorage
+  const setCurrentDate = (date: Date | ((prev: Date) => Date)) => {
+    setCurrentDateState(prev => {
+      const newDate = typeof date === 'function' ? date(prev) : date;
+      try {
+        localStorage.setItem('calendar-current-date', newDate.toISOString());
+      } catch {
+        console.warn('No se pudo guardar la fecha del calendario');
+      }
+      return newDate;
+    });
+  };
+
+  const [viewMode, setViewModeState] = useState<ViewMode>(() => {
+    try {
+      const saved = localStorage.getItem('calendar-view-mode');
+      return (saved as ViewMode) || 'day';
+    } catch {
+      return 'day';
+    }
+  });
+
+  // Wrapper para setViewMode que también guarda en localStorage
+  const setViewMode = (mode: ViewMode) => {
+    setViewModeState(mode);
+    try {
+      localStorage.setItem('calendar-view-mode', mode);
+    } catch {
+      console.warn('No se pudo guardar la preferencia de vista del calendario');
+    }
+  };
 
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -31,6 +69,7 @@ const Calendar: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -64,10 +103,10 @@ const Calendar: React.FC = () => {
       startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 0, 0, 0);
       endDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate(), 23, 59, 59);
     } else if (viewMode === 'week') {
-      // Semana actual (domingo a sábado)
+      // Semana actual (lunes a domingo)
       const day = currentDate.getDay();
-      startDate = new Date(currentDate);
-      startDate.setDate(currentDate.getDate() - day);
+      const diff = currentDate.getDate() - day + (day === 0 ? -6 : 1); // Ajusta para que lunes sea el inicio
+      startDate = new Date(currentDate.setDate(diff));
       startDate.setHours(0, 0, 0, 0);
       
       endDate = new Date(startDate);
@@ -87,26 +126,30 @@ const Calendar: React.FC = () => {
   const fetchData = async () => {
     if (!user?.id_tenant || !user?.id_user) return;
     
-    setLoading(true);
+    const { start, end } = getDateRange();
+    
+    console.log('📅 Iniciando carga de calendario:', { start, end, id_user: user.id_user, id_tenant: user.id_tenant, viewMode });
+
+    // =====================================
+    // FASE 1: CARGA RÁPIDA (BD Local)
+    // =====================================
     try {
-      const { start, end } = getDateRange();
+      setLoading(true);
       
-      console.log('Fetching events:', { start, end, id_user: user.id_user, id_tenant: user.id_tenant, viewMode });
-      
+      // Cargar datos de BD sin sincronización (muy rápido)
       const [eventsResponse, clientsResponse, contactsResponse, usersResponse, dealsResponse, quotesResponse] = await Promise.all([
-        fetch(`https://service.computeksa.com/webhook/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
-        fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`https://service.computeksa.com/webhook/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${user.id_tenant}`),
-        fetch(`https://service.computeksa.com/webhook/api/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`https://service.computeksa.com/webhook/api/quotes?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
       ]);
       
-      // Procesar eventos con mejor manejo de errores
+      // Procesar datos de BD
       let eventsData = [];
       if (eventsResponse.ok) {
         const eventsText = await eventsResponse.text();
-        console.log('📋 Events raw response:', eventsText);
         if (eventsText.trim()) {
           eventsData = JSON.parse(eventsText);
         }
@@ -152,18 +195,63 @@ const Calendar: React.FC = () => {
         }
       }
       
-      console.log('Events received:', eventsData);
+      console.log('✅ Datos BD cargados (Fase 1):', eventsData.length, 'eventos');
       
+      // MOSTRAR DATOS INMEDIATAMENTE
       setEvents(eventsData);
       setClients(clientsData);
       setContacts(contactsData);
       setUsers(usersData);
       setDeals(dealsData);
       setQuotes(quotesData);
+      
     } catch (error) {
-      console.error('Error fetching calendar data:', error);
+      console.error('❌ Error en Fase 1 (carga rápida):', error);
     } finally {
+      // QUITAR LOADING GRANDE - El usuario ve el calendario YA
       setLoading(false);
+    }
+
+    // =====================================
+    // FASE 2: SINCRONIZACIÓN EN SEGUNDO PLANO
+    // =====================================
+    setIsSyncing(true);
+    try {
+      console.log('🔄 Iniciando sincronización en segundo plano...');
+      
+      const syncResponse = await fetch(
+        `${import.meta.env.VITE_WEBHOOK_URL}/api/calendar/sync?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&id_user=${user.id_user}&id_tenant=${user.id_tenant}`,
+        {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+      
+      if (!syncResponse.ok) {
+        console.warn('⚠️ Error en sincronización:', syncResponse.status);
+      } else {
+        console.log('✅ Sincronización completada');
+        
+        // Volver a obtener eventos actualizados después de sincronizar
+        const eventsResponseUpdated = await fetch(
+          `${import.meta.env.VITE_WEBHOOK_URL}/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&id_user=${user.id_user}&id_tenant=${user.id_tenant}`
+        );
+        
+        if (eventsResponseUpdated.ok) {
+          const eventsText = await eventsResponseUpdated.text();
+          if (eventsText.trim()) {
+            const eventsDataUpdated = JSON.parse(eventsText);
+            console.log('🔄 Eventos actualizados después de sincronizar:', eventsDataUpdated.length, 'eventos');
+            // Actualizar eventos silenciosamente
+            setEvents(eventsDataUpdated);
+          }
+        }
+      }
+    } catch (syncError) {
+      console.error('⚠️ Error en Fase 2 (sincronización):', syncError);
+      // No mostrar error al usuario para no interrumpir
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -193,8 +281,10 @@ const Calendar: React.FC = () => {
     if (viewMode === 'day') {
       return currentDate.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
     } else if (viewMode === 'week') {
+      const day = currentDate.getDay();
+      const diff = currentDate.getDate() - day + (day === 0 ? -6 : 1);
       const start = new Date(currentDate);
-      start.setDate(currentDate.getDate() - currentDate.getDay());
+      start.setDate(diff);
       const end = new Date(start);
       end.setDate(start.getDate() + 6);
       
@@ -227,7 +317,7 @@ const Calendar: React.FC = () => {
     
     try {
       const response = await fetch(
-        `https://service.computeksa.com/webhook/api/events/detail?id_event=${eventId}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`
+        `${import.meta.env.VITE_WEBHOOK_URL}/api/events/detail?id_event=${eventId}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`
       );
       
       if (!response.ok) {
@@ -474,7 +564,7 @@ const Calendar: React.FC = () => {
 
       console.log('Creating event:', payload);
 
-      const response = await fetch('https://service.computeksa.com/webhook/api/events', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -525,7 +615,7 @@ const Calendar: React.FC = () => {
 
       console.log('Updating event:', payload);
 
-      const response = await fetch('https://service.computeksa.com/webhook/api/events/update', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -581,7 +671,7 @@ const Calendar: React.FC = () => {
 
     setDeleting(true);
     try {
-      const response = await fetch('https://service.computeksa.com/webhook/api/events/delete', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -719,7 +809,15 @@ const Calendar: React.FC = () => {
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center space-x-4">
-          <h1 className="text-2xl font-bold text-slate-800">Calendario</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-800">Calendario</h1>
+            {isSyncing && (
+              <span className="text-xs text-slate-500 flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-full animate-pulse">
+                <i className="fa-solid fa-arrows-rotate fa-spin text-brand-600"></i>
+                Sincronizando...
+              </span>
+            )}
+          </div>
           
           <button 
             onClick={goToToday}
@@ -1550,12 +1648,41 @@ interface ViewProps {
   onEventClick: (eventId: string) => void;
 }
 
+// Helper function to calculate hours to display
+const getHoursToDisplay = (events: CalendarEvent[], dateToCheck?: Date): number[] => {
+  const BUSINESS_START = 9;  // 9 AM
+  const BUSINESS_END = 17;   // 5 PM
+  
+  let minHour = BUSINESS_START;
+  let maxHour = BUSINESS_END;
+  
+  // Filter events for the specified date or all events
+  const relevantEvents = dateToCheck
+    ? events.filter(e => new Date(e.start).toDateString() === dateToCheck.toDateString())
+    : events;
+  
+  // Check if any events are outside business hours
+  relevantEvents.forEach(event => {
+    const startHour = new Date(event.start).getHours();
+    const endHour = new Date(event.end).getHours();
+    
+    if (startHour < minHour) minHour = startHour;
+    if (endHour > maxHour) maxHour = endHour;
+  });
+  
+  // Generate array of hours from minHour to maxHour
+  return Array.from({ length: maxHour - minHour + 1 }, (_, i) => minHour + i);
+};
+
+
 const MonthView: React.FC<ViewProps> = ({ events, currentDate, onOpenModal, onEventClick }) => {
   const getDaysInMonth = (date: Date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const days = new Date(year, month + 1, 0).getDate();
-    const firstDay = new Date(year, month, 1).getDay();
+    let firstDay = new Date(year, month, 1).getDay();
+    // Ajustar para que lunes sea 0: domingo=6, lunes=0, martes=1, etc.
+    firstDay = firstDay === 0 ? 6 : firstDay - 1;
     
     const daysArray = [];
     for (let i = 0; i < firstDay; i++) {
@@ -1581,7 +1708,7 @@ const MonthView: React.FC<ViewProps> = ({ events, currentDate, onOpenModal, onEv
   return (
     <>
       <div className="grid grid-cols-7 border-b border-slate-200">
-        {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
+        {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => (
           <div key={day} className="py-3 text-center text-sm font-semibold text-slate-500 bg-slate-50">
             {day}
           </div>
@@ -1649,7 +1776,9 @@ const WeekView: React.FC<ViewProps> = ({ events, currentDate, onOpenModal, onEve
   const getWeekDays = () => {
     const days = [];
     const startOfWeek = new Date(currentDate);
-    startOfWeek.setDate(currentDate.getDate() - currentDate.getDay());
+    const day = currentDate.getDay();
+    const diff = currentDate.getDate() - day + (day === 0 ? -6 : 1); // Lunes es el inicio
+    startOfWeek.setDate(diff);
     
     for (let i = 0; i < 7; i++) {
       const day = new Date(startOfWeek);
@@ -1667,7 +1796,7 @@ const WeekView: React.FC<ViewProps> = ({ events, currentDate, onOpenModal, onEve
   };
 
   const weekDays = getWeekDays();
-  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const hours = getHoursToDisplay(events);
 
   return (
     <div className="flex flex-col h-full">
@@ -1738,7 +1867,7 @@ const WeekView: React.FC<ViewProps> = ({ events, currentDate, onOpenModal, onEve
 
 // ============ DAY VIEW ============
 const DayView: React.FC<ViewProps> = ({ events, currentDate, onOpenModal, onEventClick }) => {
-  const hours = Array.from({ length: 24 }, (_, i) => i);
+  const hours = getHoursToDisplay(events, currentDate);
 
   const getEventsForHour = (hour: number) => {
     return events.filter(e => {

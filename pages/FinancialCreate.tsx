@@ -84,10 +84,10 @@ const FinancialCreate: React.FC = () => {
     if (!user?.id_tenant || !user?.id_user) return;
     try {
       const [companiesRes, quotesRes, contactsRes, teamRes] = await Promise.all([
-        fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`https://service.computeksa.com/webhook/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
-        fetch(`https://service.computeksa.com/webhook/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${user.id_tenant}`)
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}`)
       ]);
 
       const parseResponse = async (res: Response) => {
@@ -241,7 +241,7 @@ const FinancialCreate: React.FC = () => {
 
       console.log('Payload a enviar:', JSON.stringify(payload, null, 2));
 
-      const response = await fetch('https://service.computeksa.com/webhook/api/financials', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
