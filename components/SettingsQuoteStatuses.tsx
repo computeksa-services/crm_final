@@ -241,13 +241,18 @@ const SettingsQuoteStatuses: React.FC = () => {
     }
   };
 
-  const renderStatusCard = (status: QuoteStatus, index: number) => (
+  const renderStatusCard = (status: QuoteStatus) => {
+    const globalIndex = statuses.findIndex(s => s.id_status === status.id_status);
+    const isDragging = draggedItemIndex === globalIndex;
+
+    return (
     <div 
       key={status.id_status} 
       draggable
-      onDragStart={() => handleDragStart(statuses.findIndex(s => s.id_status === status.id_status))}
+      onDragStart={() => handleDragStart(globalIndex)}
+      onDragOver={(e) => handleDragOver(e, globalIndex)}
       onDragEnd={handleDragEnd}
-      className={`group flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all cursor-grab active:cursor-grabbing ${draggedItemIndex === statuses.findIndex(s => s.id_status === status.id_status) ? 'opacity-50 scale-95' : ''}`}
+      className={`group flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-50 scale-95' : ''}`}
     >
       <div className="flex items-center gap-3">
         <div className="text-slate-300 group-hover:text-slate-500">
@@ -291,6 +296,7 @@ const SettingsQuoteStatuses: React.FC = () => {
       </div>
     </div>
   );
+  };
 
   return (
     <div className="max-w-6xl mx-auto mt-6 animate-fade-in pb-20">
@@ -302,12 +308,24 @@ const SettingsQuoteStatuses: React.FC = () => {
             <h3 className="text-lg font-bold text-slate-800">Estados de Cotización</h3>
             <p className="text-sm text-slate-500">Arrastra los estados entre categorías para cambiar su comportamiento.</p>
         </div>
-        <button 
-            onClick={handleAddNew} 
-            className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl shadow-sm font-medium transition-all flex items-center"
-        >
-          <i className="fa-solid fa-plus mr-2"></i> Nuevo
-        </button>
+        <div className="flex items-center gap-2">
+          {orderChanged && (
+            <button
+              onClick={saveNewOrder}
+              disabled={savingOrder}
+              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-4 py-2 rounded-xl shadow-sm font-medium transition-all flex items-center"
+            >
+              {savingOrder ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-floppy-disk mr-2"></i>}
+              Guardar orden
+            </button>
+          )}
+          <button 
+              onClick={handleAddNew} 
+              className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl shadow-sm font-medium transition-all flex items-center"
+          >
+            <i className="fa-solid fa-plus mr-2"></i> Nuevo
+          </button>
+        </div>
       </div>
 
       {statuses.length === 0 ? (
@@ -338,7 +356,7 @@ const SettingsQuoteStatuses: React.FC = () => {
                   <p>Arrastra estados aquí</p>
                 </div>
               ) : (
-                draftStatuses.map((status, idx) => renderStatusCard(status, idx))
+                draftStatuses.map((status) => renderStatusCard(status))
               )}
             </div>
           </div>
@@ -363,7 +381,7 @@ const SettingsQuoteStatuses: React.FC = () => {
                   <p>Arrastra estados aquí</p>
                 </div>
               ) : (
-                sentStatuses.map((status, idx) => renderStatusCard(status, idx))
+                sentStatuses.map((status) => renderStatusCard(status))
               )}
             </div>
           </div>
@@ -388,7 +406,7 @@ const SettingsQuoteStatuses: React.FC = () => {
                   <p>Arrastra estados aquí</p>
                 </div>
               ) : (
-                acceptedStatuses.map((status, idx) => renderStatusCard(status, idx))
+                acceptedStatuses.map((status) => renderStatusCard(status))
               )}
             </div>
           </div>
@@ -413,7 +431,7 @@ const SettingsQuoteStatuses: React.FC = () => {
                   <p>Arrastra estados aquí</p>
                 </div>
               ) : (
-                rejectedStatuses.map((status, idx) => renderStatusCard(status, idx))
+                rejectedStatuses.map((status) => renderStatusCard(status))
               )}
             </div>
           </div>

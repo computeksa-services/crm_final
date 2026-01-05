@@ -41,8 +41,20 @@ const MENU_ITEMS: { id: SettingsTab; label: string; icon: string; description: s
   },
 ];
 
+const STORAGE_KEY = 'settings-active-tab';
+
 const SettingsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<SettingsTab>('dealStatuses');
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    const saved = localStorage.getItem(STORAGE_KEY) as SettingsTab | null;
+    return saved && ['dealStatuses','quoteStatuses','productTypes','dealInterests','dealChannels'].includes(saved)
+      ? saved
+      : 'dealStatuses';
+  });
+
+  const handleTabChange = (tab: SettingsTab) => {
+    setActiveTab(tab);
+    localStorage.setItem(STORAGE_KEY, tab);
+  };
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -87,7 +99,7 @@ const SettingsPage: React.FC = () => {
               return (
                 <button
                   key={item.id}
-                  onClick={() => setActiveTab(item.id)}
+                  onClick={() => handleTabChange(item.id)}
                   className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-start group ${
                     isActive
                       ? 'bg-white shadow-md shadow-slate-200/50 text-brand-600 ring-1 ring-slate-100'
