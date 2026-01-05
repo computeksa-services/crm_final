@@ -42,8 +42,8 @@ const DealCreate: React.FC = () => {
         fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${tenantId}&id_user=${userId}`),
         fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${tenantId}&id_user=${userId}`),
         fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`/api/channel?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`/api/users?id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel?id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${tenantId}&id_user=${userId}`),
       ]);
 
       const parseResponse = async (res: Response) => res.ok ? JSON.parse(await res.text()) : [];
@@ -157,7 +157,7 @@ const DealCreate: React.FC = () => {
     try {
       // Paso 1: Crear el trato
       const payload = { ...deal, id_tenant: user?.id_tenant, id_user: user?.id_user, created_at: new Date().toISOString() };
-      const res = await fetch('/api/deals', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!res.ok) throw new Error('Error al crear el trato');
       const data = await res.json();
       const newId = data?.id_trato || data?.id;
@@ -167,7 +167,7 @@ const DealCreate: React.FC = () => {
       // Paso 2: Compartir con colaboradores seleccionados
       if (selectedUserIds.length > 0) {
         const sharePromises = selectedUserIds.map(uid => 
-          fetch('/api/deals/share', {
+          fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

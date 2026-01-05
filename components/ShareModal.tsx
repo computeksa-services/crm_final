@@ -23,7 +23,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ entity, id, isOpen, onClose, on
     const loadUsers = async () => {
       if (!isOpen || !user?.id_tenant || !user?.id_user) return;
       try {
-        const res = await fetch(`/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
         const text = await res.text();
         const data = text ? JSON.parse(text) : [];
         // Filtrar: no mostrar al propio usuario ni los excluidos

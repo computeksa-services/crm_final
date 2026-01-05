@@ -280,7 +280,7 @@ const QuotesList: React.FC = () => {
         fetch(`https://service.computeksa.com/webhook/api/quotes?id_tenant=${tenantId}&id_user=${userId}`),
         fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`),
         fetch(`https://service.computeksa.com/webhook/api/clients/contacts?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`/api/statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`)
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`)
       ]);
       
       if (!quotesRes.ok) {
@@ -524,7 +524,7 @@ const QuotesList: React.FC = () => {
       is_private: !!editingQuote.is_private,
     };
     try {
-      const response = await fetch('/api/quotes/update', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -586,7 +586,7 @@ const QuotesList: React.FC = () => {
         id_tenant: user.id_tenant,
         id_user: user.id_user,
       };
-      const res = await fetch('/api/quotes/update', {
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

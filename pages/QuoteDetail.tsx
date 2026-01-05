@@ -101,7 +101,7 @@ const QuoteDetail: React.FC = () => {
 
       // Estados
       promises.push(
-        fetch(`/api/statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`)
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`)
           .then(res => res.ok ? res.json() : [])
           .then(data => setQuoteStatuses(data))
           .catch(() => {})
@@ -135,7 +135,7 @@ const QuoteDetail: React.FC = () => {
       setPdfLoading(true);
       setPdfError(null);
       try {
-        const res = await fetch(`/api/quotes/files?id_cotizacion=${quote.id_cotizacion}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/files?id_cotizacion=${quote.id_cotizacion}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
         if (!res.ok) throw new Error('Error al obtener PDFs');
         const data = await res.json();
         setPdfVersions(Array.isArray(data) ? data : []);
@@ -349,7 +349,7 @@ const QuoteDetail: React.FC = () => {
     
     setProcessing(true);
     try {
-        const response = await fetch('/api/quotes/update', {
+        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -394,7 +394,7 @@ const handleGeneratePDF = async () => {
         id_user: user.id_user,
       };
 
-      const response = await fetch('/api/quotes/generate-pdf', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/generate-pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -437,7 +437,7 @@ const handleGeneratePDF = async () => {
     
     setProcessing(true);
     try {
-      const response = await fetch('/api/quotes/send', {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -464,7 +464,7 @@ const handleGeneratePDF = async () => {
     const newDecision = e.target.value as UserDecision;
     
     try {
-      const response = await fetch(`/api/quotes/decision`, {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/decision`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

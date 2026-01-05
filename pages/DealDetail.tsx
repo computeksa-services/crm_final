@@ -30,7 +30,7 @@ const DealDetail: React.FC = () => {
     try {
       const [dealRes, quotesRes] = await Promise.all([
         fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${id}&id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`/api/quotes?id_tenant=${tenantId}&id_user=${userId}&id_trato=${id}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_tenant=${tenantId}&id_user=${userId}&id_trato=${id}`),
       ]);
 
       const parseResponse = async (res: Response) => {
