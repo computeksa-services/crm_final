@@ -1,0 +1,22 @@
+{
+  "name": "computeksa-crm",
+  "type": "app",
+  "build": {
+    "command": "npm install && npm run build",
+    "output": "dist"
+  },
+  "deploy": {
+    "command": "npm start",
+    "port": 3000
+  },
+  "env": [
+    {
+      "key": "VITE_WEBHOOK_URL",
+      "value": ""
+    },
+    {
+      "key": "VITE_GOOGLE_CLIENT_ID",
+      "value": ""
+    }
+  ]
+}
