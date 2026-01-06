@@ -9,61 +9,78 @@ const QuoteCreate: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
   
-  const [quote, setQuote] = useState<Partial<Quote>>({});
-  const [processing, setProcessing] = useState(false);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  
+  // --- ESTADOS DE DATOS ---
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]);
+  // Aunque ya no seleccionamos estado manualmente, cargamos los status por si necesitamos lógica interna
+  const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]); 
   const [dealStatuses, setDealStatuses] = useState<CustomStatus[]>([]);
   const [interestStatuses, setInterestStatuses] = useState<CustomStatus[]>([]);
   const [dealChannels, setDealChannels] = useState<DealChannel[]>([]);
+  
+  // --- ESTADOS DEL FORMULARIO ---
+  const [quote, setQuote] = useState<Partial<Quote>>({});
+  const [newDeal, setNewDeal] = useState<any>({}); 
   const [filteredContacts, setFilteredContacts] = useState<ClientContact[]>([]);
+  
+  // --- ESTADOS DE UI ---
   const [createNewDeal, setCreateNewDeal] = useState(false);
-  const [newDeal, setNewDeal] = useState<Partial<Deal>>({});
+  const [isLoading, setIsLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // --- CARGA INICIAL ---
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
 
     const tenantId = user.id_tenant;
     const userId = user.id_user;
-
     const queryParams = new URLSearchParams(location.search);
+    
     const dealId = queryParams.get('dealId');
     const clientCompanyId = queryParams.get('clientCompanyId');
     const contactId = queryParams.get('contactId');
     const dealName = queryParams.get('dealName');
 
     try {
-      const [companiesRes, contactsRes, statusesRes, dealsRes, dealStatusesRes, interestStatusesRes, channelsRes] = await Promise.all([
-        fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`https://service.computeksa.com/webhook/api/clients/contacts?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`https://service.computeksa.com/webhook/api/statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`https://service.computeksa.com/webhook/api/deals?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`https://service.computeksa.com/webhook/api/statuses/deals?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`https://service.computeksa.com/webhook/api/statuses/interests?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`https://service.computeksa.com/webhook/api/channel?id_tenant=${tenantId}&id_user=${userId}`),
-      ]);
+      setIsLoading(true);
+      const endpoints = [
+        `clients/companies?id_tenant=${tenantId}&id_user=${userId}`,
+        `clients/contacts?id_tenant=${tenantId}&id_user=${userId}`,
+        `statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`,
+        `deals?id_tenant=${tenantId}&id_user=${userId}`,
+        `statuses/deals?id_tenant=${tenantId}&id_user=${userId}`,
+        `statuses/interests?id_tenant=${tenantId}&id_user=${userId}`,
+        `channel?id_tenant=${tenantId}&id_user=${userId}`
+      ];
 
-      const parseResponse = async (res: Response) => {
-        if (!res.ok) {
-          if (res.status === 404) return [];
-          const errorText = await res.text();
-          throw new Error(`Error del servidor: ${res.status} - ${errorText}`);
+      const responses = await Promise.all(
+        endpoints.map(ep => fetch(`https://service.computeksa.com/webhook/api/${ep}`))
+      );
+
+      const data = await Promise.all(responses.map(async (res, index) => {
+        try {
+          if (!res.ok) {
+            // Si es 404 o cualquier error, devolver array vacío
+            console.warn(`Endpoint ${endpoints[index]} returned ${res.status}`);
+            return [];
+          }
+          const text = await res.text();
+          if (!text || text.trim() === '' || text === 'null') {
+            return [];
+          }
+          return JSON.parse(text);
+        } catch (e) {
+          console.error(`Error parsing response from ${endpoints[index]}:`, e);
+          return [];
         }
-        const text = await res.text();
-        return text ? JSON.parse(text) : [];
-      };
+      }));
 
-      const companiesData = await parseResponse(companiesRes);
-      const contactsData = await parseResponse(contactsRes);
-      const statusesData = await parseResponse(statusesRes);
-      const dealsData = await parseResponse(dealsRes);
-      const dealStatusesData = await parseResponse(dealStatusesRes);
-      const interestStatusesData = await parseResponse(interestStatusesRes);
-      const channelsData = await parseResponse(channelsRes);
+      const [
+        companiesData, contactsData, statusesData, dealsData, 
+        dealStatusesData, interestStatusesData, channelsData
+      ] = data;
 
       setCompanies(companiesData);
       setContacts(contactsData);
@@ -73,50 +90,60 @@ const QuoteCreate: React.FC = () => {
       setInterestStatuses(interestStatusesData);
       setDealChannels(channelsData);
 
-      const defaultStatus = statusesData.find((s: QuoteStatus) => s.is_default) || statusesData[0];
-      const defaultDealStatus = dealStatusesData.find((s: CustomStatus) => s.is_default) || dealStatusesData[0];
+      // Valores por defecto
       const defaultInterest = interestStatusesData.find((s: CustomStatus) => s.is_default) || interestStatusesData[0];
-      const defaultInterestId = (defaultInterest as any)?.id_status || (defaultInterest as any)?.id_interest || '';
       const defaultChannel = channelsData.find((c: DealChannel) => c.is_default) || channelsData[0];
 
-      let initialState: Partial<Quote> = {
+      // Inicializar Quote (Todos los campos de la BD)
+      const initialQuote: Partial<Quote> = {
         nombre_cotizacion: dealName ? `Cotización para ${dealName}` : '',
         id_trato: dealId || '',
         id_client_company: clientCompanyId || '',
         id_contact: contactId || '',
-        id_quote_status: defaultStatus?.id_status || '',
+        // id_quote_status se manejará automáticamente como DRAFT en el backend o payload
         tiempo_entrega: '5-7 días laborables',
         garantia: '12 meses',
         validez_oferta: '30 días',
+        nota: '',
+        mensaje: '',
+        correos_adicionales: '',
         id_tenant: tenantId,
         id_user: userId,
         version: 0,
         estado_decision: UserDecision.PENDING,
         total: "$0.00",
+        is_private: false
       };
 
+      // Inicializar Nuevo Trato
       setNewDeal({
-        nombre_trato: dealName || '',
-        valor_trato: '',
+        nombre_trato: dealName ? `Trato - ${dealName}` : '',
         id_client_company: clientCompanyId || '',
         id_contact: contactId || '',
-        id_deal_status: defaultDealStatus?.id_status || '',
-        id_interest: defaultInterestId,
+        id_interest: (defaultInterest as any)?.id_status || (defaultInterest as any)?.id_interest || '',
         id_channel: defaultChannel?.id_channel || '',
         id_tenant: tenantId,
         id_user_owner: userId,
         id_user: userId,
-        descripcion: '',
+        descripcion: ''
       });
 
-      if (initialState.id_client_company) {
-        setFilteredContacts(contactsData.filter((c: ClientContact) => c.id_client_company === initialState.id_client_company));
+      if (initialQuote.id_client_company) {
+        setFilteredContacts(contactsData.filter((c: ClientContact) => c.id_client_company === initialQuote.id_client_company));
       }
 
-      setQuote(initialState);
+      setQuote(initialQuote);
+      
+      // Si no hay trato en URL y no hay tratos disponibles, forzar creación
+      if (!dealId && dealsData.length === 0) {
+        setCreateNewDeal(true);
+      }
+
     } catch (error: any) {
-      console.error("Error loading initial data for QuoteCreate:", error);
-      setToast({ message: error.message || 'Error al cargar datos iniciales para la cotización.', type: 'error' });
+      console.error("Error loading data:", error);
+      setToast({ message: 'Error al cargar datos del sistema.', type: 'error' });
+    } finally {
+      setIsLoading(false);
     }
   }, [user, location.search]);
 
@@ -124,6 +151,7 @@ const QuoteCreate: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
+  // Filtrar contactos al cambiar empresa
   useEffect(() => {
     if (quote?.id_client_company) {
       setFilteredContacts(contacts.filter(c => c.id_client_company === quote.id_client_company));
@@ -132,16 +160,19 @@ const QuoteCreate: React.FC = () => {
     }
   }, [quote?.id_client_company, contacts]);
 
-  useEffect(() => {
-    if (!location.search.includes('dealId') && deals.length === 0) {
-      setCreateNewDeal(true);
-    }
-  }, [deals.length, location.search]);
+  // --- HANDLERS ---
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     
-    if (name === 'id_trato') {
+    if (name === 'nombre_cotizacion') {
+      setQuote(prev => ({ ...prev, nombre_cotizacion: value }));
+      // Lógica: Si estamos creando un trato nuevo, actualizar su nombre automáticamente con el prefijo
+      if (createNewDeal) {
+        setNewDeal(prev => ({ ...prev, nombre_trato: `Trato - ${value}` }));
+      }
+    }
+    else if (name === 'id_trato') {
       const selectedDeal = deals.find(d => d.id_trato === value);
       setQuote(prev => ({ 
         ...prev, 
@@ -149,7 +180,11 @@ const QuoteCreate: React.FC = () => {
         id_client_company: selectedDeal?.id_client_company || '',
         id_contact: selectedDeal?.id_contact || '',
       }));
-      setNewDeal(prev => ({ ...prev, id_client_company: selectedDeal?.id_client_company || '', id_contact: selectedDeal?.id_contact || '' }));
+      setNewDeal(prev => ({ 
+        ...prev, 
+        id_client_company: selectedDeal?.id_client_company || '', 
+        id_contact: selectedDeal?.id_contact || '' 
+      }));
     } else {
       setQuote(prev => ({ ...prev, [name]: value }));
       if (['id_client_company', 'id_contact'].includes(name)) {
@@ -164,489 +199,413 @@ const QuoteCreate: React.FC = () => {
   };
 
   const handleSave = async () => {
-    const quoteHasBase = quote && quote.nombre_cotizacion && quote.id_client_company && quote.id_contact && user?.id_tenant && user?.id_user;
-    const dealHasBase = newDeal && newDeal.nombre_trato && newDeal.id_client_company && newDeal.id_contact && newDeal.id_deal_status && newDeal.id_interest && newDeal.id_channel;
-
-    if (!quoteHasBase) {
-      setToast({ message: 'Por favor, complete los campos requeridos de la cotización y asegúrate de iniciar sesión.', type: 'error' });
+    // Validaciones
+    if (!quote.nombre_cotizacion) {
+        setToast({ message: 'El nombre de la cotización es obligatorio.', type: 'error' });
+        return;
+    }
+    if (!quote.id_client_company || !quote.id_contact) {
+      setToast({ message: 'Seleccione empresa y contacto.', type: 'error' });
       return;
     }
 
     if (!createNewDeal && !quote.id_trato) {
-      setToast({ message: 'Seleccione un trato existente o active "Crear nuevo trato".', type: 'error' });
+      setToast({ message: 'Seleccione un trato existente o cree uno nuevo.', type: 'error' });
       return;
     }
 
-    if (createNewDeal && !dealHasBase) {
-      setToast({ message: 'Complete los datos obligatorios del nuevo trato: nombre, empresa, contacto, estado, interés y canal.', type: 'error' });
-      return;
+    if (createNewDeal) {
+      if (!newDeal.nombre_trato || !newDeal.id_interest || !newDeal.id_channel) {
+        setToast({ message: 'Para el nuevo trato: Nombre, Interés y Canal son obligatorios.', type: 'error' });
+        return;
+      }
     }
 
     setProcessing(true);
-    setToast({ message: 'Guardando cotización...', type: 'success' });
+    setToast({ message: 'Guardando registro...', type: 'success' });
 
     try {
       let associatedDealId = quote.id_trato;
 
+      // 1. Crear Trato si es necesario
       if (createNewDeal) {
         const dealPayload = {
           ...newDeal,
           id_client_company: quote.id_client_company,
           id_contact: quote.id_contact,
-          id_tenant: user.id_tenant,
-          id_user_owner: user.id_user,
-          id_user: user.id_user,
+          status_category_deals: 'OPEN', // <-- CAMBIO SOLICITADO
+          id_tenant: user?.id_tenant,
+          id_user_owner: user?.id_user,
+          id_user: user?.id_user,
           created_at: new Date().toISOString(),
+          // Limpieza de campos opcionales
+          valor_trato: undefined 
         };
 
-        const dealResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`, {
+        const dealRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dealPayload),
         });
 
-        if (!dealResponse.ok) {
-          const errorData = await dealResponse.json().catch(() => ({ message: 'Error al crear el trato asociado.' }));
-          throw new Error(errorData.message || 'Error al crear el trato asociado.');
+        if (!dealRes.ok) {
+            const err = await dealRes.json();
+            throw new Error(err.message || 'Error al crear el trato asociado.');
         }
-
-        const dealData = await dealResponse.json();
+        const dealData = await dealRes.json();
         associatedDealId = dealData?.id_trato || dealData?.id;
-
-        if (!associatedDealId) throw new Error('No se obtuvo el ID del nuevo trato.');
       }
 
-      const payload = { 
+      // 2. Crear Cotización
+      const quotePayload = { 
         ...quote,
         id_trato: associatedDealId,
-        id_tenant: user.id_tenant,
-        id_user: user.id_user,
+        id_tenant: user?.id_tenant,
+        id_user: user?.id_user,
         fecha_emision: new Date().toISOString(),
+        status_category_quotes: 'DRAFT', // <-- CAMBIO SOLICITADO
+        
+        // Aseguramos valores por defecto de la BD
+        total: quote.total || 0,
+        estado_decision: 'PENDIENTE',
+        version: 0
       };
 
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`, {
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(quotePayload),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Error al crear cotización.' }));
-        throw new Error(errorData.message || 'Error al crear cotización.');
+      if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message || 'Error al crear la cotización.');
       }
 
-      setToast({ message: 'Cotización creada con éxito. Redirigiendo...', type: 'success' });
+      setToast({ message: '¡Cotización creada correctamente!', type: 'success' });
       
       setTimeout(() => {
-        const queryParams = new URLSearchParams(location.search);
-        const dealId = queryParams.get('dealId');
-
-        if (dealId) {
-          navigate(`/app/deals/${dealId}`);
-        } else {
-          navigate('/app/quotes');
-        }
-      }, 1500);
+        const dealIdParam = new URLSearchParams(location.search).get('dealId');
+        navigate(dealIdParam ? `/app/deals/${dealIdParam}` : '/app/quotes');
+      }, 1000);
 
     } catch (error: any) {
-      setToast({ message: error.message || 'Error al guardar la cotización.', type: 'error' });
+      console.error(error);
+      setToast({ message: error.message || 'Error desconocido al guardar.', type: 'error' });
+    } finally {
       setProcessing(false);
     } 
   };
 
-  const renderNewDealFields = () => (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Nuevo trato</p>
-          <p className="text-sm text-slate-600">Completa los mismos campos básicos de la pantalla de tratos.</p>
-        </div>
-      </div>
+  // --- RENDER ---
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1.5">Nombre del Trato <span className="text-red-500">*</span></label>
-          <input
-            name="nombre_trato"
-            value={newDeal.nombre_trato || ''}
-            onChange={handleNewDealChange}
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none transition-all placeholder:text-slate-300"
-            placeholder="Ej. Venta de Servidores"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1.5">Valor Estimado</label>
-          <div className="relative">
-            <span className="absolute left-3 top-2 text-slate-500 font-bold">$</span>
-            <input
-              name="valor_trato"
-              value={newDeal.valor_trato || ''}
-              onChange={handleNewDealChange}
-              className="w-full pl-6 pr-3 py-2 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none font-mono"
-              placeholder="0.00"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-xs font-bold text-slate-600 mb-1.5">Descripción</label>
-        <textarea
-          name="descripcion"
-          value={newDeal.descripcion || ''}
-          onChange={handleNewDealChange}
-          rows={3}
-          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none resize-none bg-slate-50"
-          placeholder="Escribe los detalles aquí..."
-        ></textarea>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1.5">Estado del Pipeline <span className="text-red-500">*</span></label>
-          <div className="relative">
-            <select
-              name="id_deal_status"
-              value={newDeal.id_deal_status || ''}
-              onChange={handleNewDealChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
-            >
-              <option value="">-- Seleccionar --</option>
-              {dealStatuses.map(status => (
-                <option key={status.id_status} value={status.id_status}>{status.name}</option>
-              ))}
-            </select>
-            <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-xs text-slate-400 pointer-events-none"></i>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1.5">Nivel de Interés <span className="text-red-500">*</span></label>
-          <div className="relative">
-            <select
-              name="id_interest"
-              value={newDeal.id_interest || ''}
-              onChange={handleNewDealChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
-            >
-              <option value="">-- Seleccionar --</option>
-              {interestStatuses.map(status => {
-                const value = (status as any)?.id_status || (status as any)?.id_interest || (status as any)?.id;
-                return <option key={value} value={value}>{status.name}</option>;
-              })}
-            </select>
-            <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-xs text-slate-400 pointer-events-none"></i>
-          </div>
-        </div>
-
-        <div>
-          <label className="block text-xs font-bold text-slate-600 mb-1.5">Canal <span className="text-red-500">*</span></label>
-          <div className="relative">
-            <select
-              name="id_channel"
-              value={newDeal.id_channel || ''}
-              onChange={handleNewDealChange}
-              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
-            >
-              <option value="">-- Seleccionar --</option>
-              {dealChannels.map(channel => (
-                <option key={channel.id_channel} value={channel.id_channel}>{channel.name}</option>
-              ))}
-            </select>
-            <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-xs text-slate-400 pointer-events-none"></i>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const renderDealSelector = () => {
-    if (quote.id_trato && location.search.includes('dealId')) {
-      const selectedDeal = deals.find(d => d.id_trato === quote.id_trato);
-      return (
-        <div className="relative">
-            <input 
-            type="text"
-            value={selectedDeal?.nombre_trato || ''}
-            disabled
-            className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 text-slate-500 font-medium"
-            />
-            <div className="absolute right-4 top-3.5 text-slate-400">
-                <i className="fa-solid fa-lock"></i>
-            </div>
-        </div>
-      );
-    }
-
-    const disableExisting = deals.length === 0;
-
+  if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => { setCreateNewDeal(false); setQuote(prev => ({ ...prev, id_trato: '' })); }}
-            disabled={disableExisting}
-            className={`px-4 py-2 rounded-lg border text-sm font-semibold transition-all ${!createNewDeal ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} ${disableExisting ? 'opacity-60 cursor-not-allowed' : ''}`}
-          >
-            <i className="fa-solid fa-list-check mr-2"></i>
-            Seleccionar trato existente
-          </button>
-          <button
-            type="button"
-            onClick={() => { setCreateNewDeal(true); setQuote(prev => ({ ...prev, id_trato: '' })); }}
-            className={`px-4 py-2 rounded-lg border text-sm font-semibold transition-all ${createNewDeal ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
-          >
-            <i className="fa-solid fa-plus mr-2"></i>
-            Crear nuevo trato
-          </button>
-        </div>
-
-        {!createNewDeal && !disableExisting && (
-          <div className="relative">
-              <select name="id_trato" value={quote.id_trato || ''} onChange={handleInputChange} required className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none">
-                  <option value="">-- Seleccionar Trato --</option>
-                  {deals.map(d => <option key={d.id_trato} value={d.id_trato}>{d.nombre_trato}</option>)}
-              </select>
-              <div className="absolute right-4 top-3.5 text-slate-400 pointer-events-none">
-                  <i className="fa-solid fa-chevron-down text-xs"></i>
-              </div>
-          </div>
-        )}
-
-        {(createNewDeal || disableExisting) && renderNewDealFields()}
+      <div className="flex h-[80vh] items-center justify-center flex-col gap-4">
+        <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500"></i>
+        <p className="text-slate-500 font-medium">Cargando configuración...</p>
       </div>
     );
-  };
+  }
 
-  const renderClientCompanySelector = () => {
-    const isDisabled = !!location.search.includes('dealId');
-    return (
-      <div className="relative">
-        <select name="id_client_company" value={quote.id_client_company || ''} onChange={handleInputChange} required 
-            className={`w-full px-4 py-3 border border-slate-200 rounded-xl outline-none appearance-none ${isDisabled ? 'bg-slate-50 text-slate-500' : 'bg-white focus:ring-2 focus:ring-brand-500'}`}
-            disabled={isDisabled}
-        >
-            <option value="">-- Seleccionar Empresa --</option>
-            {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
-        </select>
-        <div className="absolute right-4 top-3.5 text-slate-400 pointer-events-none">
-            {isDisabled ? <i className="fa-solid fa-lock text-xs"></i> : <i className="fa-solid fa-chevron-down text-xs"></i>}
-        </div>
-      </div>
-    );
-  };
-
-  const renderContactSelector = () => {
-    const isDisabled = !quote.id_client_company || !!location.search.includes('dealId');
-    return (
-      <div className="relative">
-        <select name="id_contact" value={quote.id_contact || ''} onChange={handleInputChange} required 
-            className={`w-full px-4 py-3 border border-slate-200 rounded-xl outline-none appearance-none ${isDisabled ? 'bg-slate-50 text-slate-500' : 'bg-white focus:ring-2 focus:ring-brand-500'}`}
-            disabled={isDisabled}
-        >
-            <option value="">-- Seleccionar Contacto --</option>
-            {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{`${c.first_name} ${c.last_name || ''}`}</option>)}
-        </select>
-        <div className="absolute right-4 top-3.5 text-slate-400 pointer-events-none">
-             {isDisabled && !quote.id_client_company ? <i className="fa-solid fa-ban text-xs"></i> : <i className="fa-solid fa-chevron-down text-xs"></i>}
-        </div>
-      </div>
-    );
-  };
-
+  const isLocked = !!location.search.includes('dealId');
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 animate-fade-in pb-12">
+    <div className="w-full px-4 md:px-8 py-6 animate-fade-in pb-20 max-w-[1600px] mx-auto">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
          <div>
             <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Nueva Cotización</h1>
-            <p className="text-sm text-slate-500">Complete la información para generar un nuevo presupuesto comercial.</p>
+            <p className="text-sm text-slate-500">Complete los datos para generar un nuevo registro.</p>
          </div>
-         <div className="flex items-center gap-3">
+         <div className="flex items-center gap-3 w-full md:w-auto">
             <button 
-              type="button" 
               onClick={() => navigate(-1)} 
-              className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-white hover:shadow-sm transition-all"
+              className="flex-1 md:flex-none px-4 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all text-sm"
             >
               Cancelar
             </button>
             <button 
-              type="button" 
               onClick={handleSave} 
               disabled={processing}
-              className="px-5 py-2 rounded-xl bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg shadow-brand-200 flex items-center transition-all disabled:opacity-70 disabled:shadow-none"
+              className="flex-1 md:flex-none px-6 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-70 text-sm"
             >
-              {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-paper-plane mr-2"></i>}
-              Crear Cotización
+              {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-save"></i>}
+              Guardar Registro
             </button>
          </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 overflow-hidden">
-          
-          <div className="p-8 space-y-8">
-            {/* Section 1: General Info */}
-            <div>
-                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 flex items-center">
-                    <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">1</span>
-                    Detalles Principales
-                </h2>
-                
-                <div className="space-y-5">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre de la Cotización</label>
-                        <input 
-                            name="nombre_cotizacion" 
-                            value={quote.nombre_cotizacion || ''} 
-                            onChange={handleInputChange} 
-                            required 
-                            className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all placeholder:text-slate-300"
-                            placeholder="Ej. Propuesta de Servicios IT - Q4"
-                        />
-                    </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* COLUMNA PRINCIPAL (Izquierda) */}
+        <div className="lg:col-span-2 space-y-6">
+            
+            {/* 1. NOMBRE (PRIORIDAD ALTA) */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Nombre de la Cotización <span className="text-red-500">*</span></label>
+                <input 
+                    name="nombre_cotizacion" 
+                    value={quote.nombre_cotizacion || ''} 
+                    onChange={handleInputChange} 
+                    autoFocus
+                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-lg font-medium placeholder:text-slate-300 transition-all"
+                    placeholder="Ej. Propuesta Comercial - Implementación ERP"
+                />
+            </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Trato Asociado</label>
-                            {renderDealSelector()}
+            {/* 2. ORIGEN (TRATO) */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">1</span>
+                    Vinculación de Trato
+                </h2>
+
+                {isLocked ? (
+                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold">Trato Vinculado</p>
+                        <p className="text-slate-700 font-semibold text-lg">{deals.find(d => d.id_trato === quote.id_trato)?.nombre_trato || 'Trato Actual'}</p>
+                      </div>
+                      <i className="fa-solid fa-lock text-slate-300 text-xl"></i>
+                   </div>
+                ) : (
+                    <>
+                        <div className="flex bg-slate-100 p-1 rounded-lg mb-5 w-fit">
+                            <button
+                                onClick={() => { setCreateNewDeal(false); setQuote(p => ({...p, id_trato: ''})); }}
+                                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${!createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Seleccionar Existente
+                            </button>
+                            <button
+                                onClick={() => { setCreateNewDeal(true); setQuote(p => ({...p, id_trato: ''})); }}
+                                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Crear Nuevo Trato
+                            </button>
                         </div>
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Estado Inicial</label>
+
+                        {!createNewDeal ? (
                             <div className="relative">
-                                <select
-                                name="id_quote_status"
-                                value={quote.id_quote_status || ''}
-                                onChange={handleInputChange}
-                                required
-                                className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
+                                <label className="block text-xs font-bold text-slate-600 mb-1.5">Trato Abierto</label>
+                                <select 
+                                    name="id_trato" 
+                                    value={quote.id_trato || ''} 
+                                    onChange={handleInputChange} 
+                                    className="w-full px-3 py-2.5 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none text-sm"
                                 >
-                                <option value="">-- Seleccionar Estado --</option>
-                                {quoteStatuses.map(status => (
-                                    <option key={status.id_status} value={status.id_status}>
-                                    {status.name}
-                                    </option>
-                                ))}
+                                    <option value="">-- Seleccione un trato --</option>
+                                    {deals.map(d => <option key={d.id_trato} value={d.id_trato}>{d.nombre_trato}</option>)}
                                 </select>
-                                <div className="absolute right-4 top-3.5 text-slate-400 pointer-events-none">
-                                    <i className="fa-solid fa-chevron-down text-xs"></i>
+                                <i className="fa-solid fa-chevron-down absolute right-3 top-9 text-slate-400 text-xs pointer-events-none"></i>
+                            </div>
+                        ) : (
+                            <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 animate-fade-in-down">
+                                <div className="mb-4">
+                                    <label className="block text-xs font-bold text-slate-600 mb-1.5">Nombre del Nuevo Trato <span className="text-red-500">*</span></label>
+                                    <input
+                                        name="nombre_trato"
+                                        value={newDeal.nombre_trato || ''}
+                                        onChange={handleNewDealChange}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none font-medium text-slate-700"
+                                        placeholder="Se generará automáticamente..."
+                                    />
+                                    <p className="text-[10px] text-slate-400 mt-1">El estado inicial será <span className="font-bold text-brand-600">Borrador (Draft)</span> automáticamente.</p>
                                 </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Nivel de Interés <span className="text-red-500">*</span></label>
+                                        <div className="relative">
+                                            <select
+                                                name="id_interest"
+                                                value={newDeal.id_interest || ''}
+                                                onChange={handleNewDealChange}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
+                                            >
+                                                <option value="">-- Seleccionar --</option>
+                                                {interestStatuses.map((opt: any) => (
+                                                    <option key={opt.id_status || opt.id_interest} value={opt.id_status || opt.id_interest}>
+                                                        {opt.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-slate-400 text-xs pointer-events-none"></i>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Canal de Origen <span className="text-red-500">*</span></label>
+                                        <div className="relative">
+                                            <select
+                                                name="id_channel"
+                                                value={newDeal.id_channel || ''}
+                                                onChange={handleNewDealChange}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
+                                            >
+                                                <option value="">-- Seleccionar --</option>
+                                                {dealChannels.map((opt: any) => (
+                                                    <option key={opt.id_channel} value={opt.id_channel}>{opt.name}</option>
+                                                ))}
+                                            </select>
+                                            <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-slate-400 text-xs pointer-events-none"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+
+            {/* 3. CLIENTE */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>
+                    Datos del Cliente
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Empresa <span className="text-red-500">*</span></label>
+                        <div className="relative">
+                            <select 
+                                name="id_client_company" 
+                                value={quote.id_client_company || ''} 
+                                onChange={handleInputChange} 
+                                disabled={isLocked}
+                                className={`w-full px-3 py-2.5 border rounded-lg text-sm outline-none appearance-none ${isLocked ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-white border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
+                            >
+                                <option value="">-- Seleccionar Empresa --</option>
+                                {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
+                            </select>
+                            <div className="absolute right-3 top-3 text-slate-400 pointer-events-none">
+                                {isLocked ? <i className="fa-solid fa-lock text-xs"></i> : <i className="fa-solid fa-chevron-down text-xs"></i>}
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Contacto <span className="text-red-500">*</span></label>
+                        <div className="relative">
+                            <select 
+                                name="id_contact" 
+                                value={quote.id_contact || ''} 
+                                onChange={handleInputChange} 
+                                disabled={isLocked || !quote.id_client_company}
+                                className={`w-full px-3 py-2.5 border rounded-lg text-sm outline-none appearance-none ${isLocked || !quote.id_client_company ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-white border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
+                            >
+                                <option value="">-- Seleccionar Contacto --</option>
+                                {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{c.first_name} {c.last_name}</option>)}
+                            </select>
+                            <div className="absolute right-3 top-3 text-slate-400 pointer-events-none">
+                                {isLocked ? <i className="fa-solid fa-lock text-xs"></i> : <i className="fa-solid fa-chevron-down text-xs"></i>}
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            {/* Section 2: Client Info */}
-            <div>
-                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 flex items-center">
-                    <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">2</span>
-                    Información del Cliente
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Empresa Cliente</label>
-                        {renderClientCompanySelector()}
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Contacto Principal</label>
-                        {renderContactSelector()}
-                    </div>
-                </div>
-            </div>
-
-            {/* Section 3: Commercial Conditions */}
-            <div>
-                <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 flex items-center">
-                    <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">3</span>
+            
+            {/* 4. CONDICIONES */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
                     Condiciones Comerciales
                 </h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tiempo de Entrega</label>
-                        <input name="tiempo_entrega" value={quote.tiempo_entrega || ''} onChange={handleInputChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Garantía</label>
-                        <input name="garantia" value={quote.garantia || ''} onChange={handleInputChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all" />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Validez Oferta</label>
-                        <input name="validez_oferta" value={quote.validez_oferta || ''} onChange={handleInputChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all" />
-                    </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {[
+                        { label: 'Tiempo de Entrega', name: 'tiempo_entrega', ph: 'Ej. 5-7 días laborables' },
+                        { label: 'Garantía', name: 'garantia', ph: 'Ej. 12 meses por defectos' },
+                        { label: 'Validez de Oferta', name: 'validez_oferta', ph: 'Ej. 15 días' },
+                    ].map(field => (
+                        <div key={field.name}>
+                            <label className="block text-xs font-bold text-slate-600 mb-1.5">{field.label}</label>
+                            <input 
+                                name={field.name} 
+                                value={(quote as any)[field.name] || ''} 
+                                onChange={handleInputChange} 
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm transition-all"
+                                placeholder={field.ph}
+                            />
+                        </div>
+                    ))}
                 </div>
             </div>
 
-            {/* Section 4: Extra Details */}
-            <div>
-                 <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2 flex items-center">
-                    <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs mr-2">4</span>
-                    Detalles Adicionales
-                </h2>
-                <div className="space-y-5">
+        </div>
+
+        {/* COLUMNA DERECHA (Sidebar) */}
+        <div className="space-y-6">
+            
+            {/* NOTAS Y CORREOS */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Información Adicional</h2>
+                
+                <div className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nota Interna</label>
+                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Nota Interna (Opcional)</label>
                         <textarea 
                             name="nota" 
                             value={quote.nota || ''} 
                             onChange={handleInputChange} 
                             rows={2} 
-                            className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none resize-none transition-all"
-                            placeholder="Notas internas que solo verán los administradores..."
-                        ></textarea>
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm resize-none"
+                            placeholder="Notas para el equipo..."
+                        />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mensaje (Opcional)</label>
+                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Mensaje en PDF</label>
                         <textarea 
                             name="mensaje" 
                             value={quote.mensaje || ''} 
                             onChange={handleInputChange} 
                             rows={3} 
-                            className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none resize-none transition-all"
-                            placeholder="Mensaje personalizado para el cliente..."
-                        ></textarea>
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm resize-none"
+                            placeholder="Mensaje de saludo o introducción..."
+                        />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Correos en copia (CC)</label>
+                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Correos en copia (CC)</label>
                         <input 
                             name="correos_adicionales" 
                             value={quote.correos_adicionales || ''} 
                             onChange={handleInputChange} 
-                            placeholder="ejemplo@otro.com, gerente@empresa.com" 
-                            className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none transition-all" 
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                            placeholder="email1@ejemplo.com, email2@..." 
                         />
-                        <p className="text-xs text-slate-400 mt-1">Separe múltiples correos con comas.</p>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-100">
+                        <label className="flex items-start gap-3 cursor-pointer group">
+                            <div className="flex items-center h-5">
+                                <input
+                                type="checkbox"
+                                name="is_private"
+                                checked={quote.is_private || false}
+                                onChange={(e) => setQuote({ ...quote, is_private: e.target.checked })}
+                                className="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                                />
+                            </div>
+                            <div>
+                                <span className="block text-sm font-semibold text-slate-700 group-hover:text-brand-700">Cotización Privada</span>
+                                <span className="block text-xs text-slate-400 mt-1">Visible solo para administradores.</span>
+                            </div>
+                        </label>
                     </div>
                 </div>
             </div>
 
-            {/* Privacy Section */}
-            <div className="bg-amber-50 border border-amber-100 rounded-xl p-5 flex items-start space-x-4">
-                <div className="flex-shrink-0 mt-0.5">
-                    <input
-                        type="checkbox"
-                        id="is_private"
-                        name="is_private"
-                        checked={quote.is_private || false}
-                        onChange={(e) => setQuote({ ...quote, is_private: e.target.checked })}
-                        className="w-5 h-5 text-brand-600 border-gray-300 rounded focus:ring-brand-500 cursor-pointer"
-                    />
+            {/* RESUMEN VISUAL (Opcional, ayuda a llenar el espacio) */}
+            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-2">Estado Inicial</p>
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-slate-400"></span>
+                    <span className="font-bold text-slate-700">Borrador (Draft)</span>
                 </div>
-                <label htmlFor="is_private" className="flex-1 cursor-pointer">
-                    <div className="font-bold text-amber-900 flex items-center">
-                        <i className="fa-solid fa-lock mr-2 text-amber-600"></i>
-                        Marcar como Cotización Privada
-                    </div>
-                    <div className="text-sm text-amber-800/70 mt-1">
-                        Esta cotización solo será visible para usted y los administradores. No aparecerá en los listados generales del equipo.
-                    </div>
-                </label>
+                <p className="text-xs text-slate-400 mt-2">La cotización se creará en estado borrador. Podrá agregar ítems y cambiar el estado en el siguiente paso.</p>
             </div>
 
-          </div>
+        </div>
       </div>
     </div>
   );

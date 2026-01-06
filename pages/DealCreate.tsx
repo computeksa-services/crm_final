@@ -9,7 +9,6 @@ const DealCreate: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
 
-  // --- ESTADOS Y LÓGICA (Sin cambios funcionales) ---
   const [deal, setDeal] = useState<Partial<Deal>>({});
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -23,150 +22,160 @@ const DealCreate: React.FC = () => {
   const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [sharePermission, setSharePermission] = useState<'VIEW' | 'EDIT'>('VIEW');
-  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loading, setLoading] = useState(true);
   
-  // Estados para las secciones desplegables de Clasificación
   const [expandedSections, setExpandedSections] = useState({ status: false, interest: false, channel: false });
   const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
-    const tenantId = user.id_tenant;
-    const userId = user.id_user;
+    const { id_tenant, id_user } = user;
     const queryParams = new URLSearchParams(location.search);
 
     try {
-      setLoadingUsers(true);
-      const [companiesRes, contactsRes, dealStatusesRes, interestStatusesRes, channelsRes, usersRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${tenantId}&id_user=${userId}`),
-      ]);
+      setLoading(true);
+      const endpoints = [
+        { name: 'Empresas', url: `/api/clients/companies` },
+        { name: 'Contactos', url: `/api/clients/contacts` },
+        { name: 'Estados', url: `/api/statuses/deals` },
+        { name: 'Intereses', url: `/api/statuses/interests` },
+        { name: 'Canales', url: `/api/channel` },
+        { name: 'Usuarios', url: `/api/users` }
+      ];
 
-      const parseResponse = async (res: Response) => res.ok ? JSON.parse(await res.text()) : [];
+      const parseData = async (res: Response, endpointName: string) => {
+        if (!res.ok) {
+          console.warn(`⚠️ ${endpointName}: respuesta no exitosa (${res.status})`);
+          return [];
+        }
+        
+        const text = await res.text();
+        
+        // Si la respuesta está vacía, retornar array vacío
+        if (!text || text.trim() === '') {
+          console.warn(`⚠️ ${endpointName}: respuesta vacía`);
+          return [];
+        }
+        
+        try {
+          const json = JSON.parse(text);
+          // Manejar si el backend devuelve { data: [...] } o el array directo
+          return Array.isArray(json) ? json : (json.data || []);
+        } catch (e) {
+          console.error(`❌ ${endpointName}: error parseando JSON`, text.substring(0, 100));
+          return [];
+        }
+      };
 
-      const [companiesData, contactsData, dealStatusesData, interestStatusesData, channelsData, usersData] = await Promise.all([
-        parseResponse(companiesRes),
-        parseResponse(contactsRes),
-        parseResponse(dealStatusesRes),
-        parseResponse(interestStatusesRes),
-        parseResponse(channelsRes),
-        parseResponse(usersRes)
-      ]);
+      const responses = await Promise.all(
+        endpoints.map(endpoint => 
+          fetch(`${import.meta.env.VITE_WEBHOOK_URL}${endpoint.url}?id_tenant=${id_tenant}&id_user=${id_user}`)
+        )
+      );
+
+      const [
+        companiesData, 
+        contactsData, 
+        dealStatusesData, 
+        interestStatusesData, 
+        channelsData, 
+        usersData
+      ] = await Promise.all(responses.map((res, idx) => parseData(res, endpoints[idx].name)));
+
+      console.log('🔍 DATOS CARGADOS EN DEALCREATE:');
+      console.log('  📋 Empresas:', companiesData?.length || 0, companiesData);
+      console.log('  👤 Contactos:', contactsData?.length || 0);
+      console.log('  🎯 Estados de Trato:', dealStatusesData?.length || 0, dealStatusesData);
+      console.log('  ⭐ Niveles de Interés:', interestStatusesData?.length || 0, interestStatusesData);
+      console.log('  📡 Canales:', channelsData?.length || 0, channelsData);
+      console.log('  👥 Usuarios:', usersData?.length || 0, usersData);
 
       setCompanies(companiesData);
       setContacts(contactsData);
       setDealStatuses(dealStatusesData);
       setInterestStatuses(interestStatusesData);
       setDealChannels(channelsData);
-      setAvailableUsers(Array.isArray(usersData) ? usersData.filter((u: User) => u.id_user !== userId) : []);
+      setAvailableUsers(usersData.filter((u: User) => u.id_user !== id_user));
       
-      const defaultStatus = dealStatusesData.find((s: CustomStatus) => s.is_default) || dealStatusesData[0];
-      const defaultInterest = interestStatusesData.find((s: CustomStatus) => s.is_default) || interestStatusesData[0];
-      const defaultInterestId = (defaultInterest?.id_status as string) || (defaultInterest as any)?.id_interest || '';
-      const defaultChannel = channelsData.find((c: DealChannel) => c.is_default) || channelsData[0];
+      // Lógica para IDs por defecto
+      const defaultStatus = dealStatusesData.find((s: any) => s.is_default) || dealStatusesData[0];
+      const defaultInterest = interestStatusesData.find((s: any) => s.is_default) || interestStatusesData[0];
+      const defaultChannel = channelsData.find((c: any) => c.is_default) || channelsData[0];
+
+      // Normalización del ID de interés (puede venir como id_status o id_interest)
+      const getInterestId = (item: any) => item?.id_status || item?.id_interest || item?.id || '';
 
       let initialState: Partial<Deal> = {
         nombre_trato: '',
         valor_trato: '',
         id_client_company: queryParams.get('clientCompanyId') || '',
         id_contact: queryParams.get('contactId') || '',
-        id_deal_status: defaultStatus?.id_status || '',
-        id_interest: defaultInterestId,
-        id_channel: defaultChannel?.id_channel || '',
-        id_tenant: tenantId,
-        id_user_owner: userId,
-        id_user: userId,
+        id_deal_status: defaultStatus?.id_status || defaultStatus?.id || '',
+        id_interest: getInterestId(defaultInterest),
+        id_channel: defaultChannel?.id_channel || defaultChannel?.id || '',
+        id_tenant: id_tenant,
+        id_user_owner: id_user,
+        id_user: id_user,
         descripcion: '',
       };
 
       if (initialState.id_client_company) {
-        setFilteredContacts(contactsData.filter((c: ClientContact) => c.id_client_company === initialState.id_client_company));
+        setFilteredContacts(contactsData.filter((c: ClientContact) => String(c.id_client_company) === String(initialState.id_client_company)));
       }
       setDeal(initialState);
     } catch (e) {
+      console.error("Error fetching data:", e);
       setToast({ message: 'Error cargando datos.', type: 'error' });
     } finally {
-      setLoadingUsers(false);
+      setLoading(false);
     }
   }, [user, location.search]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Cerrar dropdowns al hacer clic fuera o cuando el mouse sale del dropdown
+  // Manejador de clics fuera para cerrar dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      const dropdownContainer = target.closest('[data-dropdown-container]');
-      
-      if (!dropdownContainer) {
+      if (!(event.target as HTMLElement).closest('[data-dropdown-container]')) {
         setExpandedSections({ status: false, interest: false, channel: false });
       }
     };
-
-    const handleMouseEnter = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (target && target instanceof HTMLElement && target.hasAttribute('data-dropdown-container') && closeTimeoutRef.current) {
-        clearTimeout(closeTimeoutRef.current);
-        closeTimeoutRef.current = null;
-      }
-    };
-
-    const handleMouseLeave = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      if (target && target instanceof HTMLElement && target.hasAttribute('data-dropdown-container')) {
-        closeTimeoutRef.current = setTimeout(() => {
-          setExpandedSections({ status: false, interest: false, channel: false });
-        }, 300);
-      }
-    };
-
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('mouseenter', handleMouseEnter, true);
-    document.addEventListener('mouseleave', handleMouseLeave, true);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('mouseenter', handleMouseEnter, true);
-      document.removeEventListener('mouseleave', handleMouseLeave, true);
-      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     if (name === 'id_client_company') {
       setDeal(prev => ({ ...prev, id_client_company: value, id_contact: '' }));
-      setFilteredContacts(contacts.filter(c => c.id_client_company === value));
+      setFilteredContacts(contacts.filter(c => String(c.id_client_company) === String(value)));
     } else {
       setDeal(prev => ({ ...prev, [name]: value }));
     }
   };
 
-  const selectedCompany = useMemo(() => companies.find(c => c.id_client_company === deal.id_client_company), [companies, deal.id_client_company]);
-  const selectedContact = useMemo(() => contacts.find(c => c.id_contact === deal.id_contact), [contacts, deal.id_contact]);
-
   const handleSave = async () => {
-    if (!deal.nombre_trato || !deal.id_client_company || !deal.id_contact || !deal.id_deal_status || !deal.id_channel) {
-      setToast({ message: 'Nombre, Empresa, Contacto, Estado y Canal son obligatorios.', type: 'error' });
+    if (!deal.nombre_trato || !deal.id_client_company || !deal.id_contact || !deal.id_deal_status) {
+      setToast({ message: 'Nombre, Empresa, Contacto y Estado son obligatorios.', type: 'error' });
       return;
     }
     setProcessing(true);
     try {
-      // Paso 1: Crear el trato
-      const payload = { ...deal, id_tenant: user?.id_tenant, id_user: user?.id_user, created_at: new Date().toISOString() };
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const payload = { ...deal, created_at: new Date().toISOString() };
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(payload) 
+      });
+      
       if (!res.ok) throw new Error('Error al crear el trato');
       const data = await res.json();
-      const newId = data?.id_trato || data?.id;
+      const newId = data?.id_trato || data?.id || data?.data?.id_trato;
 
       if (!newId) throw new Error('No se obtuvo el ID del trato creado');
 
-      // Paso 2: Compartir con colaboradores seleccionados
       if (selectedUserIds.length > 0) {
-        const sharePromises = selectedUserIds.map(uid => 
+        await Promise.all(selectedUserIds.map(uid => 
           fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -176,12 +185,8 @@ const DealCreate: React.FC = () => {
               id_user_target: uid,
               permission_level: sharePermission
             })
-          }).then(r => {
-            if (!r.ok) throw new Error(`Error compartiendo con usuario ${uid}`);
-            return r.json();
           })
-        );
-        await Promise.all(sharePromises);
+        ));
       }
 
       setToast({ message: 'Trato creado correctamente.', type: 'success' });
@@ -192,362 +197,222 @@ const DealCreate: React.FC = () => {
     }
   };
 
-  // --- COMPONENTES VISUALES ---
-
-  const renderStatusSelector = () => (
-    <div className="flex flex-col gap-1.5">
-      {dealStatuses.map(status => {
-        const isSelected = deal.id_deal_status === status.id_status;
-        return (
-          <button
-            key={status.id_status}
-            type="button"
-            onClick={() => {
-              setDeal(prev => ({ ...prev, id_deal_status: status.id_status }));
-              setExpandedSections(prev => ({ ...prev, status: false }));
-            }}
-            className={`px-3 py-2 rounded-lg border text-xs font-bold text-left flex items-center gap-2 transition-all ${
-                isSelected ? 'ring-2 ring-offset-1 border-transparent shadow-sm' : 'hover:brightness-95 border-transparent'
-            }`}
-            style={{
-                backgroundColor: `${status.color || '#cccccc'}20`,
-                color: status.color || '#333',
-                borderColor: isSelected ? status.color : 'transparent',
-                ['--tw-ring-color' as any]: status.color
-            }}
-          >
-            <div className="w-5 h-5 rounded-full flex items-center justify-center bg-white/50 text-sm">
-                 {status.icon && <i className={status.icon}></i>}
-            </div>
-            <span className="flex-1">{status.name}</span>
-            {isSelected && <i className="fa-solid fa-check text-sm"></i>}
-          </button>
-        );
-      })}
-    </div>
-  );
-
-  const renderInterestSelector = () => (
-    <div className="flex flex-col gap-1.5">
-      {interestStatuses.map(int => {
-        const valueId = (int as any).id_status || (int as any).id_interest || (int as any).id;
-        const isSelected = deal.id_interest === valueId;
-        return (
-          <button
-            key={valueId}
-            type="button"
-            onClick={() => {
-              setDeal(prev => ({ ...prev, id_interest: valueId }));
-              setExpandedSections(prev => ({ ...prev, interest: false }));
-            }}
-            className={`px-3 py-2 rounded-lg border text-xs font-bold text-left flex items-center gap-2 transition-all ${
-                isSelected ? 'ring-2 ring-offset-1 border-transparent shadow-sm' : 'hover:brightness-95 border-transparent'
-            }`}
-            style={{
-                backgroundColor: `${int.color || '#cccccc'}20`,
-                color: int.color || '#333',
-                borderColor: isSelected ? int.color : 'transparent',
-                ['--tw-ring-color' as any]: int.color
-            }}
-          >
-            <div className="w-5 h-5 rounded-full flex items-center justify-center bg-white/50 text-sm">
-                 {int.icon && <i className={int.icon}></i>}
-            </div>
-            <span className="flex-1">{int.name}</span>
-            {isSelected && <i className="fa-solid fa-check text-sm"></i>}
-          </button>
-        );
-      })}
-    </div>
-  );
-
-  const renderCanalSelector = () => (
-    <div className="flex flex-col gap-1.5">
-      {dealChannels.map(channel => {
-        const isSelected = deal.id_channel === channel.id_channel;
-        return (
-          <button
-            key={channel.id_channel}
-            type="button"
-            onClick={() => {
-              setDeal(prev => ({ ...prev, id_channel: channel.id_channel }));
-              setExpandedSections(prev => ({ ...prev, channel: false }));
-            }}
-            className={`px-3 py-2 rounded-lg border text-xs font-bold text-left flex items-center gap-2 transition-all ${
-                isSelected ? 'ring-2 ring-offset-1 border-transparent shadow-sm' : 'hover:brightness-95 border-transparent'
-            }`}
-            style={{
-                backgroundColor: `${channel.color || '#cccccc'}20`,
-                color: channel.color || '#333',
-                borderColor: isSelected ? channel.color : 'transparent',
-                ['--tw-ring-color' as any]: channel.color
-            }}
-          >
-            <div className="w-5 h-5 rounded-full flex items-center justify-center bg-white/50 text-sm">
-                 {channel.icon && <i className={channel.icon}></i>}
-            </div>
-            <span className="flex-1">{channel.name}</span>
-            {isSelected && <i className="fa-solid fa-check text-sm"></i>}
-          </button>
-        );
-      })}
-    </div>
-  );
+  // Helpers para encontrar los labels seleccionados (asegurando comparación de strings)
+  const selectedStatus = useMemo(() => dealStatuses.find(s => String(s.id_status || s.id) === String(deal.id_deal_status)), [dealStatuses, deal.id_deal_status]);
+  const selectedInterest = useMemo(() => interestStatuses.find(i => String((i as any).id_status || (i as any).id_interest || i.id) === String(deal.id_interest)), [interestStatuses, deal.id_interest]);
+  const selectedChannel = useMemo(() => dealChannels.find(c => String(c.id_channel || c.id) === String(deal.id_channel)), [dealChannels, deal.id_channel]);
+  const selectedCompany = useMemo(() => companies.find(c => String(c.id_client_company) === String(deal.id_client_company)), [companies, deal.id_client_company]);
+  const selectedContact = useMemo(() => contacts.find(c => String(c.id_contact) === String(deal.id_contact)), [contacts, deal.id_contact]);
 
   return (
-    <div className="w-full bg-slate-50 animate-fade-in">
+    <div className="w-full bg-slate-50 min-h-screen animate-fade-in">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* HEADER UNIFICADO */}
-      <div className="z-50 bg-white border-b border-slate-200 px-4 md:px-6 py-3 md:py-4 shadow-sm flex items-center justify-between">
+      <div className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center justify-between shadow-sm">
          <div className="flex items-center gap-4">
-             <button onClick={() => navigate(-1)} className="text-slate-400 hover:text-slate-600 transition-colors p-2 hover:bg-slate-100 rounded-full">
-                 <i className="fa-solid fa-arrow-left text-lg md:text-xl"></i>
+             <button onClick={() => navigate(-1)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full transition-colors">
+                 <i className="fa-solid fa-arrow-left text-lg"></i>
              </button>
              <h1 className="text-lg md:text-xl font-extrabold text-slate-800">Nuevo Trato</h1>
          </div>
          <div className="flex gap-3">
-             <button onClick={() => navigate(-1)} className="px-4 md:px-5 py-2 rounded-lg border border-slate-300 text-slate-600 text-xs md:text-sm font-bold hover:bg-slate-50 transition-colors">
+             <button onClick={() => navigate(-1)} className="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm font-bold hover:bg-slate-50">
                  Cancelar
              </button>
-             <button onClick={handleSave} disabled={processing} className="px-4 md:px-6 py-2 rounded-lg bg-brand-600 text-white text-xs md:text-sm font-bold hover:bg-brand-700 shadow-md flex items-center gap-2 transition-all">
+             <button onClick={handleSave} disabled={processing || loading} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 shadow-md flex items-center gap-2 disabled:opacity-50">
                  {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
                  Guardar
              </button>
          </div>
       </div>
 
-      {/* LAYOUT DE 4 COLUMNAS (Estilo Kanban/Dashboard) */}
-      <div className="p-4 md:p-6 max-w-[1920px] mx-auto pb-8 md:pb-6">
+      <div className="p-4 md:p-6 max-w-[1920px] mx-auto pb-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 items-start">
               
-              {/* COLUMNA 1: DETALLES PRINCIPALES */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-5 h-full">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2 border-b pb-2">
-                      <i className="fa-solid fa-file-invoice text-brand-500"></i> Información
+              {/* COL 1: INFO */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-5">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2 flex items-center gap-2">
+                      <i className="fa-solid fa-file-invoice text-indigo-500"></i> Información
                   </h3>
-                  
                   <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Nombre del Trato <span className="text-red-500">*</span></label>
-                      <input 
-                        name="nombre_trato" 
-                        value={deal.nombre_trato || ''} 
-                        onChange={handleInputChange} 
-                        autoFocus
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none transition-all placeholder:text-slate-300"
-                        placeholder="Ej. Venta de Servidores"
-                      />
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Nombre del Trato *</label>
+                      <input name="nombre_trato" value={deal.nombre_trato || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Ej. Venta de Servidores" />
                   </div>
-
                   <div>
                       <label className="block text-xs font-bold text-slate-600 mb-1.5">Valor Estimado</label>
                       <div className="relative">
-                          <span className="absolute left-3 top-2 text-slate-500 font-bold">$</span>
-                          <input 
-                            name="valor_trato" 
-                            value={deal.valor_trato || ''} 
-                            onChange={handleInputChange} 
-                            className="w-full pl-6 pr-3 py-2 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-brand-500 outline-none font-mono"
-                            placeholder="0.00"
-                          />
+                          <span className="absolute left-3 top-2 text-slate-400 font-bold">$</span>
+                          <input name="valor_trato" value={deal.valor_trato || ''} onChange={handleInputChange} className="w-full pl-7 pr-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none font-mono" placeholder="0.00" />
                       </div>
                   </div>
-
                   <div>
-                      <label className="block text-xs font-bold text-slate-500 mb-1.5">Descripción</label>
-                      <textarea 
-                        name="descripcion" 
-                        value={deal.descripcion || ''} 
-                        onChange={handleInputChange} 
-                        rows={3}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none resize-none bg-slate-50"
-                        placeholder="Escribe los detalles aquí..."
-                      ></textarea>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Descripción</label>
+                      <textarea name="descripcion" value={deal.descripcion || ''} onChange={handleInputChange} rows={3} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none resize-none bg-slate-50" placeholder="Detalles adicionales..."></textarea>
                   </div>
               </div>
 
-              {/* COLUMNA 2: CLIENTE */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-5 h-full">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2 border-b pb-2">
-                      <i className="fa-solid fa-building-user text-brand-500"></i> Cliente
+              {/* COL 2: CLIENTE */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-5">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2 flex items-center gap-2">
+                      <i className="fa-solid fa-building-user text-indigo-500"></i> Cliente
                   </h3>
-
                   <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Empresa <span className="text-red-500">*</span></label>
-                      <div className="relative">
-                        <select name="id_client_company" value={deal.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer">
-                            <option value="">-- Seleccionar --</option>
-                            {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
-                        </select>
-                        <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-xs text-slate-400 pointer-events-none"></i>
-                      </div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Empresa *</label>
+                      <select name="id_client_company" value={deal.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                          <option value="">-- Seleccionar Empresa --</option>
+                          {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
+                      </select>
                   </div>
-
-                  {/* VISTA PREVIA EMPRESA */}
                   {selectedCompany && (
-                      <div className="bg-indigo-50/50 border border-indigo-100 rounded-lg p-3 text-xs space-y-1">
+                      <div className="bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-xs space-y-1">
                           <p className="font-bold text-indigo-900">{selectedCompany.name_company}</p>
-                          <p className="text-indigo-700 flex items-center gap-2"><i className="fa-solid fa-id-card opacity-50"></i> {selectedCompany.id_number || 'N/A'}</p>
-                          <p className="text-indigo-700 flex items-center gap-2"><i className="fa-solid fa-location-dot opacity-50"></i> {selectedCompany.city || ''}</p>
+                          <p className="text-indigo-700 flex items-center gap-2"><i className="fa-solid fa-location-dot opacity-50"></i> {selectedCompany.city || 'Sin ciudad'}</p>
                       </div>
                   )}
-
                   {deal.id_client_company && (
                     <div className="mt-2">
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Contacto <span className="text-red-500">*</span></label>
-                      <div className="relative">
-                        <select name="id_contact" value={deal.id_contact || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none cursor-pointer">
-                            <option value="">-- Seleccionar --</option>
-                            {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{c.first_name} {c.last_name}</option>)}
-                        </select>
-                        <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-xs text-slate-400 pointer-events-none"></i>
-                      </div>
-
-                      {/* VISTA PREVIA CONTACTO */}
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Contacto *</label>
+                      <select name="id_contact" value={deal.id_contact || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                          <option value="">-- Seleccionar Contacto --</option>
+                          {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{c.first_name} {c.last_name}</option>)}
+                      </select>
                       {selectedContact && (
                           <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-1 mt-2">
                               <p className="font-bold text-slate-700">{selectedContact.first_name} {selectedContact.last_name}</p>
-                              <p className="text-slate-500 flex items-center gap-2"><i className="fa-solid fa-envelope opacity-50"></i> {selectedContact.email}</p>
-                              <p className="text-slate-500 flex items-center gap-2"><i className="fa-solid fa-phone opacity-50"></i> {selectedContact.phone || '-'}</p>
+                              <p className="text-slate-500"><i className="fa-solid fa-envelope mr-1 opacity-50"></i> {selectedContact.email}</p>
                           </div>
                       )}
                     </div>
                   )}
               </div>
 
-              {/* COLUMNA 3: CLASIFICACIÓN (Dropdowns) */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-3 h-full">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-2 border-b pb-2">
-                      <i className="fa-solid fa-filter text-brand-500"></i> Clasificación
+              {/* COL 3: CLASIFICACIÓN */}
+              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-4">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2 flex items-center gap-2">
+                      <i className="fa-solid fa-filter text-indigo-500"></i> Clasificación
                   </h3>
 
-                  {/* DROPDOWN 1: ESTADO */}
+                  {/* Dropdown Estado */}
                   <div className="relative" data-dropdown-container>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Estado del Pipeline <span className="text-red-500">*</span></label>
-                      <button
-                          type="button"
-                          onClick={() => setExpandedSections(prev => ({ ...prev, status: !prev.status }))}
-                          className="w-full px-3 py-2 text-xs font-bold border border-slate-200 rounded-lg flex items-center justify-between hover:border-slate-300 transition"
-                          style={{
-                              backgroundColor: dealStatuses.find(s => s.id_status === deal.id_deal_status) ? `${dealStatuses.find(s => s.id_status === deal.id_deal_status)?.color}10` : 'transparent',
-                              color: dealStatuses.find(s => s.id_status === deal.id_deal_status)?.color || '#666'
-                          }}
-                      >
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Estado del Pipeline *</label>
+                      <button type="button" onClick={() => setExpandedSections(p => ({...p, status: !p.status}))} className="w-full px-3 py-2 text-xs font-bold border rounded-lg flex items-center justify-between" style={{ backgroundColor: selectedStatus ? `${selectedStatus.color}15` : '#f8fafc', color: selectedStatus?.color || '#64748b', borderColor: selectedStatus?.color || '#e2e8f0' }}>
                           <span className="flex items-center gap-2">
-                              {dealStatuses.find(s => s.id_status === deal.id_deal_status) ? (
-                                  <>
-                                      <i className={dealStatuses.find(s => s.id_status === deal.id_deal_status)?.icon}></i>
-                                      {dealStatuses.find(s => s.id_status === deal.id_deal_status)?.name}
-                                  </>
-                              ) : (
-                                  'Seleccionar'
-                              )}
+                            {selectedStatus ? <><i className={selectedStatus.icon}></i> {selectedStatus.name}</> : 'Seleccionar Estado'}
                           </span>
-                          <i className={`fa-solid fa-chevron-down transition-transform text-xs ${expandedSections.status ? 'rotate-180' : ''}`}></i>
+                          <i className={`fa-solid fa-chevron-down transition-transform ${expandedSections.status ? 'rotate-180' : ''}`}></i>
                       </button>
                       {expandedSections.status && (
-                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 p-2 space-y-1">
-                              {renderStatusSelector()}
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] p-2 space-y-1 max-h-60 overflow-y-auto">
+                              {dealStatuses.length === 0 ? (
+                                  <div className="p-4 text-center text-xs text-slate-400">
+                                      <i className="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-400"></i>
+                                      <p className="font-bold">No hay estados configurados</p>
+                                      <p className="text-[10px] mt-1">Ve a Ajustes para configurarlos</p>
+                                  </div>
+                              ) : (
+                                  dealStatuses.map(s => (
+                                      <button key={s.id_status || (s as any).id} onClick={() => { setDeal(p => ({...p, id_deal_status: s.id_status || (s as any).id})); setExpandedSections(p => ({...p, status: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: s.color }}>
+                                          <i className={s.icon}></i> {s.name}
+                                      </button>
+                                  ))
+                              )}
                           </div>
                       )}
                   </div>
 
-                  {/* DROPDOWN 2: INTERÉS */}
+                  {/* Dropdown Interés */}
                   <div className="relative" data-dropdown-container>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Nivel de Interés <span className="text-red-500">*</span></label>
-                      <button
-                          type="button"
-                          onClick={() => setExpandedSections(prev => ({ ...prev, interest: !prev.interest }))}
-                          className="w-full px-3 py-2 text-xs font-bold border border-slate-200 rounded-lg flex items-center justify-between hover:border-slate-300 transition"
-                          style={{
-                              backgroundColor: interestStatuses.find(i => (i as any).id_status === deal.id_interest || (i as any).id_interest === deal.id_interest) ? `${interestStatuses.find(i => (i as any).id_status === deal.id_interest || (i as any).id_interest === deal.id_interest)?.color}10` : 'transparent',
-                              color: interestStatuses.find(i => (i as any).id_status === deal.id_interest || (i as any).id_interest === deal.id_interest)?.color || '#666'
-                          }}
-                      >
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Nivel de Interés *</label>
+                      <button type="button" onClick={() => setExpandedSections(p => ({...p, interest: !p.interest}))} className="w-full px-3 py-2 text-xs font-bold border rounded-lg flex items-center justify-between" style={{ backgroundColor: selectedInterest ? `${selectedInterest.color}15` : '#f8fafc', color: selectedInterest?.color || '#64748b', borderColor: selectedInterest?.color || '#e2e8f0' }}>
                           <span className="flex items-center gap-2">
-                              {interestStatuses.find(i => (i as any).id_status === deal.id_interest || (i as any).id_interest === deal.id_interest) ? (
-                                  <>
-                                      <i className={interestStatuses.find(i => (i as any).id_status === deal.id_interest || (i as any).id_interest === deal.id_interest)?.icon}></i>
-                                      {interestStatuses.find(i => (i as any).id_status === deal.id_interest || (i as any).id_interest === deal.id_interest)?.name}
-                                  </>
-                              ) : (
-                                  'Seleccionar'
-                              )}
+                            {selectedInterest ? <><i className={selectedInterest.icon}></i> {selectedInterest.name}</> : 'Seleccionar Interés'}
                           </span>
-                          <i className={`fa-solid fa-chevron-down transition-transform text-xs ${expandedSections.interest ? 'rotate-180' : ''}`}></i>
+                          <i className={`fa-solid fa-chevron-down transition-transform ${expandedSections.interest ? 'rotate-180' : ''}`}></i>
                       </button>
                       {expandedSections.interest && (
-                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 p-2 space-y-1">
-                              {renderInterestSelector()}
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] p-2 space-y-1 max-h-60 overflow-y-auto">
+                              {interestStatuses.length === 0 ? (
+                                  <div className="p-4 text-center text-xs text-slate-400">
+                                      <i className="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-400"></i>
+                                      <p className="font-bold">No hay niveles de interés configurados</p>
+                                      <p className="text-[10px] mt-1">Ve a Ajustes para configurarlos</p>
+                                  </div>
+                              ) : (
+                                  interestStatuses.map(i => {
+                                      const id = (i as any).id_status || (i as any).id_interest || i.id;
+                                      return (
+                                        <button key={id} onClick={() => { setDeal(p => ({...p, id_interest: id})); setExpandedSections(p => ({...p, interest: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: i.color }}>
+                                            <i className={i.icon}></i> {i.name}
+                                        </button>
+                                      );
+                                  })
+                              )}
                           </div>
                       )}
                   </div>
 
-                  {/* DROPDOWN 3: CANAL */}
+                  {/* Dropdown Canal */}
                   <div className="relative" data-dropdown-container>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Canal <span className="text-red-500">*</span></label>
-                      <button
-                          type="button"
-                          onClick={() => setExpandedSections(prev => ({ ...prev, channel: !prev.channel }))}
-                          className="w-full px-3 py-2 text-xs font-bold border border-slate-200 rounded-lg flex items-center justify-between hover:border-slate-300 transition"
-                          style={{
-                              backgroundColor: dealChannels.find(c => c.id_channel === deal.id_channel) ? `${dealChannels.find(c => c.id_channel === deal.id_channel)?.color}10` : 'transparent',
-                              color: dealChannels.find(c => c.id_channel === deal.id_channel)?.color || '#666'
-                          }}
-                      >
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Canal de Origen *</label>
+                      <button type="button" onClick={() => setExpandedSections(p => ({...p, channel: !p.channel}))} className="w-full px-3 py-2 text-xs font-bold border rounded-lg flex items-center justify-between" style={{ backgroundColor: selectedChannel ? `${selectedChannel.color}15` : '#f8fafc', color: selectedChannel?.color || '#64748b', borderColor: selectedChannel?.color || '#e2e8f0' }}>
                           <span className="flex items-center gap-2">
-                              {dealChannels.find(c => c.id_channel === deal.id_channel) ? (
-                                  <>
-                                      <i className={dealChannels.find(c => c.id_channel === deal.id_channel)?.icon}></i>
-                                      {dealChannels.find(c => c.id_channel === deal.id_channel)?.name}
-                                  </>
-                              ) : (
-                                  'Seleccionar'
-                              )}
+                            {selectedChannel ? <><i className={selectedChannel.icon}></i> {selectedChannel.name}</> : 'Seleccionar Canal'}
                           </span>
-                          <i className={`fa-solid fa-chevron-down transition-transform text-xs ${expandedSections.channel ? 'rotate-180' : ''}`}></i>
+                          <i className={`fa-solid fa-chevron-down transition-transform ${expandedSections.channel ? 'rotate-180' : ''}`}></i>
                       </button>
                       {expandedSections.channel && (
-                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 p-2 space-y-1">
-                              {renderCanalSelector()}
+                          <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] p-2 space-y-1 max-h-60 overflow-y-auto">
+                              {dealChannels.length === 0 ? (
+                                  <div className="p-4 text-center text-xs text-slate-400">
+                                      <i className="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-400"></i>
+                                      <p className="font-bold">No hay canales configurados</p>
+                                      <p className="text-[10px] mt-1">Ve a Ajustes para configurarlos</p>
+                                  </div>
+                              ) : (
+                                  dealChannels.map(c => (
+                                      <button key={c.id_channel || c.id} onClick={() => { setDeal(p => ({...p, id_channel: c.id_channel || c.id})); setExpandedSections(p => ({...p, channel: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: c.color }}>
+                                          <i className={c.icon}></i> {c.name}
+                                      </button>
+                                  ))
+                              )}
                           </div>
                       )}
                   </div>
               </div>
 
-              {/* COLUMNA 4: EQUIPO */}
+              {/* COL 4: EQUIPO */}
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-5 h-full">
-                  <div className="flex justify-between items-center border-b pb-2 mb-2">
+                  <div className="flex justify-between items-center border-b pb-2">
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-                        <i className="fa-solid fa-users text-brand-500"></i> Equipo
+                        <i className="fa-solid fa-users text-indigo-500"></i> Colaboradores
                     </h3>
-                    <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-full">{selectedUserIds.length}</span>
+                    <span className="bg-indigo-100 text-indigo-600 text-[10px] font-bold px-2 py-0.5 rounded-full">{selectedUserIds.length}</span>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs">
-                     <button type="button" onClick={() => setSelectedUserIds(prev => prev.length === availableUsers.length ? [] : availableUsers.map(u => u.id_user))} className="text-brand-600 hover:underline font-bold">
-                        {selectedUserIds.length === availableUsers.length ? 'Ninguno' : 'Todos'}
+                  <div className="flex items-center justify-between text-[10px] font-bold">
+                     <button type="button" onClick={() => setSelectedUserIds(prev => prev.length === availableUsers.length ? [] : availableUsers.map(u => u.id_user))} className="text-indigo-600 hover:underline">
+                        {selectedUserIds.length === availableUsers.length ? 'DESELECCIONAR TODOS' : 'SELECCIONAR TODOS'}
                      </button>
                      <div className="flex bg-slate-100 rounded p-0.5">
-                        <button onClick={() => setSharePermission('VIEW')} className={`px-2 py-0.5 rounded transition ${sharePermission === 'VIEW' ? 'bg-white shadow text-black' : 'text-slate-500'}`}>Ver</button>
-                        <button onClick={() => setSharePermission('EDIT')} className={`px-2 py-0.5 rounded transition ${sharePermission === 'EDIT' ? 'bg-white shadow text-black' : 'text-slate-500'}`}>Editar</button>
+                        <button onClick={() => setSharePermission('VIEW')} className={`px-2 py-0.5 rounded ${sharePermission === 'VIEW' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>VER</button>
+                        <button onClick={() => setSharePermission('EDIT')} className={`px-2 py-0.5 rounded ${sharePermission === 'EDIT' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>EDITAR</button>
                      </div>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto custom-scrollbar border border-slate-100 rounded-lg p-1 max-h-[400px]">
+                  <div className="flex-1 overflow-y-auto max-h-[300px] border border-slate-50 rounded-lg">
                       {availableUsers.map(u => (
-                          <label key={u.id_user} className="flex items-center gap-2 p-2 rounded hover:bg-slate-50 cursor-pointer">
-                              <input type="checkbox" checked={selectedUserIds.includes(u.id_user)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id_user) ? prev.filter(id => id !== u.id_user) : [...prev, u.id_user])} className="w-4 h-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500" />
-                              <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 border border-slate-300">
-                                  {(u.name_user || 'U').charAt(0)}
+                          <label key={u.id_user} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
+                              <input type="checkbox" checked={selectedUserIds.includes(u.id_user)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id_user) ? prev.filter(id => id !== u.id_user) : [...prev, u.id_user])} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
+                              <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 uppercase">
+                                  {u.name_user?.charAt(0) || 'U'}
                               </div>
-                              <div className="overflow-hidden">
+                              <div className="flex-1 min-w-0">
                                 <p className="text-xs font-bold text-slate-700 truncate">{u.name_user}</p>
-                                <p className="text-[10px] text-slate-400 truncate">{(u as any).email_user}</p>
+                                <p className="text-[10px] text-slate-400 truncate">{u.email_user}</p>
                               </div>
                           </label>
                       ))}
-                      {availableUsers.length === 0 && <p className="text-xs text-slate-400 text-center py-4">No hay otros usuarios.</p>}
+                      {availableUsers.length === 0 && <p className="text-xs text-slate-400 text-center py-10">No hay otros usuarios disponibles.</p>}
                   </div>
               </div>
 

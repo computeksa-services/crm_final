@@ -1,24 +1,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Quote, QuoteItem, UserDecision, Product, QuoteStatus } from '../types';
+import { Quote, QuoteItem, UserDecision, Product, QuoteStatus, PdfVersion, ProductType } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import ShareModal from '../components/ShareModal';
+import QuoteEditModal from '../components/QuoteEditModal';
 
 const QuoteDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-
-  type PdfVersion = {
-    id_version: string;
-    file_url: string;
-    version_number: number;
-    created_at: string;
-    generado_por: string;
-    avatar_url?: string;
-  };
 
   // --- ESTADOS ---
   const [quote, setQuote] = useState<Quote | null>(null);
@@ -26,15 +18,14 @@ const QuoteDetail: React.FC = () => {
   const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]);
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
   const [pdfVersions, setPdfVersions] = useState<PdfVersion[]>([]);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
 
   // Estados de UI
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
   // Estados de Formulario Modal
@@ -43,7 +34,6 @@ const QuoteDetail: React.FC = () => {
   
   // Estados para crear productos desde el modal
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
-  const [productTypes, setProductTypes] = useState<any[]>([]);
   const [newProduct, setNewProduct] = useState<any>({
     codigo: '',
     descripcion: '',
@@ -64,7 +54,7 @@ const QuoteDetail: React.FC = () => {
     isDestructive: false,
   });
 
-  // --- CARGA DE DATOS ---
+  // --- CARGA DE DATOS (OPTIMIZADA: UNA SOLA LLAMADA) ---
   const fetchData = useCallback(async () => {
     if (!id || !user?.id_tenant || !user?.id_user) return;
     
@@ -72,7 +62,7 @@ const QuoteDetail: React.FC = () => {
     const userId = user.id_user;
 
     try {
-      // 1. Obtener Cotización
+      // UNA SOLA LLAMADA: Obtiene todo (quote, items, versions, access, detalles, etc.)
       const quoteResponse = await fetch(`https://service.computeksa.com/webhook/api/quotes/detail?id_cotizacion=${id}&id_tenant=${tenantId}&id_user=${userId}`);
       
       if (!quoteResponse.ok) {
@@ -98,48 +88,24 @@ const QuoteDetail: React.FC = () => {
         return;
       }
 
-      // 2. Obtener Artículos (Usando la variable local 'q')
-      try {
-        const itemsResponse = await fetch(`https://service.computeksa.com/webhook/api/quote-items?id_cotizacion=${q.id_cotizacion}&id_tenant=${tenantId}&id_user=${userId}`);
-        if (itemsResponse.ok) {
-          const responseText = await itemsResponse.text();
-          const itemsData = responseText ? JSON.parse(responseText) : [];
-          setItems(itemsData);
-        }
-      } catch (itemError) {
-        console.error("Error items:", itemError);
+      // Los items vienen en q.items (no necesita llamada separada)
+      if (q.items && Array.isArray(q.items)) {
+        setItems(q.items);
       }
 
-      // 3. Cargas secundarias (Paralelo para velocidad)
-      const promises = [];
+      // Los PDFs vienen en q.versions (no necesita llamada separada)
+      if (q.versions && Array.isArray(q.versions)) {
+        const validVersions = q.versions.filter((v: any) => v && v.file_url && v.version_number !== undefined && v.version_number !== null);
+        setPdfVersions(validVersions);
+      }
 
-      // Estados
-      promises.push(
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`)
-          .then(res => res.ok ? res.json() : [])
-          .then(data => setQuoteStatuses(data))
-          .catch(() => {})
-      );
+      // Los estados disponibles vienen en q.available_statuses (no necesita llamada separada)
+      if (q.available_statuses && Array.isArray(q.available_statuses)) {
+        setQuoteStatuses(q.available_statuses);
+      }
 
-      // Productos
-      promises.push(
-        fetch(`https://service.computeksa.com/webhook/api/products?id_tenant=${tenantId}&id_user=${userId}`)
-          .then(res => res.ok ? res.text() : null)
-          .then(text => text ? JSON.parse(text) : [])
-          .then(data => setAvailableProducts(data))
-          .catch(() => {})
-      );
-      
-      // Tipos de productos
-      promises.push(
-        fetch(`https://service.computeksa.com/webhook/api/products_type?id_tenant=${tenantId}`)
-          .then(res => res.ok ? res.text() : null)
-          .then(text => text ? JSON.parse(text) : [])
-          .then(data => setProductTypes(data))
-          .catch(() => {})
-      );
-
-      await Promise.all(promises);
+      // Nota: Las llamadas a /api/products y /api/products_type se harán solo cuando el usuario
+      // haga clic en "Agregar" (handleAddItem), no durante la carga inicial
 
     } catch (e: any) {
       console.error("Error fatal:", e);
@@ -153,46 +119,11 @@ const QuoteDetail: React.FC = () => {
     fetchData();
   }, [fetchData]);
   
-    const fetchPdfVersions = useCallback(async () => {
-      if (!quote?.id_cotizacion || !user?.id_tenant || !user?.id_user) return;
-      setPdfLoading(true);
-      setPdfError(null);
-      try {
-        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/files?id_cotizacion=${quote.id_cotizacion}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
-        if (!res.ok) throw new Error('Error al obtener PDFs');
-        
-        const text = await res.text();
-        let data = [];
-        
-        // Si la respuesta está vacía o es null/undefined, usar array vacío
-        if (text && text.trim()) {
-          data = JSON.parse(text);
-          // Si data es null o no es un array, usar array vacío
-          if (!Array.isArray(data)) {
-            data = [];
-          } else {
-            // Filtrar solo PDFs válidos (que tengan file_url y version_number)
-            data = data.filter((pdf: any) => pdf && pdf.file_url && pdf.version_number !== undefined && pdf.version_number !== null);
-          }
-        }
-        
-        setPdfVersions(data);
-      } catch (e: any) {
-        setPdfError(e?.message || 'Error al obtener PDFs');
-        setPdfVersions([]);
-      } finally {
-        setPdfLoading(false);
-      }
-    }, [quote?.id_cotizacion, user?.id_tenant, user?.id_user]);
-
-    useEffect(() => {
-      fetchPdfVersions();
-    }, [fetchPdfVersions]);
   // Activar modo edición si viene por URL
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.get('edit') === '1') setIsEditing(true);
+      // Ya no usamos isEditing, ahora usamos isConditionsModalOpen
     } catch {}
   }, []);
   
@@ -229,15 +160,44 @@ const QuoteDetail: React.FC = () => {
     return `COD-${String(nextNum).padStart(3, '0')}`;
   };
 
-  const handleAddItem = () => {
+  const handleAddItem = async () => {
     if (!quote || (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin')) {
       setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
       return;
     }
-    setIsCreatingProduct(false);
-    setSelectedProductId(null);
-    setItemQuantity(1);
-    setIsProductModalOpen(true);
+    
+    setProcessing(true);
+    try {
+      // Cargar productos y tipos de productos solo cuando se abre el modal
+      const tenantId = user?.id_tenant;
+      const userId = user?.id_user;
+      
+      const [productsRes, typesRes] = await Promise.all([
+        fetch(`https://service.computeksa.com/webhook/api/products?id_tenant=${tenantId}&id_user=${userId}`),
+        fetch(`https://service.computeksa.com/webhook/api/products_type?id_tenant=${tenantId}`)
+      ]);
+      
+      if (productsRes.ok) {
+        const productsText = await productsRes.text();
+        const products = productsText ? JSON.parse(productsText) : [];
+        setAvailableProducts(products);
+      }
+      
+      if (typesRes.ok) {
+        const typesText = await typesRes.text();
+        const types = typesText ? JSON.parse(typesText) : [];
+        setProductTypes(types);
+      }
+      
+      setIsCreatingProduct(false);
+      setSelectedProductId(null);
+      setItemQuantity(1);
+      setIsProductModalOpen(true);
+    } catch (e) {
+      setToast({ message: 'Error al cargar productos.', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
   };
   
   const handleToggleCreateProduct = () => {
@@ -547,7 +507,7 @@ const QuoteDetail: React.FC = () => {
     });
   };
 
-  const handleSaveHeader = async () => {
+  const handleSaveEdit = async (updatedData: Partial<Quote>) => {
     if (!quote || !user) return;
     
     if (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
@@ -562,29 +522,27 @@ const QuoteDetail: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             id_cotizacion: quote.id_cotizacion,
-            nombre_cotizacion: quote.nombre_cotizacion,
-            id_quote_status: quote.id_quote_status,
-            tiempo_entrega: quote.tiempo_entrega || '',
-            garantia: quote.garantia || '',
-            validez_oferta: quote.validez_oferta || '',
-            nota: quote.nota || '',
-            mensaje: quote.mensaje || '',
-            correos_adicionales: quote.correos_adicionales || '',
+            nombre_cotizacion: updatedData.nombre_cotizacion || quote.nombre_cotizacion,
+            id_quote_status: updatedData.id_quote_status || quote.id_quote_status,
+            tiempo_entrega: updatedData.tiempo_entrega || quote.tiempo_entrega || '',
+            garantia: updatedData.garantia || quote.garantia || '',
+            validez_oferta: updatedData.validez_oferta || quote.validez_oferta || '',
+            nota: updatedData.nota || quote.nota || '',
+            mensaje: updatedData.mensaje || quote.mensaje || '',
+            correos_adicionales: updatedData.correos_adicionales || quote.correos_adicionales || '',
             is_private: quote.is_private || false,
             id_tenant: user.id_tenant,
             id_user: user.id_user,
-            // NOTA: NO enviamos 'total' aquí, la BD se encarga de eso.
-            // Solo actualizamos cabeceras.
         }),
         });
         if (!response.ok) throw new Error('Error al actualizar cotización.');
         
         const updated = await response.json();
         setQuote(updated);
-        setIsEditing(false);
-        setToast({ message: 'Cotización actualizada.', type: 'success' });
+        setToast({ message: 'Cotización actualizada correctamente.', type: 'success' });
     } catch (e: any) {
         setToast({ message: e.message || 'Error al guardar.', type: 'error' });
+        throw e;
     } finally {
         setProcessing(false);
     }
@@ -629,10 +587,7 @@ const handleGeneratePDF = async () => {
       }
 
       // Refrescar datos locales (cotización y versiones) después de generar
-      await Promise.all([
-        fetchData(),
-        fetchPdfVersions(),
-      ]);
+      await fetchData();
 
       setToast({ message: 'PDF generado con éxito.', type: 'success' });
     } catch (e: any) {
@@ -736,7 +691,7 @@ const handleGeneratePDF = async () => {
   const showSendBtn = isReady; 
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-fade-in">
+    <div className="w-full space-y-6 pb-12 animate-fade-in px-6 lg:px-8">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} />
 
@@ -808,10 +763,10 @@ const handleGeneratePDF = async () => {
                     return selectedProduct ? (
                       <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
                         <div className="flex items-start gap-4">
-                          {selectedProduct.imagen && (
+                          {selectedProduct.imagen_url && (
                             <div className="flex-shrink-0">
                               <img
-                                src={convertGoogleDriveUrl(selectedProduct.imagen)}
+                                src={convertGoogleDriveUrl(selectedProduct.imagen_url)}
                                 alt={selectedProduct.descripcion}
                                 className="h-16 w-16 object-cover rounded-lg border border-slate-200"
                                 onError={(e) => {
@@ -828,9 +783,9 @@ const handleGeneratePDF = async () => {
                             <p className="text-xs text-slate-600 mt-1">
                               Código: {selectedProduct.codigo}
                             </p>
-                            {selectedProduct.precio && (
+                            {selectedProduct.precio_unitario && (
                               <p className="text-xs text-slate-600 mt-1">
-                                Precio: ${selectedProduct.precio.toFixed(2)}
+                                Precio: ${selectedProduct.precio_unitario.toFixed(2)}
                               </p>
                             )}
                           </div>
@@ -990,9 +945,9 @@ const handleGeneratePDF = async () => {
       )}
 
       {/* Main Header Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex-1">
-           <div className="flex items-center gap-3 mb-2">
+           <div className="flex items-center gap-3 mb-1">
              {quote.is_private && (
                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200 flex items-center">
                      <i className="fa-solid fa-lock mr-1 text-[10px]"></i> Privado
@@ -1000,48 +955,10 @@ const handleGeneratePDF = async () => {
              )}
            </div>
 
-           {!isEditing ? (
-             <div className="ml-8">
-                 <h1 className="text-3xl font-bold text-slate-800 tracking-tight">Cotización #{quote.formatted_no_cotizacion}</h1>
-                 <p className="text-slate-500 mt-1 font-medium">{quote.nombre_cotizacion}</p>
-             </div>
-           ) : (
-             <div className="ml-8 flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full">
-               <div className="flex-1 w-full sm:w-auto">
-                    <label className="text-xs font-bold text-slate-400 block mb-1">Nombre</label>
-                    <input 
-                        disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                        className="px-3 py-2 border border-slate-300 rounded-lg w-full focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                        value={quote.nombre_cotizacion || ''}
-                        onChange={(e) => setQuote({ ...quote, nombre_cotizacion: e.target.value })}
-                    />
-               </div>
-               <div className="w-full sm:w-auto">
-                    <label className="text-xs font-bold text-slate-400 block mb-1">Etapa</label>
-                    <select 
-                        disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                        className="px-3 py-2 border border-slate-300 rounded-lg w-full bg-white focus:ring-2 focus:ring-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                        value={quote.id_quote_status || ''}
-                        onChange={(e) => setQuote({ ...quote, id_quote_status: e.target.value })}
-                    >
-                        {quoteStatuses.map(s => (
-                        <option key={s.id_status} value={s.id_status}>{s.name}</option>
-                        ))}
-                    </select>
-               </div>
-               <div className="sm:mt-5">
-                   <button onClick={handleGeneratePDF} className="hidden" />
-                   <button 
-                        onClick={handleSaveHeader}
-                        disabled={processing}
-                        className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg shadow-md font-medium transition-all flex items-center whitespace-nowrap"
-                    >
-                        {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-floppy-disk mr-2"></i>}
-                        Guardar
-                    </button>
-               </div>
-             </div>
-           )}
+           <div className="ml-8">
+               <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Cotización #{quote.formatted_no_cotizacion}</h1>
+               <p className="text-sm text-slate-500 mt-0.5 font-medium">{quote.nombre_cotizacion}</p>
+           </div>
         </div>
         
         <div className="flex flex-wrap items-center gap-3 justify-end">
@@ -1114,175 +1031,69 @@ const handleGeneratePDF = async () => {
         {/* Left Column: Details & Items */}
         <div className="xl:col-span-2 space-y-6">
 
-          {/* Commercial Conditions Section */}
+          {/* Commercial Conditions & Details Section */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
               <h3 className="font-bold text-slate-800 flex items-center">
                 <span className="w-2 h-6 bg-emerald-500 rounded-full mr-3"></span>
-                Condiciones Comerciales
+                Detalles de la Cotización
               </h3>
-              {!isEditing && (quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
+              {(quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
                 <button 
-                  onClick={() => setIsEditing(true)}
-                  className="text-slate-400 hover:text-brand-600 transition-colors"
-                  title="Editar"
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="text-xs bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-1.5 rounded-lg transition-colors font-medium flex items-center"
                 >
-                  <i className="fa-solid fa-pen-to-square"></i>
+                  <i className="fa-solid fa-pencil mr-1.5"></i> Editar Todo
                 </button>
               )}
             </div>
             
-            {!isEditing ? (
-              <div className="px-6 py-4 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tiempo de Entrega</label>
-                    <p className="text-slate-800 font-medium">{quote.tiempo_entrega || '-'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Garantía</label>
-                    <p className="text-slate-800 font-medium">{quote.garantia || '-'}</p>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Validez de la Oferta</label>
-                    <p className="text-slate-800 font-medium">{quote.validez_oferta || '-'}</p>
-                  </div>
-                </div>
-                {quote.nota && (
-                  <div className="border-t border-slate-100 pt-4">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nota Interna</label>
-                    <p className="text-slate-800 text-sm bg-slate-50 p-3 rounded-lg">{quote.nota}</p>
-                  </div>
-                )}
-                {quote.mensaje && (
-                  <div className="border-t border-slate-100 pt-4">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Mensaje para el Cliente</label>
-                    <p className="text-slate-800 text-sm bg-slate-50 p-3 rounded-lg whitespace-pre-wrap">{quote.mensaje}</p>
-                  </div>
-                )}
-                {quote.correos_adicionales && (
-                  <div className="border-t border-slate-100 pt-4">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Correos en Copia (CC)</label>
-                    <p className="text-slate-800 text-sm">{quote.correos_adicionales}</p>
-                  </div>
-                )}
-                {quote.is_private && (
-                  <div className="bg-amber-50 border border-amber-100 p-3 rounded-lg flex items-start gap-2">
-                    <i className="fa-solid fa-lock text-amber-600 mt-0.5"></i>
-                    <span className="text-xs text-amber-800 font-medium">Esta cotización es privada</span>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="px-6 py-4 space-y-5">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tiempo de Entrega</label>
-                    <input 
-                      type="text"
-                      disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                      value={quote.tiempo_entrega || ''}
-                      onChange={(e) => setQuote({ ...quote, tiempo_entrega: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                      placeholder="Ej. 5-7 días"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Garantía</label>
-                    <input 
-                      type="text"
-                      disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                      value={quote.garantia || ''}
-                      onChange={(e) => setQuote({ ...quote, garantia: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                      placeholder="Ej. 12 meses"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Validez de la Oferta</label>
-                    <input 
-                      type="text"
-                      disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                      value={quote.validez_oferta || ''}
-                      onChange={(e) => setQuote({ ...quote, validez_oferta: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                      placeholder="Ej. 30 días"
-                    />
-                  </div>
+            <div className="px-6 py-4 space-y-3">
+              {/* Row 1: Condiciones Comerciales */}
+              <div className="grid grid-cols-3 gap-4 pb-3 border-b border-slate-100">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Entrega</p>
+                  <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.tiempo_entrega || '-'}</p>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nota Interna</label>
-                  <textarea 
-                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                    value={quote.nota || ''}
-                    onChange={(e) => setQuote({ ...quote, nota: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none resize-none disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="Notas internas..."
-                  />
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Garantía</p>
+                  <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.garantia || '-'}</p>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mensaje para el Cliente</label>
-                  <textarea 
-                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                    value={quote.mensaje || ''}
-                    onChange={(e) => setQuote({ ...quote, mensaje: e.target.value })}
-                    rows={3}
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none resize-none disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="Mensaje personalizado que se mostrará en la cotización..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Correos en Copia (CC)</label>
-                  <input 
-                    type="text"
-                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                    value={quote.correos_adicionales || ''}
-                    onChange={(e) => setQuote({ ...quote, correos_adicionales: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="ejemplo@otro.com, gerente@empresa.com"
-                  />
-                  <p className="text-xs text-slate-400 mt-1.5">Separe múltiples correos con comas.</p>
-                </div>
-                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-start space-x-3">
-                  <input
-                    type="checkbox"
-                    id="is_private_detail"
-                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                    checked={quote.is_private || false}
-                    onChange={(e) => setQuote({ ...quote, is_private: e.target.checked })}
-                    className="w-5 h-5 text-amber-600 border-amber-300 rounded focus:ring-amber-500 cursor-pointer mt-0.5"
-                  />
-                  <label htmlFor="is_private_detail" className="flex-1 cursor-pointer">
-                    <div className="font-bold text-amber-900">Marcar como Privada</div>
-                    <div className="text-sm text-amber-800/70">Solo visible para usted y administradores</div>
-                  </label>
-                </div>
-                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                  <button 
-                    type="button" 
-                    onClick={() => setIsEditing(false)} 
-                    className="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all"
-                  >
-                    Cancelar
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={handleSaveHeader}
-                    disabled={processing}
-                    className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 transition-all disabled:opacity-70 flex items-center gap-2"
-                  >
-                    {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
-                    Guardar
-                  </button>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Validez</p>
+                  <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.validez_oferta || '-'}</p>
                 </div>
               </div>
-            )}
+
+              {/* Row 2: Nota Interna (si existe) */}
+              {quote.nota && (
+                <div className="py-2">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nota Interna</p>
+                  <p className="text-sm text-slate-700 bg-slate-50 p-2 rounded border border-slate-100">{quote.nota}</p>
+                </div>
+              )}
+
+              {/* Row 3: Mensaje para Cliente (si existe) */}
+              {quote.mensaje && (
+                <div className="py-2">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Mensaje al Cliente</p>
+                  <p className="text-sm text-slate-700 bg-blue-50 p-2 rounded border border-blue-100 whitespace-pre-wrap">{quote.mensaje}</p>
+                </div>
+              )}
+
+              {/* Row 4: Correos CC (si existen) */}
+              {quote.correos_adicionales && (
+                <div className="py-2">
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Copia a</p>
+                  <p className="text-sm text-slate-700">{quote.correos_adicionales}</p>
+                </div>
+              )}
+            </div>
           </div>
           
           {/* Items Section */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
               <h3 className="font-bold text-slate-800 flex items-center">
                 <span className="w-2 h-6 bg-brand-500 rounded-full mr-3"></span>
                 Artículos
@@ -1406,7 +1217,7 @@ const handleGeneratePDF = async () => {
                 )}
                 <button
                   type="button"
-                  onClick={fetchPdfVersions}
+                  onClick={fetchData}
                   className="px-3 py-2 text-sm rounded-lg border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 transition-colors flex items-center gap-2"
                 >
                   <i className="fa-solid fa-rotate-right"></i>
@@ -1416,31 +1227,11 @@ const handleGeneratePDF = async () => {
             </div>
 
             <div className="px-6 py-4">
-              {pdfLoading && (
-                <div className="flex items-center gap-2 text-slate-500 text-sm">
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  Cargando historial...
-                </div>
-              )}
-
-              {!pdfLoading && pdfError && (
-                <div className="flex items-center justify-between gap-3 bg-red-50 border border-red-100 text-red-700 px-4 py-3 rounded-lg text-sm">
-                  <span>{pdfError}</span>
-                  <button
-                    type="button"
-                    onClick={fetchPdfVersions}
-                    className="px-3 py-1.5 rounded bg-red-600 text-white text-xs hover:bg-red-700"
-                  >
-                    Reintentar
-                  </button>
-                </div>
-              )}
-
-              {!pdfLoading && !pdfError && pdfVersions.length === 0 && (
+              {pdfVersions.length === 0 && (
                 <div className="text-sm text-slate-500">Aún no se han generado PDFs para esta cotización.</div>
               )}
 
-              {!pdfLoading && !pdfError && pdfVersions.length > 0 && (
+              {pdfVersions.length > 0 && (
                 <div className="divide-y divide-slate-100">
                   {pdfVersions.map((pdf) => {
                     // Validar que el PDF tenga datos válidos
@@ -1545,7 +1336,7 @@ const handleGeneratePDF = async () => {
                 <div>
                   <span className="text-xs text-slate-400 font-semibold block uppercase">Empresa</span>
                   <Link to={`/app/client-companies/${quote.id_client_company}`} className="text-slate-800 font-bold hover:text-blue-600 transition-colors text-base">
-                    {quote.client_company_name}
+                    {(quote.company_detail as any)?.name || quote.client_company_name || '-'}
                   </Link>
                 </div>
               </div>
@@ -1557,7 +1348,7 @@ const handleGeneratePDF = async () => {
                  <div>
                    <span className="text-xs text-slate-400 font-semibold block uppercase">Contacto</span>
                    <Link to={`/app/client-contacts/${quote.id_contact}`} className="text-slate-700 font-medium hover:text-brand-600 transition-colors">
-                     {quote.contact_name}
+                     {quote.contact_detail?.full_name || quote.contact_name || '-'}
                    </Link>
                  </div>
               </div>
@@ -1569,7 +1360,7 @@ const handleGeneratePDF = async () => {
                         <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs mr-2">
                             <i className="fa-solid fa-user-tie"></i>
                         </div>
-                        <span className="text-slate-700 text-sm font-medium truncate">{quote.owner_name}</span>
+                        <span className="text-slate-700 text-sm font-medium truncate">{quote.owner_detail?.name || quote.owner_name || '-'}</span>
                     </div>
                  </div>
                  <div>
@@ -1583,7 +1374,7 @@ const handleGeneratePDF = async () => {
           </div>
 
           {/* Associated Deal Card */}
-          {quote.id_trato && (
+          {quote.id_trato && quote.deal_detail && (
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 pb-2 border-b border-slate-50">Contexto</h3>
               <div className="flex items-center p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-brand-200 transition-colors">
@@ -1593,40 +1384,11 @@ const handleGeneratePDF = async () => {
                  <div className="overflow-hidden">
                     <p className="text-xs text-slate-500 mb-0.5">Trato Asociado</p>
                     <Link to={`/app/deals/${quote.id_trato}`} className="text-brand-700 font-bold hover:underline truncate block">
-                      {quote.nombre_trato}
+                      {quote.deal_detail.name}
                     </Link>
                  </div>
               </div>
             </div>
-          )}
-
-          {/* Commercial Conditions */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 pb-2 border-b border-slate-50">Condiciones</h3>
-              <div className="space-y-4 text-sm">
-                <div className="flex justify-between items-center border-b border-dashed border-slate-100 pb-2">
-                  <span className="text-slate-500"><i className="fa-regular fa-clock mr-2 w-4"></i>Validez</span>
-                  <span className="text-slate-700 font-semibold">{quote.validez_oferta}</span>
-                </div>
-                <div className="flex justify-between items-center border-b border-dashed border-slate-100 pb-2">
-                  <span className="text-slate-500"><i className="fa-solid fa-truck-fast mr-2 w-4"></i>Entrega</span>
-                  <span className="text-slate-700 font-semibold">{quote.tiempo_entrega}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-slate-500"><i className="fa-solid fa-shield-halved mr-2 w-4"></i>Garantía</span>
-                  <span className="text-slate-700 font-semibold">{quote.garantia}</span>
-                </div>
-              </div>
-          </div>
-          
-          {/* Notes */}
-          {quote.nota && (
-             <div className="bg-amber-50 rounded-2xl shadow-sm border border-amber-100 p-6">
-               <h3 className="text-xs font-bold text-amber-600 uppercase tracking-wider mb-3 flex items-center">
-                   <i className="fa-solid fa-sticky-note mr-2"></i> Notas
-               </h3>
-               <p className="text-sm text-amber-900/80 whitespace-pre-wrap leading-relaxed italic">"{quote.nota}"</p>
-             </div>
           )}
 
         </div>
@@ -1641,6 +1403,16 @@ const handleGeneratePDF = async () => {
           onShared={() => setToast({ message: 'Cotización compartida.', type: 'success' })}
         />
       )}
+
+      {/* Quote Edit Modal */}
+      <QuoteEditModal 
+        isOpen={isEditModalOpen}
+        quote={quote}
+        quoteStatuses={quoteStatuses}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleSaveEdit}
+        processing={processing}
+      />
     </div>
   );
 };

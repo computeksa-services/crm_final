@@ -222,6 +222,7 @@ export interface Quote {
   // Campos derivados (JOINs en el backend)
   created_at_fmt?: string; // Fecha de creación formateada "12/12/2025 00:00"
   fecha_emision_fmt?: string; // Fecha de emisión formateada "12/12/2025"
+  formatted_no_cotizacion?: string; // Número de cotización formateado (ej. 001, 002)
   estado?: string; // Nombre del estado de la cotización (legacy)
   estado_nombre?: string; // Nuevo formato backend
   estado_color?: string; // Color del estado de la cotización
@@ -239,9 +240,32 @@ export interface Quote {
   created_by_avatar?: string;
   nombre_trato?: string; // Nombre del trato asociado (legacy)
   deal_name?: string; // Nuevo formato backend
-  formatted_no_cotizacion?: string; // Número de cotización formateado (ej. 001, 002)
   access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend
   created_by?: string; // ID del usuario creador
+
+  // Nuevos campos desde la respuesta optimizada de detail endpoint
+  items?: QuoteItem[]; // Artículos de la cotización
+  versions?: PdfVersion[]; // Versiones de PDF generadas
+  available_statuses?: QuoteStatus[]; // Estados disponibles
+  status_detail?: QuoteStatus; // Estado actual detallado
+  owner_detail?: {
+    name: string;
+    email: string;
+    avatar: string;
+  };
+  company_detail?: ClientCompany;
+  contact_detail?: {
+    id: string;
+    email: string;
+    phone: string;
+    full_name: string;
+  };
+  deal_detail?: {
+    id: string;
+    name: string;
+    value: string;
+    owner_id: string;
+  };
 }
 
 // 9. FINANCIAL TRANSACTIONS (Transacciones financieras)
@@ -323,6 +347,21 @@ export interface QuoteItem {
   cantidad: number;
   precio_unitario: number; // Snapshot
   subtotal: number;
+}
+
+// PDF VERSION (Versión PDF de una cotización)
+export interface PdfVersion {
+  id_version?: string;
+  id_cotizacion?: string;
+  file_url: string;
+  version_number: number;
+  created_at: string;
+  created_by?: string;
+  generado_por?: string;
+  avatar_url?: string;
+  creator_name?: string;
+  sent_at?: string | null;
+  is_approved?: boolean;
 }
 
 export interface CalendarEvent {

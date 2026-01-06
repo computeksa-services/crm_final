@@ -166,7 +166,17 @@ const DealsList: React.FC = () => {
         fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
       ]);
-      const parse = async (res: Response) => res.ok ? await res.json() : [];
+      const parse = async (res: Response) => {
+        try {
+          if (!res.ok) return [];
+          const text = await res.text();
+          if (!text || text.trim() === '' || text === 'null') return [];
+          return JSON.parse(text);
+        } catch (e) {
+          console.error('Error parsing response:', e);
+          return [];
+        }
+      };
       const dData = await parse(dealsRes);
       setDeals(dData); setContextDeals(dData);
       setCompanies(await parse(companiesRes));
