@@ -89,7 +89,7 @@ export interface DealChannel {
 export interface ClientCompany {
   id_client_company: string;
   id_tenant: string;
-  id_type: 'RUC' | 'CI' | 'PASAPORTE' | 'OTRO';
+  id_type: 'RUC' | 'CI' | 'PASAPORTE' | 'IDENTIFICACION DEL EXTERIOR' | 'OTRO';
   id_number: string;
   name_company: string;
   industry?: string;
@@ -100,6 +100,16 @@ export interface ClientCompany {
   email_company?: string;
   created_by?: string; // ID del usuario que creó el registro
   access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend
+  id_country?: string; // ID del país
+  id_company_type?: string; // ID del tipo de empresa
+  id_label?: string; // ID de la etiqueta
+  // Campos calculados por el backend
+  created_by_name?: string;
+  created_by_avatar?: string;
+  country_name?: string;
+  company_type_name?: string;
+  label_name?: string;
+  label_color?: string;
 }
 
 // 4. CLIENT CONTACT (La persona de contacto)

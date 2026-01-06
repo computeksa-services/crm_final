@@ -413,7 +413,7 @@ const QuoteCreate: React.FC = () => {
                                         className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none font-medium text-slate-700"
                                         placeholder="Se generará automáticamente..."
                                     />
-                                    <p className="text-[10px] text-slate-400 mt-1">El estado inicial será <span className="font-bold text-brand-600">Borrador (Draft)</span> automáticamente.</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">El estado inicial será automático.</p>
                                 </div>
                                 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -554,7 +554,7 @@ const QuoteCreate: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Mensaje en PDF</label>
+                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Mensaje para correo (Opcional)</label>
                         <textarea 
                             name="mensaje" 
                             value={quote.mensaje || ''} 

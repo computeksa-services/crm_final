@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { ClientCompany, User } from '../types';
+import { ClientCompany } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import {
@@ -20,23 +20,87 @@ import {
   ExpandedState,
 } from '@tanstack/react-table';
 
+// DATOS DE REFERENCIA
+const COUNTRIES = [
+  { id: 'AF', name: 'Afganistán' },
+  { id: 'AL', name: 'Albania' },
+  { id: 'DE', name: 'Alemania' },
+  { id: 'AD', name: 'Andorra' },
+  { id: 'AO', name: 'Angola' },
+  { id: 'AR', name: 'Argentina' },
+  { id: 'AU', name: 'Australia' },
+  { id: 'AT', name: 'Austria' },
+  { id: 'BE', name: 'Bélgica' },
+  { id: 'BO', name: 'Bolivia' },
+  { id: 'BR', name: 'Brasil' },
+  { id: 'CA', name: 'Canadá' },
+  { id: 'CL', name: 'Chile' },
+  { id: 'CN', name: 'China' },
+  { id: 'CO', name: 'Colombia' },
+  { id: 'CR', name: 'Costa Rica' },
+  { id: 'CU', name: 'Cuba' },
+  { id: 'EC', name: 'Ecuador' },
+  { id: 'SV', name: 'El Salvador' },
+  { id: 'ES', name: 'España' },
+  { id: 'US', name: 'Estados Unidos' },
+  { id: 'FR', name: 'Francia' },
+  { id: 'GT', name: 'Guatemala' },
+  { id: 'HN', name: 'Honduras' },
+  { id: 'IT', name: 'Italia' },
+  { id: 'MX', name: 'México' },
+  { id: 'NI', name: 'Nicaragua' },
+  { id: 'PA', name: 'Panamá' },
+  { id: 'PY', name: 'Paraguay' },
+  { id: 'PE', name: 'Perú' },
+  { id: 'PR', name: 'Puerto Rico' },
+  { id: 'DO', name: 'República Dominicana' },
+  { id: 'UY', name: 'Uruguay' },
+  { id: 'VE', name: 'Venezuela' },
+];
+
+const COMPANY_LABELS = [
+  'Cliente',
+  'Prospecto (Lead)',
+  'Prospecto Interesado',
+  'Poco Interesado',
+  'Ex-Cliente',
+];
+
+const COMPANY_TYPES = [
+  'Tecnología y Software',
+  'Electrónica y Hardware',
+  'Finanzas y Banca',
+  'Servicios Legales',
+  'Salud y Medicina',
+  'Educación',
+  'Construcción e Inmobiliaria',
+  'Manufactura y Producción',
+  'Retail y Comercio',
+  'Logística y Transporte',
+  'Alimentos y Bebidas',
+  'Turismo y Hotelería',
+  'Energía y Minería',
+  'Marketing y Publicidad',
+  'Telecomunicaciones',
+  'Agricultura y Pesca',
+  'Seguros',
+];
+
 const ClientCompaniesList: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
   // --- ESTADOS DE DATOS ---
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   
   // --- ESTADOS DE LA TABLA ---
   const [sorting, setSorting] = useState<SortingState>([{ id: 'name_company', desc: false }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
-  const [grouping, setGrouping] = useState<GroupingState>([]); // Lista plana por defecto
+  const [grouping, setGrouping] = useState<GroupingState>([]);
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
-  const [density, setDensity] = useState<'compact' | 'comfortable'>('comfortable');
 
   // --- ESTADOS DE UI ---
   const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
@@ -59,10 +123,7 @@ const ClientCompaniesList: React.FC = () => {
     if (!user?.id_tenant || !user?.id_user) return;
     setLoading(true);
     try {
-      const [companiesRes, usersRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
-      ]);
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
 
       const parseResponse = async (res: Response) => {
         if (!res.ok) return [];
@@ -70,8 +131,7 @@ const ClientCompaniesList: React.FC = () => {
         return text ? JSON.parse(text) : [];
       };
 
-      setCompanies(await parseResponse(companiesRes));
-      setUsers(await parseResponse(usersRes));
+      setCompanies(await parseResponse(response));
     } catch (e) {
       setToast({ message: 'Error al cargar las empresas.', type: 'error' });
     } finally {
@@ -82,6 +142,26 @@ const ClientCompaniesList: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const handleGroupingChange = (newGrouping: string[]) => {
+    setGrouping(newGrouping);
+    
+    if (newGrouping.length > 0) {
+      const groupByColumn = newGrouping[0];
+      const allExpanded: ExpandedState = {};
+      
+      companies.forEach((company) => {
+        const groupValue = (company as any)[groupByColumn];
+        if (groupValue !== null && groupValue !== undefined) {
+          allExpanded[String(groupValue)] = true;
+        }
+      });
+      
+      setExpanded(allExpanded);
+    } else {
+      setExpanded({});
+    }
+  };
 
   // Clic fuera para cerrar filtros
   useEffect(() => {
@@ -95,11 +175,6 @@ const ClientCompaniesList: React.FC = () => {
   }, []);
 
   // --- HELPERS ---
-  const getUserName = useCallback((id: string | undefined) => {
-    if (!id) return 'Sistema';
-    return users.find(u => u.id_user === id)?.name_user || 'Desconocido';
-  }, [users]);
-
   const getInitials = (name: string = '') => {
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || '?';
   };
@@ -110,10 +185,14 @@ const ClientCompaniesList: React.FC = () => {
       id_type: 'RUC',
       id_number: '',
       name_company: '',
-      industry: '',
+      address: '',
       city: '',
       email_company: '',
       phone_company: '',
+      website: '',
+      id_country: 'EC', // Ecuador por defecto
+      id_company_type: '',
+      id_label: '',
       id_tenant: user?.id_tenant,
       created_by: user?.id_user
     });
@@ -226,30 +305,65 @@ const ClientCompaniesList: React.FC = () => {
   // --- COLUMNAS ---
   const columns = useMemo<ColumnDef<ClientCompany>[]>(() => [
     {
+      accessorKey: 'country_name',
+      header: 'País',
+      size: 120,
+      enableColumnFilter: true,
+      cell: ({ row, getValue, column }) => {
+        if (row.getIsGrouped()) {
+          if (grouping[0] === column.id) {
+            return (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); row.toggleExpanded(); }}
+                  className="w-5 h-5 flex items-center justify-center rounded bg-brand-600 text-white shadow-sm"
+                >
+                  <i className={`fa-solid ${row.getIsExpanded() ? 'fa-minus' : 'fa-plus'} text-[10px]`}></i>
+                </button>
+                <span className="font-bold text-slate-700 uppercase tracking-tight">
+                  {getValue() as string || 'No asignado'}
+                </span>
+                <span className="ml-1 bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                  {row.subRows.length}
+                </span>
+              </div>
+            );
+          }
+          return null;
+        }
+        return <span className="text-slate-600 text-sm font-medium">{getValue() as string || '-'}</span>;
+      },
+      filterFn: (row, id, filterValue: string[]) => 
+        filterValue.length === 0 || filterValue.includes(row.getValue(id) || '(Vacío)')
+    },
+    {
       accessorKey: 'city',
       header: 'Ciudad',
-      size: 180,
+      size: 120,
       enableColumnFilter: true,
-      cell: ({ row, getValue }) => {
+      cell: ({ row, getValue, column }) => {
         if (row.getIsGrouped()) {
-          return (
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={(e) => { e.stopPropagation(); row.toggleExpanded(); }}
-                className="w-5 h-5 flex items-center justify-center rounded bg-brand-600 text-white shadow-sm"
-              >
-                <i className={`fa-solid ${row.getIsExpanded() ? 'fa-minus' : 'fa-plus'} text-[10px]`}></i>
-              </button>
-              <span className="font-bold text-slate-700 uppercase tracking-tight">
-                {getValue() as string || 'SIN CIUDAD'}
-              </span>
-              <span className="ml-1 bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded text-[10px] font-bold">
-                {row.subRows.length}
-              </span>
-            </div>
-          );
+          if (grouping[0] === column.id) {
+            return (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); row.toggleExpanded(); }}
+                  className="w-5 h-5 flex items-center justify-center rounded bg-brand-600 text-white shadow-sm"
+                >
+                  <i className={`fa-solid ${row.getIsExpanded() ? 'fa-minus' : 'fa-plus'} text-[10px]`}></i>
+                </button>
+                <span className="font-bold text-slate-700 uppercase tracking-tight">
+                  {getValue() as string || 'No asignado'}
+                </span>
+                <span className="ml-1 bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                  {row.subRows.length}
+                </span>
+              </div>
+            );
+          }
+          return null;
         }
-        return <span className="text-slate-500 text-xs font-medium">{getValue() as string || '-'}</span>;
+        return <span className="text-slate-600 text-sm font-medium">{getValue() as string || '-'}</span>;
       },
       filterFn: (row, id, filterValue: string[]) => 
         filterValue.length === 0 || filterValue.includes(row.getValue(id) || '(Vacío)')
@@ -257,7 +371,7 @@ const ClientCompaniesList: React.FC = () => {
     {
       accessorKey: 'name_company',
       header: 'Empresa',
-      size: 280,
+      size: 220,
       enableColumnFilter: false,
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) return null;
@@ -274,41 +388,99 @@ const ClientCompaniesList: React.FC = () => {
     {
       accessorKey: 'id_number',
       header: 'Identificación',
-      size: 180,
+      size: 140,
       enableColumnFilter: false,
       cell: ({ row }) => row.getIsGrouped() ? null : (
         <div className="flex flex-col">
-            <span className="text-[9px] font-black text-slate-400 uppercase leading-none">{row.original.id_type}</span>
-            <span className="text-slate-700 font-mono text-xs font-bold">{row.original.id_number}</span>
+            <span className="text-[10px] font-black text-slate-400 uppercase leading-none">{row.original.id_type}</span>
+            <span className="text-slate-700 font-mono text-sm font-bold">{row.original.id_number}</span>
         </div>
       ),
     },
     {
-      accessorKey: 'industry',
-      header: 'Industria',
-      size: 180,
+      accessorKey: 'company_type_name',
+      header: 'Tipo',
+      size: 150,
       enableColumnFilter: true,
-      cell: ({ row, getValue }) => row.getIsGrouped() ? null : (
-        <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-bold border border-blue-100 uppercase">
-          {getValue() as string || '-'}
-        </span>
-      ),
+      cell: ({ row, getValue, column }) => {
+        if (row.getIsGrouped()) {
+          if (grouping[0] === column.id) {
+            return (
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={(e) => { e.stopPropagation(); row.toggleExpanded(); }}
+                  className="w-5 h-5 flex items-center justify-center rounded bg-brand-600 text-white shadow-sm"
+                >
+                  <i className={`fa-solid ${row.getIsExpanded() ? 'fa-minus' : 'fa-plus'} text-[10px]`}></i>
+                </button>
+                <span className="font-bold text-slate-700 uppercase tracking-tight">
+                  {getValue() as string || 'No asignado'}
+                </span>
+                <span className="ml-1 bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                  {row.subRows.length}
+                </span>
+              </div>
+            );
+          }
+          return null;
+        }
+        return (
+          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100 uppercase">
+            {getValue() as string || '-'}
+          </span>
+        );
+      },
       filterFn: (row, id, filterValue: string[]) => 
         filterValue.length === 0 || filterValue.includes(row.getValue(id) || '(Vacío)')
     },
     {
-      accessorKey: 'created_by',
-      header: 'Creado Por',
-      size: 180,
+      accessorKey: 'label_name',
+      header: 'Etiqueta',
+      size: 120,
+      enableColumnFilter: true,
+      cell: ({ row, getValue }) => {
+        if (row.getIsGrouped()) return null;
+        const labelName = getValue() as string;
+        const labelColor = row.original.label_color;
+        if (!labelName) return <span className="text-slate-400 text-sm">-</span>;
+        return (
+          <span 
+            className="px-2 py-1 rounded-full text-xs font-bold border" 
+            style={{ 
+              backgroundColor: labelColor ? `${labelColor}15` : '#f1f5f9',
+              color: labelColor || '#64748b',
+              borderColor: labelColor || '#cbd5e1'
+            }}
+          >
+            {labelName}
+          </span>
+        );
+      },
+      filterFn: (row, id, filterValue: string[]) => 
+        filterValue.length === 0 || filterValue.includes(row.getValue(id) || '(Vacío)')
+    },
+    {
+      accessorKey: 'created_by_name',
+      header: 'Creado',
+      size: 140,
       enableColumnFilter: false,
-      cell: ({ row, getValue }) => row.getIsGrouped() ? null : (
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 border border-slate-200">
-            {getUserName(getValue() as string).charAt(0)}
+      cell: ({ row, getValue }) => {
+        if (row.getIsGrouped()) return null;
+        const avatar = row.original.created_by_avatar;
+        const name = getValue() as string || 'Desconocido';
+        return (
+          <div className="flex items-center gap-2">
+            {avatar ? (
+              <img src={avatar} alt={name} className="w-6 h-6 rounded-full border border-slate-200" />
+            ) : (
+              <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 border border-slate-200">
+                {name.charAt(0)}
+              </div>
+            )}
+            <span className="text-sm text-slate-600 font-medium">{name}</span>
           </div>
-          <span className="text-xs text-slate-600 font-medium">{getUserName(getValue() as string)}</span>
-        </div>
-      ),
+        );
+      },
     },
     {
       id: 'actions',
@@ -337,7 +509,7 @@ const ClientCompaniesList: React.FC = () => {
         );
       },
     }
-  ], [getUserName]);
+  ], []);
 
   const table = useReactTable({
     data: companies,
@@ -372,19 +544,41 @@ const ClientCompaniesList: React.FC = () => {
                     className="pl-8 pr-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 w-64 shadow-sm"
                 />
             </div>
-            <button 
-                onClick={() => setGrouping(prev => prev.length ? [] : ['city'])}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${grouping.length ? 'bg-brand-600 text-white border-brand-700 shadow-inner' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-            >
-                <i className="fa-solid fa-layer-group mr-2"></i> {grouping.length ? 'Desagrupar' : 'Agrupar por Ciudad'}
-            </button>
+            <div className="flex items-center gap-2">
+                <button 
+                    onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'country_name' ? [] : ['country_name'])}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                        grouping.length && grouping[0] === 'country_name' 
+                        ? 'bg-brand-600 text-white border-brand-700 shadow-inner' 
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                >
+                    <i className="fa-solid fa-globe mr-2"></i> {grouping.length && grouping[0] === 'country_name' ? 'Desagrupar' : 'Agrupar por País'}
+                </button>
+                <button 
+                    onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'city' ? [] : ['city'])}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                        grouping.length && grouping[0] === 'city' 
+                        ? 'bg-brand-600 text-white border-brand-700 shadow-inner' 
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                >
+                    <i className="fa-solid fa-city mr-2"></i> {grouping.length && grouping[0] === 'city' ? 'Desagrupar' : 'Agrupar por Ciudad'}
+                </button>
+                <button 
+                    onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'company_type_name' ? [] : ['company_type_name'])}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                        grouping.length && grouping[0] === 'company_type_name' 
+                        ? 'bg-brand-600 text-white border-brand-700 shadow-inner' 
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                    }`}
+                >
+                    <i className="fa-solid fa-building mr-2"></i> {grouping.length && grouping[0] === 'company_type_name' ? 'Desagrupar' : 'Agrupar por Tipo'}
+                </button>
+            </div>
         </div>
         
         <div className="flex items-center gap-2">
-          <div className="flex bg-white border border-slate-200 p-0.5 rounded-lg shadow-sm">
-              <button onClick={() => setDensity('comfortable')} className={`px-2 py-1 rounded-md transition-all ${density === 'comfortable' ? 'bg-slate-100 text-brand-600' : 'text-slate-400'}`}><i className="fa-solid fa-grip-lines"></i></button>
-              <button onClick={() => setDensity('compact')} className={`px-2 py-1 rounded-md transition-all ${density === 'compact' ? 'bg-slate-100 text-brand-600' : 'text-slate-400'}`}><i className="fa-solid fa-align-justify text-xs"></i></button>
-          </div>
           <button 
             onClick={handleAddNew} 
             className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all"
@@ -496,7 +690,7 @@ const ClientCompaniesList: React.FC = () => {
                     onClick={() => !isGrouped && navigate(`/app/client-companies/${row.original.id_client_company}`)}
                 >
                   {row.getVisibleCells().map(cell => (
-                    <td key={cell.id} className={`px-4 border-r border-slate-50 ${isGrouped ? 'py-3' : (density === 'compact' ? 'py-1.5' : 'py-3')}`}>
+                    <td key={cell.id} className={`px-4 border-r border-slate-50 ${isGrouped ? 'py-3' : 'py-1.5'}`}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -545,7 +739,7 @@ const ClientCompaniesList: React.FC = () => {
             <form onSubmit={handleFormSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-3 gap-3">
                   <div className="col-span-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Tipo ID</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Tipo ID <span className="text-red-500">*</span></label>
                     <select 
                         name="id_type" 
                         required 
@@ -556,10 +750,11 @@ const ClientCompaniesList: React.FC = () => {
                         <option value="RUC">RUC</option>
                         <option value="CI">Cédula</option>
                         <option value="PASAPORTE">Pasaporte</option>
+                        <option value="IDENTIFICACION DEL EXTERIOR">ID Exterior</option>
                     </select>
                   </div>
                   <div className="col-span-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Número</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Número <span className="text-red-500">*</span></label>
                     <input 
                         name="id_number" 
                         required 
@@ -572,7 +767,7 @@ const ClientCompaniesList: React.FC = () => {
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razón Social</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razón Social <span className="text-red-500">*</span></label>
                 <input
                   name="name_company"
                   required
@@ -585,24 +780,74 @@ const ClientCompaniesList: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Industria</label>
-                  <input
-                    name="industry"
-                    value={editingCompany.industry || ''}
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">País <span className="text-red-500">*</span></label>
+                  <select
+                    name="id_country"
+                    required
+                    value={editingCompany.id_country || ''}
                     onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                    placeholder="Ej. Alimentos"
-                  />
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
+                  >
+                    <option value="">Seleccionar país</option>
+                    {COUNTRIES.map(country => (
+                      <option key={country.id} value={country.id}>{country.name}</option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ciudad</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ciudad <span className="text-red-500">*</span></label>
                   <input
                     name="city"
+                    required
                     value={editingCompany.city || ''}
                     onChange={handleInputChange}
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
                     placeholder="Quito"
                   />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dirección</label>
+                <input
+                  name="address"
+                  value={editingCompany.address || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                  placeholder="Av. Principal 123 y Secundaria"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Empresa <span className="text-red-500">*</span></label>
+                  <select
+                    name="id_company_type"
+                    required
+                    value={editingCompany.id_company_type || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
+                  >
+                    <option value="">Seleccionar tipo</option>
+                    {COMPANY_TYPES.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Etiqueta <span className="text-red-500">*</span></label>
+                  <select
+                    name="id_label"
+                    required
+                    value={editingCompany.id_label || ''}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
+                  >
+                    <option value="">Seleccionar etiqueta</option>
+                    {COMPANY_LABELS.map(label => (
+                      <option key={label} value={label}>{label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -619,15 +864,27 @@ const ClientCompaniesList: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Teléfono</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Website</label>
                   <input
-                    name="phone_company"
-                    value={editingCompany.phone_company || ''}
+                    type="text"
+                    name="website"
+                    value={editingCompany.website || ''}
                     onChange={handleInputChange}
                     className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
-                    placeholder="022..."
+                    placeholder="empresa.com"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Teléfono</label>
+                <input
+                  name="phone_company"
+                  value={editingCompany.phone_company || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
+                  placeholder="022..."
+                />
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
