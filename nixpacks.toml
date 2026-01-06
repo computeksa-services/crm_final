@@ -1,5 +1,4 @@
-[[providers]]
-name = "nodejs"
+providers = ["nodejs"]
 
 [build]
 cmds = ["npm ci", "npm run build"]
