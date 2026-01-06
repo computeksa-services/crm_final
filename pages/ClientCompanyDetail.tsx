@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ClientCompany, ClientContact } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
+import CompanyMap from '../components/CompanyMap';
 
 const ClientCompanyDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -23,12 +25,41 @@ const ClientCompanyDetail: React.FC = () => {
   const [sharePermission, setSharePermission] = useState<'VIEW' | 'EDIT'>('VIEW');
   const [shareSubmitting, setShareSubmitting] = useState(false);
 
+  // --- ESTADO EDICIÓN EMPRESA ---
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+  const [editingCompany, setEditingCompany] = useState<Partial<ClientCompany> | null>(null);
+  const [companySubmitting, setCompanySubmitting] = useState(false);
+
   // --- PERMISOS ---
   const isOwnerCompany = company?.created_by === user?.id_user;
   const companyAccess: 'VIEW' | 'EDIT' = (company?.access_level as any) || (user?.rol_user === 'admin' || isOwnerCompany ? 'EDIT' : 'VIEW');
   const canEditCompany = companyAccess === 'EDIT';
   const canShare = user?.rol_user === 'admin' || isOwnerCompany;
-  const canDeleteContact = (contact: ClientContact) => contact.created_by === user?.id_user;
+  const canDeleteContact = (contact: ClientContact) => {
+    return (user?.rol_user === 'admin') || canEditCompany || (contact.created_by === user?.id_user);
+  };
+
+  // --- DATOS DE REFERENCIA (para edición) ---
+  const COUNTRIES = [
+    { id: 'AF', name: 'Afganistán' }, { id: 'AL', name: 'Albania' }, { id: 'DE', name: 'Alemania' },
+    { id: 'AD', name: 'Andorra' }, { id: 'AO', name: 'Angola' }, { id: 'AR', name: 'Argentina' },
+    { id: 'AU', name: 'Australia' }, { id: 'AT', name: 'Austria' }, { id: 'BE', name: 'Bélgica' },
+    { id: 'BO', name: 'Bolivia' }, { id: 'BR', name: 'Brasil' }, { id: 'CA', name: 'Canadá' },
+    { id: 'CL', name: 'Chile' }, { id: 'CN', name: 'China' }, { id: 'CO', name: 'Colombia' },
+    { id: 'CR', name: 'Costa Rica' }, { id: 'CU', name: 'Cuba' }, { id: 'EC', name: 'Ecuador' },
+    { id: 'SV', name: 'El Salvador' }, { id: 'ES', name: 'España' }, { id: 'US', name: 'Estados Unidos' },
+    { id: 'FR', name: 'Francia' }, { id: 'GT', name: 'Guatemala' }, { id: 'HN', name: 'Honduras' },
+    { id: 'IT', name: 'Italia' }, { id: 'MX', name: 'México' }, { id: 'NI', name: 'Nicaragua' },
+    { id: 'PA', name: 'Panamá' }, { id: 'PY', name: 'Paraguay' }, { id: 'PE', name: 'Perú' },
+    { id: 'PR', name: 'Puerto Rico' }, { id: 'DO', name: 'República Dominicana' }, { id: 'UY', name: 'Uruguay' },
+    { id: 'VE', name: 'Venezuela' },
+  ];
+  const COMPANY_LABELS = ['Cliente','Prospecto (Lead)','Prospecto Interesado','Poco Interesado','Ex-Cliente'];
+  const COMPANY_TYPES = [
+    'Tecnología y Software','Electrónica y Hardware','Finanzas y Banca','Servicios Legales','Salud y Medicina','Educación',
+    'Construcción e Inmobiliaria','Manufactura y Producción','Retail y Comercio','Logística y Transporte','Alimentos y Bebidas',
+    'Turismo y Hotelería','Energía y Minería','Marketing y Publicidad','Telecomunicaciones','Agricultura y Pesca','Seguros'
+  ];
 
   // --- MODALES EDICIÓN ---
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,6 +131,55 @@ const ClientCompanyDetail: React.FC = () => {
     if (!iso) return '';
     const [date, time = ''] = iso.split('T');
     return `${date}${time ? ` ${time.slice(0,5)}` : ''}`;
+  };
+
+  // --- HANDLERS EMPRESA (Edit/Update) ---
+  const openEditCompany = () => {
+    if (!company || !canEditCompany) return;
+    setEditingCompany({
+      id_client_company: company.id_client_company,
+      id_type: company.id_type,
+      id_number: company.id_number,
+      name_company: company.name_company,
+      id_country: company.id_country || undefined,
+      city: company.city || '',
+      address: company.address || '',
+      id_company_type: company.company_type_name || '',
+      id_label: company.label_name || '',
+      email_company: company.email_company || '',
+      phone_company: company.phone_company || '',
+      website: company.website || '',
+    });
+    setIsCompanyModalOpen(true);
+  };
+
+  const handleCompanyInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setEditingCompany(prev => (prev ? { ...prev, [name]: value } : prev));
+  };
+
+  const handleCompanySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCompany || !user?.id_tenant || !user?.id_user) return;
+    setCompanySubmitting(true);
+    try {
+      const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/update`;
+      const payload = {
+        ...editingCompany,
+        id_client_company: editingCompany.id_client_company || company?.id_client_company,
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+      };
+      const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!resp.ok) throw new Error('Update failed');
+      setToast({ message: 'Empresa actualizada con éxito.', type: 'success' });
+      setIsCompanyModalOpen(false);
+      await fetchData();
+    } catch (err) {
+      setToast({ message: 'Error al actualizar la empresa.', type: 'error' });
+    } finally {
+      setCompanySubmitting(false);
+    }
   };
 
   // --- HANDLERS CONTACTO (Create/Edit/Delete) ---
@@ -293,18 +373,29 @@ const ClientCompanyDetail: React.FC = () => {
                 </div>
             </div>
             
-            <button
-                onClick={openShareModal}
-                disabled={!canShare}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    canShare 
-                    ? 'bg-white border border-slate-200 text-slate-700 hover:border-brand-300 hover:text-brand-600 shadow-sm' 
-                    : 'bg-slate-50 text-slate-400 cursor-not-allowed border border-slate-100'
-                }`}
-            >
-                <i className="fa-solid fa-share-nodes"></i>
-                Compartir
-            </button>
+            <div className="flex items-center gap-2">
+              {canEditCompany && (
+                <button
+                  onClick={openEditCompany}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-white border border-slate-200 text-slate-700 hover:border-brand-300 hover:text-brand-600 shadow-sm"
+                >
+                  <i className="fa-solid fa-pen-to-square"></i>
+                  Editar
+                </button>
+              )}
+              <button
+                  onClick={openShareModal}
+                  disabled={!canShare}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      canShare 
+                      ? 'bg-white border border-slate-200 text-slate-700 hover:border-brand-300 hover:text-brand-600 shadow-sm' 
+                      : 'bg-slate-50 text-slate-400 cursor-not-allowed border border-slate-100'
+                  }`}
+              >
+                  <i className="fa-solid fa-share-nodes"></i>
+                  Compartir
+              </button>
+            </div>
         </div>
       </div>
 
@@ -406,6 +497,7 @@ const ClientCompanyDetail: React.FC = () => {
 
         {/* Lista Contactos */}
         <div className="lg:col-span-2 space-y-6">
+          {/* Contactos */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[400px]">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
                 <h3 className="font-bold text-slate-800 flex items-center gap-2">
@@ -486,11 +578,28 @@ const ClientCompanyDetail: React.FC = () => {
                 </div>
             )}
           </div>
+
+          {/* Mapa */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                    <i className="fa-solid fa-map"></i> Ubicación
+                </h3>
+            </div>
+            <div className="p-6">
+              <CompanyMap
+                address={company.address}
+                city={company.city}
+                country={company.country_name}
+                companyName={company.name_company}
+              />
+            </div>
+          </div>
         </div>
       </div>
 
       {/* SHARE MODAL MEJORADO (Estilo de la imagen) */}
-      {shareModalOpen && (
+      {shareModalOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 transition-opacity">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
             
@@ -590,12 +699,203 @@ const ClientCompanyDetail: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL EDITAR EMPRESA */}
+      {isCompanyModalOpen && editingCompany && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-brand-100 text-brand-600">
+                   <i className="fa-solid fa-building-circle-check"></i>
+                </div>
+                Editar Empresa
+              </h2>
+              <button onClick={() => setIsCompanyModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-400">
+                <i className="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+            <form onSubmit={handleCompanySubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-3 gap-3">
+                  <div className="col-span-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Tipo ID <span className="text-red-500">*</span></label>
+                    <select 
+                        name="id_type" 
+                        required 
+                        value={editingCompany.id_type || 'RUC'} 
+                        onChange={handleCompanyInputChange} 
+                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none"
+                    >
+                        <option value="RUC">RUC</option>
+                        <option value="CI">Cédula</option>
+                        <option value="PASAPORTE">Pasaporte</option>
+                        <option value="IDENTIFICACION DEL EXTERIOR">ID Exterior</option>
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Número <span className="text-red-500">*</span></label>
+                    <input 
+                        name="id_number" 
+                        required 
+                        value={editingCompany.id_number || ''} 
+                        onChange={handleCompanyInputChange} 
+                        className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-brand-500" 
+                        placeholder="17900..." 
+                    />
+                  </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razón Social <span className="text-red-500">*</span></label>
+                <input
+                  name="name_company"
+                  required
+                  value={editingCompany.name_company || ''}
+                  onChange={handleCompanyInputChange}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
+                  placeholder="Ej. Corporación Favorita"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">País <span className="text-red-500">*</span></label>
+                  <select
+                    name="id_country"
+                    required
+                    value={editingCompany.id_country || ''}
+                    onChange={handleCompanyInputChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
+                  >
+                    <option value="">Seleccionar país</option>
+                    {COUNTRIES.map(country => (
+                      <option key={country.id} value={country.id}>{country.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ciudad <span className="text-red-500">*</span></label>
+                  <input
+                    name="city"
+                    required
+                    value={editingCompany.city || ''}
+                    onChange={handleCompanyInputChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                    placeholder="Quito"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dirección</label>
+                <input
+                  name="address"
+                  value={editingCompany.address || ''}
+                  onChange={handleCompanyInputChange}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                  placeholder="Av. Principal 123 y Secundaria"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Empresa <span className="text-red-500">*</span></label>
+                  <select
+                    name="id_company_type"
+                    required
+                    value={editingCompany.id_company_type || ''}
+                    onChange={handleCompanyInputChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
+                  >
+                    <option value="">Seleccionar tipo</option>
+                    {COMPANY_TYPES.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Etiqueta <span className="text-red-500">*</span></label>
+                  <select
+                    name="id_label"
+                    required
+                    value={editingCompany.id_label || ''}
+                    onChange={handleCompanyInputChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
+                  >
+                    <option value="">Seleccionar etiqueta</option>
+                    {COMPANY_LABELS.map(label => (
+                      <option key={label} value={label}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Corp.</label>
+                  <input
+                    type="email"
+                    name="email_company"
+                    value={editingCompany.email_company || ''}
+                    onChange={handleCompanyInputChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
+                    placeholder="info@empresa.com"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Website</label>
+                  <input
+                    type="text"
+                    name="website"
+                    value={editingCompany.website || ''}
+                    onChange={handleCompanyInputChange}
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
+                    placeholder="empresa.com"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Teléfono</label>
+                <input
+                  name="phone_company"
+                  value={editingCompany.phone_company || ''}
+                  onChange={handleCompanyInputChange}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
+                  placeholder="022..."
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsCompanyModalOpen(false)}
+                  className="px-5 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={companySubmitting}
+                  className="px-6 py-2.5 bg-brand-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-200 hover:bg-brand-700 disabled:opacity-50 transition-all flex items-center gap-2"
+                >
+                  {companySubmitting ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL DE CONTACTO (Mismo estilo que lista) */}
-      {isModalOpen && editingContact && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
+      {isModalOpen && editingContact && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
               <h2 className="text-lg font-bold text-slate-800">{isEditMode ? 'Editar Contacto' : 'Nuevo Contacto'}</h2>
@@ -607,7 +907,7 @@ const ClientCompanyDetail: React.FC = () => {
             <form onSubmit={handleContactSubmit} className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre <span className="text-red-500">*</span></label>
                   <input name="first_name" value={editingContact.first_name || ''} onChange={handleInputChange} required className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="Juan" />
                 </div>
                 <div>
@@ -623,7 +923,7 @@ const ClientCompanyDetail: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Email</label>
-                <input type="email" name="email" value={editingContact.email || ''} onChange={handleInputChange} required className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="email@ejemplo.com" />
+                <input type="email" name="email" value={editingContact.email || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="email@ejemplo.com" />
               </div>
 
               <div>
@@ -640,7 +940,8 @@ const ClientCompanyDetail: React.FC = () => {
                </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

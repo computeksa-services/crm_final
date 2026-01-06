@@ -531,7 +531,7 @@ const ClientContactsList: React.FC = () => {
             
             <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Empresa Principal</label>
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Empresa Principal <span className="text-red-500">*</span></label>
                 <select
                   required
                   value={editingContact.id_client_company || ''}
@@ -545,7 +545,7 @@ const ClientContactsList: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nombre <span className="text-red-500">*</span></label>
                   <input
                     required
                     value={editingContact.first_name || ''}
