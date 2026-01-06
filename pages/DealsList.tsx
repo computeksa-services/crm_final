@@ -69,7 +69,6 @@ const renderGroupCell = (row: any, label: string) => (
   </div>
 );
 
-// --- COMPONENTE INTERNO: Selector Inline (Badges con Iconos) ---
 const InlineBadgeSelector: React.FC<{
   valueId: string;
   items: { id: string; name: string; color?: string; icon?: string }[];
@@ -125,7 +124,6 @@ const DealsList: React.FC = () => {
   const navigate = useNavigate();
   const { dealStatuses, setDeals: setContextDeals } = useDealFilters();
 
-  // --- ESTADOS DE DATOS ---
   const [deals, setDeals] = useState<Deal[]>([]);
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
   const [contacts, setContacts] = useState<ClientContact[]>([]);
@@ -133,15 +131,19 @@ const DealsList: React.FC = () => {
   const [interestStatuses, setInterestStatuses] = useState<DealInterest[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- ESTADOS DE LA TABLA ---
   const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
-  const [grouping, setGrouping] = useState<GroupingState>([]);
-  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [grouping, setGrouping] = useState<GroupingState>(() => {
+    const saved = localStorage.getItem('dealsListGrouping');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [expanded, setExpanded] = useState<ExpandedState>(() => {
+    const saved = localStorage.getItem('dealsListExpanded');
+    return saved ? JSON.parse(saved) : {};
+  });
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
 
-  // --- ESTADOS DE UI ---
   const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -153,7 +155,6 @@ const DealsList: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, isDestructive: false });
 
-  // --- CARGA DE DATOS ---
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
     setLoading(true);
@@ -178,7 +179,29 @@ const DealsList: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  // Cerrar menús al hacer clic fuera
+  const handleGroupingChange = (newGrouping: string[]) => {
+    setGrouping(newGrouping);
+    localStorage.setItem('dealsListGrouping', JSON.stringify(newGrouping));
+    
+    if (newGrouping.length > 0) {
+      const groupByColumn = newGrouping[0];
+      const allExpanded: ExpandedState = {};
+      
+      deals.forEach((deal) => {
+        const groupValue = (deal as any)[groupByColumn];
+        if (groupValue !== null && groupValue !== undefined) {
+          allExpanded[String(groupValue)] = true;
+        }
+      });
+      
+      setExpanded(allExpanded);
+      localStorage.setItem('dealsListExpanded', JSON.stringify(allExpanded));
+    } else {
+      setExpanded({});
+      localStorage.setItem('dealsListExpanded', JSON.stringify({}));
+    }
+  };
+
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) setActiveFilterMenu(null);
@@ -187,7 +210,6 @@ const DealsList: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  // --- HANDLERS ---
   const handleEdit = (deal: Deal) => {
     setEditingDeal({ ...deal, valor_trato: parseDealValue(deal.valor_trato) });
     setIsEditMode(true);
@@ -239,7 +261,6 @@ const DealsList: React.FC = () => {
     });
   };
 
-  // --- COLUMNAS ---
   const columns = useMemo<ColumnDef<Deal>[]>(() => [
     {
       accessorKey: 'estado_nombre',
@@ -247,7 +268,6 @@ const DealsList: React.FC = () => {
       size: 180,
       cell: ({ row, getValue, column }) => {
         if (row.getIsGrouped()) {
-          // Solo mostrar la celda de agrupación en la columna seleccionada
           if (grouping[0] === column.id) return renderGroupCell(row, getValue() as string);
           return null;
         }
@@ -281,7 +301,7 @@ const DealsList: React.FC = () => {
       accessorKey: 'valor_trato',
       header: 'Valor',
       size: 130,
-      enableColumnFilter: false, // ELIMINADO FILTRO POR VALOR
+      enableColumnFilter: false,
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) return null;
         const val = getValue() as Deal['valor_trato'];
@@ -347,16 +367,29 @@ const DealsList: React.FC = () => {
 
   const table = useReactTable({
     data: deals, columns, state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination },
-    onSortingChange: setSorting, onColumnFiltersChange: setColumnFilters, onGlobalFilterChange: setGlobalFilter, onGroupingChange: setGrouping, onExpandedChange: setExpanded, onPaginationChange: setPagination,
+    onSortingChange: setSorting, onColumnFiltersChange: setColumnFilters, onGlobalFilterChange: setGlobalFilter, onGroupingChange: setGrouping, 
+    onExpandedChange: (updater) => {
+      setExpanded((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        localStorage.setItem('dealsListExpanded', JSON.stringify(next));
+        return next;
+      });
+    }, 
+    onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(), getFilteredRowModel: getFilteredRowModel(), getSortedRowModel: getSortedRowModel(), getPaginationRowModel: getPaginationRowModel(), getGroupedRowModel: getGroupedRowModel(), getExpandedRowModel: getExpandedRowModel(),
+    getRowId: (row) => {
+      if ('id_trato' in row) return row.id_trato as string;
+      if ('id' in row) return row.id as string;
+      return '';
+    }
   });
+
   const filteredRows = table.getFilteredRowModel().rows;
   const totalFiltered = useMemo(() => filteredRows.reduce((s, r) => s + (r.getIsGrouped() ? 0 : parseDealValue(r.original.valor_trato)), 0), [filteredRows]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
       
-      {/* TOOLBAR */}
       <div className="bg-slate-50 border-b border-slate-200 p-2 flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 flex-1">
             <div className="relative flex-1 max-w-xs">
@@ -364,7 +397,6 @@ const DealsList: React.FC = () => {
                 <input value={globalFilter} onChange={e => setGlobalFilter(e.target.value)} placeholder="Buscar trato..." className="w-full pl-8 pr-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm" />
             </div>
             
-            {/* SELECTOR DE AGRUPACIÓN */}
             <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
                 <span className="text-[10px] font-black text-slate-400 uppercase px-2">Agrupar por:</span>
                 {[
@@ -373,7 +405,7 @@ const DealsList: React.FC = () => {
                   { id: 'owner_name', label: 'Owner', icon: 'fa-user-tie' },
                   { id: 'client_company_name', label: 'Empresa', icon: 'fa-building' }
                 ].map(opt => (
-                  <button key={opt.id} onClick={() => setGrouping(grouping.includes(opt.id) ? [] : [opt.id])} className={`px-2 py-1 rounded text-[10px] font-bold transition-all flex items-center gap-1 ${grouping.includes(opt.id) ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}>
+                  <button key={opt.id} onClick={() => handleGroupingChange(grouping.includes(opt.id) ? [] : [opt.id])} className={`px-2 py-1 rounded text-[10px] font-bold transition-all flex items-center gap-1 ${grouping.includes(opt.id) ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}>
                     <i className={`fa-solid ${opt.icon}`}></i> {opt.label}
                   </button>
                 ))}
@@ -384,7 +416,6 @@ const DealsList: React.FC = () => {
         </button>
       </div>
 
-      {/* TABLE */}
       <div className="flex-1 overflow-auto relative bg-slate-50/10">
         <table className="w-full border-separate border-spacing-0">
           <thead className="sticky top-0 z-40 shadow-sm">
@@ -406,11 +437,9 @@ const DealsList: React.FC = () => {
                         )}
                       </div>
 
-                      {/* DROPDOWN DE FILTRO DINÁMICO */}
                       {activeFilterMenu === header.column.id && (
                         <div ref={filterMenuRef} className="absolute top-full left-0 mt-1 w-64 bg-white shadow-xl rounded-xl border border-slate-200 z-50 py-3 animate-in fade-in slide-in-from-top-1">
                           {isDate ? (
-                            // FILTRO DE RANGO DE FECHAS
                             <div className="px-4 space-y-3">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Rango de fechas</span>
                                 <div>
@@ -429,7 +458,6 @@ const DealsList: React.FC = () => {
                                 </div>
                             </div>
                           ) : (
-                            // FILTRO FACETADO NORMAL
                             <div className="max-h-60 overflow-y-auto px-1">
                                 {Array.from(new Set(deals.map(d => (d as any)[header.column.id] || '(Vacío)'))).map(val => {
                                     const activeValues = (columnFilters.find(f => f.id === header.column.id)?.value as string[]) || [];
@@ -476,7 +504,6 @@ const DealsList: React.FC = () => {
         </table>
       </div>
 
-      {/* FOOTER */}
       <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest">
           <div className="flex items-center gap-6">
             <span>{deals.length} TOTALES</span>
@@ -491,7 +518,6 @@ const DealsList: React.FC = () => {
           </div>
       </div>
 
-      {/* MODAL DE EDICIÓN / CREACIÓN */}
       {isModalOpen && editingDeal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col animate-in zoom-in duration-200">

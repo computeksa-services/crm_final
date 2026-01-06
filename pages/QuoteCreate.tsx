@@ -588,6 +588,17 @@ const QuoteCreate: React.FC = () => {
                 </h2>
                 <div className="space-y-5">
                     <div>
+                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nota Interna</label>
+                        <textarea 
+                            name="nota" 
+                            value={quote.nota || ''} 
+                            onChange={handleInputChange} 
+                            rows={2} 
+                            className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none resize-none transition-all"
+                            placeholder="Notas internas que solo verán los administradores..."
+                        ></textarea>
+                    </div>
+                    <div>
                         <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mensaje (Opcional)</label>
                         <textarea 
                             name="mensaje" 

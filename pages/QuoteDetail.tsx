@@ -160,8 +160,23 @@ const QuoteDetail: React.FC = () => {
       try {
         const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/files?id_cotizacion=${quote.id_cotizacion}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
         if (!res.ok) throw new Error('Error al obtener PDFs');
-        const data = await res.json();
-        setPdfVersions(Array.isArray(data) ? data : []);
+        
+        const text = await res.text();
+        let data = [];
+        
+        // Si la respuesta está vacía o es null/undefined, usar array vacío
+        if (text && text.trim()) {
+          data = JSON.parse(text);
+          // Si data es null o no es un array, usar array vacío
+          if (!Array.isArray(data)) {
+            data = [];
+          } else {
+            // Filtrar solo PDFs válidos (que tengan file_url y version_number)
+            data = data.filter((pdf: any) => pdf && pdf.file_url && pdf.version_number !== undefined && pdf.version_number !== null);
+          }
+        }
+        
+        setPdfVersions(data);
       } catch (e: any) {
         setPdfError(e?.message || 'Error al obtener PDFs');
         setPdfVersions([]);
@@ -549,6 +564,13 @@ const QuoteDetail: React.FC = () => {
             id_cotizacion: quote.id_cotizacion,
             nombre_cotizacion: quote.nombre_cotizacion,
             id_quote_status: quote.id_quote_status,
+            tiempo_entrega: quote.tiempo_entrega || '',
+            garantia: quote.garantia || '',
+            validez_oferta: quote.validez_oferta || '',
+            nota: quote.nota || '',
+            mensaje: quote.mensaje || '',
+            correos_adicionales: quote.correos_adicionales || '',
+            is_private: quote.is_private || false,
             id_tenant: user.id_tenant,
             id_user: user.id_user,
             // NOTA: NO enviamos 'total' aquí, la BD se encarga de eso.
@@ -1071,15 +1093,7 @@ const handleGeneratePDF = async () => {
              );
            })()}
 
-           {showSendBtn && (
-             <button 
-              onClick={() => handleSendQuote(pdfVersions.length ? pdfVersions[0]?.id_version : undefined)}
-               disabled={processing || !(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-               className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-emerald-200 font-medium transition-all flex items-center disabled:opacity-50 disabled:cursor-not-allowed">
-               {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-paper-plane mr-2"></i>}
-               Enviar al Cliente
-             </button>
-           )}
+           
 
             <div className="h-8 w-px bg-slate-200 mx-1 hidden md:block"></div>
 
@@ -1099,6 +1113,172 @@ const handleGeneratePDF = async () => {
         
         {/* Left Column: Details & Items */}
         <div className="xl:col-span-2 space-y-6">
+
+          {/* Commercial Conditions Section */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
+              <h3 className="font-bold text-slate-800 flex items-center">
+                <span className="w-2 h-6 bg-emerald-500 rounded-full mr-3"></span>
+                Condiciones Comerciales
+              </h3>
+              {!isEditing && (quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
+                <button 
+                  onClick={() => setIsEditing(true)}
+                  className="text-slate-400 hover:text-brand-600 transition-colors"
+                  title="Editar"
+                >
+                  <i className="fa-solid fa-pen-to-square"></i>
+                </button>
+              )}
+            </div>
+            
+            {!isEditing ? (
+              <div className="px-6 py-4 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tiempo de Entrega</label>
+                    <p className="text-slate-800 font-medium">{quote.tiempo_entrega || '-'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Garantía</label>
+                    <p className="text-slate-800 font-medium">{quote.garantia || '-'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Validez de la Oferta</label>
+                    <p className="text-slate-800 font-medium">{quote.validez_oferta || '-'}</p>
+                  </div>
+                </div>
+                {quote.nota && (
+                  <div className="border-t border-slate-100 pt-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nota Interna</label>
+                    <p className="text-slate-800 text-sm bg-slate-50 p-3 rounded-lg">{quote.nota}</p>
+                  </div>
+                )}
+                {quote.mensaje && (
+                  <div className="border-t border-slate-100 pt-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Mensaje para el Cliente</label>
+                    <p className="text-slate-800 text-sm bg-slate-50 p-3 rounded-lg whitespace-pre-wrap">{quote.mensaje}</p>
+                  </div>
+                )}
+                {quote.correos_adicionales && (
+                  <div className="border-t border-slate-100 pt-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Correos en Copia (CC)</label>
+                    <p className="text-slate-800 text-sm">{quote.correos_adicionales}</p>
+                  </div>
+                )}
+                {quote.is_private && (
+                  <div className="bg-amber-50 border border-amber-100 p-3 rounded-lg flex items-start gap-2">
+                    <i className="fa-solid fa-lock text-amber-600 mt-0.5"></i>
+                    <span className="text-xs text-amber-800 font-medium">Esta cotización es privada</span>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="px-6 py-4 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tiempo de Entrega</label>
+                    <input 
+                      type="text"
+                      disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                      value={quote.tiempo_entrega || ''}
+                      onChange={(e) => setQuote({ ...quote, tiempo_entrega: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                      placeholder="Ej. 5-7 días"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Garantía</label>
+                    <input 
+                      type="text"
+                      disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                      value={quote.garantia || ''}
+                      onChange={(e) => setQuote({ ...quote, garantia: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                      placeholder="Ej. 12 meses"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Validez de la Oferta</label>
+                    <input 
+                      type="text"
+                      disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                      value={quote.validez_oferta || ''}
+                      onChange={(e) => setQuote({ ...quote, validez_oferta: e.target.value })}
+                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                      placeholder="Ej. 30 días"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nota Interna</label>
+                  <textarea 
+                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                    value={quote.nota || ''}
+                    onChange={(e) => setQuote({ ...quote, nota: e.target.value })}
+                    rows={3}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none resize-none disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="Notas internas..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mensaje para el Cliente</label>
+                  <textarea 
+                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                    value={quote.mensaje || ''}
+                    onChange={(e) => setQuote({ ...quote, mensaje: e.target.value })}
+                    rows={3}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none resize-none disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="Mensaje personalizado que se mostrará en la cotización..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Correos en Copia (CC)</label>
+                  <input 
+                    type="text"
+                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                    value={quote.correos_adicionales || ''}
+                    onChange={(e) => setQuote({ ...quote, correos_adicionales: e.target.value })}
+                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="ejemplo@otro.com, gerente@empresa.com"
+                  />
+                  <p className="text-xs text-slate-400 mt-1.5">Separe múltiples correos con comas.</p>
+                </div>
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-start space-x-3">
+                  <input
+                    type="checkbox"
+                    id="is_private_detail"
+                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                    checked={quote.is_private || false}
+                    onChange={(e) => setQuote({ ...quote, is_private: e.target.checked })}
+                    className="w-5 h-5 text-amber-600 border-amber-300 rounded focus:ring-amber-500 cursor-pointer mt-0.5"
+                  />
+                  <label htmlFor="is_private_detail" className="flex-1 cursor-pointer">
+                    <div className="font-bold text-amber-900">Marcar como Privada</div>
+                    <div className="text-sm text-amber-800/70">Solo visible para usted y administradores</div>
+                  </label>
+                </div>
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsEditing(false)} 
+                    className="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={handleSaveHeader}
+                    disabled={processing}
+                    className="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 transition-all disabled:opacity-70 flex items-center gap-2"
+                  >
+                    {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           
           {/* Items Section */}
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -1262,51 +1442,61 @@ const handleGeneratePDF = async () => {
 
               {!pdfLoading && !pdfError && pdfVersions.length > 0 && (
                 <div className="divide-y divide-slate-100">
-                  {pdfVersions.map((pdf) => (
-                    <div key={pdf.id_version} className="py-3 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                          <i className="fa-solid fa-file-pdf"></i>
+                  {pdfVersions.map((pdf) => {
+                    // Validar que el PDF tenga datos válidos
+                    if (!pdf.file_url || pdf.version_number === undefined) return null;
+                    
+                    // Validar y formatear la fecha
+                    const fecha = pdf.created_at ? new Date(pdf.created_at) : null;
+                    const fechaValida = fecha && !isNaN(fecha.getTime());
+                    const fechaFormato = fechaValida ? fecha.toLocaleString() : 'Fecha desconocida';
+                    
+                    return (
+                      <div key={pdf.id_version} className="py-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                            <i className="fa-solid fa-file-pdf"></i>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                              v{pdf.version_number}
+                              <span className="text-xs text-slate-400">{fechaFormato}</span>
+                            </div>
+                            <div className="text-xs text-slate-500 truncate">
+                              Generado por {pdf.generado_por || 'Sistema'}
+                            </div>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                            v{pdf.version_number}
-                            <span className="text-xs text-slate-400">{new Date(pdf.created_at).toLocaleString()}</span>
-                          </div>
-                          <div className="text-xs text-slate-500 truncate">
-                            Generado por {pdf.generado_por}
-                          </div>
+                        <div className="flex items-center gap-2">
+                          {pdf.avatar_url && (
+                            <img
+                              src={pdf.avatar_url}
+                              alt={pdf.generado_por}
+                              className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                            />
+                          )}
+                          <a
+                            href={pdf.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-3 py-2 text-sm rounded-lg border border-slate-200 hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-2"
+                          >
+                            <i className="fa-solid fa-arrow-up-right-from-square"></i>
+                            Abrir
+                          </a>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.preventDefault(); handleSendQuote(pdf.id_version); }}
+                            disabled={processing}
+                            className="px-3 py-2 text-sm rounded-lg border border-emerald-200 text-emerald-700 hover:border-emerald-500 hover:text-emerald-800 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>}
+                            Enviar
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {pdf.avatar_url && (
-                          <img
-                            src={pdf.avatar_url}
-                            alt={pdf.generado_por}
-                            className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                          />
-                        )}
-                        <a
-                          href={pdf.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-2 text-sm rounded-lg border border-slate-200 hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-2"
-                        >
-                          <i className="fa-solid fa-arrow-up-right-from-square"></i>
-                          Abrir
-                        </a>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.preventDefault(); handleSendQuote(pdf.id_version); }}
-                          disabled={processing}
-                          className="px-3 py-2 text-sm rounded-lg border border-emerald-200 text-emerald-700 hover:border-emerald-500 hover:text-emerald-800 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                        >
-                          {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>}
-                          Enviar
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
