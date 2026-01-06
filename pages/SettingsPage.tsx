@@ -74,7 +74,7 @@ const SettingsPage: React.FC = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12 animate-fade-in">
+    <div className="w-full px-6 space-y-6 pb-12 animate-fade-in">
       
       {/* Header */}
       <div className="flex items-center gap-4 mb-8">
@@ -87,57 +87,43 @@ const SettingsPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Sidebar de Navegación (Izquierda) */}
-        <div className="lg:col-span-3">
-          <nav className="space-y-2 sticky top-6">
-            <p className="px-4 text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">General</p>
-            
-            {MENU_ITEMS.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => handleTabChange(item.id)}
-                  className={`w-full text-left px-4 py-3 rounded-xl transition-all duration-200 flex items-start group ${
-                    isActive
-                      ? 'bg-white shadow-md shadow-slate-200/50 text-brand-600 ring-1 ring-slate-100'
-                      : 'hover:bg-white hover:shadow-sm text-slate-600 hover:text-slate-800'
-                  }`}
-                >
-                  <div className={`mt-0.5 w-8 flex-shrink-0 ${isActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-500'}`}>
-                    <i className={item.icon}></i>
+      {/* Tabs Navigation */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="flex overflow-x-auto scrollbar-hide border-b border-slate-200">
+          {MENU_ITEMS.map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleTabChange(item.id)}
+                className={`flex-shrink-0 px-6 py-4 flex items-center gap-3 border-b-2 transition-all ${
+                  isActive
+                    ? 'border-brand-600 text-brand-700 bg-brand-50/30'
+                    : 'border-transparent text-slate-600 hover:text-slate-800 hover:bg-slate-50'
+                }`}
+              >
+                <i className={`${item.icon} ${isActive ? 'text-brand-600' : 'text-slate-400'}`}></i>
+                <div className="text-left">
+                  <div className={`text-sm font-bold whitespace-nowrap ${isActive ? 'text-brand-700' : 'text-slate-700'}`}>
+                    {item.label}
                   </div>
-                  <div>
-                    <span className={`block text-sm font-bold ${isActive ? 'text-brand-700' : 'text-slate-700'}`}>
-                        {item.label}
-                    </span>
-                    <span className={`block text-xs mt-0.5 ${isActive ? 'text-brand-600/70' : 'text-slate-400'}`}>
-                        {item.description}
-                    </span>
+                  <div className={`text-xs ${isActive ? 'text-brand-600/70' : 'text-slate-400'}`}>
+                    {item.description}
                   </div>
-                  {isActive && (
-                      <div className="ml-auto text-brand-600 text-xs mt-1">
-                          <i className="fa-solid fa-chevron-right"></i>
-                      </div>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
-        {/* Área de Contenido (Derecha) */}
-        <div className="lg:col-span-9">
-            {/* Como tus componentes hijos ya tienen tarjeta blanca (bg-white), 
-                los renderizamos directamente. Añadimos una animación suave al cambiar. */}
-            <div key={activeTab} className="animate-fade-in-up">
-                {renderTabContent()}
-            </div>
+        {/* Tab Content */}
+        <div className="p-6">
+          <div key={activeTab} className="animate-fade-in">
+            {renderTabContent()}
+          </div>
         </div>
-
       </div>
+
     </div>
   );
 };

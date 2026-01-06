@@ -233,7 +233,7 @@ const QuoteCreate: React.FC = () => {
           ...newDeal,
           id_client_company: quote.id_client_company,
           id_contact: quote.id_contact,
-          status_category_deals: 'OPEN', // <-- CAMBIO SOLICITADO
+          status_category_deals: 'DRAFT', // <-- CAMBIO SOLICITADO
           id_tenant: user?.id_tenant,
           id_user_owner: user?.id_user,
           id_user: user?.id_user,

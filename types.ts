@@ -50,7 +50,7 @@ export interface DealStatus {
   status_order: number;
   is_default: boolean;
   icon: string;
-  status_category?: 'OPEN' | 'WON' | 'LOST';
+  status_category?: 'DRAFT' | 'PROGRESS' | 'PAUSED' | 'WON' | 'LOST';
 }
 
 export interface QuoteStatus {

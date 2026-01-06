@@ -299,7 +299,7 @@ const SettingsQuoteStatuses: React.FC = () => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto mt-6 animate-fade-in pb-20">
+    <div className="w-full animate-fade-in pb-20">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} isDestructive={true} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} />
 

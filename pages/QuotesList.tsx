@@ -576,25 +576,44 @@ const QuotesList: React.FC = () => {
 
   const handleInlineUpdate = async (quote: Quote, updates: Partial<Quote>) => {
     if (!user?.id_tenant || !user?.id_user) return;
+
+    const isStatusChange = updates.id_quote_status && updates.id_quote_status !== quote.id_quote_status;
     const previousQuote = { ...quote };
-    setQuotes(prev => prev.map(q => q.id_cotizacion === quote.id_cotizacion ? { ...q, ...updates } : q));
+    setQuotes((prev) => prev.map((q) => (q.id_cotizacion === quote.id_cotizacion ? { ...q, ...updates } : q)));
 
     try {
-      const payload = {
-        ...quote,
-        ...updates,
-        id_tenant: user.id_tenant,
-        id_user: user.id_user,
-      };
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error('No se pudo actualizar');
+      if (isStatusChange) {
+        const payload = {
+          id_cotizacion: quote.id_cotizacion,
+          id_quote_status: updates.id_quote_status,
+          id_tenant: user.id_tenant,
+          id_user: user.id_user,
+        };
+        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/quotes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('No se pudo actualizar');
+      } else {
+        const payload = {
+          ...quote,
+          ...updates,
+          id_tenant: user.id_tenant,
+          id_user: user.id_user,
+        };
+        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error('No se pudo actualizar');
+      }
+
+      await fetchData();
       setToast({ message: 'Cotización actualizada.', type: 'success' });
     } catch (err) {
-      setQuotes(prev => prev.map(q => q.id_cotizacion === quote.id_cotizacion ? previousQuote : q));
+      setQuotes((prev) => prev.map((q) => (q.id_cotizacion === quote.id_cotizacion ? previousQuote : q)));
       setToast({ message: 'Error al actualizar.', type: 'error' });
     }
   };

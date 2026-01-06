@@ -247,14 +247,58 @@ const DealsList: React.FC = () => {
   };
 
   const handleInlineUpdate = async (deal: Deal, updates: Partial<Deal>) => {
-    try {
-      await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...deal, ...updates, id_tenant: user?.id_tenant, id_user: user?.id_user })
+    if (!user?.id_tenant || !user?.id_user) return;
+
+    const isStatusChange = updates.id_deal_status && updates.id_deal_status !== deal.id_deal_status;
+    const targetStatus = isStatusChange
+      ? dealStatuses.find((s) => s.id_status === updates.id_deal_status)
+      : undefined;
+
+    const runUpdate = async () => {
+      try {
+        if (isStatusChange) {
+          const payload = {
+            id_trato: deal.id_trato,
+            id_deal_status: updates.id_deal_status,
+            id_tenant: user.id_tenant,
+            id_user: user.id_user,
+          };
+          const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error('No se pudo actualizar el estado del trato');
+        } else {
+          await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...deal, ...updates, id_tenant: user.id_tenant, id_user: user.id_user }),
+          });
+        }
+        fetchData();
+        setToast({ message: 'Actualizado.', type: 'success' });
+      } catch (e) {
+        console.error(e);
+        setToast({ message: 'Error al actualizar', type: 'error' });
+      }
+    };
+
+    if (isStatusChange && targetStatus?.status_category === 'LOST') {
+      setConfirmState({
+        isOpen: true,
+        title: 'Marcar Trato como Perdido',
+        message: 'Esto marcará todas las cotizaciones asociadas como Perdidas. ¿Deseas continuar?',
+        isDestructive: true,
+        onConfirm: () => {
+          runUpdate();
+          setConfirmState((p) => ({ ...p, isOpen: false }));
+        },
       });
-      fetchData();
-    } catch { setToast({ message: 'Error al actualizar', type: 'error' }); }
+      return;
+    }
+
+    runUpdate();
   };
 
   const handleDelete = (id: string) => {

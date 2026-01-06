@@ -124,7 +124,7 @@ const SettingsDealStatuses: React.FC = () => {
         icon: 'fa-solid fa-layer-group', 
         status_order: newOrder, 
         is_default: false,
-        status_category: 'OPEN' 
+        status_category: 'DRAFT' 
     });
     setIsModalOpen(true);
   };
@@ -197,16 +197,18 @@ const SettingsDealStatuses: React.FC = () => {
   );
 
   // Agrupar estados por categoría
-  const openStatuses = statuses.filter(s => s.status_category === 'OPEN' || !s.status_category);
+  const draftStatuses = statuses.filter(s => s.status_category === 'DRAFT' || !s.status_category);
+  const progressStatuses = statuses.filter(s => s.status_category === 'PROGRESS');
+  const pausedStatuses = statuses.filter(s => s.status_category === 'PAUSED');
   const wonStatuses = statuses.filter(s => s.status_category === 'WON');
   const lostStatuses = statuses.filter(s => s.status_category === 'LOST');
 
-  const handleDragOverCategory = (e: React.DragEvent, category: 'OPEN' | 'WON' | 'LOST') => {
+  const handleDragOverCategory = (e: React.DragEvent, category: 'DRAFT' | 'PROGRESS' | 'PAUSED' | 'WON' | 'LOST') => {
     e.preventDefault();
     e.stopPropagation();
   };
 
-  const handleDropOnCategory = async (e: React.DragEvent, category: 'OPEN' | 'WON' | 'LOST') => {
+  const handleDropOnCategory = async (e: React.DragEvent, category: 'DRAFT' | 'PROGRESS' | 'PAUSED' | 'WON' | 'LOST') => {
     e.preventDefault();
     if (draggedItemIndex === null) return;
 
@@ -292,7 +294,7 @@ const SettingsDealStatuses: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto mt-6 animate-fade-in pb-20">
+    <div className="w-full animate-fade-in pb-20">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} isDestructive={true} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} />
 
@@ -327,29 +329,79 @@ const SettingsDealStatuses: React.FC = () => {
           <p>No hay estados configurados.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           
-          {/* ABIERTO */}
+          {/* BORRADOR */}
           <div 
-            onDragOver={(e) => handleDragOverCategory(e, 'OPEN')}
-            onDrop={(e) => handleDropOnCategory(e, 'OPEN')}
-            className="bg-white rounded-2xl shadow-sm border-2 border-emerald-200 overflow-hidden"
+            onDragOver={(e) => handleDragOverCategory(e, 'DRAFT')}
+            onDrop={(e) => handleDropOnCategory(e, 'DRAFT')}
+            className="bg-white rounded-2xl shadow-sm border-2 border-slate-200 overflow-hidden"
           >
-            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 text-white">
+            <div className="bg-gradient-to-r from-slate-500 to-slate-600 p-4 text-white">
               <div className="flex items-center gap-2 mb-1">
-                <i className="fa-solid fa-circle-dot"></i>
-                <h4 className="font-bold text-sm uppercase tracking-wide">Abierto</h4>
+                <i className="fa-solid fa-file-lines"></i>
+                <h4 className="font-bold text-sm uppercase tracking-wide">Borrador</h4>
               </div>
-              <p className="text-xs text-emerald-100">En proceso</p>
+              <p className="text-xs text-slate-100">En planificación</p>
             </div>
             <div className="p-3 space-y-2 min-h-[200px]">
-              {openStatuses.length === 0 ? (
+              {draftStatuses.length === 0 ? (
                 <div className="text-center text-slate-400 text-xs py-8">
                   <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
                   <p>Arrastra estados aquí</p>
                 </div>
               ) : (
-                openStatuses.map((status) => renderStatusCard(status))
+                draftStatuses.map((status) => renderStatusCard(status))
+              )}
+            </div>
+          </div>
+
+          {/* EN PROGRESO */}
+          <div 
+            onDragOver={(e) => handleDragOverCategory(e, 'PROGRESS')}
+            onDrop={(e) => handleDropOnCategory(e, 'PROGRESS')}
+            className="bg-white rounded-2xl shadow-sm border-2 border-emerald-200 overflow-hidden"
+          >
+            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 text-white">
+              <div className="flex items-center gap-2 mb-1">
+                <i className="fa-solid fa-arrows-spin"></i>
+                <h4 className="font-bold text-sm uppercase tracking-wide">En Progreso</h4>
+              </div>
+              <p className="text-xs text-emerald-100">Trato activo</p>
+            </div>
+            <div className="p-3 space-y-2 min-h-[200px]">
+              {progressStatuses.length === 0 ? (
+                <div className="text-center text-slate-400 text-xs py-8">
+                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
+                  <p>Arrastra estados aquí</p>
+                </div>
+              ) : (
+                progressStatuses.map((status) => renderStatusCard(status))
+              )}
+            </div>
+          </div>
+
+          {/* PAUSADO */}
+          <div 
+            onDragOver={(e) => handleDragOverCategory(e, 'PAUSED')}
+            onDrop={(e) => handleDropOnCategory(e, 'PAUSED')}
+            className="bg-white rounded-2xl shadow-sm border-2 border-amber-200 overflow-hidden"
+          >
+            <div className="bg-gradient-to-r from-amber-500 to-amber-600 p-4 text-white">
+              <div className="flex items-center gap-2 mb-1">
+                <i className="fa-solid fa-pause"></i>
+                <h4 className="font-bold text-sm uppercase tracking-wide">Pausado</h4>
+              </div>
+              <p className="text-xs text-amber-100">Temporalmente detenido</p>
+            </div>
+            <div className="p-3 space-y-2 min-h-[200px]">
+              {pausedStatuses.length === 0 ? (
+                <div className="text-center text-slate-400 text-xs py-8">
+                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
+                  <p>Arrastra estados aquí</p>
+                </div>
+              ) : (
+                pausedStatuses.map((status) => renderStatusCard(status))
               )}
             </div>
           </div>
@@ -457,11 +509,13 @@ const SettingsDealStatuses: React.FC = () => {
                   Comportamiento del Sistema <span className="text-red-500">*</span>
                 </label>
                 <select
-                  value={editingStatus.status_category || 'OPEN'}
-                  onChange={(e) => setEditingStatus({ ...editingStatus, status_category: e.target.value as 'OPEN' | 'WON' | 'LOST' })}
+                  value={editingStatus.status_category || 'DRAFT'}
+                  onChange={(e) => setEditingStatus({ ...editingStatus, status_category: e.target.value as 'DRAFT' | 'PROGRESS' | 'PAUSED' | 'WON' | 'LOST' })}
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all bg-white"
                 >
-                  <option value="OPEN">🟢 Abierto - El trato sigue en curso</option>
+                  <option value="DRAFT">📝 Borrador - Trato en planificación</option>
+                  <option value="PROGRESS">🔄 En Progreso - Trato activo</option>
+                  <option value="PAUSED">⏸️ Pausado - Temporalmente detenido</option>
                   <option value="WON">🎉 Ganado - Éxito, venta cerrada</option>
                   <option value="LOST">❌ Perdido - Venta fallida</option>
                 </select>
