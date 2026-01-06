@@ -4,10 +4,10 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/', // Ruta base absoluta para que React Router funcione correctamente
+  base: '/',
   server: {
-    port: 5173,
-    strictPort: false,
+    host: '0.0.0.0',
+    port: 3000,
     proxy: {
       '/api': {
         target: 'https://service.computeksa.com/webhook',
@@ -18,9 +18,12 @@ export default defineConfig({
     },
   },
   preview: {
+    host: '0.0.0.0',
     port: 3000,
-    strictPort: true,
-    open: true,
+    allowedHosts: [
+      'crm.computeksa.com',
+      '.computeksa.com'
+    ]
   },
   build: {
     outDir: 'dist',
