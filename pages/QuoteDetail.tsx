@@ -520,38 +520,54 @@ const QuoteDetail: React.FC = () => {
     
     setProcessing(true);
     try {
+        const payload = {
+            id_cotizacion: quote.id_cotizacion,
+            id_tenant: user.id_tenant,
+            id_user: user.id_user,
+            id_client_company: quote.id_client_company,
+            id_contact: quote.id_contact || null,
+            nombre_cotizacion: updatedData.nombre_cotizacion !== undefined ? updatedData.nombre_cotizacion : quote.nombre_cotizacion,
+            id_quote_status: updatedData.id_quote_status !== undefined ? updatedData.id_quote_status : quote.id_quote_status,
+            tiempo_entrega: updatedData.tiempo_entrega !== undefined ? updatedData.tiempo_entrega : (quote.tiempo_entrega || ''),
+            garantia: updatedData.garantia !== undefined ? updatedData.garantia : (quote.garantia || ''),
+            validez_oferta: updatedData.validez_oferta !== undefined ? updatedData.validez_oferta : (quote.validez_oferta || ''),
+            nota: updatedData.nota !== undefined ? updatedData.nota : (quote.nota || ''),
+            mensaje: updatedData.mensaje !== undefined ? updatedData.mensaje : (quote.mensaje || ''),
+            correos_adicionales: updatedData.correos_adicionales !== undefined ? updatedData.correos_adicionales : (quote.correos_adicionales || ''),
+            is_private: quote.is_private || false,
+            id_trato: quote.id_trato || null,
+        };
+
+        console.log('Quote update payload:', payload);
+
         const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            id_cotizacion: quote.id_cotizacion,
-            nombre_cotizacion: updatedData.nombre_cotizacion || quote.nombre_cotizacion,
-            id_quote_status: updatedData.id_quote_status || quote.id_quote_status,
-            tiempo_entrega: updatedData.tiempo_entrega || quote.tiempo_entrega || '',
-            garantia: updatedData.garantia || quote.garantia || '',
-            validez_oferta: updatedData.validez_oferta || quote.validez_oferta || '',
-            nota: updatedData.nota || quote.nota || '',
-            mensaje: updatedData.mensaje || quote.mensaje || '',
-            correos_adicionales: updatedData.correos_adicionales || quote.correos_adicionales || '',
-            is_private: quote.is_private || false,
-            id_tenant: user.id_tenant,
-            id_user: user.id_user,
-        }),
+        body: JSON.stringify(payload),
         });
-        if (!response.ok) throw new Error('Error al actualizar cotización.');
         
-        const updated = await response.json();
-        setQuote(updated);
+        if (!response.ok) {
+          const text = await response.text();
+          console.error('API response error:', text);
+          throw new Error('Error al actualizar cotización.');
+        }
+        
+        console.log('Quote updated successfully, reloading data...');
         setToast({ message: 'Cotización actualizada correctamente.', type: 'success' });
+        
+        // Recargar todos los datos completos desde el servidor (esperar a que se complete)
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await fetchData();
+        
     } catch (e: any) {
+        console.error('Save edit error:', e);
         setToast({ message: e.message || 'Error al guardar.', type: 'error' });
-        throw e;
     } finally {
         setProcessing(false);
     }
   };
 
-const handleGeneratePDF = async () => {
+  const handleGeneratePDF = async () => {
     if (!quote || !user?.id_user || !user?.id_tenant) {
       setToast({ message: 'Faltan datos de usuario o cotización.', type: 'error' });
       return;
@@ -600,6 +616,44 @@ const handleGeneratePDF = async () => {
     }
   };
 
+  const handleSendQuoteClick = (id_version?: string) => {
+    if (!quote) return;
+    
+    // Recolectar emails destinatarios
+    const recipients: { name?: string; email: string }[] = [];
+    
+    // Email del contacto principal
+    if (quote.contact_detail?.email) {
+      recipients.push({
+        name: quote.contact_detail.full_name,
+        email: quote.contact_detail.email,
+      });
+    }
+    
+    // Emails adicionales en copia
+    if (quote.correos_adicionales) {
+      const additionalEmails = quote.correos_adicionales
+        .split(',')
+        .map((email) => email.trim())
+        .filter((email) => email.length > 0);
+      additionalEmails.forEach((email) => {
+        recipients.push({ email });
+      });
+    }
+
+    const recipientText = recipients.length > 0 
+      ? recipients.map((r) => r.name ? `${r.name} (${r.email})` : r.email).join('\n')
+      : 'No hay destinatarios configurados';
+
+    setConfirmState({
+      isOpen: true,
+      title: '¿Enviar Cotización?',
+      message: `Se enviará a los siguientes destinatarios:\n\n${recipientText}`,
+      onConfirm: () => handleSendQuote(id_version),
+      isDestructive: false,
+    });
+  };
+
   const handleSendQuote = async (id_version?: string) => {
     if (!quote || !user?.id_user) return;
     
@@ -622,9 +676,14 @@ const handleGeneratePDF = async () => {
       });
       if (!response.ok) throw new Error('Error al enviar cotización.');
       
-      const updatedQuote = await response.json();
-      setQuote(updatedQuote);
       setToast({ message: 'Cotización enviada con éxito.', type: 'success' });
+      
+      // Reload full data after sending to ensure proper state
+      setTimeout(() => {
+        fetchData();
+      }, 500);
+      
+      console.log('Quote sent successfully, reloading data...');
     } catch (e: any) {
       setToast({ message: e.message || 'Error al enviar.', type: 'error' });
     } finally {
@@ -1280,7 +1339,7 @@ const handleGeneratePDF = async () => {
                           </a>
                           <button
                             type="button"
-                            onClick={(e) => { e.preventDefault(); handleSendQuote(pdf.id_version); }}
+                            onClick={(e) => { e.preventDefault(); handleSendQuoteClick(pdf.id_version); }}
                             disabled={processing}
                             className="px-3 py-2 text-sm rounded-lg border border-emerald-200 text-emerald-700 hover:border-emerald-500 hover:text-emerald-800 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                           >
