@@ -168,8 +168,20 @@ const DealCreate: React.FC = () => {
         body: JSON.stringify(payload) 
       });
       
-      if (!res.ok) throw new Error('Error al crear el trato');
-      const data = await res.json();
+      if (!res.ok) {
+        const text = await res.text();
+        let errorMsg = 'Error al crear el trato';
+        try {
+          if (text) {
+            const err = JSON.parse(text);
+            errorMsg = err.message || errorMsg;
+          }
+        } catch (e) {}
+        throw new Error(errorMsg);
+      }
+      
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : {};
       const newId = data?.id_trato || data?.id || data?.data?.id_trato;
 
       if (!newId) throw new Error('No se obtuvo el ID del trato creado');

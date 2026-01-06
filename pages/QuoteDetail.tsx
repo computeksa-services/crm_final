@@ -494,8 +494,11 @@ const QuoteDetail: React.FC = () => {
 
           setToast({ message: 'Artículo eliminado.', type: 'success' });
           
-          // 2. Recargar (La BD ya calculó el nuevo total global)
-          fetchData(); 
+          // 2. Actualizar estado local inmediatamente (UI optimista)
+          setItems(prevItems => prevItems.filter(item => (item.id_articulo_cot || item.id_quote_item) !== itemId));
+          
+          // 3. Recargar datos completos de la API
+          setTimeout(() => fetchData(), 300); 
 
         } catch (e: any) {
           setToast({ message: e.message || 'Error al eliminar.', type: 'error' });
@@ -785,7 +788,7 @@ const handleGeneratePDF = async () => {
                             </p>
                             {selectedProduct.precio_unitario && (
                               <p className="text-xs text-slate-600 mt-1">
-                                Precio: ${selectedProduct.precio_unitario.toFixed(2)}
+                                Precio: ${parseFloat(String(selectedProduct.precio_unitario).replace(/[^0-9.-]+/g, "")).toFixed(2)}
                               </p>
                             )}
                           </div>

@@ -66,7 +66,10 @@ const ClientContactsList: React.FC = () => {
       const parseResponse = async (res: Response) => {
         if (!res.ok) return [];
         const text = await res.text();
-        return text ? JSON.parse(text) : [];
+        if (!text) return [];
+        const data = JSON.parse(text);
+        // Filtrar registros válidos que tengan al menos un id válido
+        return Array.isArray(data) ? data.filter(item => item && (item.id_contact || item.id_client_company)) : [];
       };
 
       setContacts(await parseResponse(contactsRes));
@@ -472,6 +475,20 @@ const ClientContactsList: React.FC = () => {
                 <td colSpan={columns.length} className="py-24 text-center">
                    <i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i>
                    <p className="text-slate-400 text-sm font-medium tracking-wide">Cargando contactos...</p>
+                </td>
+              </tr>
+            ) : table.getRowModel().rows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} className="py-24 text-center">
+                   <div className="flex flex-col items-center gap-3">
+                     <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
+                       <i className="fa-solid fa-user text-2xl text-slate-300"></i>
+                     </div>
+                     <div>
+                       <p className="text-slate-600 font-bold text-sm">No hay contactos registrados</p>
+                       <p className="text-slate-400 text-xs mt-1">Crea tu primer contacto para comenzar</p>
+                     </div>
+                   </div>
                 </td>
               </tr>
             ) : table.getRowModel().rows.map(row => {

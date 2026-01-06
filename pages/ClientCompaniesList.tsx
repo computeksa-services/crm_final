@@ -538,6 +538,9 @@ const ClientCompaniesList: React.FC = () => {
       
       {/* Toolbar superior */}
       <div className="bg-slate-50 border-b border-slate-200 p-2 flex items-center justify-between">
+        {!loading && companies.length === 0 ? (
+          <div className="flex-1"></div>
+        ) : (
         <div className="flex items-center gap-2">
             <div className="relative">
                 <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
@@ -581,6 +584,7 @@ const ClientCompaniesList: React.FC = () => {
                 </button>
             </div>
         </div>
+        )}
         
         <div className="flex items-center gap-2">
           <button 
@@ -593,6 +597,25 @@ const ClientCompaniesList: React.FC = () => {
       </div>
 
       {/* Área de la Tabla */}
+      {!loading && companies.length === 0 ? (
+        <div className="flex-1 flex items-center justify-center bg-slate-50/30">
+          <div className="flex flex-col items-center gap-4 max-w-md text-center">
+            <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center">
+              <i className="fa-solid fa-building text-3xl text-slate-300"></i>
+            </div>
+            <div>
+              <p className="text-slate-600 font-bold text-lg">No hay empresas registradas</p>
+              <p className="text-slate-400 text-sm mt-2">Comienza agregando tu primera empresa usando el botón superior</p>
+            </div>
+            <button 
+              onClick={handleAddNew} 
+              className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all flex items-center gap-2"
+            >
+              <i className="fa-solid fa-plus"></i> Nueva Empresa
+            </button>
+          </div>
+        </div>
+      ) : (
       <div className="flex-1 overflow-auto relative bg-slate-50/10">
         <table className="w-full border-separate border-spacing-0">
           <thead className="sticky top-0 z-40 shadow-sm">
@@ -717,7 +740,7 @@ const ClientCompaniesList: React.FC = () => {
             })}
           </tbody>
         </table>
-      </div>
+      
 
       {/* Footer / Paginación */}
       <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest">
@@ -737,6 +760,8 @@ const ClientCompaniesList: React.FC = () => {
             <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-right"></i></button>
           </div>
       </div>
+      </div>
+      )}
 
       {/* Modal de Creación / Edición */}
       {isModalOpen && editingCompany && (

@@ -249,10 +249,19 @@ const QuoteCreate: React.FC = () => {
         });
 
         if (!dealRes.ok) {
-            const err = await dealRes.json();
-            throw new Error(err.message || 'Error al crear el trato asociado.');
+            let errorMessage = 'Error al crear el trato asociado.';
+            try {
+              const text = await dealRes.text();
+              if (text) {
+                const err = JSON.parse(text);
+                errorMessage = err.message || errorMessage;
+              }
+            } catch (e) {}
+            throw new Error(errorMessage);
         }
-        const dealData = await dealRes.json();
+        
+        const dealText = await dealRes.text();
+        const dealData = dealText ? JSON.parse(dealText) : {};
         associatedDealId = dealData?.id_trato || dealData?.id;
       }
 
@@ -271,6 +280,8 @@ const QuoteCreate: React.FC = () => {
         version: 0
       };
 
+      console.log('Quote payload to send:', quotePayload);
+
       const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -278,8 +289,17 @@ const QuoteCreate: React.FC = () => {
       });
 
       if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.message || 'Error al crear la cotización.');
+          let errorMessage = 'Error al crear la cotización.';
+          try {
+            const text = await res.text();
+            if (text) {
+              const err = JSON.parse(text);
+              errorMessage = err.message || errorMessage;
+            }
+          } catch (e) {
+            console.error('Error parsing response:', e);
+          }
+          throw new Error(errorMessage);
       }
 
       setToast({ message: '¡Cotización creada correctamente!', type: 'success' });
@@ -356,114 +376,10 @@ const QuoteCreate: React.FC = () => {
                 />
             </div>
 
-            {/* 2. ORIGEN (TRATO) */}
+            {/* 1. DATOS DEL CLIENTE */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
                     <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">1</span>
-                    Vinculación de Trato
-                </h2>
-
-                {isLocked ? (
-                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-xs text-slate-400 uppercase font-bold">Trato Vinculado</p>
-                        <p className="text-slate-700 font-semibold text-lg">{deals.find(d => d.id_trato === quote.id_trato)?.nombre_trato || 'Trato Actual'}</p>
-                      </div>
-                      <i className="fa-solid fa-lock text-slate-300 text-xl"></i>
-                   </div>
-                ) : (
-                    <>
-                        <div className="flex bg-slate-100 p-1 rounded-lg mb-5 w-fit">
-                            <button
-                                onClick={() => { setCreateNewDeal(false); setQuote(p => ({...p, id_trato: ''})); }}
-                                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${!createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                Seleccionar Existente
-                            </button>
-                            <button
-                                onClick={() => { setCreateNewDeal(true); setQuote(p => ({...p, id_trato: ''})); }}
-                                className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                Crear Nuevo Trato
-                            </button>
-                        </div>
-
-                        {!createNewDeal ? (
-                            <div className="relative">
-                                <label className="block text-xs font-bold text-slate-600 mb-1.5">Trato Abierto</label>
-                                <select 
-                                    name="id_trato" 
-                                    value={quote.id_trato || ''} 
-                                    onChange={handleInputChange} 
-                                    className="w-full px-3 py-2.5 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none text-sm"
-                                >
-                                    <option value="">-- Seleccione un trato --</option>
-                                    {deals.map(d => <option key={d.id_trato} value={d.id_trato}>{d.nombre_trato}</option>)}
-                                </select>
-                                <i className="fa-solid fa-chevron-down absolute right-3 top-9 text-slate-400 text-xs pointer-events-none"></i>
-                            </div>
-                        ) : (
-                            <div className="bg-slate-50 rounded-xl p-5 border border-slate-200 animate-fade-in-down">
-                                <div className="mb-4">
-                                    <label className="block text-xs font-bold text-slate-600 mb-1.5">Nombre del Nuevo Trato <span className="text-red-500">*</span></label>
-                                    <input
-                                        name="nombre_trato"
-                                        value={newDeal.nombre_trato || ''}
-                                        onChange={handleNewDealChange}
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none font-medium text-slate-700"
-                                        placeholder="Se generará automáticamente..."
-                                    />
-                                    <p className="text-[10px] text-slate-400 mt-1">El estado inicial será automático.</p>
-                                </div>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Nivel de Interés <span className="text-red-500">*</span></label>
-                                        <div className="relative">
-                                            <select
-                                                name="id_interest"
-                                                value={newDeal.id_interest || ''}
-                                                onChange={handleNewDealChange}
-                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
-                                            >
-                                                <option value="">-- Seleccionar --</option>
-                                                {interestStatuses.map((opt: any) => (
-                                                    <option key={opt.id_status || opt.id_interest} value={opt.id_status || opt.id_interest}>
-                                                        {opt.name}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                            <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-slate-400 text-xs pointer-events-none"></i>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Canal de Origen <span className="text-red-500">*</span></label>
-                                        <div className="relative">
-                                            <select
-                                                name="id_channel"
-                                                value={newDeal.id_channel || ''}
-                                                onChange={handleNewDealChange}
-                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
-                                            >
-                                                <option value="">-- Seleccionar --</option>
-                                                {dealChannels.map((opt: any) => (
-                                                    <option key={opt.id_channel} value={opt.id_channel}>{opt.name}</option>
-                                                ))}
-                                            </select>
-                                            <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-slate-400 text-xs pointer-events-none"></i>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </>
-                )}
-            </div>
-
-            {/* 3. CLIENTE */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
-                    <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>
                     Datos del Cliente
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -506,10 +422,10 @@ const QuoteCreate: React.FC = () => {
                 </div>
             </div>
             
-            {/* 4. CONDICIONES */}
+            {/* 2. CONDICIONES COMERCIALES */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
-                    <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
+                    <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">2</span>
                     Condiciones Comerciales
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -532,6 +448,27 @@ const QuoteCreate: React.FC = () => {
                 </div>
             </div>
 
+            {/* 3. CONDICIONES DEL SERVICIO */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h2 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <span className="bg-brand-100 text-brand-600 w-6 h-6 rounded-full flex items-center justify-center text-xs">3</span>
+                    Condiciones del Servicio
+                </h2>
+                <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-2">
+                        Este apartado se enviará por correo adjunto a la cotización
+                    </label>
+                    <textarea 
+                        name="mensaje" 
+                        value={quote.mensaje || ''} 
+                        onChange={handleInputChange} 
+                        rows={12} 
+                        className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                        placeholder="Condiciones del servicio, términos, mensaje de saludo, etc..."
+                    />
+                </div>
+            </div>
+
         </div>
 
         {/* COLUMNA DERECHA (Sidebar) */}
@@ -551,17 +488,6 @@ const QuoteCreate: React.FC = () => {
                             rows={2} 
                             className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm resize-none"
                             placeholder="Notas para el equipo..."
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Mensaje para correo (Opcional)</label>
-                        <textarea 
-                            name="mensaje" 
-                            value={quote.mensaje || ''} 
-                            onChange={handleInputChange} 
-                            rows={3} 
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm resize-none"
-                            placeholder="Mensaje de saludo o introducción..."
                         />
                     </div>
                     <div>
@@ -603,6 +529,108 @@ const QuoteCreate: React.FC = () => {
                     <span className="font-bold text-slate-700">Borrador (Draft)</span>
                 </div>
                 <p className="text-xs text-slate-400 mt-2">La cotización se creará en estado borrador. Podrá agregar ítems y cambiar el estado en el siguiente paso.</p>
+            </div>
+
+            {/* VINCULACIÓN DE TRATO (OPCIONAL) */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <i className="fa-solid fa-link text-xs"></i>
+                    Vinculación de Trato (Opcional)
+                </h2>
+
+                {isLocked ? (
+                   <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-slate-400 uppercase font-bold">Trato Vinculado</p>
+                        <p className="text-slate-700 font-semibold">{deals.find(d => d.id_trato === quote.id_trato)?.nombre_trato || 'Trato Actual'}</p>
+                      </div>
+                      <i className="fa-solid fa-lock text-slate-300 text-xl"></i>
+                   </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="flex bg-slate-100 p-1 rounded-lg w-full">
+                            <button
+                                onClick={() => { setCreateNewDeal(false); setQuote(p => ({...p, id_trato: ''})); }}
+                                className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all ${!createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Existente
+                            </button>
+                            <button
+                                onClick={() => { setCreateNewDeal(true); setQuote(p => ({...p, id_trato: ''})); }}
+                                className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all ${createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Nuevo
+                            </button>
+                        </div>
+
+                        {!createNewDeal ? (
+                            <div className="relative">
+                                <label className="block text-xs font-bold text-slate-600 mb-1.5">Trato Abierto</label>
+                                <select 
+                                    name="id_trato" 
+                                    value={quote.id_trato || ''} 
+                                    onChange={handleInputChange} 
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none text-sm"
+                                >
+                                    <option value="">-- Ninguno --</option>
+                                    {deals.map(d => <option key={d.id_trato} value={d.id_trato}>{d.nombre_trato}</option>)}
+                                </select>
+                                <i className="fa-solid fa-chevron-down absolute right-3 top-9 text-slate-400 text-xs pointer-events-none"></i>
+                            </div>
+                        ) : (
+                            <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1.5">Nombre <span className="text-red-500">*</span></label>
+                                    <input
+                                        name="nombre_trato"
+                                        value={newDeal.nombre_trato || ''}
+                                        onChange={handleNewDealChange}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                        placeholder="Auto-generado..."
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1.5">Interés <span className="text-red-500">*</span></label>
+                                    <div className="relative">
+                                        <select
+                                            name="id_interest"
+                                            value={newDeal.id_interest || ''}
+                                            onChange={handleNewDealChange}
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
+                                        >
+                                            <option value="">-- Seleccionar --</option>
+                                            {interestStatuses.map((opt: any) => (
+                                                <option key={opt.id_status || opt.id_interest} value={opt.id_status || opt.id_interest}>
+                                                    {opt.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-slate-400 text-xs pointer-events-none"></i>
+                                    </div>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-600 mb-1.5">Canal <span className="text-red-500">*</span></label>
+                                    <div className="relative">
+                                        <select
+                                            name="id_channel"
+                                            value={newDeal.id_channel || ''}
+                                            onChange={handleNewDealChange}
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
+                                        >
+                                            <option value="">-- Seleccionar --</option>
+                                            {dealChannels.map((opt: any) => (
+                                                <option key={opt.id_channel} value={opt.id_channel}>{opt.name}</option>
+                                            ))}
+                                        </select>
+                                        <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-slate-400 text-xs pointer-events-none"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
         </div>

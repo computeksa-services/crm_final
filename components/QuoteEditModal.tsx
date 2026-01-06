@@ -176,7 +176,7 @@ const QuoteEditModal: React.FC<QuoteEditModalProps> = ({
                 name="mensaje"
                 value={formData.mensaje || ''}
                 onChange={handleInputChange}
-                rows={3}
+                rows={8}
                 className="w-full px-4 py-2.5 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent resize-none"
                 placeholder="Mensaje personalizado que verá el cliente..."
               ></textarea>
