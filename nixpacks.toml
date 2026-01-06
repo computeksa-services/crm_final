@@ -1,0 +1,6 @@
+[build]
+cmds = ["npm ci", "npm run build"]
+
+[start]
+runImage = "node:20-alpine"
+cmd = "npm start"
