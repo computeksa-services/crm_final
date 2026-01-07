@@ -29,7 +29,7 @@ const COUNTRIES = [
 ];
 
 const COMPANY_LABELS = [
-  'Cliente', 'Prospecto (Lead)', 'Prospecto Interesado', 'Poco Interesado', 'Ex-Cliente',
+  'Cliente', 'Muy Interesado', 'Interesado', 'Poco Interesado', 'Ex-Cliente',
 ];
 
 const COMPANY_TYPES = [
@@ -159,14 +159,17 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
       const endpoint = mode === 'edit' ? 'update' : '';
       const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/${endpoint}`;
 
+      const payload = {
+        ...formData,
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+        ...(mode === 'create' ? { created_by: user.id_user } : {}),
+      };
+
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          id_tenant: user.id_tenant,
-          id_user: user.id_user,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) throw new Error('Error al guardar empresa');
@@ -222,7 +225,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
                 <option value="RUC">RUC</option>
                 <option value="CI">Cédula</option>
                 <option value="PASAPORTE">Pasaporte</option>
-                <option value="IDENTIFICACION DEL EXTERIOR">ID Exterior</option>
+                <option value="IDENTIFICACION DEL EXTERIOR">ID. del Exterior</option>
               </select>
             </div>
             <div className="col-span-2">

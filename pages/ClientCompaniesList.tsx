@@ -47,13 +47,6 @@ const COUNTRIES = [
   { id: 'FR', name: 'Francia' },
   { id: 'GT', name: 'Guatemala' },
   { id: 'HN', name: 'Honduras' },
-  { id: 'IT', name: 'Italia' },
-  { id: 'MX', name: 'México' },
-  { id: 'NI', name: 'Nicaragua' },
-  { id: 'PA', name: 'Panamá' },
-  { id: 'PY', name: 'Paraguay' },
-  { id: 'PE', name: 'Perú' },
-  { id: 'PR', name: 'Puerto Rico' },
   { id: 'DO', name: 'República Dominicana' },
   { id: 'UY', name: 'Uruguay' },
   { id: 'VE', name: 'Venezuela' },
@@ -61,8 +54,8 @@ const COUNTRIES = [
 
 const COMPANY_LABELS = [
   'Cliente',
-  'Prospecto (Lead)',
-  'Prospecto Interesado',
+  'Muy Interesado',
+  'Interesado',
   'Poco Interesado',
   'Ex-Cliente',
 ];
@@ -148,7 +141,7 @@ const ClientCompaniesList: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  const handleGroupingChange = (newGrouping: string[]) => {
+  const handleGroupingChange = useCallback((newGrouping: string[]) => {
     setGrouping(newGrouping);
     
     if (newGrouping.length > 0) {
@@ -166,7 +159,7 @@ const ClientCompaniesList: React.FC = () => {
     } else {
       setExpanded({});
     }
-  };
+  }, [companies]);
 
   // Clic fuera para cerrar filtros
   useEffect(() => {
@@ -530,7 +523,7 @@ const ClientCompaniesList: React.FC = () => {
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans">
       
       {/* Toolbar superior */}
-      <div className="bg-slate-50 border-b border-slate-200 p-2 flex items-center justify-between">
+      <div className="bg-slate-50 border-b border-slate-200 p-2 flex items-center justify-between shrink-0">{/* shrink-0 para evitar que se comprima */}
         {!loading && companies.length === 0 ? (
           <div className="flex-1"></div>
         ) : (
@@ -717,14 +710,46 @@ const ClientCompaniesList: React.FC = () => {
               </tr>
             ) : table.getRowModel().rows.map(row => {
               const isGrouped = row.getIsGrouped();
+              
+              // Si es una fila agrupada, renderizar el grupo y sus hijos
+              if (isGrouped) {
+                return (
+                  <React.Fragment key={row.id}>
+                    {/* Fila de grupo */}
+                    <tr className="bg-slate-50/80 font-bold border-l-4 border-l-brand-500 border-b border-slate-100">
+                      {row.getVisibleCells().map(cell => (
+                        <td key={cell.id} className="px-4 py-3 border-r border-slate-50">
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                    {/* Filas hijas si está expandido */}
+                    {row.getIsExpanded() && row.subRows.map(subRow => (
+                      <tr 
+                        key={subRow.id}
+                        className="hover:bg-blue-50/30 border-b border-slate-100 transition-colors group cursor-pointer"
+                        onClick={() => navigate(`/app/client-companies/${subRow.original.id_client_company}`)}
+                      >
+                        {subRow.getVisibleCells().map(cell => (
+                          <td key={cell.id} className="px-4 py-1.5 border-r border-slate-50">
+                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              }
+              
+              // Si no es agrupada, renderizar normalmente
               return (
                 <tr 
                     key={row.id} 
-                    className={`${isGrouped ? 'bg-slate-50/80 font-bold border-l-4 border-l-brand-500' : 'hover:bg-blue-50/30'} border-b border-slate-100 transition-colors group cursor-pointer`}
-                    onClick={() => !isGrouped && navigate(`/app/client-companies/${row.original.id_client_company}`)}
+                    className="hover:bg-blue-50/30 border-b border-slate-100 transition-colors group cursor-pointer"
+                    onClick={() => navigate(`/app/client-companies/${row.original.id_client_company}`)}
                 >
                   {row.getVisibleCells().map(cell => (
-                    <td key={cell.id} className={`px-4 border-r border-slate-50 ${isGrouped ? 'py-3' : 'py-1.5'}`}>
+                    <td key={cell.id} className="px-4 py-1.5 border-r border-slate-50">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -733,10 +758,11 @@ const ClientCompaniesList: React.FC = () => {
             })}
           </tbody>
         </table>
-      
+      </div>
+      )}
 
       {/* Footer / Paginación */}
-      <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+      <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
           <div className="flex items-center gap-4">
             <span>{companies.length} empresas totales</span>
             {columnFilters.length > 0 && (
@@ -753,8 +779,6 @@ const ClientCompaniesList: React.FC = () => {
             <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-right"></i></button>
           </div>
       </div>
-      </div>
-      )}
 
       {/* Modal de Creación / Edición */}
       <CompanyFormModal
