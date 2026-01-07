@@ -82,6 +82,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     localStorage.setItem('sidebar-desktop-open', JSON.stringify(isDesktopSidebarOpen));
   }, [isDesktopSidebarOpen]);
 
+  const didFetchTenantRef = React.useRef<string | null>(null);
   useEffect(() => {
     if (!user?.id_tenant) {
       setTenantName(null);
@@ -102,8 +103,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         console.error("Error fetching tenant", error);
       }
     };
-
-    fetchTenantName();
+    // Evitar doble fetch en StrictMode si el tenant no cambió
+    if (didFetchTenantRef.current !== user.id_tenant) {
+      didFetchTenantRef.current = user.id_tenant;
+      fetchTenantName();
+    }
     return () => { isMounted = false; };
   }, [user?.id_tenant]);
 

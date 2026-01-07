@@ -53,7 +53,6 @@ const App: React.FC = () => {
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <AuthProvider>
-        <DealFiltersProvider>
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<LandingPage />} />
@@ -66,7 +65,7 @@ const App: React.FC = () => {
               <Route path="quotes" element={<QuotesList />} />
               <Route path="quotes/new" element={<QuoteCreate />} />
               <Route path="quotes/:id" element={<QuoteDetail />} />
-              <Route path="deals" element={<DealsList />} />
+              <Route path="deals" element={<DealFiltersProvider><DealsList /></DealFiltersProvider>} />
               <Route path="deals/new" element={<DealCreate />} />
               <Route path="deals/:id" element={<DealDetail />} />
               <Route path="financials" element={<FinancialsList />} />
@@ -85,7 +84,6 @@ const App: React.FC = () => {
             </Route>
           </Routes>
         </BrowserRouter>
-        </DealFiltersProvider>
       </AuthProvider>
     </GoogleOAuthProvider>
   );

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { ClientContact, ClientCompany } from '../types';
+import { ClientContact } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import ContactFormModal from '../components/ContactFormModal';
@@ -27,7 +27,6 @@ const ClientContactsList: React.FC = () => {
   
   // --- ESTADOS DE DATOS ---
   const [contacts, setContacts] = useState<ClientContact[]>([]);
-  const [companies, setCompanies] = useState<ClientCompany[]>([]);
   const [loading, setLoading] = useState(true);
   
   // --- ESTADOS DE LA TABLA ---
@@ -59,10 +58,7 @@ const ClientContactsList: React.FC = () => {
     if (!user?.id_tenant || !user?.id_user) return;
     setLoading(true);
     try {
-      const [contactsRes, companiesRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
-      ]);
+      const contactsRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
 
       const parseResponse = async (res: Response) => {
         if (!res.ok) return [];
@@ -70,11 +66,10 @@ const ClientContactsList: React.FC = () => {
         if (!text) return [];
         const data = JSON.parse(text);
         // Filtrar registros válidos que tengan al menos un id válido
-        return Array.isArray(data) ? data.filter(item => item && (item.id_contact || item.id_client_company)) : [];
+        return Array.isArray(data) ? data.filter(item => item && item.id_contact) : [];
       };
 
       setContacts(await parseResponse(contactsRes));
-      setCompanies(await parseResponse(companiesRes));
     } catch (e) {
       setToast({ message: 'Error al cargar los datos.', type: 'error' });
     } finally {
@@ -82,7 +77,11 @@ const ClientContactsList: React.FC = () => {
     }
   }, [user]);
 
+  // Evitar doble carga en StrictMode (dev)
+  const didInitRef = useRef(false);
   useEffect(() => {
+    if (didInitRef.current) return;
+    didInitRef.current = true;
     fetchData();
   }, [fetchData]);
 
@@ -98,10 +97,10 @@ const ClientContactsList: React.FC = () => {
   }, []);
 
   // --- HELPERS ---
-  const getCompanyName = useCallback((id: string | undefined) => {
-    if (!id) return 'SIN EMPRESA';
-    return companies.find(c => c.id_client_company === id)?.name_company || 'SIN EMPRESA';
-  }, [companies]);
+  // Usar name_company provisto por backend directamente en el payload de contactos
+  const getCompanyNameForContact = useCallback((contact: ClientContact) => {
+    return (contact as any).name_company || 'SIN EMPRESA';
+  }, []);
 
   const getInitials = (first: string = '', last: string = '') => {
     const f = first?.charAt(0) || '';
@@ -167,7 +166,7 @@ const ClientContactsList: React.FC = () => {
     const counts = new Map<string, number>();
     contacts.forEach(contact => {
       let val = '';
-      if (columnId === 'id_client_company') val = getCompanyName(contact.id_client_company);
+      if (columnId === 'id_client_company') val = getCompanyNameForContact(contact);
       else val = (contact as any)[columnId] || '(Vacío)';
       counts.set(val, (counts.get(val) || 0) + 1);
     });
@@ -220,12 +219,12 @@ const ClientContactsList: React.FC = () => {
         }
         return (
           <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-100 uppercase">
-            {getCompanyName(getValue() as string)}
+            {((row.original as any).name_company) || 'SIN EMPRESA'}
           </span>
         );
       },
       filterFn: (row, id, filterValue: string[]) => 
-        filterValue.length === 0 || filterValue.includes(getCompanyName(row.original.id_client_company))
+        filterValue.length === 0 || filterValue.includes(((row.original as any).name_company) || 'SIN EMPRESA')
     },
     {
       accessorKey: 'first_name',
@@ -290,7 +289,7 @@ const ClientContactsList: React.FC = () => {
         );
       },
     }
-  ], [getCompanyName, companies]);
+  ], []);
 
   const table = useReactTable({
     data: contacts,
@@ -503,7 +502,6 @@ const ClientContactsList: React.FC = () => {
         mode={isEditMode ? 'edit' : 'create'}
         initialData={editingContact}
         onSuccess={handleModalSuccess}
-        companies={companies}
       />
 
       {/* OLD INLINE FORM - KEEP FOR ROLLBACK IF NEEDED

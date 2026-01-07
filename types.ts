@@ -117,6 +117,7 @@ export interface ClientContact {
   id_contact: string;
   id_tenant: string;
   id_client_company?: string;
+  name_company?: string; // Nombre de empresa entregado por backend en list
   client_company_name?: string; // Helper
   created_by?: string;
   access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend

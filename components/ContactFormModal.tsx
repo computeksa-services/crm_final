@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ClientContact, ClientCompany } from '../types';
 import Toast from './Toast';
@@ -35,6 +35,9 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
 
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [companiesList, setCompaniesList] = useState<ClientCompany[]>(companies || []);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const didRequestCompaniesRef = useRef(false);
 
   // Inicializar formulario SOLO cuando el modal se abre, no en cada cambio
   useEffect(() => {
@@ -62,6 +65,37 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
       });
     }
   }, [isOpen]); // SOLO depende de isOpen, no de initialData ni preselectedCompanyId
+
+  const ensureCompaniesLoaded = async () => {
+    // Si ya hay empresas, o ya estamos cargando, o no hay usuario válido, no hacer nada
+    if ((companiesList && companiesList.length > 0) || loadingCompanies || !user?.id_tenant || !user?.id_user) return;
+    if (didRequestCompaniesRef.current) return;
+    didRequestCompaniesRef.current = true;
+    try {
+      setLoadingCompanies(true);
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      if (!res.ok) throw new Error('Error al cargar empresas');
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : [];
+      const valid = Array.isArray(data) ? data.filter((c: any) => c && c.id_client_company) : [];
+      setCompaniesList(valid);
+    } catch (err) {
+      setToast({ message: 'No se pudieron cargar las empresas.', type: 'error' });
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
+
+  // Cargar empresas al abrir el modal si no vienen por props
+  useEffect(() => {
+    if (!isOpen) return;
+    if (companies && companies.length > 0) {
+      setCompaniesList(companies);
+      return;
+    }
+    // Lazy: solicitar empresas una sola vez por apertura
+    ensureCompaniesLoaded();
+  }, [isOpen, companies]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -154,11 +188,15 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
               required
               value={formData.id_client_company || ''}
               onChange={handleInputChange}
+              onFocus={ensureCompaniesLoaded}
+              onClick={ensureCompaniesLoaded}
               disabled={!!(preselectedCompanyId || initialData?.id_client_company)}
               className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="">Selecciona empresa</option>
-              {companies.map(c => (
+              {loadingCompanies ? (
+                <option value="" disabled>Cargando empresas...</option>
+              ) : companiesList.map(c => (
                 <option key={c.id_client_company} value={c.id_client_company}>
                   {c.name_company}
                 </option>
