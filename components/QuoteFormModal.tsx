@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Quote, ClientCompany, ClientContact } from '../types';
 import Toast from './Toast';
@@ -24,6 +24,8 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   contacts = [],
 }) => {
   const { user } = useAuth();
+  const mode = initialData?.id_cotizacion ? 'edit' : 'create';
+
   const [formData, setFormData] = useState<Partial<Quote>>({
     nombre_cotizacion: '',
     fecha_emision: new Date().toISOString().split('T')[0],
@@ -36,6 +38,8 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     validez_oferta: '',
     nota: '',
     mensaje: '',
+    correos_adicionales: '',
+    is_private: false,
   });
 
   const [companiesList, setCompaniesList] = useState<ClientCompany[]>(companies || []);
@@ -44,10 +48,9 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [loadingData, setLoadingData] = useState(false);
   const didLoadDataRef = useRef(false);
-  
-  // Modales inline para crear empresa/contacto
   const [isCompanyFormOpen, setIsCompanyFormOpen] = useState(false);
   const [isContactFormOpen, setIsContactFormOpen] = useState(false);
+  const [condicionOption, setCondicionOption] = useState<string>('CONTADO');
 
   useEffect(() => {
     if (isOpen && initialData) {
@@ -64,8 +67,19 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
         validez_oferta: initialData.validez_oferta || '',
         nota: initialData.nota || '',
         mensaje: initialData.mensaje || '',
+        correos_adicionales: initialData.correos_adicionales || '',
+        condicion_pago: initialData.condicion_pago || '',
         is_private: initialData.is_private || false,
       });
+      const options = ['CONTADO','15 DÍAS','30 DÍAS','60 DÍAS','90 DÍAS'];
+      const val = initialData.condicion_pago || '';
+      if (val && options.includes(val.toUpperCase())) {
+        setCondicionOption(val.toUpperCase());
+      } else if (val) {
+        setCondicionOption('OTRO');
+      } else {
+        setCondicionOption('CONTADO');
+      }
     }
   }, [isOpen, initialData]);
 
@@ -79,18 +93,17 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     try {
       const [companiesRes, contactsRes] = await Promise.all([
         fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
       ]);
+
       const parseList = async (res: Response) => {
         if (!res.ok) return [];
         const text = await res.text();
         const data = text ? JSON.parse(text) : [];
-        return Array.isArray(data) ? data.filter((item: any) => item && (item.id_client_company || item.id_contact)) : [];
+        return Array.isArray(data) ? data : [];
       };
-      const [compData, contData] = await Promise.all([
-        parseList(companiesRes),
-        parseList(contactsRes)
-      ]);
+
+      const [compData, contData] = await Promise.all([parseList(companiesRes), parseList(contactsRes)]);
       setCompaniesList(compData);
       setContactsList(contData);
     } catch (error) {
@@ -108,9 +121,7 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     ensureDataLoaded();
   }, [isOpen, user?.id_tenant, user?.id_user]);
 
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target as HTMLInputElement;
     if (type === 'checkbox') {
       setFormData(prev => ({ ...prev, [name]: (e.target as HTMLInputElement).checked }));
@@ -124,53 +135,45 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     setSubmitting(true);
 
     try {
-      // Validaciones básicas
       if (!formData.nombre_cotizacion?.trim()) {
         setToast({ message: 'El nombre de la cotización es requerido.', type: 'error' });
         setSubmitting(false);
         return;
       }
-
       if (!formData.id_client_company) {
         setToast({ message: 'Selecciona una empresa.', type: 'error' });
         setSubmitting(false);
         return;
       }
-
       if (!formData.id_contact) {
         setToast({ message: 'Selecciona un contacto.', type: 'error' });
         setSubmitting(false);
         return;
       }
 
-      // POST to backend
       const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
           id_tenant: user?.id_tenant,
           id_user: user?.id_user,
-        })
+        }),
       });
 
       if (!response.ok) {
-        setToast({ message: 'Error al actualizar la cotización.', type: 'error' });
-        setSubmitting(false);
-        return;
+        const text = await response.text();
+        throw new Error(text || 'Error al guardar la cotización');
       }
 
-      const result = await response.json();
-      const updatedQuote = Array.isArray(result) ? result[0] : result;
-      
-      setToast({ message: 'Cotización actualizada exitosamente.', type: 'success' });
-      onSuccess?.(updatedQuote as Quote);
-      onClose();
-    } catch (error: any) {
-      setToast({ message: error.message || 'Error al procesar la cotización.', type: 'error' });
-    } finally {
+      const text = await response.text();
+      const data = text ? JSON.parse(text) : {};
+      const updatedQuote = Array.isArray(data) ? data[0] : data;
+      setToast({ message: 'Cotización guardada correctamente.', type: 'success' });
+      onSuccess?.(updatedQuote);
+      setTimeout(() => onClose(), 300);
+    } catch (err: any) {
+      setToast({ message: err.message || 'Error en el proceso', type: 'error' });
       setSubmitting(false);
     }
   };
@@ -185,7 +188,7 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
             <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-brand-100 text-brand-600">
               <i className="fa-solid fa-pen-to-square"></i>
             </div>
-            Editar Cotización
+            {mode === 'create' ? 'Crear Cotización' : 'Editar Cotización'}
           </h2>
           <button
             onClick={onClose}
@@ -216,6 +219,13 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => setIsCompanyFormOpen(true)}
+                className="text-xs text-brand-600 font-semibold hover:underline mt-1"
+              >
+                + Nueva empresa
+              </button>
             </div>
 
             <div className="space-y-1">
@@ -237,6 +247,13 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                   </option>
                 ))}
               </select>
+              <button
+                type="button"
+                onClick={() => setIsContactFormOpen(true)}
+                className="text-xs text-brand-600 font-semibold hover:underline mt-1"
+              >
+                + Nuevo contacto
+              </button>
             </div>
           </div>
 
@@ -264,8 +281,9 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                 type="date"
                 name="fecha_emision"
                 value={formData.fecha_emision || ''}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                readOnly
+                disabled
+                className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500 cursor-not-allowed"
               />
             </div>
 
@@ -277,8 +295,9 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                 type="number"
                 name="total"
                 value={formData.total || ''}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                readOnly
+                disabled
+                className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500 cursor-not-allowed"
                 placeholder="0.00"
               />
             </div>
@@ -328,6 +347,43 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
             </div>
           </div>
 
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Condición de Pago</label>
+              <select
+                value={condicionOption}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCondicionOption(v);
+                  if (v !== 'OTRO') {
+                    setFormData(prev => ({ ...prev, condicion_pago: v }));
+                  }
+                }}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+              >
+                <option value="CONTADO">Contado</option>
+                <option value="15 DÍAS">15 días</option>
+                <option value="30 DÍAS">30 días</option>
+                <option value="60 DÍAS">60 días</option>
+                <option value="90 DÍAS">90 días</option>
+                <option value="OTRO">Otro</option>
+              </select>
+            </div>
+            {condicionOption === 'OTRO' && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Especificar</label>
+                <input
+                  type="text"
+                  name="condicion_pago"
+                  value={(formData.condicion_pago as string) || ''}
+                  onChange={handleInputChange}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                  placeholder="Ej. 45 días, Contraentrega, etc."
+                />
+              </div>
+            )}
+          </div>
+
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
               Nota
@@ -352,8 +408,23 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
               onChange={handleInputChange}
               className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
               placeholder="Mensaje para el cliente..."
+              rows={5}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+              Correos adicionales (CC/BCC)
+            </label>
+            <textarea
+              name="correos_adicionales"
+              value={formData.correos_adicionales as string}
+              onChange={handleInputChange}
+              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+              placeholder="email1@dominio.com, email2@dominio.com"
               rows={2}
             />
+            <p className="text-[11px] text-slate-500 ml-1">Separa múltiples correos con coma.</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -397,6 +468,28 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
           />
         )}
       </div>
+
+      {isCompanyFormOpen && (
+        <CompanyFormModal
+          isOpen={isCompanyFormOpen}
+          onClose={() => setIsCompanyFormOpen(false)}
+          onSuccess={company => {
+            setCompaniesList(prev => [...prev, company]);
+            setFormData(prev => ({ ...prev, id_client_company: company.id_client_company }));
+          }}
+        />
+      )}
+
+      {isContactFormOpen && (
+        <ContactFormModal
+          isOpen={isContactFormOpen}
+          onClose={() => setIsContactFormOpen(false)}
+          onSuccess={contact => {
+            setContactsList(prev => [...prev, contact]);
+            setFormData(prev => ({ ...prev, id_contact: contact.id_contact }));
+          }}
+        />
+      )}
     </div>,
     document.body
   );

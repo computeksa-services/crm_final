@@ -5,7 +5,7 @@ import { Quote, QuoteItem, UserDecision, Product, QuoteStatus, PdfVersion, Produ
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import ShareModal from '../components/ShareModal';
-import QuoteEditModal from '../components/QuoteEditModal';
+import QuoteFormModal from '../components/QuoteFormModal';
 
 const QuoteDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -1124,7 +1124,7 @@ const QuoteDetail: React.FC = () => {
             
             <div className="px-6 py-4 space-y-3">
               {/* Row 1: Condiciones Comerciales */}
-              <div className="grid grid-cols-3 gap-4 pb-3 border-b border-slate-100">
+              <div className="grid grid-cols-4 gap-4 pb-3 border-b border-slate-100">
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Entrega</p>
                   <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.tiempo_entrega || '-'}</p>
@@ -1136,6 +1136,10 @@ const QuoteDetail: React.FC = () => {
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Validez</p>
                   <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.validez_oferta || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Condición de Pago</p>
+                  <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.condicion_pago || '-'}</p>
                 </div>
               </div>
 
@@ -1561,7 +1565,7 @@ const QuoteDetail: React.FC = () => {
 
       {/* Quote Edit Modal - Use creation-style modal for edit */}
       {quote && (
-        <QuoteEditModal
+        <QuoteFormModal
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
           initialData={quote}

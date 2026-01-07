@@ -35,6 +35,7 @@ const QuoteCreate: React.FC = () => {
   // Modal states for inline creation
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [condicionOption, setCondicionOption] = useState<string>('Contado');
 
   // --- CARGA INICIAL ---
   const fetchData = useCallback(async () => {
@@ -110,6 +111,7 @@ const QuoteCreate: React.FC = () => {
         tiempo_entrega: '5-7 días laborables',
         garantia: '12 meses',
         validez_oferta: '30 días',
+        condicion_pago: 'Contado',
         nota: '',
         mensaje: '',
         correos_adicionales: '',
@@ -139,6 +141,11 @@ const QuoteCreate: React.FC = () => {
       }
 
       setQuote(initialQuote);
+      setCondicionOption(
+        initialQuote.condicion_pago && ['Contado','15 días','30 días','60 días','90 días'].includes(initialQuote.condicion_pago)
+          ? initialQuote.condicion_pago
+          : (initialQuote.condicion_pago ? 'OTRO' : 'Contado')
+      );
       
       // Si no hay trato en URL y no hay tratos disponibles, forzar creación
       if (!dealId && dealsData.length === 0) {
@@ -522,6 +529,44 @@ const QuoteCreate: React.FC = () => {
                             />
                         </div>
                     ))}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1.5">Condición de Pago</label>
+                    <select
+                      value={condicionOption}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setCondicionOption(v);
+                        if (v !== 'OTRO') {
+                          setQuote(prev => ({ ...prev, condicion_pago: v }));
+                        } else {
+                          setQuote(prev => ({ ...prev, condicion_pago: '' }));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                    >
+                      <option value="Contado">Contado</option>
+                      <option value="15 días">15 días</option>
+                      <option value="30 días">30 días</option>
+                      <option value="60 días">60 días</option>
+                      <option value="90 días">90 días</option>
+                      <option value="OTRO">Otro</option>
+                    </select>
+                  </div>
+                  {condicionOption === 'OTRO' ? (
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Especificar</label>
+                      <input
+                        name="condicion_pago"
+                        value={quote.condicion_pago || ''}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                        placeholder="Ej. 45 días, Contraentrega, etc."
+                      />
+                    </div>
+                  ) : null}
                 </div>
             </div>
 

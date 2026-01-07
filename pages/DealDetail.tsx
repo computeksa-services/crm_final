@@ -40,34 +40,107 @@ const DealDetail: React.FC = () => {
     const userId = user.id_user;
 
     try {
-      const [dealRes, quotesRes, statusesRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${id}&id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_tenant=${tenantId}&id_user=${userId}&id_trato=${id}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${tenantId}`),
-      ]);
-
-      const parseResponse = async (res: Response) => {
-        if (!res.ok) {
-          if (res.status === 404) return null;
-          const text = await res.text();
-          throw new Error(`Error: ${res.status} - ${text}`);
-        }
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${id}&id_tenant=${tenantId}&id_user=${userId}`);
+      if (!res.ok) {
         const text = await res.text();
-        return text ? JSON.parse(text) : null;
+        throw new Error(`Error: ${res.status} - ${text}`);
+      }
+      const text = await res.text();
+      const parsed = text ? JSON.parse(text) : null;
+      const payload = Array.isArray(parsed) ? (parsed[0] || null) : parsed;
+      if (!payload) {
+        setDeal(null);
+        return;
+      }
+
+      // Helper: dd/mm/yyyy -> yyyy-mm-dd
+      const toIsoDate = (ddmmyyyy?: string): string | undefined => {
+        if (!ddmmyyyy) return undefined;
+        const [d, m, y] = ddmmyyyy.split('/');
+        if (!d || !m || !y) return ddmmyyyy;
+        return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
       };
 
-      const rawDealData = await parseResponse(dealRes);
-      const allQuotesData = await parseResponse(quotesRes) || [];
-      const statusesData = await parseResponse(statusesRes) || [];
+      // Map deal statuses catalog
+      const mappedStatuses: DealStatus[] = (payload.catalogo_estados || []).map((s: any, idx: number) => ({
+        id_status: s.id,
+        id_tenant: tenantId,
+        name: s.name,
+        color: s.color,
+        status_order: idx,
+        is_default: false,
+        icon: 'fa-solid fa-circle',
+      }));
 
-      let processedDeal: Deal | null = null;
-      if (rawDealData) {
-        processedDeal = Array.isArray(rawDealData) ? rawDealData[0] : rawDealData;
-      }
-      
-      setDeal(processedDeal);
-      setQuotes(allQuotesData.filter((q: Quote) => q.id_trato === id));
-      setDealStatuses(statusesData);
+      // Map quotes from cotizaciones_activas
+      const mappedQuotes: Quote[] = (payload.cotizaciones_activas || []).map((q: any) => ({
+        id_cotizacion: q.id,
+        id_tenant: tenantId,
+        id_user: payload.owner_id,
+        id_client_company: payload.empresa_cliente?.id || '',
+        id_contact: payload.contacto_cliente?.id || '',
+        no_cotizacion: Number(q.numero) || 0,
+        formatted_no_cotizacion: q.numero,
+        nombre_cotizacion: q.nombre,
+        fecha_emision: toIsoDate(q.fecha) || new Date().toISOString(),
+        estado_decision: 'PENDIENTE',
+        total: String(q.total),
+        version: 1,
+        id_quote_status: '',
+        id_trato: payload.id_trato,
+        is_private: false,
+        estado: q.estado,
+        estado_color: q.color_estado,
+        client_company_name: payload.empresa_cliente?.name,
+        contact_full_name: payload.contacto_cliente?.name,
+      }));
+
+      // Map history to historial_cotizaciones expected by UI
+      const mappedHistory = (payload.historial_envios || []).map((h: any) => ({
+        id_sent: h.id_sent,
+        fecha_envio: h.fecha,
+        enviado_por: h.enviado_por,
+        enviado_a: h.enviado_a,
+        copia_a: null,
+        asunto: h.asunto,
+        metodo: 'EMAIL',
+        politica: null,
+        version_numero: h.version,
+        nombre_cotizacion: undefined,
+        no_cotizacion_fmt: h.cotizacion_no,
+      }));
+
+      // Map main deal to existing Deal shape
+      const mappedDeal: Deal = {
+        id_trato: payload.id_trato,
+        id_tenant: payload.id_tenant || tenantId,
+        id_user_owner: payload.owner_id,
+        id_user: payload.owner_id,
+        id_client_company: payload.empresa_cliente?.id || '',
+        id_contact: payload.contacto_cliente?.id || '',
+        id_deal_status: payload.estado_actual?.id || '',
+        id_interest: payload.interes_actual?.id || '',
+        nombre_trato: payload.nombre_trato,
+        valor_trato: payload.valor_numeric,
+        created_at_fmt: payload.created_at_fmt,
+        updated_at: payload.updated_at_fmt,
+        descripcion: undefined,
+        access_level: payload.access_level,
+        client_company_name: payload.empresa_cliente?.name,
+        contact_full_name: payload.contacto_cliente?.name,
+        contact_email: payload.contacto_cliente?.email,
+        owner_name: payload.owner_details?.name,
+        owner_avatar: payload.owner_details?.avatar,
+        estado_nombre: payload.estado_actual?.name,
+        estado_color: payload.estado_actual?.color,
+        interes_nombre: payload.interes_actual?.name,
+        interes_color: payload.interes_actual?.color,
+        historial_cotizaciones: mappedHistory,
+      };
+
+      setDeal(mappedDeal);
+      setQuotes(mappedQuotes);
+      setDealStatuses(mappedStatuses);
 
     } catch (e: any) {
       console.error("Error fetching details:", e);
@@ -81,6 +154,12 @@ const DealDetail: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const formatUSD = (amount: number | string) => {
+    const n = typeof amount === 'string' ? Number(amount) : amount;
+    if (Number.isNaN(n)) return amount as any;
+    return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  };
 
   if (loading) return (
     <div className="flex h-64 items-center justify-center">
@@ -326,9 +405,14 @@ const DealDetail: React.FC = () => {
                                                 <i className="fa-solid fa-file-invoice-dollar text-lg"></i>
                                             </div>
                                             <div>
-                                                <Link to={`/app/quotes/${q.id_cotizacion}`} className="font-bold text-slate-700 group-hover:text-brand-600 transition-colors block">
-                                                    {q.nombre_cotizacion || `Cotización #${q.formatted_no_cotizacion}`}
-                                                </Link>
+                                              <Link to={`/app/quotes/${q.id_cotizacion}`} className="font-bold text-slate-700 group-hover:text-brand-600 transition-colors block">
+                                                {q.nombre_cotizacion || 'Cotización'}
+                                                {(q.formatted_no_cotizacion || q.no_cotizacion) && (
+                                                  <span className="ml-2 text-xs font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                                                  #{q.formatted_no_cotizacion || String(q.no_cotizacion).padStart(4,'0')}
+                                                  </span>
+                                                )}
+                                              </Link>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <span className="text-xs text-slate-400 font-mono bg-slate-100 px-1.5 rounded">v{q.version}</span>
                                                     <span className="text-xs text-slate-500">• {new Date(q.fecha_emision).toLocaleDateString()}</span>
@@ -337,7 +421,7 @@ const DealDetail: React.FC = () => {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-bold text-slate-700 text-sm">{q.total}</p>
+                                            <p className="font-bold text-slate-700 text-sm">{formatUSD(q.total)}</p>
                                             <span className="text-[10px] uppercase font-bold text-slate-400">{q.estado}</span>
                                         </div>
                                     </div>

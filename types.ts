@@ -245,6 +245,7 @@ export interface Quote {
   garantia?: string;
   validez_oferta?: string;
   nota?: string;
+  condicion_pago?: string; // Nueva: Contado | 15 días | 30 días | 60 días | 90 días | Otro
   id_trato?: string | null;
   is_private?: boolean; // Si es privada (no sigue permisos compartidos)
   
