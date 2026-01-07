@@ -22,12 +22,14 @@ interface DealFiltersContextType {
   setExpandedMenu: (menu: string | null) => void;
   deals: Deal[];
   setDeals: (deals: Deal[]) => void;
+  setDealStatuses: (statuses: DealStatus[]) => void;
 }
 
 const DealFiltersContext = createContext<DealFiltersContextType | undefined>(undefined);
 
 export const DealFiltersProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [dealStatuses, setDealStatuses] = useState<DealStatus[]>([]);
+  const [dealStatuses, setDealStatusesState] = useState<DealStatus[]>([]);
+  const [statusesHydrated, setStatusesHydrated] = useState(false);
   const [statusFilter, setStatusFilter] = useState(() => {
     // Recuperar filtro guardado en localStorage
     const saved = localStorage.getItem('dealStatusFilter');
@@ -37,37 +39,25 @@ export const DealFiltersProvider: React.FC<{ children: React.ReactNode }> = ({ c
   const [deals, setDeals] = useState<Deal[]>([]);
   const { user } = useAuth();
 
+  // Permite hidratar estados desde otra llamada (por ejemplo, /api/deals con config_estados)
+  const setDealStatuses = useCallback((statuses: DealStatus[]) => {
+    setDealStatusesState(statuses);
+    setStatusesHydrated(true);
+  }, []);
+
+  // Reiniciar cuando cambia el usuario/tenant
+  useEffect(() => {
+    setDealStatusesState([]);
+    setStatusesHydrated(false);
+  }, [user?.id_tenant, user?.id_user]);
+
   // Guardar filtro en localStorage cuando cambia
   useEffect(() => {
     localStorage.setItem('dealStatusFilter', statusFilter);
   }, [statusFilter]);
 
-  // Cargar deal statuses
-  useEffect(() => {
-    if (!user?.id_tenant || !user?.id_user) {
-      setDealStatuses([]);
-      return;
-    }
-
-    let isMounted = true;
-
-    const fetchDealStatuses = async () => {
-      try {
-        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
-        if (response.ok) {
-          const data = await response.json();
-          if (isMounted) {
-            setDealStatuses(Array.isArray(data) ? data : []);
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching deal statuses", error);
-      }
-    };
-
-    fetchDealStatuses();
-    return () => { isMounted = false; };
-  }, [user?.id_tenant, user?.id_user]);
+  // Ya no hacemos llamada separada a /api/statuses/deals.
+  // Los estados se hidratan desde la respuesta de /api/deals mediante setDealStatuses.
 
   const value: DealFiltersContextType = {
     dealStatuses,
@@ -77,6 +67,7 @@ export const DealFiltersProvider: React.FC<{ children: React.ReactNode }> = ({ c
     setExpandedMenu,
     deals,
     setDeals,
+    setDealStatuses,
   };
 
   return (

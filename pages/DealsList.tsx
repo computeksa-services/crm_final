@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useDealFilters } from '../contexts/DealFiltersContext';
-import { Deal, ClientCompany, ClientContact, User, DealInterest } from '../types';
+import { Deal, ClientCompany, DealInterest } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import ShareModal from '../components/ShareModal';
@@ -51,9 +51,10 @@ const formatDealValue = (value: Deal['valor_trato']) => {
   return amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 };
 
-const formatDateTime = (iso?: string) => {
-  if (!iso) return '';
-  const [date, time = ''] = iso.split('T');
+const formatDateTime = (value?: string) => {
+  if (!value) return '';
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const [date, time = ''] = normalized.split('T');
   return `${date}${time ? ` ${time.slice(0, 5)}` : ''}`;
 };
 
@@ -123,12 +124,10 @@ const InlineBadgeSelector: React.FC<{
 const DealsList: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { dealStatuses, setDeals: setContextDeals } = useDealFilters();
+  const { dealStatuses, setDeals: setContextDeals, setDealStatuses: setContextDealStatuses } = useDealFilters();
 
   const [deals, setDeals] = useState<Deal[]>([]);
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
-  const [contacts, setContacts] = useState<ClientContact[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [interestStatuses, setInterestStatuses] = useState<DealInterest[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -162,33 +161,76 @@ const DealsList: React.FC = () => {
     if (!user?.id_tenant || !user?.id_user) return;
     setLoading(true);
     try {
-      const [dealsRes, companiesRes, contactsRes, usersRes, interestsRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
-      ]);
-      const parse = async (res: Response) => {
-        try {
-          if (!res.ok) return [];
-          const text = await res.text();
-          if (!text || text.trim() === '' || text === 'null') return [];
-          return JSON.parse(text);
-        } catch (e) {
-          console.error('Error parsing response:', e);
-          return [];
-        }
-      };
-      const dData = await parse(dealsRes);
-      setDeals(dData); setContextDeals(dData);
-      setCompanies(await parse(companiesRes));
-      setContacts(await parse(contactsRes));
-      setUsers(await parse(usersRes));
-      setInterestStatuses(await parse(interestsRes));
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      if (!response.ok) throw new Error('No se pudo cargar tratos');
+
+      const text = await response.text();
+      const raw = text ? JSON.parse(text) : {};
+      const payload = Array.isArray(raw) ? (raw[0]?.data ?? raw[0] ?? {}) : (raw.data ?? raw);
+
+      const normalizeStatuses = (list: any[] = []) => Array.isArray(list)
+        ? list.map(s => ({
+            id_status: s.id_status,
+            name: s.name,
+            color: s.color,
+            icon: s.icon,
+            status_category: s.status_category,
+            status_order: s.status_order,
+          }))
+        : [];
+
+      const normalizeInterests = (list: any[] = []) => Array.isArray(list)
+        ? list.map(i => ({
+            id_interest: i.id_interest,
+            name: i.name,
+            color: i.color,
+            icon: i.icon,
+            status_order: i.status_order,
+            id_tenant: user.id_tenant,
+          }))
+        : [];
+
+      const normalizeDeals = (list: any[] = []) => Array.isArray(list)
+        ? list.map(d => ({
+            id_trato: d.id_trato,
+            id_tenant: user.id_tenant,
+            id_user_owner: d.id_owner ?? d.id_user_owner,
+            id_user: d.id_owner ?? d.id_user,
+            id_client_company: d.id_client_company ?? '',
+            id_contact: d.id_contact ?? '',
+            id_deal_status: d.estado_id ?? d.id_deal_status ?? '',
+            id_interest: d.interes_id ?? d.id_interest ?? '',
+            nombre_trato: d.nombre_trato,
+            valor_trato: d.valor_numeric ?? d.valor_trato ?? 0,
+            client_company_name: d.empresa_nombre ?? d.client_company_name,
+            contact_full_name: d.contacto_nombre ?? d.contact_full_name,
+            contact_email: d.contact_email,
+            owner_name: d.owner_name,
+            owner_avatar: d.owner_avatar,
+            estado_nombre: d.estado_nombre,
+            estado_color: d.estado_color,
+            estado_categoria: d.estado_categoria,
+            estado_icon: d.estado_icon,
+            interes_nombre: d.interes_nombre,
+            interes_color: d.interes_color,
+            interes_icon: d.interes_icon,
+            created_at: d.created_at ?? d.fecha_creacion,
+            updated_at: d.updated_at ?? d.fecha_actualizacion,
+            access_level: d.access_level ?? 'VIEW',
+          }))
+        : [];
+
+      const dealsFromApi = normalizeDeals(payload.tratos);
+      const statusList = normalizeStatuses(payload.config_estados);
+      const interestsList = normalizeInterests(payload.config_intereses);
+
+      setContextDealStatuses(statusList);
+      setInterestStatuses(interestsList);
+      setDeals(dealsFromApi);
+      setContextDeals(dealsFromApi);
     } catch (e) { setToast({ message: 'Error de conexión', type: 'error' }); }
     finally { setLoading(false); }
-  }, [user, setContextDeals]);
+  }, [user, setContextDeals, setContextDealStatuses]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -394,7 +436,7 @@ const DealsList: React.FC = () => {
         }
         return (
         <div className="flex items-center gap-2">
-          <img src={(row.original as any).created_by_avatar || `https://ui-avatars.com/api/?name=${getValue()}`} className="w-6 h-6 rounded-full border" alt="" />
+          <img src={(row.original as any).owner_avatar || `https://ui-avatars.com/api/?name=${getValue()}`} className="w-6 h-6 rounded-full border" alt="" />
           <span className="text-[11px] text-slate-600 font-bold">{getValue() as string}</span>
         </div>
         );
