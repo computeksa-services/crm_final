@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Deal, ClientCompany, ClientContact } from '../types';
+import { Deal, ClientCompany, ClientContact, DealStatus, InterestStatus } from '../types';
 import Toast from './Toast';
+import { useAuth } from '../contexts/AuthContext';
+import CompanyFormModal from './CompanyFormModal';
+import ContactFormModal from './ContactFormModal';
 
 interface DealFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  mode: 'create' | 'edit';
   initialData?: Partial<Deal>;
   onSuccess?: (deal: Deal) => void;
-  preselectedCompanyId?: string;
-  preselectedContactId?: string;
   companies?: ClientCompany[];
   contacts?: ClientContact[];
 }
@@ -18,57 +18,95 @@ interface DealFormModalProps {
 const DealFormModal: React.FC<DealFormModalProps> = ({
   isOpen,
   onClose,
-  mode,
   initialData,
   onSuccess,
-  preselectedCompanyId,
-  preselectedContactId,
   companies = [],
   contacts = [],
 }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState<Partial<Deal>>({
     nombre_trato: '',
     valor_trato: '',
-    fecha_cierre_esperada: '',
     descripcion: '',
-    id_client_company: preselectedCompanyId || '',
-    id_contact: preselectedContactId || '',
+    id_client_company: '',
+    id_contact: '',
     id_deal_status: '',
     id_interest: '',
-    id_channel: '',
+    channel: '',
   });
 
+  const [companiesList, setCompaniesList] = useState<ClientCompany[]>(companies || []);
+  const [contactsList, setContactsList] = useState<ClientContact[]>(contacts || []);
+  const [dealStatuses, setDealStatuses] = useState<DealStatus[]>([]);
+  const [interestStatuses, setInterestStatuses] = useState<InterestStatus[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [loadingData, setLoadingData] = useState(false);
+  const didLoadDataRef = useRef(false);
+  
+  // Modales inline para crear empresa/contacto
+  const [isCompanyFormOpen, setIsCompanyFormOpen] = useState(false);
+  const [isContactFormOpen, setIsContactFormOpen] = useState(false);
+
+  // Inicializar form con datos de edición
+  useEffect(() => {
+    if (!isOpen || !initialData) return;
+    setFormData({
+      id_trato: initialData.id_trato,
+      nombre_trato: initialData.nombre_trato || '',
+      valor_trato: initialData.valor_trato || '',
+      descripcion: initialData.descripcion || '',
+      id_client_company: initialData.id_client_company || '',
+      id_contact: initialData.id_contact || '',
+      id_deal_status: initialData.id_deal_status || '',
+      id_interest: initialData.id_interest || '',
+      channel: initialData.channel || '',
+    });
+  }, [isOpen, initialData]);
+
+  // Cargar empresas, contactos, statuses y interests lazy
+  const ensureDataLoaded = async () => {
+    if (loadingData || didLoadDataRef.current || !user?.id_tenant || !user?.id_user) return;
+    if ((companiesList.length > 0 && contactsList.length > 0 && dealStatuses.length > 0 && interestStatuses.length > 0)) return;
+    didLoadDataRef.current = true;
+    try {
+      setLoadingData(true);
+      const [companiesRes, contactsRes, dealStatusesRes, interestStatusesRes] = await Promise.all([
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
+      ]);
+      const parseList = async (res: Response) => {
+        if (!res.ok) return [];
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : [];
+        return Array.isArray(data) ? data.filter((item: any) => item && (item.id_client_company || item.id_contact || item.id_status || item.id_interest)) : [];
+      };
+      const [compData, contData, dealStatusesData, interestStatusesData] = await Promise.all([
+        parseList(companiesRes),
+        parseList(contactsRes),
+        parseList(dealStatusesRes),
+        parseList(interestStatusesRes)
+      ]);
+      setCompaniesList(compData);
+      setContactsList(contData);
+      setDealStatuses(dealStatusesData);
+      setInterestStatuses(interestStatusesData);
+    } catch (err) {
+      setToast({ message: 'Error al cargar datos.', type: 'error' });
+    } finally {
+      setLoadingData(false);
+    }
+  };
 
   useEffect(() => {
-    if (isOpen && mode === 'edit' && initialData) {
-      setFormData({
-        id_trato: initialData.id_trato,
-        nombre_trato: initialData.nombre_trato || '',
-        valor_trato: initialData.valor_trato || '',
-        fecha_cierre_esperada: initialData.fecha_cierre_esperada || '',
-        descripcion: initialData.descripcion || '',
-        id_client_company: initialData.id_client_company || '',
-        id_contact: initialData.id_contact || '',
-        id_deal_status: initialData.id_deal_status || '',
-        id_interest: initialData.id_interest || '',
-        id_channel: initialData.id_channel || '',
-      });
-    } else if (isOpen && mode === 'create') {
-      setFormData({
-        nombre_trato: '',
-        valor_trato: '',
-        fecha_cierre_esperada: '',
-        descripcion: '',
-        id_client_company: preselectedCompanyId || '',
-        id_contact: preselectedContactId || '',
-        id_deal_status: '',
-        id_interest: '',
-        id_channel: '',
-      });
+    if (!isOpen) {
+      didLoadDataRef.current = false;
+      return;
     }
-  }, [isOpen, mode, initialData, preselectedCompanyId, preselectedContactId]);
+    ensureDataLoaded();
+  }, [isOpen, user?.id_tenant, user?.id_user]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -101,11 +139,32 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
         return;
       }
 
-      // TODO: Conectar al backend
-      console.log('Form data to submit:', formData);
-      setToast({ message: mode === 'create' ? 'Trato creado exitosamente.' : 'Trato actualizado exitosamente.', type: 'success' });
+      if (!user?.id_tenant || !user?.id_user) {
+        setToast({ message: 'Usuario no autenticado.', type: 'error' });
+        setSubmitting(false);
+        return;
+      }
+
+      // Conectar al backend para edición
+      const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update`;
+      const payload = {
+        ...formData,
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+      };
       
-      onSuccess?.(formData as Deal);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) throw new Error('Error al guardar trato');
+      const result = await response.json();
+      const savedDeal = Array.isArray(result) ? result[0] : result;
+
+      setToast({ message: 'Trato actualizado exitosamente.', type: 'success' });
+      onSuccess?.(savedDeal);
       onClose();
     } catch (error: any) {
       setToast({ message: 'Error al procesar el trato.', type: 'error' });
@@ -121,10 +180,10 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${mode === 'create' ? 'bg-emerald-100 text-emerald-600' : 'bg-brand-100 text-brand-600'}`}>
-              <i className={`fa-solid ${mode === 'create' ? 'fa-handshake' : 'fa-pen-to-square'}`}></i>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-brand-100 text-brand-600">
+              <i className="fa-solid fa-pen-to-square"></i>
             </div>
-            {mode === 'create' ? 'Nuevo Trato' : 'Editar Trato'}
+            Editar Trato
           </h2>
           <button
             onClick={onClose}
@@ -140,40 +199,62 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                 Empresa <span className="text-red-500">*</span>
               </label>
-              <select
-                name="id_client_company"
-                required
-                value={formData.id_client_company || ''}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-              >
-                <option value="">Selecciona empresa</option>
-                {companies.map(c => (
-                  <option key={c.id_client_company} value={c.id_client_company}>
-                    {c.name_company}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  name="id_client_company"
+                  required
+                  value={formData.id_client_company || ''}
+                  onChange={handleInputChange}
+                  disabled={loadingData}
+                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60"
+                >
+                  <option value="">{loadingData ? 'Cargando...' : 'Selecciona empresa'}</option>
+                  {companiesList.map(c => (
+                    <option key={c.id_client_company} value={c.id_client_company}>
+                      {c.name_company}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setIsCompanyFormOpen(true)}
+                  className="px-3 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 text-sm font-bold rounded-xl transition-all border border-emerald-200"
+                  title="Crear nueva empresa"
+                >
+                  <i className="fa-solid fa-plus"></i>
+                </button>
+              </div>
             </div>
 
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                 Contacto <span className="text-red-500">*</span>
               </label>
-              <select
-                name="id_contact"
-                required
-                value={formData.id_contact || ''}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-              >
-                <option value="">Selecciona contacto</option>
-                {contacts.map(c => (
-                  <option key={c.id_contact} value={c.id_contact}>
-                    {c.first_name} {c.last_name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  name="id_contact"
+                  required
+                  value={formData.id_contact || ''}
+                  onChange={handleInputChange}
+                  disabled={loadingData}
+                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60"
+                >
+                  <option value="">{loadingData ? 'Cargando...' : 'Selecciona contacto'}</option>
+                  {contactsList.map(c => (
+                    <option key={c.id_contact} value={c.id_contact}>
+                      {c.first_name} {c.last_name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setIsContactFormOpen(true)}
+                  className="px-3 py-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 text-sm font-bold rounded-xl transition-all border border-blue-200"
+                  title="Crear nuevo contacto"
+                >
+                  <i className="fa-solid fa-plus"></i>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -204,19 +285,63 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
                 onChange={handleInputChange}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
                 placeholder="5000.00"
+                step="0.01"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                Fecha Cierre Esperada
+                Estado del Trato
+              </label>
+              <select
+                name="id_deal_status"
+                value={formData.id_deal_status || ''}
+                onChange={handleInputChange}
+                disabled={loadingData}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60"
+              >
+                <option value="">{loadingData ? 'Cargando...' : 'Selecciona estado'}</option>
+                {dealStatuses.map(s => (
+                  <option key={s.id_status} value={s.id_status}>
+                    {s.nombre_estado}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Interés
+              </label>
+              <select
+                name="id_interest"
+                value={formData.id_interest || ''}
+                onChange={handleInputChange}
+                disabled={loadingData}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60"
+              >
+                <option value="">{loadingData ? 'Cargando...' : 'Selecciona interés'}</option>
+                {interestStatuses.map(i => (
+                  <option key={i.id_interest} value={i.id_interest}>
+                    {i.nombre_interes}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                Canal
               </label>
               <input
-                type="date"
-                name="fecha_cierre_esperada"
-                value={formData.fecha_cierre_esperada?.split('T')[0] || ''}
+                type="text"
+                name="channel"
+                value={formData.channel || ''}
                 onChange={handleInputChange}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                placeholder="Ej. Email, Teléfono, Reunión"
               />
             </div>
           </div>
@@ -249,7 +374,7 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
               className="px-6 py-2.5 bg-brand-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-200 hover:bg-brand-700 disabled:opacity-50 transition-all flex items-center gap-2"
             >
               {submitting ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
-              {mode === 'create' ? 'Crear Trato' : 'Guardar Cambios'}
+              Guardar Cambios
             </button>
           </div>
         </form>
@@ -262,6 +387,29 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
           />
         )}
       </div>
+
+      {/* Modales inline para crear empresa y contacto */}
+      <CompanyFormModal
+        isOpen={isCompanyFormOpen}
+        onClose={() => setIsCompanyFormOpen(false)}
+        onSuccess={(newCompany) => {
+          setCompaniesList(prev => [...prev, newCompany]);
+          setFormData(prev => ({ ...prev, id_client_company: newCompany.id_client_company }));
+          setIsCompanyFormOpen(false);
+          setToast({ message: 'Empresa creada exitosamente.', type: 'success' });
+        }}
+      />
+
+      <ContactFormModal
+        isOpen={isContactFormOpen}
+        onClose={() => setIsContactFormOpen(false)}
+        onSuccess={(newContact) => {
+          setContactsList(prev => [...prev, newContact]);
+          setFormData(prev => ({ ...prev, id_contact: newContact.id_contact }));
+          setIsContactFormOpen(false);
+          setToast({ message: 'Contacto creado exitosamente.', type: 'success' });
+        }}
+      />
     </div>,
     document.body
   );

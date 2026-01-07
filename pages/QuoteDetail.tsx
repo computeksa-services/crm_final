@@ -1466,15 +1466,22 @@ const QuoteDetail: React.FC = () => {
         />
       )}
 
-      {/* Quote Edit Modal */}
-      <QuoteEditModal 
-        isOpen={isEditModalOpen}
-        quote={quote}
-        quoteStatuses={quoteStatuses}
-        onClose={() => setIsEditModalOpen(false)}
-        onSave={handleSaveEdit}
-        processing={processing}
-      />
+      {/* Quote Edit Modal - Use creation-style modal for edit */}
+      {quote && (
+        <QuoteEditModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          initialData={quote}
+          onSuccess={(updatedQuote) => {
+            setQuote(updatedQuote);
+            setIsEditModalOpen(false);
+            setToast({ message: 'Cotización actualizada exitosamente.', type: 'success' });
+            fetchData();
+          }}
+        />
+      )}
+
+      {/* Quote Edit Modal - Legacy removed */}
     </div>
   );
 };

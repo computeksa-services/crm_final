@@ -31,7 +31,7 @@ const DealCreate: React.FC = () => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   
   const [expandedSections, setExpandedSections] = useState({ status: false, interest: false, channel: false });
-  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
@@ -244,9 +244,9 @@ const DealCreate: React.FC = () => {
   };
 
   // Helpers para encontrar los labels seleccionados (asegurando comparación de strings)
-  const selectedStatus = useMemo(() => dealStatuses.find(s => String(s.id_status || s.id) === String(deal.id_deal_status)), [dealStatuses, deal.id_deal_status]);
-  const selectedInterest = useMemo(() => interestStatuses.find(i => String((i as any).id_status || (i as any).id_interest || i.id) === String(deal.id_interest)), [interestStatuses, deal.id_interest]);
-  const selectedChannel = useMemo(() => dealChannels.find(c => String(c.id_channel || c.id) === String(deal.id_channel)), [dealChannels, deal.id_channel]);
+  const selectedStatus = useMemo(() => dealStatuses.find((s: any) => String(s.id_status || s.id) === String(deal.id_deal_status)), [dealStatuses, deal.id_deal_status]);
+  const selectedInterest = useMemo(() => interestStatuses.find((i: any) => String(i.id_status || i.id_interest || i.id) === String(deal.id_interest)), [interestStatuses, deal.id_interest]);
+  const selectedChannel = useMemo(() => dealChannels.find((c: any) => String(c.id_channel || c.id) === String(deal.id_channel)), [dealChannels, deal.id_channel]);
   const selectedCompany = useMemo(() => companies.find(c => String(c.id_client_company) === String(deal.id_client_company)), [companies, deal.id_client_company]);
   const selectedContact = useMemo(() => contacts.find(c => String(c.id_contact) === String(deal.id_contact)), [contacts, deal.id_contact]);
 
@@ -410,10 +410,10 @@ const DealCreate: React.FC = () => {
                                       <p className="text-[10px] mt-1">Ve a Ajustes para configurarlos</p>
                                   </div>
                               ) : (
-                                  interestStatuses.map(i => {
-                                      const id = (i as any).id_status || (i as any).id_interest || i.id;
+                                  interestStatuses.map((i: any) => {
+                                      const id = i.id_status || i.id_interest || i.id;
                                       return (
-                                        <button key={id} onClick={() => { setDeal(p => ({...p, id_interest: id})); setExpandedSections(p => ({...p, interest: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: i.color }}>
+                                        <button key={id} onClick={() => { setDeal((p: Partial<Deal>) => ({...p, id_interest: id})); setExpandedSections(p => ({...p, interest: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: i.color }}>
                                             <i className={i.icon}></i> {i.name}
                                         </button>
                                       );
@@ -441,8 +441,8 @@ const DealCreate: React.FC = () => {
                                       <p className="text-[10px] mt-1">Ve a Ajustes para configurarlos</p>
                                   </div>
                               ) : (
-                                  dealChannels.map(c => (
-                                      <button key={c.id_channel || c.id} onClick={() => { setDeal(p => ({...p, id_channel: c.id_channel || c.id})); setExpandedSections(p => ({...p, channel: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: c.color }}>
+                                  dealChannels.map((c: any) => (
+                                      <button key={c.id_channel || c.id} onClick={() => { setDeal((p: Partial<Deal>) => ({...p, id_channel: c.id_channel || c.id})); setExpandedSections(p => ({...p, channel: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: c.color }}>
                                           <i className={c.icon}></i> {c.name}
                                       </button>
                                   ))

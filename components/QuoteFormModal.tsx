@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Quote, ClientCompany, ClientContact } from '../types';
 import Toast from './Toast';
+import { useAuth } from '../contexts/AuthContext';
+import CompanyFormModal from './CompanyFormModal';
+import ContactFormModal from './ContactFormModal';
 
 interface QuoteFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  mode: 'create' | 'edit';
   initialData?: Partial<Quote>;
   onSuccess?: (quote: Quote) => void;
-  preselectedCompanyId?: string;
-  preselectedContactId?: string;
   companies?: ClientCompany[];
   contacts?: ClientContact[];
 }
@@ -18,19 +18,17 @@ interface QuoteFormModalProps {
 const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
   isOpen,
   onClose,
-  mode,
   initialData,
   onSuccess,
-  preselectedCompanyId,
-  preselectedContactId,
   companies = [],
   contacts = [],
 }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState<Partial<Quote>>({
     nombre_cotizacion: '',
     fecha_emision: new Date().toISOString().split('T')[0],
-    id_client_company: preselectedCompanyId || '',
-    id_contact: preselectedContactId || '',
+    id_client_company: '',
+    id_contact: '',
     id_quote_status: '',
     total: '',
     tiempo_entrega: '',
@@ -40,11 +38,19 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
     mensaje: '',
   });
 
+  const [companiesList, setCompaniesList] = useState<ClientCompany[]>(companies || []);
+  const [contactsList, setContactsList] = useState<ClientContact[]>(contacts || []);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [loadingData, setLoadingData] = useState(false);
+  const didLoadDataRef = useRef(false);
+  
+  // Modales inline para crear empresa/contacto
+  const [isCompanyFormOpen, setIsCompanyFormOpen] = useState(false);
+  const [isContactFormOpen, setIsContactFormOpen] = useState(false);
 
   useEffect(() => {
-    if (isOpen && mode === 'edit' && initialData) {
+    if (isOpen && initialData) {
       setFormData({
         id_cotizacion: initialData.id_cotizacion,
         nombre_cotizacion: initialData.nombre_cotizacion || '',
@@ -60,23 +66,47 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
         mensaje: initialData.mensaje || '',
         is_private: initialData.is_private || false,
       });
-    } else if (isOpen && mode === 'create') {
-      setFormData({
-        nombre_cotizacion: '',
-        fecha_emision: new Date().toISOString().split('T')[0],
-        id_client_company: preselectedCompanyId || '',
-        id_contact: preselectedContactId || '',
-        id_quote_status: '',
-        total: '',
-        tiempo_entrega: '',
-        garantia: '',
-        validez_oferta: '',
-        nota: '',
-        mensaje: '',
-        is_private: false,
-      });
     }
-  }, [isOpen, mode, initialData, preselectedCompanyId, preselectedContactId]);
+  }, [isOpen, initialData]);
+
+  const ensureDataLoaded = async () => {
+    if (didLoadDataRef.current || !user?.id_tenant || !user?.id_user) return;
+    if (companiesList.length > 0 && contactsList.length > 0) return;
+
+    setLoadingData(true);
+    didLoadDataRef.current = true;
+
+    try {
+      const [companiesRes, contactsRes] = await Promise.all([
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
+      ]);
+      const parseList = async (res: Response) => {
+        if (!res.ok) return [];
+        const text = await res.text();
+        const data = text ? JSON.parse(text) : [];
+        return Array.isArray(data) ? data.filter((item: any) => item && (item.id_client_company || item.id_contact)) : [];
+      };
+      const [compData, contData] = await Promise.all([
+        parseList(companiesRes),
+        parseList(contactsRes)
+      ]);
+      setCompaniesList(compData);
+      setContactsList(contData);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) {
+      didLoadDataRef.current = false;
+      return;
+    }
+    ensureDataLoaded();
+  }, [isOpen, user?.id_tenant, user?.id_user]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -113,14 +143,33 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
         return;
       }
 
-      // TODO: Conectar al backend
-      console.log('Quote form data to submit:', formData);
-      setToast({ message: mode === 'create' ? 'Cotización creada exitosamente.' : 'Cotización actualizada exitosamente.', type: 'success' });
+      // POST to backend
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          ...formData,
+          id_tenant: user?.id_tenant,
+          id_user: user?.id_user,
+        })
+      });
+
+      if (!response.ok) {
+        setToast({ message: 'Error al actualizar la cotización.', type: 'error' });
+        setSubmitting(false);
+        return;
+      }
+
+      const result = await response.json();
+      const updatedQuote = Array.isArray(result) ? result[0] : result;
       
-      onSuccess?.(formData as Quote);
+      setToast({ message: 'Cotización actualizada exitosamente.', type: 'success' });
+      onSuccess?.(updatedQuote as Quote);
       onClose();
     } catch (error: any) {
-      setToast({ message: 'Error al procesar la cotización.', type: 'error' });
+      setToast({ message: error.message || 'Error al procesar la cotización.', type: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -133,10 +182,10 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${mode === 'create' ? 'bg-emerald-100 text-emerald-600' : 'bg-brand-100 text-brand-600'}`}>
-              <i className={`fa-solid ${mode === 'create' ? 'fa-file-invoice-dollar' : 'fa-pen-to-square'}`}></i>
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-brand-100 text-brand-600">
+              <i className="fa-solid fa-pen-to-square"></i>
             </div>
-            {mode === 'create' ? 'Nueva Cotización' : 'Editar Cotización'}
+            Editar Cotización
           </h2>
           <button
             onClick={onClose}
@@ -157,10 +206,11 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                 required
                 value={formData.id_client_company || ''}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                disabled={loadingData}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-50"
               >
-                <option value="">Selecciona empresa</option>
-                {companies.map(c => (
+                <option value="">{loadingData ? 'Cargando...' : 'Selecciona empresa'}</option>
+                {companiesList.map(c => (
                   <option key={c.id_client_company} value={c.id_client_company}>
                     {c.name_company}
                   </option>
@@ -177,10 +227,11 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
                 required
                 value={formData.id_contact || ''}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                disabled={loadingData}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-50"
               >
-                <option value="">Selecciona contacto</option>
-                {contacts.map(c => (
+                <option value="">{loadingData ? 'Cargando...' : 'Selecciona contacto'}</option>
+                {contactsList.map(c => (
                   <option key={c.id_contact} value={c.id_contact}>
                     {c.first_name} {c.last_name}
                   </option>

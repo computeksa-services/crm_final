@@ -6,6 +6,7 @@ import { Deal, ClientCompany, ClientContact, User, DealInterest } from '../types
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import ShareModal from '../components/ShareModal';
+import DealEditModal from '../components/DealEditModal';
 import {
   useReactTable,
   getCoreRowModel,
@@ -150,6 +151,8 @@ const DealsList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingDeal, setEditingDeal] = useState<Partial<Deal> | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedDealForEdit, setSelectedDealForEdit] = useState<Deal | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareDealId, setShareDealId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -221,9 +224,15 @@ const DealsList: React.FC = () => {
   }, []);
 
   const handleEdit = (deal: Deal) => {
-    setEditingDeal({ ...deal, valor_trato: parseDealValue(deal.valor_trato) });
-    setIsEditMode(true);
-    setIsModalOpen(true);
+    setSelectedDealForEdit(deal);
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditModalSuccess = (updatedDeal: Deal) => {
+    setToast({ message: 'Trato actualizado exitosamente.', type: 'success' });
+    setIsEditModalOpen(false);
+    setSelectedDealForEdit(null);
+    fetchData();
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -647,6 +656,19 @@ const DealsList: React.FC = () => {
 
       {shareModalOpen && shareDealId && (
         <ShareModal entity="deal" id={shareDealId} isOpen={shareModalOpen} onClose={() => { setShareModalOpen(false); setShareDealId(null); }} onShared={() => fetchData()} />
+      )}
+
+      {/* Deal Edit Modal - creation-style modal for editing */}
+      {selectedDealForEdit && (
+        <DealEditModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setSelectedDealForEdit(null);
+          }}
+          initialData={selectedDealForEdit}
+          onSuccess={handleEditModalSuccess}
+        />
       )}
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}

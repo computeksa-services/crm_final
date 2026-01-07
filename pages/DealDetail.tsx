@@ -5,6 +5,7 @@ import { Deal, Quote } from '../types';
 import Toast from '../components/Toast';
 import ShareModal from '../components/ShareModal';
 import DealShareList from '../components/DealShareList';
+import DealEditModal from '../components/DealEditModal';
 
 type Tab = 'quotes' | 'permissions' | 'activity';
 
@@ -19,6 +20,7 @@ const DealDetail: React.FC = () => {
   const [activeTab, setActiveTab] = useState<Tab>('quotes');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [refreshPermissions, setRefreshPermissions] = useState(0);
 
   const fetchData = useCallback(async () => {
@@ -140,12 +142,20 @@ const DealDetail: React.FC = () => {
                 </div>
                 
                 {(deal.access_level === 'EDIT' || user?.rol_user === 'admin') && (
-                    <button
-                        onClick={() => setIsShareOpen(true)}
-                        className="flex items-center text-sm text-slate-500 hover:text-brand-600 bg-slate-50 hover:bg-brand-50 px-3 py-1.5 rounded-lg transition-all border border-slate-200 hover:border-brand-200"
-                    >
-                        <i className="fa-solid fa-share-nodes mr-2"></i> Compartir
-                    </button>
+                    <div className="flex gap-2 flex-col items-end">
+                        <button
+                            onClick={() => setIsEditModalOpen(true)}
+                            className="flex items-center text-sm text-slate-500 hover:text-brand-600 bg-slate-50 hover:bg-brand-50 px-3 py-1.5 rounded-lg transition-all border border-slate-200 hover:border-brand-200"
+                        >
+                            <i className="fa-solid fa-pen mr-2"></i> Editar
+                        </button>
+                        <button
+                            onClick={() => setIsShareOpen(true)}
+                            className="flex items-center text-sm text-slate-500 hover:text-brand-600 bg-slate-50 hover:bg-brand-50 px-3 py-1.5 rounded-lg transition-all border border-slate-200 hover:border-brand-200"
+                        >
+                            <i className="fa-solid fa-share-nodes mr-2"></i> Compartir
+                        </button>
+                    </div>
                 )}
             </div>
         </div>
@@ -309,6 +319,20 @@ const DealDetail: React.FC = () => {
           onShared={() => {
             setToast({ message: 'Trato compartido.', type: 'success' });
             setRefreshPermissions(prev => prev + 1);
+          }}
+        />
+      )}
+
+      {deal && (
+        <DealEditModal
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          initialData={deal}
+          onSuccess={(updatedDeal) => {
+            setDeal(updatedDeal);
+            setIsEditModalOpen(false);
+            setToast({ message: 'Trato actualizado exitosamente.', type: 'success' });
+            fetchData();
           }}
         />
       )}
