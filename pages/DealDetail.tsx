@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Deal, Quote } from '../types';
+import { Deal, Quote, DealStatus } from '../types';
 import Toast from '../components/Toast';
+import ConfirmModal from '../components/ConfirmModal';
 import ShareModal from '../components/ShareModal';
 import DealShareList from '../components/DealShareList';
 import DealEditModal from '../components/DealEditModal';
@@ -16,12 +17,21 @@ const DealDetail: React.FC = () => {
 
   const [deal, setDeal] = useState<Deal | null>(null);
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [dealStatuses, setDealStatuses] = useState<DealStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processing, setProcessing] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('quotes');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [refreshPermissions, setRefreshPermissions] = useState(0);
+  const [confirmState, setConfirmState] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    onCancel: () => {}
+  });
 
   const fetchData = useCallback(async () => {
     if (!id || !user?.id_tenant || !user?.id_user) return;
@@ -30,9 +40,10 @@ const DealDetail: React.FC = () => {
     const userId = user.id_user;
 
     try {
-      const [dealRes, quotesRes] = await Promise.all([
+      const [dealRes, quotesRes, statusesRes] = await Promise.all([
         fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${id}&id_tenant=${tenantId}&id_user=${userId}`),
         fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_tenant=${tenantId}&id_user=${userId}&id_trato=${id}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${tenantId}`),
       ]);
 
       const parseResponse = async (res: Response) => {
@@ -47,6 +58,7 @@ const DealDetail: React.FC = () => {
 
       const rawDealData = await parseResponse(dealRes);
       const allQuotesData = await parseResponse(quotesRes) || [];
+      const statusesData = await parseResponse(statusesRes) || [];
 
       let processedDeal: Deal | null = null;
       if (rawDealData) {
@@ -55,6 +67,7 @@ const DealDetail: React.FC = () => {
       
       setDeal(processedDeal);
       setQuotes(allQuotesData.filter((q: Quote) => q.id_trato === id));
+      setDealStatuses(statusesData);
 
     } catch (e: any) {
       console.error("Error fetching details:", e);
@@ -115,17 +128,65 @@ const DealDetail: React.FC = () => {
                     <button onClick={() => navigate('/app/deals')} className="text-slate-400 hover:text-brand-600 transition-colors p-1">
                         <i className="fa-solid fa-arrow-left text-lg"></i>
                     </button>
-                    <span 
-                        className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border"
-                        style={{ 
-                            backgroundColor: `${deal.estado_color || '#cccccc'}15`, 
-                            color: deal.estado_color || '#333',
-                            borderColor: `${deal.estado_color || '#cccccc'}40`
-                        }}
-                    >
-                        {deal.estado_icon && <i className={`${deal.estado_icon} mr-1.5`}></i>}
-                        {deal.estado_nombre}
-                    </span>
+                    
+                    {/* Status Dropdown */}
+                    {dealStatuses.length > 0 && (() => {
+                      const currentStatus = dealStatuses.find(s => s.id_status === deal.id_deal_status);
+                      return (
+                        <select 
+                          disabled={!(deal.access_level === 'EDIT' || user?.rol_user === 'admin') || processing}
+                          value={deal.id_deal_status || ''}
+                          onChange={(e) => {
+                            const newStatusId = e.target.value;
+                            if (newStatusId === deal.id_deal_status) return;
+                            const newStatus = dealStatuses.find(s => s.id_status === newStatusId);
+                            setConfirmState({
+                              isOpen: true,
+                              title: 'Confirmar Cambio de Estado',
+                              message: `¿Estás seguro de cambiar el estado a "${newStatus?.name}"?`,
+                              onConfirm: async () => {
+                                setConfirmState(prev => ({ ...prev, isOpen: false }));
+                                try {
+                                  setProcessing(true);
+                                  const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      id_trato: deal.id_trato,
+                                      id_deal_status: newStatusId,
+                                      id_tenant: user?.id_tenant,
+                                      id_user: user?.id_user
+                                    })
+                                  });
+                                  if (response.ok) {
+                                    setDeal({ ...deal, id_deal_status: newStatusId, estado_color: newStatus?.color, estado_nombre: newStatus?.name, estado_icon: newStatus?.icon });
+                                    setToast({ message: 'Estado actualizado correctamente', type: 'success' });
+                                    await fetchData();
+                                  } else {
+                                    throw new Error('Error en la respuesta del servidor');
+                                  }
+                                } catch (err) {
+                                  setToast({ message: 'Error al actualizar estado', type: 'error' });
+                                } finally {
+                                  setProcessing(false);
+                                }
+                              },
+                              onCancel: () => setConfirmState(prev => ({ ...prev, isOpen: false }))
+                            });
+                          }}
+                          className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border transition-all outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={{
+                            backgroundColor: `${currentStatus?.color || deal.estado_color || '#cccccc'}15`,
+                            borderColor: `${currentStatus?.color || deal.estado_color || '#cccccc'}40`,
+                            color: currentStatus?.color || deal.estado_color || '#333'
+                          }}
+                        >
+                          {dealStatuses.map(s => (
+                            <option key={s.id_status} value={s.id_status}>{s.name}</option>
+                          ))}
+                        </select>
+                      );
+                    })()}
                 </div>
                 
                 <h1 className="text-3xl font-bold text-slate-800 tracking-tight ml-8">{deal.nombre_trato}</h1>
@@ -293,12 +354,80 @@ const DealDetail: React.FC = () => {
                 )}
 
                 {activeTab === 'activity' && (
-                    <div className="flex flex-col items-center justify-center h-64 text-center">
-                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                            <i className="fa-solid fa-timeline text-2xl text-slate-300"></i>
+                    <div className="space-y-3">
+                        <div className="flex justify-between items-center mb-4">
+                            <h4 className="font-bold text-slate-700 text-sm uppercase tracking-wide">Cotizaciones Enviadas</h4>
+                            <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-full font-bold">
+                                {deal.historial_cotizaciones?.length || 0}
+                            </span>
                         </div>
-                        <h4 className="font-bold text-slate-600">Historial de Actividad</h4>
-                        <p className="text-slate-400 text-sm mt-1 max-w-xs">Próximamente podrás ver aquí todos los cambios, notas y correos relacionados con este trato.</p>
+                        {deal.historial_cotizaciones && deal.historial_cotizaciones.length > 0 ? (
+                            <div className="space-y-3 max-h-[600px] overflow-y-auto">
+                                {deal.historial_cotizaciones.map((log, idx) => (
+                                    <div key={idx} className="bg-white p-4 rounded-xl border border-slate-200 hover:border-brand-200 transition-all">
+                                        <div className="flex items-start gap-4">
+                                            <div className="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
+                                                <i className="fa-solid fa-envelope text-sm"></i>
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-start justify-between gap-2 mb-1">
+                                                    <div>
+                                                        <p className="font-bold text-slate-800 text-sm">
+                                                            {log.nombre_cotizacion || `Cotización #${log.no_cotizacion_fmt}`}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 mt-0.5">
+                                                            Versión {log.version_numero}
+                                                        </p>
+                                                    </div>
+                                                    <span className="text-[10px] uppercase font-bold text-slate-400 whitespace-nowrap">
+                                                        {log.metodo === 'EMAIL' ? '📧 Email' : '✉️ Manual'}
+                                                    </span>
+                                                </div>
+                                                <div className="space-y-1.5 mt-2 text-xs text-slate-600">
+                                                    <div className="flex items-center gap-2">
+                                                        <i className="fa-solid fa-user text-slate-400 w-4"></i>
+                                                        <span className="font-medium">{log.enviado_por}</span>
+                                                    </div>
+                                                    <div className="flex items-start gap-2">
+                                                        <i className="fa-solid fa-envelope text-slate-400 w-4 mt-0.5"></i>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="break-all text-slate-600">{log.enviado_a}</p>
+                                                            {log.copia_a && <p className="text-slate-500 text-[11px] mt-0.5">CC: {log.copia_a}</p>}
+                                                        </div>
+                                                    </div>
+                                                    {log.asunto && (
+                                                        <div className="flex items-start gap-2">
+                                                            <i className="fa-solid fa-heading text-slate-400 w-4 mt-0.5"></i>
+                                                            <p className="text-slate-700 italic max-w-sm truncate">Asunto: {log.asunto}</p>
+                                                        </div>
+                                                    )}
+                                                    {log.politica && (
+                                                        <div className="flex items-center gap-2">
+                                                            <i className={`${log.politica === 'CORPORATE' ? 'fa-solid fa-building' : 'fa-solid fa-user'} text-slate-400 w-4`}></i>
+                                                            <span className="text-slate-600">
+                                                                {log.politica === 'CORPORATE' ? '🏢 Email Corporativo' : '👤 Email Personal'}
+                                                            </span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className="mt-2 pt-2 border-t border-slate-100">
+                                                    <p className="text-xs text-slate-500 flex items-center gap-1">
+                                                        <i className="fa-regular fa-clock"></i>
+                                                        {log.fecha_envio}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-12 bg-white rounded-xl border border-dashed border-slate-200">
+                                <i className="fa-solid fa-inbox text-3xl text-slate-200 mb-3 block"></i>
+                                <p className="text-slate-400 text-sm">No hay cotizaciones enviadas aún.</p>
+                                <p className="text-slate-400 text-xs mt-1">Cuando envíes cotizaciones, aparecerán aquí.</p>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -334,6 +463,16 @@ const DealDetail: React.FC = () => {
             setToast({ message: 'Trato actualizado exitosamente.', type: 'success' });
             fetchData();
           }}
+        />
+      )}
+
+      {confirmState.isOpen && (
+        <ConfirmModal
+          isOpen={confirmState.isOpen}
+          title={confirmState.title}
+          message={confirmState.message}
+          onConfirm={confirmState.onConfirm}
+          onCancel={confirmState.onCancel}
         />
       )}
     </div>

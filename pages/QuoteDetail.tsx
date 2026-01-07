@@ -1032,31 +1032,43 @@ const QuoteDetail: React.FC = () => {
                <select 
                  disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
                  value={quote.id_quote_status || ''}
-                 onChange={async (e) => {
+                 onChange={(e) => {
                    const newStatusId = e.target.value;
                    if (newStatusId === quote.id_quote_status) return;
-                   try {
-                     setProcessing(true);
-                     const response = await fetch('https://service.computeksa.com/webhook/api/quotes/update-status', {
-                       method: 'PUT',
-                       headers: { 'Content-Type': 'application/json' },
-                       body: JSON.stringify({
-                         id_cotizacion: quote.id_cotizacion,
-                         id_quote_status: newStatusId,
-                         id_tenant: user?.id_tenant,
-                         id_user: user?.id_user
-                       })
-                     });
-                     if (response.ok) {
-                       setQuote({ ...quote, id_quote_status: newStatusId });
-                       setToast({ message: 'Estado actualizado correctamente', type: 'success' });
-                       await fetchData();
-                     }
-                   } catch (err) {
-                     setToast({ message: 'Error al actualizar estado', type: 'error' });
-                   } finally {
-                     setProcessing(false);
-                   }
+                   const newStatus = quoteStatuses.find(s => s.id_status === newStatusId);
+                   setConfirmState({
+                     isOpen: true,
+                     title: 'Confirmar Cambio de Estado',
+                     message: `¿Estás seguro de cambiar el estado a "${newStatus?.name}"?`,
+                     onConfirm: async () => {
+                       setConfirmState(prev => ({ ...prev, isOpen: false }));
+                       try {
+                         setProcessing(true);
+                         const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/quotes`, {
+                           method: 'POST',
+                           headers: { 'Content-Type': 'application/json' },
+                           body: JSON.stringify({
+                             id_cotizacion: quote.id_cotizacion,
+                             id_quote_status: newStatusId,
+                             id_tenant: user?.id_tenant,
+                             id_user: user?.id_user
+                           })
+                         });
+                         if (response.ok) {
+                           setQuote({ ...quote, id_quote_status: newStatusId });
+                           setToast({ message: 'Estado actualizado correctamente', type: 'success' });
+                           await fetchData();
+                         } else {
+                           throw new Error('Error en la respuesta del servidor');
+                         }
+                       } catch (err) {
+                         setToast({ message: 'Error al actualizar estado', type: 'error' });
+                       } finally {
+                         setProcessing(false);
+                       }
+                     },
+                     onCancel: () => setConfirmState(prev => ({ ...prev, isOpen: false }))
+                   });
                  }}
                  className="px-4 py-2.5 rounded-xl border font-medium transition-all outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                  style={{
@@ -1350,6 +1362,87 @@ const QuoteDetail: React.FC = () => {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Historial de Envíos */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white">
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-6 bg-emerald-500 rounded-full"></span>
+                <div>
+                  <h3 className="font-bold text-slate-800">Historial de Envíos</h3>
+                  <p className="text-xs text-slate-500">Registro de cotizaciones enviadas por email.</p>
+                </div>
+              </div>
+              <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-full font-bold">
+                {quote.sent_history?.length || 0}
+              </span>
+            </div>
+
+            <div className="px-6 py-4">
+              {(!quote.sent_history || quote.sent_history.length === 0) && (
+                <div className="text-center py-8">
+                  <i className="fa-solid fa-inbox text-3xl text-slate-200 mb-2 block"></i>
+                  <p className="text-sm text-slate-400">No se han enviado cotizaciones aún.</p>
+                </div>
+              )}
+
+              {quote.sent_history && quote.sent_history.length > 0 && (
+                <div className="space-y-3 max-h-[500px] overflow-y-auto">
+                  {quote.sent_history.map((log, idx) => (
+                    <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200 hover:border-emerald-200 transition-all">
+                      <div className="flex items-start gap-4">
+                        <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
+                          <i className="fa-solid fa-envelope text-sm"></i>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div>
+                              <p className="font-bold text-slate-800 text-sm">
+                                Versión {log.version_enviada}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {log.sent_at_fmt}
+                              </p>
+                            </div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 whitespace-nowrap">
+                              {log.method === 'EMAIL' ? '📧 Email' : '✉️ Manual'}
+                            </span>
+                          </div>
+                          <div className="space-y-1.5 text-xs text-slate-600">
+                            <div className="flex items-center gap-2">
+                              <i className="fa-solid fa-user text-slate-400 w-4"></i>
+                              <span className="font-medium">{log.sent_by_name}</span>
+                            </div>
+                            <div className="flex items-start gap-2">
+                              <i className="fa-solid fa-envelope text-slate-400 w-4 mt-0.5"></i>
+                              <div className="flex-1 min-w-0">
+                                <p className="break-all text-slate-600">{log.sent_to}</p>
+                                {log.sent_cc && <p className="text-slate-500 text-[11px] mt-0.5">CC: {log.sent_cc}</p>}
+                              </div>
+                            </div>
+                            {log.subject && (
+                              <div className="flex items-start gap-2">
+                                <i className="fa-solid fa-heading text-slate-400 w-4 mt-0.5"></i>
+                                <p className="text-slate-700 italic truncate">Asunto: {log.subject}</p>
+                              </div>
+                            )}
+                            {log.email_policy && (
+                              <div className="flex items-center gap-2">
+                                <i className={`${log.email_policy === 'CORPORATE' ? 'fa-solid fa-building' : 'fa-solid fa-user'} text-slate-400 w-4`}></i>
+                                <span className="text-slate-600">
+                                  {log.email_policy === 'CORPORATE' ? '🏢 Email Corporativo' : '👤 Email Personal'}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getImageUrl } from '../utils/imageUtils';
@@ -70,12 +70,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Estado para modal de confirmación de logout
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
-  const [tenantName, setTenantName] = useState<string | null>(null);
+  const [tenantName, setTenantName] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('tenant-name');
+    } catch {
+      return null;
+    }
+  });
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   
   const { user, logout } = useAuth(); 
   const location = useLocation();
   const navigate = useNavigate();
   const userRole = user?.rol_user || 'usuario';
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Guardar estado del sidebar en localStorage cuando cambia
   useEffect(() => {
@@ -97,21 +105,32 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         if (response.ok) {
           const data = await response.json();
           const name = Array.isArray(data) ? data[0]?.name_tenant : data.name_tenant;
-          if (isMounted) setTenantName(name || "Mi Organización");
+          if (isMounted) {
+            setTenantName(name || null);
+            try {
+              if (name) localStorage.setItem('tenant-name', name);
+            } catch {
+              /* ignore */
+            }
+          }
         }
       } catch (error) {
         console.error("Error fetching tenant", error);
       }
     };
-    // Evitar doble fetch en StrictMode si el tenant no cambió
-    if (didFetchTenantRef.current !== user.id_tenant) {
+    // Evitar doble fetch en StrictMode y dentro de una misma sesión
+    const sessionKey = `tenant:fetched:${user.id_tenant}`;
+    const shouldFetch = didFetchTenantRef.current !== user.id_tenant && !sessionStorage.getItem(sessionKey);
+    if (shouldFetch) {
       didFetchTenantRef.current = user.id_tenant;
+      sessionStorage.setItem(sessionKey, '1');
       fetchTenantName();
     }
     return () => { isMounted = false; };
   }, [user?.id_tenant]);
 
   const handleLogout = () => {
+    setUserMenuOpen(false);
     setShowLogoutConfirm(true);
   };
 
@@ -119,6 +138,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     logout();
     navigate('/login');
   };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+
+    if (userMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [userMenuOpen]);
 
   // Función auxiliar para renderizar links
   const NavLinkItem = ({ item, isCollapsed }: { item: any, isCollapsed: boolean }) => {
@@ -362,33 +397,61 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
              <div className="h-6 w-px bg-slate-200"></div>
 
-             {/* Tenant Info */}
+             {/* Tenant Info visible junto al avatar */}
              {tenantName && (
-                <div className="hidden md:flex flex-col items-end">
-                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center">
-                        {tenantName}
-                        <i className="fa-solid fa-circle-check text-brand-500 ml-1.5 text-[10px]"></i>
-                    </span>
-                    <span className="text-[10px] text-slate-400">Plan Enterprise</span>
-                </div>
+               <div className="flex flex-col items-end">
+                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center">
+                      {tenantName}
+                      <i className="fa-solid fa-circle-check text-brand-500 ml-1.5 text-[10px]"></i>
+                  </span>
+                  <span className="text-[10px] text-slate-400">Plan Enterprise</span>
+               </div>
              )}
              
-             {/* Profile Link (Avatar mobile) */}
-             <Link to="/app/profile" className="flex items-center gap-2 hover:bg-slate-50 p-1.5 pr-3 rounded-full border border-transparent hover:border-slate-200 transition-all">
-                <img 
-                    src={getImageUrl(user?.avatar_url) || "https://ui-avatars.com/api/?name=User&background=random"} 
-                    alt="User" 
-                    className="w-8 h-8 rounded-full shadow-sm"
-                    referrerPolicy="no-referrer"
-                    onLoad={() => console.log('✅ Avatar header cargado:', getImageUrl(user?.avatar_url))}
-                    onError={(e) => {
-                      console.error('❌ Error cargando avatar header');
-                      console.error('   URL original:', user?.avatar_url);
-                      console.error('   URL procesada:', getImageUrl(user?.avatar_url));
-                    }}
-                />
-                <i className="fa-solid fa-chevron-down text-[10px] text-slate-400 hidden sm:block"></i>
-             </Link>
+             {/* User dropdown */}
+             <div className="relative" ref={userMenuRef}>
+               <button
+                 onClick={() => setUserMenuOpen((open) => !open)}
+                 className="flex items-center gap-2 hover:bg-slate-50 p-1.5 pr-3 rounded-full border border-transparent hover:border-slate-200 transition-all"
+               >
+                  <img 
+                      src={getImageUrl(user?.avatar_url) || "https://ui-avatars.com/api/?name=User&background=random"} 
+                      alt="User" 
+                      className="w-8 h-8 rounded-full shadow-sm"
+                      referrerPolicy="no-referrer"
+                      onLoad={() => console.log('✅ Avatar header cargado:', getImageUrl(user?.avatar_url))}
+                      onError={(e) => {
+                        console.error('❌ Error cargando avatar header');
+                        console.error('   URL original:', user?.avatar_url);
+                        console.error('   URL procesada:', getImageUrl(user?.avatar_url));
+                      }}
+                  />
+                  <div className="hidden sm:flex flex-col items-start leading-tight">
+                    <span className="text-xs font-semibold text-slate-800 truncate max-w-[120px]">{user?.name_user || 'Usuario'}</span>
+                  </div>
+                  <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}></i>
+               </button>
+
+               {userMenuOpen && (
+                 <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-30 py-2">
+                   <Link
+                     to="/app/profile"
+                     onClick={() => setUserMenuOpen(false)}
+                     className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                   >
+                     <i className="fa-regular fa-user"></i>
+                     Ver perfil
+                   </Link>
+                   <button
+                     onClick={handleLogout}
+                     className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                   >
+                     <i className="fa-solid fa-arrow-right-from-bracket"></i>
+                     Cerrar sesión
+                   </button>
+                 </div>
+               )}
+             </div>
           </div>
         </header>
 

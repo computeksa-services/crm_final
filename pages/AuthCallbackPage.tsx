@@ -59,7 +59,21 @@ const AuthCallbackPage: React.FC = () => {
         console.log('🔑 Token a guardar:', token);
         console.log('👤 Usuario a guardar:', userData);
 
-        // 2. Llamamos a login con AMBOS argumentos
+        // 2. Persistir el nombre del tenant en localStorage (para mostrarlo de inmediato)
+        try {
+          if (userData?.id_tenant) {
+            const tRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/detail?id_tenant=${userData.id_tenant}`);
+            if (tRes.ok) {
+              const tData = await tRes.json();
+              const tName = Array.isArray(tData) ? tData[0]?.name_tenant : tData?.name_tenant;
+              if (tName) localStorage.setItem('tenant-name', tName);
+            }
+          }
+        } catch (e) {
+          console.warn('No se pudo obtener name_tenant en login:', e);
+        }
+
+        // 3. Llamamos a login con AMBOS argumentos
         // login(token: string, user: User)
         login(token, userData);
 

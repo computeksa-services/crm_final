@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useGoogleLogin } from '@react-oauth/google';
 import { microsoftClientId, oauthRedirectUri } from '../services/oauthConfig';
-import { User } from '../types';
+import { User, Tenant } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import { getImageUrl } from '../utils/imageUtils';
@@ -44,9 +44,6 @@ const UserProfile: React.FC = () => {
         const t: any = Array.isArray(data) ? data[0] : data;
         setCorporativeEmail(t?.corporate_email_address || '');
         setCorporativeSetup(t?.email_policy === 'CORPORATE' && Boolean(t?.corporate_email_address));
-      } else {
-        setCorporativeEmail('');
-        setCorporativeSetup(false);
       }
     } catch (e) {
       console.error('Error loading tenant detail', e);
@@ -152,7 +149,8 @@ const UserProfile: React.FC = () => {
       setCorporativeEmail(data?.corporate_email_address || '');
       setCorporativeSetup(true);
       setToast({ message: 'Email corporativo configurado correctamente.', type: 'success' });
-      await loadTenant();
+      // Refrescar datos del tenant para asegurar consistencia
+      loadTenant();
     } catch (e) {
       console.error(e);
       setToast({ message: 'Error al guardar la configuración.', type: 'error' });
@@ -173,7 +171,7 @@ const UserProfile: React.FC = () => {
       setCorporativeEmail('');
       setCorporativeSetup(false);
       setToast({ message: 'Email corporativo eliminado correctamente.', type: 'success' });
-      await loadTenant();
+      loadTenant();
     } catch (e) {
       console.error(e);
       setToast({ message: 'Error al eliminar la configuración.', type: 'error' });
@@ -201,9 +199,9 @@ const UserProfile: React.FC = () => {
         isOpen={confirmDelete}
         onClose={() => setConfirmDelete(false)}
         onConfirm={deleteCorporativeEmail}
-        title="Eliminar correo corporativo"
-        message="¿Estás seguro de que deseas eliminar la configuración del correo corporativo? Si lo borras, los correos se enviarán desde las cuentas personales."
-        isDestructive
+        title="Eliminar Email Corporativo"
+        message="¿Estás seguro de que deseas eliminar la configuración del email corporativo? Los correos seguirán siendo enviados por usuarios individuales."
+        isDestructive={true}
       />
 
       {/* Header */}

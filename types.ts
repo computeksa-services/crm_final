@@ -15,6 +15,9 @@ export interface Tenant {
   address: string;
   website?: string;
   logo_url?: string;
+  // Email policy config
+  email_policy?: 'INDIVIDUAL' | 'CORPORATE';
+  corporate_email_address?: string;
 }
 
 // 2. USER (El empleado del Tenant)
@@ -194,6 +197,21 @@ export interface Deal {
   channel_nombre?: string;
   channel_color?: string;
   channel_icon?: string;
+  
+  // Historial de cotizaciones enviadas
+  historial_cotizaciones?: Array<{
+    id_sent?: string;
+    fecha_envio?: string; // DD/MM/YYYY HH24:MI
+    enviado_por?: string; // Nombre del usuario
+    enviado_a?: string; // Email destinatario
+    copia_a?: string | null; // CC (puede ser null)
+    asunto?: string | null; // Asunto (puede ser null)
+    metodo?: string; // 'EMAIL', etc
+    politica?: string | null; // 'CORPORATE' | 'INDIVIDUAL' (puede ser null)
+    version_numero?: number;
+    nombre_cotizacion?: string;
+    no_cotizacion_fmt?: string; // Formato "0002"
+  }>;
 }
 
 export interface DealPermission {
@@ -277,6 +295,19 @@ export interface Quote {
     value: string;
     owner_id: string;
   };
+  
+  // Historial de envíos de cotización
+  sent_history?: Array<{
+    id_sent?: string;
+    sent_at_fmt?: string; // DD/MM/YYYY HH:MI
+    sent_by_name?: string; // Nombre del usuario que envió
+    sent_to?: string; // Email destinatario
+    sent_cc?: string | null; // CC (puede ser null)
+    subject?: string | null; // Asunto (puede ser null)
+    method?: string; // 'EMAIL', etc
+    email_policy?: string | null; // 'CORPORATE' | 'INDIVIDUAL' (puede ser null)
+    version_enviada?: number; // Versión que se envió
+  }>;
 }
 
 // 9. FINANCIAL TRANSACTIONS (Transacciones financieras)
