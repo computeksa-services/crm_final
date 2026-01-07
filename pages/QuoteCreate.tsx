@@ -1,8 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Quote, ClientCompany, ClientContact, QuoteStatus, Deal, UserDecision, CustomStatus, DealChannel } from '../types';
 import Toast from '../components/Toast';
+import CompanyFormModal from '../components/CompanyFormModal';
+import ContactFormModal from '../components/ContactFormModal';
 
 const QuoteCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -29,6 +31,10 @@ const QuoteCreate: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  
+  // Modal states for inline creation
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
 
   // --- CARGA INICIAL ---
   const fetchData = useCallback(async () => {
@@ -160,6 +166,17 @@ const QuoteCreate: React.FC = () => {
     }
   }, [quote?.id_client_company, contacts]);
 
+  // Computed values para mostrar detalles de selección
+  const selectedCompany = useMemo(() => 
+    companies.find(c => String(c.id_client_company) === String(quote.id_client_company)),
+    [companies, quote.id_client_company]
+  );
+
+  const selectedContact = useMemo(() => 
+    contacts.find(c => String(c.id_contact) === String(quote.id_contact)),
+    [contacts, quote.id_contact]
+  );
+
   // --- HANDLERS ---
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -185,6 +202,10 @@ const QuoteCreate: React.FC = () => {
         id_client_company: selectedDeal?.id_client_company || '', 
         id_contact: selectedDeal?.id_contact || '' 
       }));
+    } else if (name === 'id_client_company' && value === '__ADD_NEW_COMPANY__') {
+      setIsCompanyModalOpen(true);
+    } else if (name === 'id_contact' && value === '__ADD_NEW_CONTACT__') {
+      setIsContactModalOpen(true);
     } else {
       setQuote(prev => ({ ...prev, [name]: value }));
       if (['id_client_company', 'id_contact'].includes(name)) {
@@ -198,6 +219,26 @@ const QuoteCreate: React.FC = () => {
     setNewDeal(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleCompanyCreated = (newCompany: ClientCompany) => {
+    setCompanies(prev => [...prev, newCompany]);
+    setQuote(prev => ({ ...prev, id_client_company: newCompany.id_client_company, id_contact: '' }));
+    setNewDeal(prev => ({ ...prev, id_client_company: newCompany.id_client_company, id_contact: '' }));
+    setFilteredContacts(contacts.filter(c => String(c.id_client_company) === String(newCompany.id_client_company)));
+    setIsCompanyModalOpen(false);
+    setToast({ message: 'Empresa creada exitosamente.', type: 'success' });
+  };
+
+  const handleContactCreated = (newContact: ClientContact) => {
+    setContacts(prev => [...prev, newContact]);
+    if (newContact.id_client_company && String(newContact.id_client_company) === String(quote.id_client_company)) {
+      setFilteredContacts(prev => [...prev, newContact]);
+    }
+    setQuote(prev => ({ ...prev, id_contact: newContact.id_contact }));
+    setNewDeal(prev => ({ ...prev, id_contact: newContact.id_contact }));
+    setIsContactModalOpen(false);
+    setToast({ message: 'Contacto creado exitosamente.', type: 'success' });
+  };
+
   const handleSave = async () => {
     // Validaciones
     if (!quote.nombre_cotizacion) {
@@ -209,11 +250,7 @@ const QuoteCreate: React.FC = () => {
       return;
     }
 
-    if (!createNewDeal && !quote.id_trato) {
-      setToast({ message: 'Seleccione un trato existente o cree uno nuevo.', type: 'error' });
-      return;
-    }
-
+    // El trato es OPCIONAL - solo validar si se está creando uno nuevo
     if (createNewDeal) {
       if (!newDeal.nombre_trato || !newDeal.id_interest || !newDeal.id_channel) {
         setToast({ message: 'Para el nuevo trato: Nombre, Interés y Canal son obligatorios.', type: 'error' });
@@ -394,12 +431,33 @@ const QuoteCreate: React.FC = () => {
                                 className={`w-full px-3 py-2.5 border rounded-lg text-sm outline-none appearance-none ${isLocked ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-white border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
                             >
                                 <option value="">-- Seleccionar Empresa --</option>
+                                <option value="__ADD_NEW_COMPANY__" className="font-bold text-emerald-600">+ Nueva Empresa</option>
                                 {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
                             </select>
                             <div className="absolute right-3 top-3 text-slate-400 pointer-events-none">
                                 {isLocked ? <i className="fa-solid fa-lock text-xs"></i> : <i className="fa-solid fa-chevron-down text-xs"></i>}
                             </div>
                         </div>
+                        {/* Detalles de empresa */}
+                        {selectedCompany && (
+                            <div className="mt-3 bg-indigo-50 border border-indigo-100 rounded-lg p-3 text-xs space-y-2">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                        <p className="font-bold text-indigo-900 text-sm mb-1">{selectedCompany.name_company}</p>
+                                        <p className="text-indigo-600 font-mono text-xs">{selectedCompany.id_number}</p>
+                                    </div>
+                                    <div className="bg-indigo-200 text-indigo-800 px-2 py-1 rounded text-[10px] font-bold">
+                                        {selectedCompany.label_name || selectedCompany.id_label}
+                                    </div>
+                                </div>
+                                <div className="space-y-1 text-indigo-700">
+                                    <p className="flex items-center gap-2"><i className="fa-solid fa-location-dot opacity-50 w-3"></i> {selectedCompany.city}, {selectedCompany.country_name || selectedCompany.id_country}</p>
+                                    {selectedCompany.phone_company && <p className="flex items-center gap-2"><i className="fa-solid fa-phone opacity-50 w-3"></i> {selectedCompany.phone_company}</p>}
+                                    {selectedCompany.email_company && <p className="flex items-center gap-2"><i className="fa-solid fa-envelope opacity-50 w-3"></i> {selectedCompany.email_company}</p>}
+                                    {selectedCompany.website && <p className="flex items-center gap-2"><i className="fa-solid fa-globe opacity-50 w-3"></i> {selectedCompany.website}</p>}
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1.5">Contacto <span className="text-red-500">*</span></label>
@@ -412,12 +470,31 @@ const QuoteCreate: React.FC = () => {
                                 className={`w-full px-3 py-2.5 border rounded-lg text-sm outline-none appearance-none ${isLocked || !quote.id_client_company ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-white border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
                             >
                                 <option value="">-- Seleccionar Contacto --</option>
+                                <option value="__ADD_NEW_CONTACT__" className="font-bold text-emerald-600">+ Nuevo Contacto</option>
                                 {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{c.first_name} {c.last_name}</option>)}
                             </select>
                             <div className="absolute right-3 top-3 text-slate-400 pointer-events-none">
                                 {isLocked ? <i className="fa-solid fa-lock text-xs"></i> : <i className="fa-solid fa-chevron-down text-xs"></i>}
                             </div>
                         </div>
+                        {/* Detalles de contacto */}
+                        {selectedContact && (
+                            <div className="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                                        {selectedContact.first_name?.charAt(0)}{selectedContact.last_name?.charAt(0)}
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="font-bold text-slate-800">{selectedContact.first_name} {selectedContact.last_name}</p>
+                                        {selectedContact.position && <p className="text-slate-500 text-[10px]">{selectedContact.position}</p>}
+                                    </div>
+                                </div>
+                                <div className="space-y-1 text-slate-600">
+                                    <p className="flex items-center gap-2"><i className="fa-solid fa-envelope opacity-50 w-3"></i> {selectedContact.email}</p>
+                                    {selectedContact.phone && <p className="flex items-center gap-2"><i className="fa-solid fa-phone opacity-50 w-3"></i> {selectedContact.phone}</p>}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -635,6 +712,23 @@ const QuoteCreate: React.FC = () => {
 
         </div>
       </div>
+
+      {/* Modals para creación inline */}
+      <CompanyFormModal
+        isOpen={isCompanyModalOpen}
+        onClose={() => setIsCompanyModalOpen(false)}
+        mode="create"
+        onSuccess={handleCompanyCreated}
+      />
+      
+      <ContactFormModal
+        isOpen={isContactModalOpen}
+        onClose={() => setIsContactModalOpen(false)}
+        mode="create"
+        initialData={quote.id_client_company ? { id_client_company: quote.id_client_company } : undefined}
+        onSuccess={handleContactCreated}
+        companies={companies}
+      />
     </div>
   );
 };

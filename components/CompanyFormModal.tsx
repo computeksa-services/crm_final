@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ClientCompany } from '../types';
 import Toast from './Toast';
+import { useAuth } from '../contexts/AuthContext';
 
 interface CompanyFormModalProps {
   isOpen: boolean;
@@ -45,6 +46,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
   initialData,
   onSuccess,
 }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState<Partial<ClientCompany>>({
     id_type: 'RUC',
     id_number: '',
@@ -62,8 +64,11 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // Inicializar formulario SOLO cuando el modal se abre
   useEffect(() => {
-    if (isOpen && mode === 'edit' && initialData) {
+    if (!isOpen) return;
+
+    if (mode === 'edit' && initialData) {
       setFormData({
         id_client_company: initialData.id_client_company,
         id_type: initialData.id_type || 'RUC',
@@ -72,13 +77,13 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         id_country: initialData.id_country || 'EC',
         city: initialData.city || '',
         address: initialData.address || '',
-        id_company_type: initialData.company_type_name || '',
-        id_label: initialData.label_name || '',
+        id_company_type: initialData.id_company_type || initialData.company_type_name || '',
+        id_label: initialData.id_label || initialData.label_name || '',
         email_company: initialData.email_company || '',
         phone_company: initialData.phone_company || '',
         website: initialData.website || '',
       });
-    } else if (isOpen && mode === 'create') {
+    } else if (mode === 'create') {
       setFormData({
         id_type: 'RUC',
         id_number: '',
@@ -93,7 +98,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         website: '',
       });
     }
-  }, [isOpen, mode, initialData]);
+  }, [isOpen]); // SOLO depende de isOpen
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -144,11 +149,34 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         return;
       }
 
-      // TODO: Conectar al backend
-      console.log('Company form data to submit:', formData);
+      if (!user?.id_tenant || !user?.id_user) {
+        setToast({ message: 'Usuario no autenticado.', type: 'error' });
+        setSubmitting(false);
+        return;
+      }
+
+      // Conectar al backend
+      const endpoint = mode === 'edit' ? 'update' : '';
+      const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/${endpoint}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          id_tenant: user.id_tenant,
+          id_user: user.id_user,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Error al guardar empresa');
+
+      const result = await response.json();
+      // El backend devuelve un array, extraer el primer elemento
+      const savedCompany = Array.isArray(result) ? result[0] : result;
       setToast({ message: mode === 'create' ? 'Empresa creada exitosamente.' : 'Empresa actualizada exitosamente.', type: 'success' });
       
-      onSuccess?.(formData as ClientCompany);
+      onSuccess?.(savedCompany);
       onClose();
     } catch (error: any) {
       setToast({ message: 'Error al procesar la empresa.', type: 'error' });

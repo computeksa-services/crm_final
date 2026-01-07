@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ClientContact, ClientCompany } from '../types';
 import Toast from './Toast';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ContactFormModalProps {
   isOpen: boolean;
@@ -22,6 +23,7 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
   preselectedCompanyId,
   companies = [],
 }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState<Partial<ClientContact>>({
     first_name: '',
     last_name: '',
@@ -34,8 +36,11 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // Inicializar formulario SOLO cuando el modal se abre, no en cada cambio
   useEffect(() => {
-    if (isOpen && mode === 'edit' && initialData) {
+    if (!isOpen) return; // Solo ejecutar cuando el modal está abierto
+
+    if (mode === 'edit' && initialData) {
       setFormData({
         id_contact: initialData.id_contact,
         first_name: initialData.first_name || '',
@@ -43,19 +48,20 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
         email: initialData.email || '',
         phone: initialData.phone || '',
         position: initialData.position || '',
-        id_client_company: initialData.id_client_company || preselectedCompanyId || '',
+        id_client_company: initialData.id_client_company || '',
       });
-    } else if (isOpen && mode === 'create') {
+    } else if (mode === 'create') {
       setFormData({
         first_name: '',
         last_name: '',
         email: '',
         phone: '',
         position: '',
-        id_client_company: preselectedCompanyId || '',
+        // Pre-llenar empresa desde initialData o preselectedCompanyId
+        id_client_company: initialData?.id_client_company || preselectedCompanyId || '',
       });
     }
-  }, [isOpen, mode, initialData, preselectedCompanyId]);
+  }, [isOpen]); // SOLO depende de isOpen, no de initialData ni preselectedCompanyId
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -82,14 +88,37 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
         return;
       }
 
-      // TODO: Conectar al backend
-      console.log('Contact form data to submit:', formData);
+      if (!user?.id_tenant || !user?.id_user) {
+        setToast({ message: 'Usuario no autenticado.', type: 'error' });
+        setSubmitting(false);
+        return;
+      }
+
+      // Conectar al backend
+      const endpoint = mode === 'edit' ? 'update' : '';
+      const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/${endpoint}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          id_tenant: user.id_tenant,
+          id_user: user.id_user,
+        }),
+      });
+
+      if (!response.ok) throw new Error('Error al guardar contacto');
+
+      const result = await response.json();
+      // El backend devuelve un array, extraer el primer elemento
+      const savedContact = Array.isArray(result) ? result[0] : result;
       setToast({ message: mode === 'create' ? 'Contacto creado exitosamente.' : 'Contacto actualizado exitosamente.', type: 'success' });
       
-      onSuccess?.(formData as ClientContact);
+      onSuccess?.(savedContact);
       onClose();
     } catch (error: any) {
-      setToast({ message: 'Error al procesar el contacto.', type: 'error' });
+      setToast({ message: error.message || 'Error al procesar el contacto.', type: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -125,7 +154,8 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
               required
               value={formData.id_client_company || ''}
               onChange={handleInputChange}
-              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+              disabled={!!(preselectedCompanyId || initialData?.id_client_company)}
+              className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="">Selecciona empresa</option>
               {companies.map(c => (

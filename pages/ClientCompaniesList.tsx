@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ClientCompany } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
+import CompanyFormModal from '../components/CompanyFormModal';
 import {
   useReactTable,
   getCoreRowModel,
@@ -185,21 +186,7 @@ const ClientCompaniesList: React.FC = () => {
 
   // --- HANDLERS DE ACCIONES ---
   const handleAddNew = () => {
-    setEditingCompany({
-      id_type: 'RUC',
-      id_number: '',
-      name_company: '',
-      address: '',
-      city: '',
-      email_company: '',
-      phone_company: '',
-      website: '',
-      id_country: 'EC', // Ecuador por defecto
-      id_company_type: '',
-      id_label: '',
-      id_tenant: user?.id_tenant,
-      created_by: user?.id_user
-    });
+    setEditingCompany(undefined); // Modal handles defaults
     setIsEditMode(false);
     setIsModalOpen(true);
   };
@@ -209,6 +196,12 @@ const ClientCompaniesList: React.FC = () => {
     setEditingCompany(company);
     setIsEditMode(true);
     setIsModalOpen(true);
+  };
+
+  const handleModalSuccess = () => {
+    setIsModalOpen(false);
+    fetchData(); // Refresh list
+    setToast({ message: isEditMode ? 'Empresa actualizada.' : 'Empresa creada.', type: 'success' });
   };
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
@@ -241,7 +234,7 @@ const ClientCompaniesList: React.FC = () => {
     });
   };
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
+  /* const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     try {
@@ -271,12 +264,12 @@ const ClientCompaniesList: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  };
+  }; */
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  /* const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setEditingCompany(prev => (prev ? { ...prev, [name]: value } : null));
-  };
+  }; */
 
   // --- LÓGICA DE FILTROS FACETADOS ---
   const getFacetedValues = (columnId: string) => {
@@ -764,193 +757,13 @@ const ClientCompaniesList: React.FC = () => {
       )}
 
       {/* Modal de Creación / Edición */}
-      {isModalOpen && editingCompany && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isEditMode ? 'bg-brand-100 text-brand-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                   <i className={`fa-solid ${isEditMode ? 'fa-building-circle-check' : 'fa-building-circle-arrow-right'}`}></i>
-                </div>
-                {isEditMode ? 'Editar Empresa' : 'Nueva Empresa'}
-              </h2>
-              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-400">
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-            
-            <form onSubmit={handleFormSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-3 gap-3">
-                  <div className="col-span-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Tipo ID <span className="text-red-500">*</span></label>
-                    <select 
-                        name="id_type" 
-                        required 
-                        value={editingCompany.id_type || 'RUC'} 
-                        onChange={handleInputChange} 
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none"
-                    >
-                        <option value="RUC">RUC</option>
-                        <option value="CI">Cédula</option>
-                        <option value="PASAPORTE">Pasaporte</option>
-                        <option value="IDENTIFICACION DEL EXTERIOR">ID Exterior</option>
-                    </select>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Número <span className="text-red-500">*</span></label>
-                    <input 
-                        name="id_number" 
-                        required 
-                        value={editingCompany.id_number || ''} 
-                        onChange={handleInputChange} 
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-brand-500" 
-                        placeholder="17900..." 
-                    />
-                  </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razón Social <span className="text-red-500">*</span></label>
-                <input
-                  name="name_company"
-                  required
-                  value={editingCompany.name_company || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
-                  placeholder="Ej. Corporación Favorita"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">País <span className="text-red-500">*</span></label>
-                  <select
-                    name="id_country"
-                    required
-                    value={editingCompany.id_country || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
-                  >
-                    <option value="">Seleccionar país</option>
-                    {COUNTRIES.map(country => (
-                      <option key={country.id} value={country.id}>{country.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ciudad <span className="text-red-500">*</span></label>
-                  <input
-                    name="city"
-                    required
-                    value={editingCompany.city || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                    placeholder="Quito"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dirección</label>
-                <input
-                  name="address"
-                  value={editingCompany.address || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                  placeholder="Av. Principal 123 y Secundaria"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Empresa <span className="text-red-500">*</span></label>
-                  <select
-                    name="id_company_type"
-                    required
-                    value={editingCompany.id_company_type || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
-                  >
-                    <option value="">Seleccionar tipo</option>
-                    {COMPANY_TYPES.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Etiqueta <span className="text-red-500">*</span></label>
-                  <select
-                    name="id_label"
-                    required
-                    value={editingCompany.id_label || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
-                  >
-                    <option value="">Seleccionar etiqueta</option>
-                    {COMPANY_LABELS.map(label => (
-                      <option key={label} value={label}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Corp.</label>
-                  <input
-                    type="email"
-                    name="email_company"
-                    value={editingCompany.email_company || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
-                    placeholder="info@empresa.com"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Website</label>
-                  <input
-                    type="text"
-                    name="website"
-                    value={editingCompany.website || ''}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
-                    placeholder="empresa.com"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Teléfono</label>
-                <input
-                  name="phone_company"
-                  value={editingCompany.phone_company || ''}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
-                  placeholder="022..."
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-6 py-2.5 bg-brand-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-200 hover:bg-brand-700 disabled:opacity-50 transition-all flex items-center gap-2"
-                >
-                  {submitting ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
-                  {isEditMode ? 'Actualizar Empresa' : 'Guardar Empresa'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <CompanyFormModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        mode={isEditMode ? 'edit' : 'create'}
+        initialData={editingCompany || undefined}
+        onSuccess={handleModalSuccess}
+      />
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />
