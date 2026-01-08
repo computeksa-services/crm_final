@@ -209,7 +209,7 @@ const ClientContactsList: React.FC = () => {
                 <i className={`fa-solid ${row.getIsExpanded() ? 'fa-minus' : 'fa-plus'} text-[10px]`}></i>
               </button>
               <span className="font-bold text-slate-700 uppercase tracking-tight">
-                {getCompanyName(getValue() as string)}
+                {((row.subRows?.[0]?.original as any)?.name_company) || 'SIN EMPRESA'}
               </span>
               <span className="ml-1 bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded text-[10px] font-bold">
                 {row.subRows.length}

@@ -145,13 +145,20 @@ const ClientCompaniesList: React.FC = () => {
     setGrouping(newGrouping);
     
     if (newGrouping.length > 0) {
+      // Auto-expand all groups when grouping is applied
       const groupByColumn = newGrouping[0];
       const allExpanded: ExpandedState = {};
       
+      // Mark all unique group values as expanded
+      const seenGroups = new Set<string>();
       companies.forEach((company) => {
         const groupValue = (company as any)[groupByColumn];
         if (groupValue !== null && groupValue !== undefined) {
-          allExpanded[String(groupValue)] = true;
+          const groupKey = String(groupValue);
+          if (!seenGroups.has(groupKey)) {
+            allExpanded[groupKey] = true;
+            seenGroups.add(groupKey);
+          }
         }
       });
       
@@ -226,43 +233,6 @@ const ClientCompaniesList: React.FC = () => {
       },
     });
   };
-
-  /* const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const endpoint = isEditMode ? 'update' : '';
-      const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/${endpoint}`;
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...editingCompany,
-          id_tenant: user?.id_tenant,
-          id_user: user?.id_user
-        }),
-      });
-
-      if (!response.ok) throw new Error();
-
-      setToast({ 
-        message: isEditMode ? 'Empresa actualizada con éxito.' : 'Empresa creada con éxito.', 
-        type: 'success' 
-      });
-      setIsModalOpen(false);
-      fetchData();
-    } catch (error) {
-      setToast({ message: 'Error al procesar la solicitud.', type: 'error' });
-    } finally {
-      setSubmitting(false);
-    }
-  }; */
-
-  /* const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setEditingCompany(prev => (prev ? { ...prev, [name]: value } : null));
-  }; */
 
   // --- LÓGICA DE FILTROS FACETADOS ---
   const getFacetedValues = (columnId: string) => {
@@ -499,7 +469,7 @@ const ClientCompaniesList: React.FC = () => {
         );
       },
     }
-  ], []);
+  ], [grouping]);
 
   const table = useReactTable({
     data: companies,
@@ -523,7 +493,7 @@ const ClientCompaniesList: React.FC = () => {
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans">
       
       {/* Toolbar superior */}
-      <div className="bg-slate-50 border-b border-slate-200 p-2 flex items-center justify-between shrink-0">{/* shrink-0 para evitar que se comprima */}
+      <div className="bg-slate-50 border-b border-slate-200 p-2 flex items-center justify-between shrink-0">
         {!loading && companies.length === 0 ? (
           <div className="flex-1"></div>
         ) : (
@@ -710,46 +680,14 @@ const ClientCompaniesList: React.FC = () => {
               </tr>
             ) : table.getRowModel().rows.map(row => {
               const isGrouped = row.getIsGrouped();
-              
-              // Si es una fila agrupada, renderizar el grupo y sus hijos
-              if (isGrouped) {
-                return (
-                  <React.Fragment key={row.id}>
-                    {/* Fila de grupo */}
-                    <tr className="bg-slate-50/80 font-bold border-l-4 border-l-brand-500 border-b border-slate-100">
-                      {row.getVisibleCells().map(cell => (
-                        <td key={cell.id} className="px-4 py-3 border-r border-slate-50">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </td>
-                      ))}
-                    </tr>
-                    {/* Filas hijas si está expandido */}
-                    {row.getIsExpanded() && row.subRows.map(subRow => (
-                      <tr 
-                        key={subRow.id}
-                        className="hover:bg-blue-50/30 border-b border-slate-100 transition-colors group cursor-pointer"
-                        onClick={() => navigate(`/app/client-companies/${subRow.original.id_client_company}`)}
-                      >
-                        {subRow.getVisibleCells().map(cell => (
-                          <td key={cell.id} className="px-4 py-1.5 border-r border-slate-50">
-                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </React.Fragment>
-                );
-              }
-              
-              // Si no es agrupada, renderizar normalmente
               return (
                 <tr 
                     key={row.id} 
-                    className="hover:bg-blue-50/30 border-b border-slate-100 transition-colors group cursor-pointer"
-                    onClick={() => navigate(`/app/client-companies/${row.original.id_client_company}`)}
+                    className={`${isGrouped ? 'bg-slate-50/80 font-bold border-l-4 border-l-brand-500' : 'hover:bg-blue-50/30'} border-b border-slate-100 transition-colors group cursor-pointer`}
+                    onClick={() => !isGrouped && navigate(`/app/client-companies/${row.original.id_client_company}`)}
                 >
                   {row.getVisibleCells().map(cell => (
-                    <td key={cell.id} className="px-4 py-1.5 border-r border-slate-50">
+                    <td key={cell.id} className={`px-4 ${isGrouped ? 'py-3' : 'py-1.5'} border-r border-slate-50`}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
