@@ -58,16 +58,14 @@ const formatDateTime = (value?: string) => {
   return `${date}${time ? ` ${time.slice(0, 5)}` : ''}`;
 };
 
+// --- HELPER PARA CELDA DE GRUPO (Actualizado) ---
 const renderGroupCell = (row: any, label: string) => (
-  <div className="flex items-center gap-2">
-    <button
-      onClick={(e) => { e.stopPropagation(); row.toggleExpanded(); }}
-      className="w-5 h-5 flex items-center justify-center rounded bg-brand-600 text-white shadow-sm"
-    >
-      <i className={`fa-solid ${row.getIsExpanded() ? 'fa-minus' : 'fa-plus'} text-[10px]`}></i>
-    </button>
+  <div className="flex items-center gap-3">
+    {/* Ícono Chevron en lugar de botón */}
+    <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+    
     <span className="font-bold text-slate-700 uppercase tracking-tight">{label || 'No asignado'}</span>
-    <span className="ml-1 bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded text-[10px] font-bold">{row.subRows.length}</span>
+    <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
   </div>
 );
 
@@ -610,13 +608,32 @@ const DealsList: React.FC = () => {
           <tbody className="bg-white">
             {loading ? (
                 <tr><td colSpan={columns.length} className="py-24 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i><p className="text-slate-400 text-sm font-medium">Cargando tratos...</p></td></tr>
-            ) : table.getRowModel().rows.map(row => (
-                <tr key={row.id} className={`${row.getIsGrouped() ? 'bg-slate-50/80 border-l-4 border-l-brand-500' : 'hover:bg-blue-50/30'} border-b border-slate-100 transition-colors cursor-pointer group`} onClick={() => !row.getIsGrouped() && navigate(`/app/deals/${row.original.id_trato}`)}>
-                    {row.getVisibleCells().map(cell => (
-                        <td key={cell.id} className="px-4 py-2 border-r border-slate-50">{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
-                    ))}
-                </tr>
-            ))}
+            ) : table.getRowModel().rows.map(row => {
+                const isGrouped = row.getIsGrouped();
+                const handleRowClick = () => {
+                    if (isGrouped) row.toggleExpanded();
+                    else navigate(`/app/deals/${row.original.id_trato}`);
+                };
+
+                return (
+                    <tr 
+                        key={row.id} 
+                        onClick={handleRowClick}
+                        className={`
+                            ${isGrouped 
+                                ? 'bg-slate-50/80 border-l-4 border-l-brand-500 cursor-pointer font-bold' 
+                                : 'hover:bg-blue-50/30 cursor-pointer group'} 
+                            border-b border-slate-100 transition-colors
+                        `}
+                    >
+                        {row.getVisibleCells().map(cell => (
+                            <td key={cell.id} className={`px-4 py-2 border-r border-slate-50 ${isGrouped ? 'py-3' : ''}`}>
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                        ))}
+                    </tr>
+                );
+            })}
           </tbody>
         </table>
       </div>

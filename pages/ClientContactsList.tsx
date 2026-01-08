@@ -33,7 +33,7 @@ const ClientContactsList: React.FC = () => {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'first_name', desc: false }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
-  const [grouping, setGrouping] = useState<GroupingState>([]); // Lista plana por defecto
+  const [grouping, setGrouping] = useState<GroupingState>([]); 
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
 
@@ -44,7 +44,6 @@ const ClientContactsList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingContact, setEditingContact] = useState<Partial<ClientContact> | null>(null);
-  const [submitting, setSubmitting] = useState(false);
   const [confirmState, setConfirmState] = useState({ 
     isOpen: false, 
     title: '', 
@@ -65,7 +64,6 @@ const ClientContactsList: React.FC = () => {
         const text = await res.text();
         if (!text) return [];
         const data = JSON.parse(text);
-        // Filtrar registros válidos que tengan al menos un id válido
         return Array.isArray(data) ? data.filter(item => item && item.id_contact) : [];
       };
 
@@ -77,7 +75,6 @@ const ClientContactsList: React.FC = () => {
     }
   }, [user]);
 
-  // Evitar doble carga en StrictMode (dev)
   const didInitRef = useRef(false);
   useEffect(() => {
     if (didInitRef.current) return;
@@ -85,7 +82,6 @@ const ClientContactsList: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  // Clic fuera para cerrar filtros
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
@@ -97,7 +93,6 @@ const ClientContactsList: React.FC = () => {
   }, []);
 
   // --- HELPERS ---
-  // Usar name_company provisto por backend directamente en el payload de contactos
   const getCompanyNameForContact = useCallback((contact: ClientContact) => {
     return (contact as any).name_company || 'SIN EMPRESA';
   }, []);
@@ -110,13 +105,13 @@ const ClientContactsList: React.FC = () => {
 
   // --- HANDLERS DE ACCIONES ---
   const handleAddNew = () => {
-    setEditingContact(undefined); // Modal toma valores por defecto
+    setEditingContact(undefined);
     setIsEditMode(false);
     setIsModalOpen(true);
   };
 
   const handleEdit = (e: React.MouseEvent, contact: ClientContact) => {
-    e.stopPropagation(); // IMPORTANTE: Detener navegación
+    e.stopPropagation();
     setEditingContact(contact);
     setIsEditMode(true);
     setIsModalOpen(true);
@@ -124,12 +119,12 @@ const ClientContactsList: React.FC = () => {
 
   const handleModalSuccess = () => {
     setIsModalOpen(false);
-    fetchData(); // Refrescar lista
+    fetchData();
     setToast({ message: isEditMode ? 'Contacto actualizado.' : 'Contacto creado.', type: 'success' });
   };
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation(); // IMPORTANTE: Detener navegación
+    e.stopPropagation();
     setConfirmState({
       isOpen: true,
       title: 'Eliminar Contacto',
@@ -157,9 +152,6 @@ const ClientContactsList: React.FC = () => {
       },
     });
   };
-
-  // OLD FORM SUBMIT - REPLACED BY MODAL
-  // const handleFormSubmit = async (e: React.FormEvent) => { ... };
 
   // --- LÓGICA DE FILTROS FACETADOS ---
   const getFacetedValues = (columnId: string) => {
@@ -200,18 +192,17 @@ const ClientContactsList: React.FC = () => {
       enableColumnFilter: true,
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) {
+          // CAMBIO: Ya no renderizamos un botón clickeable, solo un contenedor visual.
+          // La acción de click se maneja en el <tr onClick> de la tabla.
           return (
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={(e) => { e.stopPropagation(); row.toggleExpanded(); }}
-                className="w-5 h-5 flex items-center justify-center rounded bg-brand-600 text-white shadow-sm"
-              >
-                <i className={`fa-solid ${row.getIsExpanded() ? 'fa-minus' : 'fa-plus'} text-[10px]`}></i>
-              </button>
+            <div className="flex items-center gap-3">
+              {/* Ícono de flecha que rota (chevron) en lugar del botón más/menos pesado */}
+              <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+              
               <span className="font-bold text-slate-700 uppercase tracking-tight">
                 {((row.subRows?.[0]?.original as any)?.name_company) || 'SIN EMPRESA'}
               </span>
-              <span className="ml-1 bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded text-[10px] font-bold">
+              <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
                 {row.subRows.length}
               </span>
             </div>
@@ -312,30 +303,44 @@ const ClientContactsList: React.FC = () => {
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans">
       
-      {/* Toolbar superior */}
-      <div className="bg-slate-50 border-b border-slate-200 p-2 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-            <div className="relative">
+      {/* TOOLBAR RESPONSIVO */}
+      <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        
+        {(loading || contacts.length > 0) && (
+          <>
+            <div className="relative order-3 lg:order-1 w-full lg:flex-1">
                 <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
                 <input 
                     value={globalFilter} 
                     onChange={e => setGlobalFilter(e.target.value)}
                     placeholder="Buscar contacto..." 
-                    className="pl-8 pr-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 w-64 shadow-sm"
+                    className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm"
                 />
             </div>
-            <button 
-                onClick={() => setGrouping(prev => prev.length ? [] : ['id_client_company'])}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${grouping.length ? 'bg-brand-600 text-white border-brand-700 shadow-inner' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
-            >
-                <i className="fa-solid fa-layer-group mr-2"></i> {grouping.length ? 'Desagrupar' : 'Agrupar por Empresa'}
-            </button>
-        </div>
+
+            <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm min-w-[200px]">
+                <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
+                <div className="flex items-center gap-1 flex-wrap">
+                    <button 
+                        onClick={() => setGrouping(prev => prev.length ? [] : ['id_client_company'])}
+                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
+                            grouping.length 
+                            ? 'bg-brand-600 text-white shadow-inner' 
+                            : 'text-slate-500 hover:bg-slate-50'
+                        }`}
+                    >
+                        <i className="fa-solid fa-building text-[11px]"></i> Empresa
+                    </button>
+                </div>
+            </div>
+          </>
+        )}
+        
         <button 
           onClick={handleAddNew} 
-          className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all"
+          className={`order-1 lg:order-3 w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center justify-center gap-2 ${(!loading && contacts.length === 0) ? 'mx-auto sm:mx-0' : ''}`}
         >
-            <i className="fa-solid fa-plus mr-2"></i> Nuevo Contacto
+            <i className="fa-solid fa-plus"></i> Nuevo Contacto
         </button>
       </div>
 
@@ -384,7 +389,6 @@ const ClientContactsList: React.FC = () => {
                         )}
                       </div>
 
-                      {/* Dropdown de Filtros */}
                       {activeFilterMenu === header.column.id && (
                         <div 
                           ref={filterMenuRef}
@@ -458,11 +462,30 @@ const ClientContactsList: React.FC = () => {
               </tr>
             ) : table.getRowModel().rows.map(row => {
               const isGrouped = row.getIsGrouped();
+              
+              // CAMBIO: Definimos el manejador de clic para la fila
+              const handleRowClick = () => {
+                if (isGrouped) {
+                  // Si es grupo, expandir/colapsar
+                  row.toggleExpanded();
+                } else {
+                  // Si no es grupo, navegar
+                  navigate(`/app/client-contacts/${row.original.id_contact}`);
+                }
+              };
+
               return (
                 <tr 
                     key={row.id} 
-                    className={`${isGrouped ? 'bg-slate-50/80 font-bold border-l-4 border-l-brand-500' : 'hover:bg-blue-50/30'} border-b border-slate-100 transition-colors group cursor-pointer`}
-                    onClick={() => !isGrouped && navigate(`/app/client-contacts/${row.original.id_contact}`)}
+                    // CAMBIO: onClick condicional
+                    onClick={handleRowClick}
+                    className={`
+                      ${isGrouped 
+                        ? 'bg-slate-50/80 font-bold border-l-4 border-l-brand-500 cursor-pointer' // cursor-pointer importante
+                        : 'hover:bg-blue-50/30 cursor-pointer group'
+                      } 
+                      border-b border-slate-100 transition-colors
+                    `}
                 >
                   {row.getVisibleCells().map(cell => (
                     <td key={cell.id} className={`px-4 py-2 border-r border-slate-50 ${isGrouped ? 'py-3' : ''}`}>
@@ -477,7 +500,7 @@ const ClientContactsList: React.FC = () => {
       </div>
 
       {/* Footer / Paginación */}
-      <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+      <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
           <div className="flex items-center gap-4">
             <span>{contacts.length} registros</span>
             {columnFilters.length > 0 && (
@@ -495,7 +518,7 @@ const ClientContactsList: React.FC = () => {
           </div>
       </div>
 
-      {/* Modal de Creación / Edición - NEW MODAL VERSION */}
+      {/* Modal de Creación / Edición */}
       <ContactFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -503,30 +526,6 @@ const ClientContactsList: React.FC = () => {
         initialData={editingContact}
         onSuccess={handleModalSuccess}
       />
-
-      {/* OLD INLINE FORM - KEEP FOR ROLLBACK IF NEEDED
-      {isModalOpen && editingContact && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isEditMode ? 'bg-brand-100 text-brand-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                   <i className={`fa-solid ${isEditMode ? 'fa-user-pen' : 'fa-user-plus'}`}></i>
-                </div>
-                {isEditMode ? 'Editar Contacto' : 'Nuevo Contacto'}
-              </h2>
-              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-400">
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-            
-            <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
-              ... (old form code kept for rollback)
-            </form>
-          </div>
-        </div>
-      )}
-      */}
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />
