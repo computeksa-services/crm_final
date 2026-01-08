@@ -495,31 +495,43 @@ const DealsList: React.FC = () => {
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
       
-      <div className="bg-slate-50 border-b border-slate-200 p-2 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-2 flex-1">
-            <div className="relative flex-1 max-w-xs">
-                <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input value={globalFilter} onChange={e => setGlobalFilter(e.target.value)} placeholder="Buscar trato..." className="w-full pl-8 pr-4 py-1.5 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm" />
-            </div>
-            
-            <div className="flex items-center bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
-                <span className="text-[10px] font-black text-slate-400 uppercase px-2">Agrupar por:</span>
+      {/* TOOLBAR RESPONSIVO MEJORADO */}
+      <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3">
+
+        {/* 1. BUSCADOR */}
+        {/* Mobile/Tablet: Order 3 (Abajo del todo), Width 100%. 
+            Desktop (lg): Order 1 (Izquierda), flex-1 (Ocupa el espacio disponible). */}
+        <div className="relative order-3 lg:order-1 w-full lg:flex-1">
+            <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            <input value={globalFilter} onChange={e => setGlobalFilter(e.target.value)} placeholder="Buscar trato..." className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm" />
+        </div>
+        
+        {/* 2. FILTROS */}
+        {/* Mobile/Tablet: Order 2. 
+            Desktop: Order 2. lg:w-auto (Se ajusta al contenido, no crece). */}
+        <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm min-w-[200px]">
+            <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
+            <div className="flex items-center gap-1 flex-wrap">
                 {[
                   { id: 'estado_nombre', label: 'Estado', icon: 'fa-list-check' },
                   { id: 'interes_nombre', label: 'Interés', icon: 'fa-star' },
                   { id: 'owner_name', label: 'Owner', icon: 'fa-user-tie' },
                   { id: 'client_company_name', label: 'Empresa', icon: 'fa-building' }
                 ].map(opt => (
-                  <button key={opt.id} onClick={() => handleGroupingChange(grouping.includes(opt.id) ? [] : [opt.id])} className={`px-2 py-1 rounded text-[10px] font-bold transition-all flex items-center gap-1 ${grouping.includes(opt.id) ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}>
-                    <i className={`fa-solid ${opt.icon}`}></i> {opt.label}
+                  <button key={opt.id} onClick={() => handleGroupingChange(grouping.includes(opt.id) ? [] : [opt.id])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping.includes(opt.id) ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}>
+                    <i className={`fa-solid ${opt.icon} text-[11px]`}></i> {opt.label}
                   </button>
                 ))}
             </div>
         </div>
-        <button onClick={() => navigate('/app/deals/new')} className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center gap-2">
+
+        {/* 3. BOTÓN AÑADIR */}
+        {/* Mobile/Tablet: Order 1 (Arriba). Desktop: Order 3 (Derecha) */}
+        <button onClick={() => navigate('/app/deals/new')} className="order-1 lg:order-3 w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center justify-center gap-2">
             <i className="fa-solid fa-plus"></i> Nuevo Trato
         </button>
       </div>
+      {/* FIN TOOLBAR RESPONSIVO */}
 
       <div className="flex-1 overflow-auto relative bg-slate-50/10">
         <table className="w-full border-separate border-spacing-0">
