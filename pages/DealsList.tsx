@@ -447,14 +447,14 @@ const DealsList: React.FC = () => {
       header: 'Creado',
       size: 150,
       filterFn: dateRangeFilter,
-      cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-[10px] text-slate-500">{formatDateTime(getValue() as string)}</span>
+      cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-[12px] text-slate-600">{formatDateTime(getValue() as string)}</span>
     },
     {
       accessorKey: 'updated_at',
       header: 'Actualizado',
       size: 150,
       filterFn: dateRangeFilter,
-      cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-[10px] text-slate-500">{formatDateTime(getValue() as string)}</span>
+      cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-[12px] text-slate-600">{formatDateTime(getValue() as string)}</span>
     },
     {
       id: 'actions',
@@ -611,9 +611,9 @@ const DealsList: React.FC = () => {
 
       <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest">
           <div className="flex items-center gap-6">
-            <span>{deals.length} TOTALES</span>
+            <span>{deals.length} REGISTROS</span>
             <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-brand-600">
-                <span className="text-slate-400">FILTRADO:</span> {totalFiltered.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                <span className="text-slate-400">VALOR TOTAL:</span> {totalFiltered.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
             </div>
           </div>
           <div className="flex items-center gap-2">

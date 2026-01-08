@@ -764,7 +764,7 @@ const ClientCompaniesList: React.FC = () => {
       {/* Footer / Paginación */}
       <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
           <div className="flex items-center gap-4">
-            <span>{companies.length} empresas totales</span>
+            <span>{companies.length} REGISTROS</span>
             {columnFilters.length > 0 && (
                 <button onClick={() => setColumnFilters([])} className="text-red-500 hover:text-red-700 font-black flex items-center gap-1 transition-colors">
                     <i className="fa-solid fa-filter-circle-xmark text-xs"></i> Limpiar Filtros
