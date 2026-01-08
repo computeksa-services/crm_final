@@ -5,14 +5,56 @@ import { Quote, ClientCompany, ClientContact, QuoteStatus } from '../types';
 import Toast from '../components/Toast';
 import ShareModal from '../components/ShareModal';
 import ConfirmModal from '../components/ConfirmModal';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  getGroupedRowModel,
+  getExpandedRowModel,
+  flexRender,
+  ColumnDef,
+  SortingState,
+  ColumnFiltersState,
+  GroupingState,
+  ExpandedState,
+  FilterFn
+} from '@tanstack/react-table';
 
-// Tipo para el ordenamiento
-type SortConfig = {
-    key: keyof Quote | 'client_company_name' | 'owner_name' | 'estado_nombre';
-    direction: 'asc' | 'desc';
+// --- UTILS & FILTERS ---
+const dateRangeFilter: FilterFn<any> = (row, columnId, value) => {
+  const { start, end } = value as { start: string; end: string };
+  const rowDate = row.getValue(columnId) as string;
+  if (!rowDate) return false;
+  const date = rowDate.split('T')[0];
+  if (start && date < start) return false;
+  if (end && date > end) return false;
+  return true;
 };
 
-// --- COMPONENTE INTERNO MEJORADO: Selector Inline con Posicionamiento Inteligente ---
+const formatCurrency = (value: number | string) => {
+  const num = typeof value === 'string' ? parseFloat(value.replace(/[^0-9.-]+/g, '')) : value;
+  return isNaN(num) ? '$0.00' : num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+};
+
+const formatDateTime = (value?: string) => {
+  if (!value) return '';
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const [date, time = ''] = normalized.split('T');
+  return `${date}${time ? ` ${time.slice(0, 5)}` : ''}`;
+};
+
+// --- HELPER PARA CELDA DE GRUPO (Sutil) ---
+const renderGroupCell = (row: any, label: string) => (
+  <div className="flex items-center gap-3">
+    <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+    <span className="font-bold text-slate-700 uppercase tracking-tight">{label || 'No asignado'}</span>
+    <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
+  </div>
+);
+
+// --- COMPONENTE INTERNO: Selector Inline ---
 const InlineBadgeSelector: React.FC<{
     valueId: string | number;
     items: { id: string | number; name: string; color?: string; icon?: string }[];
@@ -20,215 +62,41 @@ const InlineBadgeSelector: React.FC<{
     disabled?: boolean;
 }> = ({ valueId, items, onSelect, disabled }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [coords, setCoords] = useState({ top: 0, left: 0, width: 224 });
-    const current = items.find(i => i.id === valueId);
-    const buttonRef = useRef<HTMLButtonElement>(null);
+    const current = items.find(i => String(i.id) === String(valueId));
     const dropdownRef = useRef<HTMLDivElement>(null);
-    const leaveTimeoutRef = useRef<number | null>(null);
 
     useEffect(() => {
-        if (!isOpen) return;
-        const handleResize = () => setIsOpen(false);
-        window.addEventListener('resize', handleResize);
-        return () => {
-            window.removeEventListener('resize', handleResize);
+        const handleClick = (e: MouseEvent) => {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setIsOpen(false);
         };
+        if (isOpen) document.addEventListener('mousedown', handleClick);
+        return () => document.removeEventListener('mousedown', handleClick);
     }, [isOpen]);
-
-    useEffect(() => {
-        if (!isOpen) return;
-        const handleClickOutside = (e: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
-                buttonRef.current && !buttonRef.current.contains(e.target as Node)) {
-                setIsOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [isOpen]);
-
-    const handleOpen = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (disabled || !buttonRef.current) return;
-
-        if (isOpen) {
-            setIsOpen(false);
-            return;
-        }
-
-        const rect = buttonRef.current.getBoundingClientRect();
-        const dropdownHeight = Math.min(items.length * 36 + 10, 256);
-        const dropdownWidth = 224;
-
-        const spaceBelow = window.innerHeight - rect.bottom;
-        const openUpwards = spaceBelow < dropdownHeight && rect.top > spaceBelow;
-        const top = openUpwards ? rect.top - dropdownHeight - 5 : rect.bottom + 5;
-
-        const spaceRight = window.innerWidth - rect.left;
-        let left = rect.left;
-        if (spaceRight < dropdownWidth) {
-            left = rect.right - dropdownWidth;
-        }
-
-        setCoords({ top, left, width: dropdownWidth });
-        setIsOpen(true);
-    };
 
     return (
-        <>
+        <div className="relative inline-block" ref={dropdownRef}>
             <button
-                ref={buttonRef}
                 type="button"
-                onClick={handleOpen}
-                disabled={disabled}
-                className={`inline-flex items-center px-2 py-1 rounded-lg border text-[13px] font-bold whitespace-nowrap ${disabled ? 'cursor-not-allowed opacity-70' : 'hover:border-slate-300'}`}
-                style={{
-                    backgroundColor: `${current?.color || '#cccccc'}15`,
-                    color: current?.color || '#333333',
-                    borderColor: `${current?.color || '#cccccc'}40`
-                }}
+                onClick={(e) => { e.stopPropagation(); if (!disabled) setIsOpen(!isOpen); }}
+                className={`flex items-center gap-2 px-2 py-1 rounded-lg border text-[11px] font-black uppercase tracking-tight transition-all ${disabled ? 'cursor-default opacity-70' : 'hover:bg-white active:scale-95'}`}
+                style={{ backgroundColor: `${current?.color}15`, color: current?.color, borderColor: `${current?.color}30` }}
             >
-                {current?.icon && <i className={`${current.icon} mr-1.5`}></i>}
-                {current?.name || 'Seleccionar'}
-                {!disabled && <i className="fa-solid fa-chevron-down text-[10px] ml-1 text-slate-400"></i>}
+                {current?.icon && <i className={current.icon}></i>}
+                {current?.name || 'S/N'}
+                {!disabled && <i className="fa-solid fa-chevron-down opacity-50 text-[8px]"></i>}
             </button>
-
             {isOpen && (
-                <div
-                    ref={dropdownRef}
-                    onMouseLeave={() => {
-                        leaveTimeoutRef.current = setTimeout(() => setIsOpen(false), 300);
-                    }}
-                    onMouseEnter={() => {
-                        if (leaveTimeoutRef.current) {
-                            clearTimeout(leaveTimeoutRef.current);
-                            leaveTimeoutRef.current = null;
-                        }
-                    }}
-                    className="fixed z-[9999] bg-white border border-slate-200 rounded-lg shadow-xl overflow-auto animate-fade-in"
-                    style={{
-                        top: coords.top,
-                        left: coords.left,
-                        width: coords.width,
-                        maxHeight: '256px'
-                    }}
-                >
-                    {items.filter(item => item.id !== valueId).map(item => (
-                        <button
-                            key={item.id}
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
-                            className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-sm border-b border-slate-50 last:border-0"
-                        >
-                            <span
-                                className="inline-flex items-center px-2 py-1 rounded-lg border text-[13px] font-bold"
-                                style={{
-                                    backgroundColor: `${item.color || '#cccccc'}15`,
-                                    color: item.color || '#333333',
-                                    borderColor: `${item.color || '#cccccc'}40`
-                                }}
-                            >
-                                {item.icon && <i className={`${item.icon} mr-1.5`}></i>}
-                                {item.name}
-                            </span>
-                        </button>
-                    ))}
-                </div>
-            )}
-        </>
-    );
-};
-
-// --- COMPONENTE INTERNO: Dropdown de Filtro Superior ---
-const StatusInterestFilter: React.FC<{
-    placeholder: string;
-    selectedId: string;
-    onChange: (val: string) => void;
-    items: { id: string; name: string; color?: string; icon?: string; count?: number }[];
-}> = ({ placeholder, selectedId, onChange, items }) => {
-    const [open, setOpen] = useState(false);
-    const current = items.find(i => i.id === selectedId);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const leaveTimeoutRef = useRef<number | null>(null);
-
-    useEffect(() => {
-        if (!open) return;
-        const handleClickOutside = (e: MouseEvent) => {
-            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-                setOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [open]);
-
-    const handleMouseLeave = () => {
-        leaveTimeoutRef.current = setTimeout(() => setOpen(false), 300);
-    };
-
-    const handleMouseEnter = () => {
-        if (leaveTimeoutRef.current) {
-            clearTimeout(leaveTimeoutRef.current);
-            leaveTimeoutRef.current = null;
-        }
-    };
-
-    return (
-        <div ref={containerRef} className="relative w-full md:w-auto md:min-w-[16rem] lg:min-w-[18rem] max-w-[26rem]" onMouseLeave={handleMouseLeave} onMouseEnter={handleMouseEnter}>
-            <button
-                type="button"
-                onClick={() => setOpen(o => !o)}
-                className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg bg-white text-sm text-left flex items-center gap-2 hover:border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none"
-            >
-                {current ? (
-                    <span
-                        className="inline-flex items-center px-2 py-0.5 rounded-lg border text-[13px] font-bold"
-                        style={{
-                            backgroundColor: `${current.color || '#cccccc'}15`,
-                            color: current.color || '#333333',
-                            borderColor: `${current.color || '#cccccc'}40`
-                        }}
-                    >
-                        {current.icon && <i className={`${current.icon} mr-1.5`}></i>}
-                        {current.name}
-                    </span>
-                ) : (
-                    <span className="text-slate-500">{placeholder}</span>
-                )}
-                <span className="absolute right-3 top-2.5 text-slate-400 text-xs">
-                    <i className="fa-solid fa-chevron-down"></i>
-                </span>
-            </button>
-
-            {open && (
-                <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-auto">
-                    <button
-                        type="button"
-                        onClick={() => { onChange(''); setOpen(false); }}
-                        className="w-full text-left px-3 py-2 text-slate-600 hover:bg-slate-50 text-sm"
-                    >
-                        {placeholder}
-                    </button>
-                    <div className="border-t border-slate-100"></div>
+                <div className="absolute z-[100] mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-xl py-1 overflow-hidden animate-in fade-in slide-in-from-top-1">
                     {items.map(item => (
                         <button
                             key={item.id}
-                            type="button"
-                            onClick={() => { onChange(item.id); setOpen(false); }}
-                            className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center justify-between text-sm"
+                            onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
+                            className="w-full px-3 py-2.5 hover:bg-slate-50 flex items-center gap-3 text-left border-b border-slate-50 last:border-0"
                         >
-                            <span
-                                className="inline-flex items-center px-2 py-0.5 rounded-lg border text-[13px] font-bold"
-                                style={{
-                                    backgroundColor: `${item.color || '#cccccc'}15`,
-                                    color: item.color || '#333333',
-                                    borderColor: `${item.color || '#cccccc'}40`
-                                }}
-                            >
-                                {item.icon && <i className={`${item.icon} mr-1.5`}></i>}
-                                {item.name}
-                            </span>
-                            {item.count !== undefined && <span className="text-xs text-slate-400 ml-2">({item.count})</span>}
+                            <div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor: `${item.color}20`, color: item.color }}>
+                                <i className={item.icon || 'fa-solid fa-tag'}></i>
+                            </div>
+                            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
                         </button>
                     ))}
                 </div>
@@ -241,34 +109,36 @@ const QuotesList: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  // Data State
+  // --- DATA STATE ---
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]);
-  
-  // UI State
+  const [loading, setLoading] = useState(true);
+
+  // --- TABLE STATE ---
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [globalFilter, setGlobalFilter] = useState('');
+  const [grouping, setGrouping] = useState<GroupingState>([]);
+  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
+
+  // --- UI STATE ---
+  const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Partial<Quote> | null>(null);
   const [filteredContacts, setFilteredContacts] = useState<ClientContact[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
-  // Filters State
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [columnFilters, setColumnFilters] = useState<{[key: string]: string[]}>({});
-  const [dateFilters, setDateFilters] = useState<{[key: string]: {start: string; end: string}}>({});
-  const [openFilterColumn, setOpenFilterColumn] = useState<string | null>(null);
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'created_at', direction: 'desc' });
-
-  // Modals State
+  // --- MODALS ---
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [shareQuoteId, setShareQuoteId] = useState<string | null>(null);
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title: string; message: string; isDestructive?: boolean; onConfirm?: () => void }>({ isOpen: false, title: '', message: '' });
 
+  // --- FETCH DATA ---
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
     setLoading(true);
@@ -283,674 +153,433 @@ const QuotesList: React.FC = () => {
         fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`)
       ]);
       
-      if (!quotesRes.ok) {
-        if (quotesRes.status === 404) setQuotes([]);
-        else throw new Error('Error al cargar cotizaciones');
-        return;
-      }
       const parse = async (res: Response) => { const t = await res.text(); return t ? JSON.parse(t) : []; };
-      const quotesData = await parse(quotesRes);
-      const companiesData = await parse(companiesRes);
-      const contactsData = await parse(contactsRes);
-      const statusesData = await parse(statusesRes);
-      setQuotes(quotesData);
-      setCompanies(companiesData);
-      setContacts(contactsData);
-      setQuoteStatuses(statusesData);
+      
+      if (!quotesRes.ok && quotesRes.status !== 404) throw new Error('Error al cargar cotizaciones');
+      
+      setQuotes(await parse(quotesRes));
+      setCompanies(await parse(companiesRes));
+      setContacts(await parse(contactsRes));
+      setQuoteStatuses(await parse(statusesRes));
 
     } catch (e) {
-      setToast({ message: 'Error al cargar las cotizaciones.', type: 'error' });
-      setQuotes([]);
+      setToast({ message: 'Error al cargar datos.', type: 'error' });
     } finally {
       setLoading(false);
     }
   }, [user]);
 
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // --- FILTERS LOGIC ---
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  // Filter Functions
-  const toggleColumnFilter = (column: string, value: string) => {
-    setColumnFilters(prev => {
-      const current = prev[column] || [];
-      const newValues = current.includes(value)
-        ? current.filter(v => v !== value)
-        : [...current, value];
-      return { ...prev, [column]: newValues };
-    });
-  };
-
-  const updateDateFilter = (column: string, type: 'start' | 'end', value: string) => {
-    setDateFilters(prev => ({
-      ...prev,
-      [column]: { ...(prev[column] || { start: '', end: '' }), [type]: value }
-    }));
-  };
-
-  const clearDateFilter = (column: string, type?: 'start' | 'end') => {
-    if (type) {
-      setDateFilters(prev => ({
-        ...prev,
-        [column]: { ...(prev[column] || { start: '', end: '' }), [type]: '' }
-      }));
-    } else {
-      setDateFilters(prev => {
-        const updated = { ...prev };
-        delete updated[column];
-        return updated;
-      });
-    }
-  };
-
-  const getUniqueValues = (column: string) => {
-    const valueCounts = new Map<string, number>();
-    quotes.forEach(quote => {
-      let val = '';
-      if (column === 'estado_nombre') {
-        val = quote.estado_nombre || quote.estado || '';
-      } else if (column === 'client_company_name') {
-        val = quote.client_company_name || '';
-      } else if (column === 'owner_name') {
-        val = quote.created_by_name || '';
-      }
-      if (val) {
-        valueCounts.set(val, (valueCounts.get(val) || 0) + 1);
-      }
-    });
-    return Array.from(valueCounts.entries())
-      .map(([value, count]) => ({ value, label: value, count }))
-      .sort((a, b) => a.label.localeCompare(b.label));
-  };
-
-  const adjustDropdownPosition = (el: HTMLDivElement | null, preferredHeight?: number) => {
-    if (!el) return;
-    el.style.position = 'absolute';
-    el.style.top = '100%';
-    el.style.left = '0';
-    el.style.marginTop = '8px';
-    el.style.zIndex = '50';
-  };
-
-  const clearAllFilters = () => {
-    setSearchTerm('');
-    setStatusFilter('');
-    setColumnFilters({});
-    setDateFilters({});
-  };
-
-  const hasActiveFilters = useMemo(() => {
-    const hasColumnFilters = Object.values(columnFilters).some(v => (v || []).length > 0);
-    const hasDateFilters = Object.values(dateFilters).some(r => !!(r?.start || r?.end));
-    return Boolean(searchTerm || statusFilter || hasColumnFilters || hasDateFilters);
-  }, [searchTerm, statusFilter, columnFilters, dateFilters]);
-
-  useEffect(() => {
-    if (editingQuote?.id_client_company) {
-      setFilteredContacts(contacts.filter(c => c.id_client_company === editingQuote.id_client_company));
-    } else {
-      setFilteredContacts([]);
-    }
-  }, [editingQuote?.id_client_company, contacts]);
-
-  // --- MANEJO DE CLICKS FUERA DE FILTROS ---
-  useEffect(() => {
-    if (openFilterColumn === null) return;
     const handleClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      if (!target.closest('[data-filter-column]')) {
-        setOpenFilterColumn(null);
-      }
+        if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) setActiveFilterMenu(null);
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
-  }, [openFilterColumn]);
+  }, []);
 
-  const requestSort = (key: SortConfig['key']) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
+  const getFacetedValues = (columnId: string) => {
+    const counts = new Map<string, number>();
+    quotes.forEach(quote => {
+        let val = (quote as any)[columnId];
+        if (columnId === 'id_quote_status') {
+            const status = quoteStatuses.find(s => s.id_status === val);
+            val = status ? status.name : 'Desconocido';
+        }
+        if (!val) val = '(Vacío)';
+        counts.set(val, (counts.get(val) || 0) + 1);
+    });
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   };
 
-  // Logic for Client-Side Filtering & Sorting
-  const filteredAndSortedQuotes = useMemo(() => {
-    // 1. Filtrar
-    let result = (Array.isArray(quotes) ? quotes : []).filter(quote => {
-      const searchLower = searchTerm.toLowerCase();
-      const matchesSearch =
-        (quote.formatted_no_cotizacion || '').toLowerCase().includes(searchLower) ||
-        (quote.client_company_name || '').toLowerCase().includes(searchLower) ||
-        (quote.nombre_cotizacion || '').toLowerCase().includes(searchLower) ||
-        (quote.created_by_name || '').toLowerCase().includes(searchLower);
-
-      const matchesStatus = statusFilter ? quote.id_quote_status?.toString() === statusFilter : true;
-
-      const matchesColumnFilters = Object.entries(columnFilters).every(([col, values]) => {
-        if (values.length === 0) return true;
-        if (col === 'estado_nombre') return values.includes(quote.estado_nombre || quote.estado || '');
-        if (col === 'client_company_name') return values.includes(quote.client_company_name || '');
-        if (col === 'owner_name') return values.includes(quote.created_by_name || '');
-        return true;
-      });
-
-      const matchesDateFilters = Object.entries(dateFilters).every(([col, range]) => {
-        if (!range.start && !range.end) return true;
-        let dateValue = '';
-        if (col === 'fecha_emision') {
-          dateValue = quote.fecha_emision || '';
-        } else if (col === 'created_at') {
-          dateValue = quote.created_at || '';
-        }
-        if (!dateValue) return false;
-        const itemDate = new Date(dateValue).setHours(0, 0, 0, 0);
-        if (range.start) {
-          const startDate = new Date(range.start).setHours(0, 0, 0, 0);
-          if (itemDate < startDate) return false;
-        }
-        if (range.end) {
-          const endDate = new Date(range.end).setHours(0, 0, 0, 0);
-          if (itemDate > endDate) return false;
-        }
-        return true;
-      });
-
-      return matchesSearch && matchesStatus && matchesColumnFilters && matchesDateFilters;
-    });
-
-    // 2. Ordenar
-    result.sort((a, b) => {
-      let aValue = a[sortConfig.key as keyof Quote];
-      let bValue = b[sortConfig.key as keyof Quote];
-
-      if (sortConfig.key === 'client_company_name') {
-        aValue = a.client_company_name || '';
-        bValue = b.client_company_name || '';
-      } else if (sortConfig.key === 'owner_name') {
-        aValue = a.created_by_name || '';
-        bValue = b.created_by_name || '';
-      } else if (sortConfig.key === 'estado_nombre') {
-        aValue = a.estado_nombre || a.estado || '';
-        bValue = b.estado_nombre || b.estado || '';
-      }
-
-      if (aValue == null) return sortConfig.direction === 'asc' ? 1 : -1;
-      if (bValue == null) return sortConfig.direction === 'asc' ? -1 : 1;
-
-      if (typeof aValue === 'string' && typeof bValue === 'string') {
-        const comparison = aValue.localeCompare(bValue);
-        return sortConfig.direction === 'asc' ? comparison : -comparison;
-      }
-
-      if (typeof aValue === 'number' && typeof bValue === 'number') {
-        return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
-      }
-
-      return 0;
-    });
-
-    return result;
-  }, [quotes, searchTerm, statusFilter, columnFilters, dateFilters, sortConfig]);
-
-  const handleRowClick = (id: string) => {
-    navigate(`/app/quotes/${id}`);
-  };
-
+  // --- ACTIONS HANDLERS ---
   const handleEdit = (quote: Quote) => {
     setEditingQuote(quote);
-    // No setIsEditMode needed as per simplified logic, just modal open
+    // Filtrar contactos para el modal de edición
+    if (quote.id_client_company) {
+        setFilteredContacts(contacts.filter(c => c.id_client_company === quote.id_client_company));
+    } else {
+        setFilteredContacts([]);
+    }
     setIsModalOpen(true);
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    const isCompanyChange = name === 'id_client_company';
-    setEditingQuote(prev => (prev ? { ...prev, [name]: value, ...(isCompanyChange && { id_contact: '' }) } : null));
-  };
+  const handleInlineUpdate = async (quote: Quote, updates: Partial<Quote>) => {
+    if (!user?.id_tenant || !user?.id_user) return;
+    
+    setQuotes(prev => prev.map(q => q.id_cotizacion === quote.id_cotizacion ? { ...q, ...updates } : q));
 
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingQuote || !user?.id_tenant || !user?.id_user) return;
-    if (!editingQuote.nombre_cotizacion || !editingQuote.id_client_company || !editingQuote.id_contact || !editingQuote.id_quote_status) {
-      setToast({ message: 'Complete Nombre, Empresa, Contacto y Estado.', type: 'error' });
-      return;
-    }
-    setSubmitting(true);
-    const payload = {
-      ...editingQuote,
-      id_tenant: user.id_tenant,
-      id_user: user.id_user,
-      is_private: !!editingQuote.is_private,
-    };
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Error al actualizar cotización.' }));
-        throw new Error(errorData.message || 'Error al actualizar cotización.');
-      }
-      setToast({ message: 'Cotización actualizada.', type: 'success' });
-      setIsModalOpen(false);
-      await fetchData();
-    } catch (error: any) {
-      setToast({ message: error.message || 'Error al guardar la cotización.', type: 'error' });
-    } finally {
-      setSubmitting(false);
+        const payload = updates.id_quote_status 
+            ? { id_cotizacion: quote.id_cotizacion, id_quote_status: updates.id_quote_status, id_tenant: user.id_tenant, id_user: user.id_user }
+            : { ...quote, ...updates, id_tenant: user.id_tenant, id_user: user.id_user };
+            
+        const endpoint = updates.id_quote_status ? '/api/status/quotes' : '/api/quotes/update';
+        
+        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}${endpoint}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        
+        if (!res.ok) throw new Error();
+        setToast({ message: 'Actualizado correctamente.', type: 'success' });
+        fetchData(); 
+    } catch {
+        setToast({ message: 'Error al actualizar.', type: 'error' });
+        fetchData(); 
     }
   };
 
-  const handleDeleteQuote = (id: string) => {
+  const handleDelete = (id: string) => {
     setConfirmState({
       isOpen: true,
       title: 'Eliminar Cotización',
       message: '¿Estás seguro? Esta acción no se puede deshacer.',
       isDestructive: true,
       onConfirm: async () => {
-        if (!user?.id_tenant || !user?.id_user) return;
-        setSubmitting(true);
         try {
-          const response = await fetch('https://service.computeksa.com/webhook/api/quotes/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id_cotizacion: id, id_tenant: user.id_tenant, id_user: user.id_user }),
-          });
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Error al eliminar cotización.' }));
-            throw new Error(errorData.message || 'Error al eliminar cotización.');
-          }
-          await fetchData();
-          setToast({ message: 'Cotización eliminada.', type: 'success' });
-        } catch (error: any) {
-          setToast({ message: error.message || 'Error al eliminar.', type: 'error' });
+            await fetch('https://service.computeksa.com/webhook/api/quotes/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id_cotizacion: id, id_tenant: user?.id_tenant, id_user: user?.id_user }),
+            });
+            setToast({ message: 'Cotización eliminada.', type: 'success' });
+            fetchData();
+        } catch {
+            setToast({ message: 'Error al eliminar.', type: 'error' });
         } finally {
-          setSubmitting(false);
-          setConfirmState({ ...confirmState, isOpen: false });
+            setConfirmState(prev => ({ ...prev, isOpen: false }));
         }
       },
     });
   };
 
-  const handleInlineUpdate = async (quote: Quote, updates: Partial<Quote>) => {
-    if (!user?.id_tenant || !user?.id_user) return;
+  // Función para manejar cambios en el form de edición
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    const isCompanyChange = name === 'id_client_company';
+    
+    if (isCompanyChange) {
+        setFilteredContacts(contacts.filter(c => c.id_client_company === value));
+        setEditingQuote(prev => (prev ? { ...prev, [name]: value, id_contact: '' } : null));
+    } else {
+        setEditingQuote(prev => (prev ? { ...prev, [name]: value } : null));
+    }
+  };
 
-    const isStatusChange = updates.id_quote_status && updates.id_quote_status !== quote.id_quote_status;
-    const previousQuote = { ...quote };
-    setQuotes((prev) => prev.map((q) => (q.id_cotizacion === quote.id_cotizacion ? { ...q, ...updates } : q)));
-
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingQuote || !user) return;
+    setSubmitting(true);
     try {
-      if (isStatusChange) {
-        const payload = {
-          id_cotizacion: quote.id_cotizacion,
-          id_quote_status: updates.id_quote_status,
-          id_tenant: user.id_tenant,
-          id_user: user.id_user,
-        };
-        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/quotes`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error('No se pudo actualizar');
-      } else {
-        const payload = {
-          ...quote,
-          ...updates,
-          id_tenant: user.id_tenant,
-          id_user: user.id_user,
-        };
+        const payload = { ...editingQuote, id_tenant: user.id_tenant, id_user: user.id_user, is_private: !!editingQuote.is_private };
         const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
         });
-        if (!res.ok) throw new Error('No se pudo actualizar');
-      }
-
-      await fetchData();
-      setToast({ message: 'Cotización actualizada.', type: 'success' });
-    } catch (err) {
-      setQuotes((prev) => prev.map((q) => (q.id_cotizacion === quote.id_cotizacion ? previousQuote : q)));
-      setToast({ message: 'Error al actualizar.', type: 'error' });
+        if (!res.ok) throw new Error();
+        setToast({ message: 'Cotización actualizada.', type: 'success' });
+        setIsModalOpen(false);
+        fetchData();
+    } catch {
+        setToast({ message: 'Error al guardar.', type: 'error' });
+    } finally {
+        setSubmitting(false);
     }
   };
 
-  // --- RENDERIZADO TABLA ---
-  const SortIcon = ({ column }: { column: string }) => {
-    if (sortConfig.key !== column) return <i className="fa-solid fa-sort text-slate-300 ml-1 text-xs"></i>;
-    return <i className={`fa-solid fa-sort-${sortConfig.direction === 'asc' ? 'up' : 'down'} text-brand-600 ml-1 text-xs`}></i>;
-  };
-
-  const renderContent = () => {
-    if (loading) {
-      return (
-        <div className="p-12 text-center">
-            <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500 mb-4"></i>
-            <p className="text-slate-500 font-medium">Sincronizando cotizaciones...</p>
-        </div>
-      );
-    }
-    if (error) {
-      return (
-        <div className="p-12 text-center">
-             <i className="fa-solid fa-triangle-exclamation text-4xl text-red-400 mb-4"></i>
-            <p className="text-slate-600 font-medium">{error}</p>
-        </div>
-      );
-    }
-    if (quotes.length === 0) {
-      return (
-        <div className="p-16 text-center flex flex-col items-center">
-            <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                <i className="fa-solid fa-file-invoice-dollar text-3xl text-slate-300"></i>
-            </div>
-            <h3 className="text-lg font-bold text-slate-700">No hay cotizaciones aún</h3>
-            <p className="text-slate-500 max-w-sm mt-1 mb-6">Crea tu primera cotización profesional para enviar a tus clientes y cerrar más tratos.</p>
-            <Link to="/app/quotes/new" className="bg-brand-600 text-white px-5 py-2.5 rounded-xl shadow-md hover:bg-brand-700 transition-all">
-                Crear Primera Cotización
-            </Link>
-        </div>
-      );
-    }
-
-    if (filteredAndSortedQuotes.length === 0) {
+  // --- COLUMNS DEFINITION ---
+  const columns = useMemo<ColumnDef<Quote>[]>(() => [
+    {
+      accessorKey: 'client_company_name',
+      header: 'Cliente',
+      size: 220,
+      enableColumnFilter: true,
+      cell: ({ row, getValue, column }) => {
+        // CORRECCIÓN PRINCIPAL: Solo renderizar grupo si ESTA columna es la agrupada
+        if (row.getIsGrouped()) {
+            return grouping.includes(column.id) ? renderGroupCell(row, getValue() as string || 'Sin Cliente') : null;
+        }
         return (
-            <div className="p-12 text-center">
-                <i className="fa-solid fa-search text-3xl text-slate-200 mb-4"></i>
-                <p className="text-slate-500">No se encontraron resultados para tu búsqueda.</p>
-                <button onClick={clearAllFilters} className="text-brand-600 font-medium mt-2 hover:underline">Limpiar filtros</button>
+            <div className="flex flex-col">
+                <span className="font-bold text-slate-700 text-xs uppercase">{getValue() as string}</span>
+                <span className="text-[10px] text-slate-400">{row.original.contact_full_name || 'Sin contacto'}</span>
             </div>
         );
-    }
-
-    return (
-        <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse" style={{ minWidth: '1200px' }}>
-                <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-bold tracking-wider sticky top-0 z-10">
-                    <tr>
-                        <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors min-w-[40px]" onClick={() => requestSort('formatted_no_cotizacion')}>
-                            Nro. <SortIcon column="formatted_no_cotizacion" />
-                        </th>
-                        <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('nombre_cotizacion')}>
-                            Nombre <SortIcon column="nombre_cotizacion" />
-                        </th>
-                        <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => requestSort('client_company_name')}>
-                            Cliente <SortIcon column="client_company_name" />
-                        </th>
-                        <th className="px-2 sm:px-4 py-3 cursor-pointer hover:bg-slate-100 transition-colors text-right" onClick={() => requestSort('total')}>
-                            Total <SortIcon column="total" />
-                        </th>
-                        <th data-filter-column="estado_nombre" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
-                            <div className="flex items-center gap-2">
-                                <div className="flex-1 cursor-pointer" onClick={() => requestSort('estado_nombre')}>
-                                    Estado <SortIcon column="estado_nombre" />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'estado_nombre' ? null : 'estado_nombre'); }}
-                                    className={`p-1 rounded hover:bg-slate-200 transition-colors ${(columnFilters['estado_nombre'] || []).length > 0 ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
-                                    title="Filtrar por Estado"
-                                >
-                                    <i className="fa-solid fa-filter text-xs"></i>
-                                </button>
-                            </div>
-                            {openFilterColumn === 'estado_nombre' && (
-                                <div
-                                    className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-lg w-64 max-h-64 overflow-auto z-50"
-                                    onMouseLeave={() => setOpenFilterColumn(null)}
-                                >
-                                    {getUniqueValues('estado_nombre').map(val => (
-                                        <label key={val.value} className="px-3 py-2 hover:bg-slate-50 flex items-center gap-2 cursor-pointer text-sm text-slate-600 border-b border-slate-100 last:border-b-0">
-                                            <input type="checkbox" checked={(columnFilters['estado_nombre'] || []).includes(val.value)} onChange={() => toggleColumnFilter('estado_nombre', val.value)} className="w-4 h-4" />
-                                            <span className="flex-1">{val.label}</span>
-                                            <span className="text-xs text-slate-400">({val.count})</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            )}
-                        </th>
-                        <th data-filter-column="owner_name" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
-                            <div className="flex items-center gap-2">
-                                <div className="flex-1 cursor-pointer" onClick={() => requestSort('created_by_name')}>
-                                    Owner <SortIcon column="owner_name" />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'owner_name' ? null : 'owner_name'); }}
-                                    className={`p-1 rounded hover:bg-slate-200 transition-colors ${(columnFilters['owner_name'] || []).length > 0 ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
-                                    title="Filtrar por Owner"
-                                >
-                                    <i className="fa-solid fa-filter text-xs"></i>
-                                </button>
-                            </div>
-                            {openFilterColumn === 'owner_name' && (
-                                <div
-                                    className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-lg w-64 max-h-64 overflow-auto z-50"
-                                    onMouseLeave={() => setOpenFilterColumn(null)}
-                                >
-                                    {getUniqueValues('owner_name').map(val => (
-                                        <label key={val.value} className="px-3 py-2 hover:bg-slate-50 flex items-center gap-2 cursor-pointer text-sm text-slate-600 border-b border-slate-100 last:border-b-0">
-                                            <input type="checkbox" checked={(columnFilters['owner_name'] || []).includes(val.value)} onChange={() => toggleColumnFilter('owner_name', val.value)} className="w-4 h-4" />
-                                            <span className="flex-1">{val.label}</span>
-                                            <span className="text-xs text-slate-400">({val.count})</span>
-                                        </label>
-                                    ))}
-                                </div>
-                            )}
-                        </th>
-                        <th data-filter-column="fecha_emision" className="px-2 sm:px-4 py-3 hover:bg-slate-100 transition-colors relative group">
-                            <div className="flex items-center gap-2">
-                                <div className="flex-1 cursor-pointer" onClick={() => requestSort('fecha_emision')}>
-                                    Fecha <SortIcon column="fecha_emision" />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); setOpenFilterColumn(openFilterColumn === 'fecha_emision' ? null : 'fecha_emision'); }}
-                                    className={`p-1 rounded hover:bg-slate-200 transition-colors ${(dateFilters['fecha_emision']?.start || dateFilters['fecha_emision']?.end) ? 'bg-brand-100 text-brand-600' : 'text-slate-400'}`}
-                                    title="Filtrar por fecha"
-                                >
-                                    <i className="fa-solid fa-calendar text-xs"></i>
-                                </button>
-                            </div>
-                            {openFilterColumn === 'fecha_emision' && (
-                                <div
-                                    className="absolute top-full left-0 mt-2 bg-white border border-slate-200 rounded-lg shadow-lg p-3 w-64 z-50"
-                                    onMouseLeave={() => setOpenFilterColumn(null)}
-                                >
-                                    <div className="space-y-2">
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-600 mb-1">Desde</label>
-                                            <input type="date" value={dateFilters['fecha_emision']?.start || ''} onChange={(e) => updateDateFilter('fecha_emision', 'start', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-600 mb-1">Hasta</label>
-                                            <input type="date" value={dateFilters['fecha_emision']?.end || ''} onChange={(e) => updateDateFilter('fecha_emision', 'end', e.target.value)} className="w-full px-2 py-1.5 border border-slate-200 rounded text-sm" />
-                                        </div>
-                                        {(dateFilters['fecha_emision']?.start || dateFilters['fecha_emision']?.end) && (
-                                            <button type="button" onClick={() => clearDateFilter('fecha_emision')} className="w-full px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded border border-red-200 transition-colors">
-                                                <i className="fa-solid fa-times mr-1"></i> Limpiar filtro
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                        </th>
-                        <th className="px-2 py-3 text-center">Acciones</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white" style={{ minHeight: '400px' }}>
-                    {filteredAndSortedQuotes.length === 0 ? (
-                        <tr>
-                            <td colSpan={9} className="px-4 py-12 text-center text-slate-500" style={{ minHeight: '400px' }}>
-                                <i className="fa-solid fa-filter text-2xl mb-2 block text-slate-300"></i>
-                                No hay resultados para los filtros aplicados.
-                            </td>
-                        </tr>
-                    ) : (
+      }
+    },
+    {
+        accessorKey: 'formatted_no_cotizacion',
+        header: 'Nro.',
+        size: 100,
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="font-bold text-brand-600 text-xs">{getValue() as string}</span>
+    },
+    {
+        accessorKey: 'nombre_cotizacion',
+        header: 'Nombre',
+        size: 200,
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-slate-700 text-sm font-medium">{getValue() as string}</span>
+    },
+    {
+        accessorKey: 'id_quote_status',
+        header: 'Estado',
+        size: 160,
+        enableColumnFilter: true,
+        cell: ({ row, getValue, column }) => {
+            // CORRECCIÓN: Renderizar cabecera de grupo solo si estamos agrupando por estado
+            if (row.getIsGrouped()) {
+                if (grouping.includes(column.id)) {
+                    const status = quoteStatuses.find(s => s.id_status === getValue());
+                    return renderGroupCell(row, status?.name || 'Desconocido');
+                }
+                return null;
+            }
+            return (
+                <InlineBadgeSelector 
+                    valueId={getValue() as number}
+                    items={quoteStatuses.map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon }))}
+                    onSelect={(id) => handleInlineUpdate(row.original, { id_quote_status: Number(id) })}
+                    disabled={!(row.original.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                />
+            );
+        },
+        filterFn: (row, id, filterValue: string[]) => {
+             const status = quoteStatuses.find(s => s.id_status === row.getValue(id));
+             const statusName = status ? status.name : 'Desconocido';
+             return filterValue.length === 0 || filterValue.includes(statusName);
+        }
+    },
+    {
+        accessorKey: 'total',
+        header: 'Total',
+        size: 120,
+        // CORRECCIÓN: Retornar null si es grupo
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="font-mono font-bold text-slate-700 text-xs bg-slate-50 px-2 py-1 rounded border border-slate-100">{formatCurrency(getValue() as string)}</span>
+    },
+    {
+        accessorKey: 'created_by_name',
+        header: 'Owner',
+        size: 150,
+        enableColumnFilter: true,
+        cell: ({ row, getValue, column }) => {
+            // CORRECCIÓN: Renderizar cabecera solo si es la columna agrupada
+            if (row.getIsGrouped()) {
+                return grouping.includes(column.id) ? renderGroupCell(row, getValue() as string) : null;
+            }
+            return (
+                <div className="flex items-center gap-2">
+                    <img src={row.original.created_by_avatar || `https://ui-avatars.com/api/?name=${getValue()}`} className="w-5 h-5 rounded-full border border-slate-200" alt="" />
+                    <span className="text-xs text-slate-600 font-medium">{getValue() as string}</span>
+                </div>
+            );
+        }
+    },
+    {
+        accessorKey: 'fecha_emision',
+        header: 'Fecha',
+        size: 120,
+        filterFn: dateRangeFilter,
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs text-slate-500">{formatDateTime(getValue() as string)}</span>
+    },
+    {
+        id: 'actions',
+        header: 'Acciones',
+        size: 100,
+        cell: ({ row }) => {
+            if (row.getIsGrouped()) return null;
+            const q = row.original;
+            const canEdit = q.access_level === 'EDIT' || user?.rol_user === 'admin';
+            const canDelete = q.created_by === user?.id_user || user?.rol_user === 'admin';
+            return (
+                <div className="flex items-center justify-end gap-1">
+                    {canEdit && (
                         <>
-                        {filteredAndSortedQuotes.map((quote) => (
-                            <tr key={quote.id_cotizacion} onClick={() => handleRowClick(quote.id_cotizacion)} className="hover:bg-slate-50/80 transition-all cursor-pointer group">
-                                <td className="px-2 sm:px-4 py-2 align-top">
-                                    <div className="flex flex-col whitespace-normal break-words">
-                                        <span className="font-bold text-brand-600 text-sm hover:underline">#{quote.formatted_no_cotizacion || '---'}</span>
-                                    </div>
-                                </td>
-                                <td className="px-2 sm:px-4 py-2 align-top">
-                                    <div className="flex flex-col whitespace-normal break-words">
-                                        <span className="text-sm font-bold text-slate-700">{quote.nombre_cotizacion || 'Sin Nombre'}</span>
-                                    </div>
-                                </td>
-                                <td className="px-2 sm:px-4 py-2 align-top">
-                                    <div className="flex flex-col whitespace-normal">
-                                        <div className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
-                                            <i className="fa-solid fa-building text-slate-400 text-xs"></i>
-                                            {quote.client_company_name}
-                                        </div>
-                                        <div className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
-                                            <i className="fa-solid fa-user text-slate-400 text-xs"></i>
-                                            <span>{quote.contact_full_name || quote.contact_name}</span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-2 sm:px-4 py-2 text-right">
-                                    <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded text-sm">
-                                        {quote.total}
-                                    </span>
-                                </td>
-                                <td className="px-2 sm:px-4 py-2" onClick={(e) => e.stopPropagation()}>
-                                    <InlineBadgeSelector
-                                        valueId={quote.id_quote_status || 0}
-                                        items={quoteStatuses.map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon }))}
-                                        disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                                        onSelect={(id) => {
-                                            if (id === quote.id_quote_status) return;
-                                            const st = quoteStatuses.find(s => s.id_status === id);
-                                            handleInlineUpdate(quote, {
-                                                id_quote_status: id,
-                                                estado_nombre: st?.name,
-                                                estado_color: st?.color,
-                                                estado_icon: st?.icon,
-                                            });
-                                        }}
-                                    />
-                                </td>
-                                <td className="px-2 sm:px-4 py-2">
-                                    <div className="flex items-center gap-2">
-                                        <img
-                                            src={quote.created_by_avatar || `https://ui-avatars.com/api/?name=${quote.created_by_name || 'User'}&background=random`}
-                                            alt="Owner"
-                                            className="w-8 h-8 rounded-full border-2 border-white shadow-sm object-cover"
-                                        />
-                                        <span className="text-xs text-slate-600 whitespace-nowrap">{quote.created_by_name}</span>
-                                    </div>
-                                </td>
-                                <td className="px-2 sm:px-4 py-2">
-                                    <div className="text-xs text-slate-600 whitespace-nowrap">
-                                        <i className="fa-regular fa-calendar-plus text-slate-400 mr-1.5"></i>
-                                        {quote.fecha_emision_fmt || (quote.fecha_emision ? new Date(quote.fecha_emision).toLocaleDateString() : 'N/A')}
-                                    </div>
-                                </td>
-                                <td className="px-2 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                                    <div className="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {(quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
-                                            <>
-                                                <button onClick={(e) => { e.stopPropagation(); handleEdit(quote); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" title="Editar">
-                                                    <i className="fa-solid fa-pen-to-square text-xs"></i>
-                                                </button>
-                                                <button onClick={(e) => { e.stopPropagation(); setShareQuoteId(quote.id_cotizacion); setIsShareOpen(true); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Compartir">
-                                                    <i className="fa-solid fa-user-plus text-xs"></i>
-                                                </button>
-                                            </>
-                                        )}
-                                        {(quote.created_by === user?.id_user || user?.rol_user === 'admin') && (
-                                            <button onClick={(e) => { e.stopPropagation(); handleDeleteQuote(quote.id_cotizacion); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
-                                                <i className="fa-solid fa-trash-can text-xs"></i>
-                                            </button>
-                                        )}
-                                    </div>
-                                </td>
-                            </tr>
-                        ))}
-                        {filteredAndSortedQuotes.length < 6 && Array.from({ length: 6 - filteredAndSortedQuotes.length }).map((_, i) => (
-                            <tr key={`empty-${i}`} style={{ height: '60px' }}>
-                                <td colSpan={9}></td>
-                            </tr>
-                        ))}
+                            <button onClick={(e) => { e.stopPropagation(); handleEdit(q); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
+                            <button onClick={(e) => { e.stopPropagation(); setShareQuoteId(q.id_cotizacion); setIsShareOpen(true); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
                         </>
                     )}
-                </tbody>
-            </table>
-        </div>
-    );
-  };
+                    {canDelete && (
+                        <button onClick={(e) => { e.stopPropagation(); handleDelete(q.id_cotizacion); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-trash text-[10px]"></i></button>
+                    )}
+                </div>
+            );
+        }
+    }
+  ], [quoteStatuses, grouping]);
+
+  const table = useReactTable({
+    data: quotes,
+    columns,
+    state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
+    onGroupingChange: setGrouping,
+    onExpandedChange: setExpanded,
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getGroupedRowModel: getGroupedRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+    getRowId: (row) => {
+      if ('id_cotizacion' in row) return row.id_cotizacion as string; // Fix: Ensure correct ID field
+      return '';
+    }
+  });
 
   return (
-    <>
-    <div className="w-full mx-auto px-2 md:px-4 lg:px-6 space-y-4 animate-fade-in pb-12">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Cotizaciones</h1>
-            <p className="text-slate-500 text-sm mt-1">Gestiona, envía y monitorea tus propuestas comerciales.</p>
-        </div>
-        <Link to="/app/quotes/new" className="bg-brand-600 hover:bg-brand-700 text-white px-5 py-2.5 rounded-xl shadow-lg shadow-brand-200 text-sm font-medium transition-all flex items-center justify-center">
-          <i className="fa-solid fa-plus mr-2"></i> Nueva Cotización
+    <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
+      
+      {/* TOOLBAR RESPONSIVO MEJORADO */}
+      <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3">
+
+        {(loading || quotes.length > 0) && (
+          <>
+            {/* 1. BUSCADOR */}
+            <div className="relative order-3 lg:order-1 w-full lg:flex-1">
+                <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                <input 
+                    value={globalFilter} 
+                    onChange={e => setGlobalFilter(e.target.value)}
+                    placeholder="Buscar cotización..." 
+                    className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm"
+                />
+            </div>
+            
+            {/* 2. FILTROS */}
+            <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm min-w-[200px]">
+                <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
+                <div className="flex items-center gap-1 flex-wrap">
+                    {[
+                        { id: 'client_company_name', label: 'Cliente', icon: 'fa-building' },
+                        { id: 'id_quote_status', label: 'Estado', icon: 'fa-list-check' },
+                        { id: 'created_by_name', label: 'Owner', icon: 'fa-user-tie' }
+                    ].map(opt => (
+                        <button 
+                            key={opt.id} 
+                            onClick={() => setGrouping(prev => prev.includes(opt.id) ? [] : [opt.id])}
+                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
+                                grouping.includes(opt.id)
+                                ? 'bg-brand-600 text-white shadow-inner' 
+                                : 'text-slate-500 hover:bg-slate-50'
+                            }`}
+                        >
+                            <i className={`fa-solid ${opt.icon} text-[11px]`}></i> {opt.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+          </>
+        )}
+
+        {/* 3. BOTÓN AÑADIR */}
+        <Link 
+          to="/app/quotes/new" 
+          className={`order-1 lg:order-3 w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center justify-center gap-2 ${(!loading && quotes.length === 0) ? 'mx-auto sm:mx-0' : ''}`}
+        >
+            <i className="fa-solid fa-plus"></i> Nueva Cotización
         </Link>
       </div>
 
-      {/* Filters Bar */}
-      <div className="bg-white p-3 rounded-lg shadow-sm border border-slate-200 flex flex-col md:flex-row md:flex-wrap gap-3 items-center">
-        <div className="relative w-full md:flex-1 min-w-[260px]">
-            <span className="absolute left-3 top-2.5 text-slate-400">
-                <i className="fa-solid fa-magnifying-glass"></i>
-            </span>
-          <input type="text" placeholder="Buscar..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all text-sm" />
-        </div>
-        <div className="flex items-center gap-2 w-full md:flex-1 flex-wrap justify-end">
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="p-2.5 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
-              title="Quitar filtros"
-            >
-              <i className="fa-solid fa-filter-circle-xmark text-base"></i>
-            </button>
-          )}
-          <StatusInterestFilter
-            placeholder="Todos los Estados"
-            selectedId={statusFilter}
-            onChange={setStatusFilter}
-            items={quoteStatuses.map(s => {
-              const count = quotes.filter(q => q.id_quote_status?.toString() === s.id_status.toString()).length;
-              return { id: s.id_status.toString(), name: s.name, color: s.color, icon: s.icon, count };
+      <div className="flex-1 overflow-auto relative bg-slate-50/10">
+        <table className="w-full border-separate border-spacing-0">
+          <thead className="sticky top-0 z-40 shadow-sm">
+            {table.getHeaderGroups().map(hg => (
+              <tr key={hg.id}>
+                {hg.headers.map(header => {
+                  const isFiltered = columnFilters.some(f => f.id === header.column.id);
+                  const isDate = header.column.id === 'fecha_emision';
+                  
+                  return (
+                    <th key={header.id} style={{ width: header.getSize() }} className="border-b border-r border-slate-200 bg-slate-50 px-4 py-2 text-left relative group">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 cursor-pointer select-none" onClick={header.column.getToggleSortingHandler()}>
+                          <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                          {{ asc: <i className="fa-solid fa-sort-up text-brand-600"></i>, desc: <i className="fa-solid fa-sort-down text-brand-600"></i> }[header.column.getIsSorted() as string] ?? null}
+                        </div>
+                        {header.column.id !== 'actions' && header.column.columnDef.enableColumnFilter !== false && (
+                          <button onClick={(e) => { e.stopPropagation(); setActiveFilterMenu(activeFilterMenu === header.column.id ? null : header.column.id); }} className={`w-6 h-6 rounded flex items-center justify-center transition-all ${isFiltered ? 'bg-brand-100 text-brand-600' : 'text-slate-300 hover:text-slate-500'}`}><i className={`fa-solid ${isDate ? 'fa-calendar' : 'fa-filter'} text-[10px]`}></i></button>
+                        )}
+                      </div>
+
+                      {activeFilterMenu === header.column.id && (
+                        <div ref={filterMenuRef} className="absolute top-full left-0 mt-1 w-64 bg-white shadow-xl rounded-xl border border-slate-200 z-50 py-3 animate-in fade-in slide-in-from-top-1">
+                          {isDate ? (
+                            <div className="px-4 space-y-3">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Rango de fechas</span>
+                                <input type="date" className="w-full text-xs border rounded p-1" onChange={e => header.column.setFilterValue(old => ({ ...old as any, start: e.target.value }))} />
+                                <input type="date" className="w-full text-xs border rounded p-1" onChange={e => header.column.setFilterValue(old => ({ ...old as any, end: e.target.value }))} />
+                            </div>
+                          ) : (
+                            <div className="max-h-60 overflow-y-auto px-1">
+                                {getFacetedValues(header.column.id).map(([val, count]) => {
+                                    const isChecked = (columnFilters.find(f => f.id === header.column.id)?.value as string[] || []).includes(val);
+                                    return (
+                                        <label key={val} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer">
+                                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${isChecked ? 'bg-brand-600 border-brand-600' : 'bg-white border-slate-300'}`}>{isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}</div>
+                                            <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
+                                            <input type="checkbox" className="hidden" checked={isChecked} onChange={() => {
+                                                const current = (columnFilters.find(f => f.id === header.column.id)?.value as string[]) || [];
+                                                const next = current.includes(val) ? current.filter(v => v !== val) : [...current, val];
+                                                header.column.setFilterValue(next.length ? next : undefined);
+                                            }} />
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                          )}
+                          {isFiltered && <div className="mt-2 pt-2 border-t px-3 text-center"><button onClick={() => header.column.setFilterValue(undefined)} className="text-[10px] font-black text-red-500 hover:underline uppercase">Limpiar Filtro</button></div>}
+                        </div>
+                      )}
+                    </th>
+                  );
+                })}
+              </tr>
+            ))}
+          </thead>
+          <tbody className="bg-white">
+            {loading ? (
+                <tr><td colSpan={columns.length} className="py-24 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i><p className="text-slate-400 text-sm font-medium">Cargando cotizaciones...</p></td></tr>
+            ) : table.getRowModel().rows.length === 0 ? (
+                <tr><td colSpan={columns.length} className="py-24 text-center text-slate-500">No se encontraron cotizaciones.</td></tr>
+            ) : table.getRowModel().rows.map(row => {
+                const isGrouped = row.getIsGrouped();
+                return (
+                    <tr 
+                        key={row.id} 
+                        onClick={() => { if(isGrouped) row.toggleExpanded(); else navigate(`/app/quotes/${row.original.id_cotizacion}`); }}
+                        className={`${isGrouped ? 'bg-slate-50/80 border-l-4 border-l-brand-500 cursor-pointer font-bold' : 'hover:bg-blue-50/30 cursor-pointer group'} border-b border-slate-100 transition-colors`}
+                    >
+                        {row.getVisibleCells().map(cell => (
+                            <td key={cell.id} className={`px-4 py-2 border-r border-slate-50 ${isGrouped ? 'py-3' : ''}`}>
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                        ))}
+                    </tr>
+                );
             })}
-          />
-        </div>
+          </tbody>
+        </table>
       </div>
 
-      {/* Table Container aligned with DealsList */}
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-visible w-full flex flex-col">
-        <div style={{ maxHeight: 'calc(100vh - 300px)', minHeight: '350px', overflowY: 'auto', overflowX: 'auto' }}>
-          {renderContent()}
-        </div>
-        {filteredAndSortedQuotes.length > 0 && (
-          <div className="px-4 py-4 text-xs text-slate-500 border-t border-slate-100 bg-slate-50 flex justify-between items-center">
-            <span>Mostrando <span className="font-semibold text-slate-700">{filteredAndSortedQuotes.length}</span> de <span className="font-semibold text-slate-700">{quotes.length}</span> registros</span>
-            <span className="text-lg font-bold text-brand-700">Total: ${filteredAndSortedQuotes.reduce((sum, q) => {
-              const val = typeof q.total === 'string' ? parseFloat((q.total as string).replace(/[^0-9.-]+/g, '')) : (q.total as number);
-              return sum + (isNaN(val as number) ? 0 : (val as number));
-            }, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+      <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
+          <div className="flex items-center gap-6">
+            <span>{quotes.length} REGISTROS</span>
           </div>
-        )}
+          <div className="flex items-center gap-2">
+            <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-left"></i></button>
+            <span className="bg-white px-3 py-1 border border-slate-200 rounded shadow-sm text-brand-600 font-black tracking-normal">{table.getState().pagination.pageIndex + 1} / {table.getPageCount()}</span>
+            <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-right"></i></button>
+          </div>
       </div>
-    </div>
 
-    {/* Edit Modal */}
-    {isModalOpen && editingQuote && (
+      {isModalOpen && editingQuote && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
@@ -962,16 +591,8 @@ const QuotesList: React.FC = () => {
             <form onSubmit={handleFormSubmit} className="overflow-y-auto p-6 space-y-5">
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre de la Cotización</label>
-                <input 
-                    name="nombre_cotizacion" 
-                    required 
-                    value={editingQuote.nombre_cotizacion || ''} 
-                    onChange={handleInputChange} 
-                    className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all" 
-                    placeholder="Ej. Renovación de Licencias 2024"
-                />
+                <input name="nombre_cotizacion" required value={editingQuote.nombre_cotizacion || ''} onChange={handleInputChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none" />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                  <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Estado</label>
@@ -988,7 +609,6 @@ const QuotesList: React.FC = () => {
                     </select>
                  </div>
               </div>
-
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Contacto Principal</label>
                 <select name="id_contact" required value={editingQuote.id_contact || ''} onChange={handleInputChange} disabled={!editingQuote.id_client_company} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 outline-none disabled:bg-slate-100 disabled:text-slate-400">
@@ -996,7 +616,6 @@ const QuotesList: React.FC = () => {
                   {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{`${c.first_name} ${c.last_name || ''}`}</option>)}
                 </select>
               </div>
-
               <div className="pt-2">
                  <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center"><i className="fa-solid fa-list-check mr-2 text-brand-500"></i> Condiciones</h3>
                  <div className="grid grid-cols-3 gap-3">
@@ -1014,27 +633,21 @@ const QuotesList: React.FC = () => {
                     </div>
                  </div>
               </div>
-
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mensaje (Opcional)</label>
                 <textarea name="mensaje" value={editingQuote.mensaje || ''} onChange={handleInputChange} rows={2} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none resize-none"></textarea>
               </div>
-              
               <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-start gap-3">
                 <input type="checkbox" id="is_private_edit" name="is_private" checked={editingQuote.is_private || false} onChange={(e) => setEditingQuote({ ...(editingQuote || {}), is_private: e.target.checked })} className="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500" />
                 <label htmlFor="is_private_edit" className="cursor-pointer">
                   <div className="text-sm font-bold text-amber-800">Cotización Privada</div>
-                  <div className="text-xs text-amber-700/70 mt-0.5">
-                    Solo visible para ti y administradores. No se comparte con el equipo.
-                  </div>
+                  <div className="text-xs text-amber-700/70 mt-0.5">Solo visible para ti y administradores.</div>
                 </label>
               </div>
-              
               <div className="flex justify-end pt-4 gap-3 border-t border-slate-100">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all">Cancelar</button>
                 <button type="submit" disabled={submitting} className="px-5 py-2.5 rounded-xl bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-200 font-medium flex items-center transition-all disabled:opacity-70">
-                  {submitting ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-check mr-2"></i>}
-                  Guardar Cambios
+                  {submitting ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-check mr-2"></i>} Guardar
                 </button>
               </div>
             </form>
@@ -1042,30 +655,10 @@ const QuotesList: React.FC = () => {
         </div>
       )}
 
-      {confirmState.isOpen && (
-        <ConfirmModal
-          isOpen={confirmState.isOpen}
-          title={confirmState.title}
-          message={confirmState.message}
-          isDestructive={confirmState.isDestructive}
-          onClose={() => setConfirmState({ ...confirmState, isOpen: false })}
-          onConfirm={confirmState.onConfirm || (() => setConfirmState({ ...confirmState, isOpen: false }))}
-        />
-      )}
-
-      {isShareOpen && shareQuoteId && (
-        <ShareModal 
-          entity="quotes" 
-          id={shareQuoteId} 
-          isOpen={isShareOpen} 
-          onClose={() => { setIsShareOpen(false); setShareQuoteId(null); }} 
-          onShared={() => setToast({ message: 'Cotización compartida.', type: 'success' })}
-          excludeUserIds={user ? [user.id_user] : []}
-        />
-      )}
-
-    {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-    </>
+      {confirmState.isOpen && <ConfirmModal {...confirmState} onClose={() => setConfirmState(p => ({...p, isOpen: false}))} />}
+      {isShareOpen && shareQuoteId && <ShareModal entity="quotes" id={shareQuoteId} isOpen={isShareOpen} onClose={() => { setIsShareOpen(false); setShareQuoteId(null); }} onShared={() => setToast({ message: 'Compartido.', type: 'success' })} />}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+    </div>
   );
 };
 
