@@ -24,13 +24,12 @@ const NAV_GROUPS = [
       { label: 'Tratos', path: '/app/deals', icon: 'fa-handshake', roles: ['superadmin', 'admin', 'usuario'] },
     ]
   },
-  // Marketing Center oculto temporalmente hasta finalizar features
-  // {
-  //   title: 'Marketing',
-  //   items: [
-  //     { label: 'Marketing Center', path: '/app/marketing', icon: 'fa-bullseye', roles: ['superadmin', 'admin', 'usuario'] },
-  //   ]
-  // },
+  {
+    title: 'Marketing',
+    items: [
+      { label: 'Marketing Center', path: '/app/marketing', icon: 'fa-bullseye', roles: ['superadmin', 'admin', 'usuario'] },
+    ]
+  },
   {
     title: 'Directorio',
     items: [

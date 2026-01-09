@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { marketingApi } from '../../../services/marketingApi';
+import ConfirmModal from '../../ConfirmModal';
 
 // Definición de tipos
 interface Contact {
@@ -11,6 +12,7 @@ interface Contact {
   position?: string;
   company_name?: string;
   city?: string;
+  is_subscribed?: boolean;
 }
 
 interface CompanyOption {
@@ -40,6 +42,13 @@ const AudienceMembersModal: React.FC<Props> = ({ isOpen, onClose, listId, listNa
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Búsqueda en MEMBERS tab
+  const [memberSearch, setMemberSearch] = useState('');
+  
+  // Modal de confirmación
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{action: 'add' | 'remove' | 'unsubscribe', count: number} | null>(null);
 
   // Filtros Avanzados
   const [filters, setFilters] = useState({
@@ -119,9 +128,15 @@ useEffect(() => {
   };
 
   const handleToggleSelect = (id: string) => {
+    if (!id || id.trim() === '') {
+      return;
+    }
     const newSet = new Set(selectedIds);
-    if (newSet.has(id)) newSet.delete(id);
-    else newSet.add(id);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
     setSelectedIds(newSet);
   };
 
@@ -133,13 +148,33 @@ useEffect(() => {
     }
   };
 
-  const executeAction = async (action: 'add' | 'remove') => {
-    if (selectedIds.size === 0) return;
+  const executeAction = async (action: 'add' | 'remove' | 'unsubscribe') => {
+    if (selectedIds.size === 0) {
+      alert('Por favor selecciona al menos un contacto');
+      return;
+    }
+
+    setPendingAction({ action, count: selectedIds.size });
+    setShowConfirm(true);
+  };
+
+  const confirmAction = async () => {
+    if (!pendingAction) return;
+
+    // Filtrar cualquier ID undefined antes de enviar
+    const validIds = Array.from(selectedIds).filter(id => id && id.trim() !== '');
+    
+    if (validIds.length === 0) {
+      alert('Por favor selecciona al menos un contacto válido');
+      setShowConfirm(false);
+      return;
+    }
+
     setIsSaving(true);
     try {
-      await marketingApi.manageListMembers(listId, Array.from(selectedIds), action);
+      await marketingApi.manageListMembers(listId, validIds, pendingAction.action);
       
-      if (action === 'add') {
+      if (pendingAction.action === 'add') {
         setActiveTab('MEMBERS');
         fetchMembers(); 
       } else {
@@ -147,9 +182,12 @@ useEffect(() => {
       }
       setSelectedIds(new Set());
     } catch (error) {
+      console.error('Error al actualizar:', error);
       alert('Error al actualizar');
     } finally {
       setIsSaving(false);
+      setShowConfirm(false);
+      setPendingAction(null);
     }
   };
 
@@ -253,21 +291,68 @@ useEffect(() => {
 
           {/* === VISTA: MIEMBROS === */}
           {activeTab === 'MEMBERS' && (
-            <div className="space-y-2">
-              {members.length === 0 ? (
+            <div className="space-y-3">
+              {/* Search bar for members */}
+              <div className="sticky top-0 bg-slate-50/95 backdrop-blur-sm pb-2 pt-1 z-10">
+                <input 
+                  type="text" 
+                  placeholder="🔍 Buscar en miembros actuales..." 
+                  value={memberSearch}
+                  onChange={(e) => setMemberSearch(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none" 
+                />
+              </div>
+
+              {members.filter(m => {
+                const name = renderName(m).toLowerCase();
+                const email = (m.email || '').toLowerCase();
+                const query = memberSearch.toLowerCase();
+                return name.includes(query) || email.includes(query);
+              }).length === 0 ? (
                 <div className="text-center py-20 text-slate-400">
                   <i className="fas fa-folder-open text-4xl mb-3 opacity-50"></i>
-                  <p>La lista está vacía.</p>
+                  <p>{memberSearch ? 'No se encontraron miembros con esa búsqueda.' : 'La lista está vacía.'}</p>
                 </div>
               ) : (
-                members.map((member, idx) => (
-                  <div key={member.id_contact || idx} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-lg hover:shadow-sm transition-shadow">
+                members.filter(m => {
+                  const name = renderName(m).toLowerCase();
+                  const email = (m.email || '').toLowerCase();
+                  const query = memberSearch.toLowerCase();
+                  return name.includes(query) || email.includes(query);
+                }).map((member, idx) => {
+                  const isUnsubscribed = member.is_subscribed === false;
+                  const isSelected = selectedIds.has(member.id_contact);
+                  
+                  return (
+                  <label 
+                    key={member.id_contact || idx} 
+                    className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${
+                      isSelected
+                        ? 'bg-red-50 border-red-300 ring-1 ring-red-300' 
+                        : isUnsubscribed
+                        ? 'bg-orange-50/70 border-orange-200 hover:border-orange-300 opacity-75'
+                        : 'bg-white border-slate-200 hover:border-slate-300'
+                    }`}
+                  >
                     <div className="flex items-center gap-3">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 text-red-600 rounded focus:ring-red-500"
+                        checked={selectedIds.has(member.id_contact)}
+                        onChange={() => handleToggleSelect(member.id_contact)}
+                      />
                       <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold uppercase">
                         {getInitial(member)}
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-slate-800">{renderName(member)}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-slate-700">{renderName(member)}</p>
+                          {member.is_subscribed === false && (
+                            <span className="px-2 py-0.5 text-[10px] font-bold bg-orange-100 text-orange-700 rounded-full">
+                              DESUSCRITO
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-slate-500">{member.email}</p>
                       </div>
                     </div>
@@ -276,19 +361,10 @@ useEffect(() => {
                          <p className="text-xs font-semibold text-slate-700">{member.company_name || 'Particular'}</p>
                          {member.position && <p className="text-[10px] text-slate-400">{member.position}</p>}
                        </div>
-                       <button 
-                         onClick={() => {
-                           setSelectedIds(new Set([member.id_contact]));
-                           executeAction('remove');
-                         }}
-                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-                         title="Quitar de la lista"
-                       >
-                         <i className="fas fa-times"></i>
-                       </button>
                     </div>
-                  </div>
-                ))
+                  </label>
+                  );
+                })
               )}
             </div>
           )}
@@ -310,9 +386,9 @@ useEffect(() => {
                     <p>No se encontraron contactos con estos filtros.</p>
                  </div>
               ) : (
-                candidates.map((contact, idx) => (
+                candidates.filter(c => c.id_contact && c.id_contact.trim() !== '').map((contact) => (
                   <label 
-                    key={contact.id_contact || idx} 
+                    key={contact.id_contact} 
                     className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${selectedIds.has(contact.id_contact) ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'bg-white border-slate-200 hover:border-blue-300'}`}
                   >
                     <div className="flex items-center gap-3">
@@ -367,16 +443,67 @@ useEffect(() => {
             )}
             
             {activeTab === 'MEMBERS' && selectedIds.size > 0 && (
+              <>
                 <button 
-                onClick={() => executeAction('remove')}
-                className="px-4 py-2 text-sm bg-red-100 text-red-600 font-bold rounded-lg hover:bg-red-200"
-              >
-                Quitar Seleccionados
-              </button>
+                  onClick={() => setSelectedIds(new Set())}
+                  disabled={isSaving}
+                  className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg font-semibold border border-slate-200 transition-all flex items-center gap-2"
+                >
+                  <i className="fas fa-times"></i>
+                  Borrar Selección
+                </button>
+                
+                <button 
+                  onClick={() => executeAction('unsubscribe')}
+                  disabled={isSaving}
+                  className="px-4 py-2 text-sm bg-orange-600 text-white font-bold rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                >
+                  {isSaving ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-user-slash"></i>}
+                  {isSaving ? 'Desuscribiendo...' : 'Desuscribir'}
+                </button>
+                
+                <button 
+                  onClick={() => executeAction('remove')}
+                  disabled={isSaving}
+                  className="px-4 py-2 text-sm bg-red-600 text-white font-bold rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+                >
+                  {isSaving ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-trash"></i>}
+                  {isSaving ? 'Eliminando...' : 'Eliminar'}
+                </button>
+              </>
             )}
           </div>
         </div>
       </div>
+
+      {/* Modal de Confirmación */}
+      <ConfirmModal
+        isOpen={showConfirm}
+        onClose={() => {
+          setShowConfirm(false);
+          setPendingAction(null);
+        }}
+        onConfirm={confirmAction}
+        title={
+          pendingAction?.action === 'add' ? 'Agregar Contactos' :
+          pendingAction?.action === 'remove' ? 'Eliminar Contactos' :
+          'Desuscribir Contactos'
+        }
+        message={
+          pendingAction?.action === 'add' 
+            ? `¿Seguro desea agregar ${pendingAction.count} contacto${pendingAction.count > 1 ? 's' : ''} a la lista?`
+            : pendingAction?.action === 'remove'
+            ? `¿Seguro desea eliminar ${pendingAction.count} contacto${pendingAction.count > 1 ? 's' : ''} de la lista? Esta acción no se puede deshacer.`
+            : `¿Seguro desea desuscribir ${pendingAction?.count || 0} contacto${(pendingAction?.count || 0) > 1 ? 's' : ''}? No se eliminarán pero se marcarán como desuscritos y no recibirán más correos.`
+        }
+        confirmText={
+          pendingAction?.action === 'add' ? 'Agregar' :
+          pendingAction?.action === 'remove' ? 'Eliminar' :
+          'Desuscribir'
+        }
+        cancelText="Cancelar"
+        isDestructive={pendingAction?.action === 'remove'}
+      />
     </div>,
     document.body
   );

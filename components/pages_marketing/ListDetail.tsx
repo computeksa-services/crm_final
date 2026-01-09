@@ -3,6 +3,8 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { marketingApi } from '../../services/marketingApi';
 import { MarketingList, ListMember } from '../../types';
+import AudienceMembersModal from '../marketing_center/audiences/AudienceMembersModal';
+import ConfirmModal from '../ConfirmModal';
 
 interface SharedUser {
   id_user: string;
@@ -33,7 +35,15 @@ const ListDetail: React.FC = () => {
 
   // Add Member Modal State
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
-  const [newMemberEmail, setNewMemberEmail] = useState('');
+  
+  // Confirmation Modal State
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'remove' | 'unsubscribe' | 'resubscribe';
+    memberId: string;
+    memberName: string;
+  } | null>(null);
+  const [isActionLoading, setIsActionLoading] = useState(false);
 
   useEffect(() => {
     if (id && user?.id_user) {
@@ -115,6 +125,10 @@ const ListDetail: React.FC = () => {
 
   }, [members, searchQuery, filterStatus, groupBy]);
 
+  const totalFilteredMembers = useMemo(() => {
+    return Object.values(processedMembers).reduce((sum, group) => sum + group.length, 0);
+  }, [processedMembers]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -127,14 +141,51 @@ const ListDetail: React.FC = () => {
     return <div className="p-8 text-center text-slate-500">Lista no encontrada</div>;
   }
 
+  // Verificar si el usuario actual es el creador de la lista
+  const isCreator = list.created_by === user?.id_user;
+
   // --- Handlers ---
 
-  const handleUpdateList = (e: React.FormEvent) => {
+  const handleUpdateList = async (e: React.FormEvent) => {
     e.preventDefault();
-    setList(prev => prev ? ({ ...prev, name: editForm.name, description: editForm.description, visibility: editForm.visibility as any }) : undefined);
-    setOriginalForm(editForm); // Reset dirty state
-    setHasUnsavedChanges(false);
-    alert("Configuración guardada correctamente.");
+    if (!id || !user) return;
+
+    console.log('💾 Enviando actualización de lista:', { id_list: id, id_user: user.id_user, id_tenant: user.id_tenant, ...editForm });
+    
+    try {
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/lists/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_list: id,
+          id_user: user.id_user,
+          id_tenant: user.id_tenant,
+          name: editForm.name,
+          description: editForm.description,
+          visibility: editForm.visibility
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Error ${response.status}: ${error}`);
+      }
+
+      const updatedList = await response.json();
+      console.log('✅ Lista actualizada:', updatedList);
+      
+      // Actualizar el estado local
+      setList(prev => prev ? { 
+        ...prev, 
+        name: editForm.name, 
+        description: editForm.description, 
+        visibility: editForm.visibility as any 
+      } : undefined);
+      setOriginalForm(editForm);
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('❌ Error al guardar lista:', error);
+    }
   };
 
   const handleToggleShare = (userId: string) => {
@@ -147,43 +198,77 @@ const ListDetail: React.FC = () => {
     // Note: In a real app, this should also trigger "unsaved changes" if not immediate
   };
 
-  const handleRemoveMember = (memberId: string) => {
-    if (confirm('¿Estás seguro de quitar a este miembro de la lista?')) {
-      setMembers(prev => prev.filter(m => m.id_member !== memberId));
+  const handleRemoveMember = (memberId: string, memberName: string) => {
+    console.log('🗑️ handleRemoveMember llamado:', { memberId, memberName });
+    if (!memberId || memberId.trim() === '') {
+      console.error('❌ memberId inválido:', memberId);
+      return;
+    }
+    setPendingAction({ type: 'remove', memberId, memberName });
+    setShowConfirm(true);
+  };
+
+  const handleStatusChange = (memberId: string, memberName: string, newStatus: 'SUBSCRIBED' | 'UNSUBSCRIBED') => {
+    console.log('🔄 handleStatusChange llamado:', { memberId, memberName, newStatus });
+    if (!memberId || memberId.trim() === '') {
+      console.error('❌ memberId inválido:', memberId);
+      return;
+    }
+    const actionType = newStatus === 'UNSUBSCRIBED' ? 'unsubscribe' : 'resubscribe';
+    setPendingAction({ type: actionType, memberId, memberName });
+    setShowConfirm(true);
+  };
+
+  const confirmAction = async () => {
+    console.log('🔐 confirmAction ejecutado:', { pendingAction, id, user: user?.id_user });
+    if (!pendingAction || !id || !user) {
+      console.error('❌ Datos incompletos:', { hasPendingAction: !!pendingAction, hasId: !!id, hasUser: !!user });
+      return;
+    }
+
+    setIsActionLoading(true);
+    try {
+      const contactIds = [pendingAction.memberId];
+      console.log('📤 Enviando al API:', { id_list: id, contact_ids: contactIds, action: pendingAction.type });
+      
+      if (pendingAction.type === 'remove') {
+        await marketingApi.manageListMembers(id, contactIds, 'remove');
+      } else if (pendingAction.type === 'unsubscribe') {
+        await marketingApi.manageListMembers(id, contactIds, 'unsubscribe');
+      } else if (pendingAction.type === 'resubscribe') {
+        await marketingApi.manageListMembers(id, contactIds, 'add');
+      }
+      
+      console.log('✅ Acción completada, refrescando lista...');
+      // Refrescar la lista
+      await refreshMembers();
+      
+      // Cerrar modal
+      setShowConfirm(false);
+      setPendingAction(null);
+    } catch (error) {
+      console.error('Error al ejecutar acción:', error);
+      setShowConfirm(false);
+      setPendingAction(null);
+    } finally {
+      setIsActionLoading(false);
     }
   };
 
-  const handleStatusChange = (memberId: string, newStatus: 'SUBSCRIBED' | 'UNSUBSCRIBED') => {
-    setMembers(prev => prev.map(m => m.id_member === memberId ? { ...m, status: newStatus } : m));
-  };
-
-  const handleAddMember = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMemberEmail || !list) return;
-    
-    const newMember: ListMember = {
-      id_member: `mem_${Date.now()}`,
-      id_list: list.id_list,
-      id_contact: `cont_${Date.now()}`,
-      email: newMemberEmail,
-      full_name: newMemberEmail.split('@')[0],
-      company_name: 'N/A',
-      joined_at: new Date().toISOString(),
-      status: 'SUBSCRIBED'
-    };
-
-    setMembers([newMember, ...members]);
-    setIsAddMemberModalOpen(false);
-    setNewMemberEmail('');
+  const refreshMembers = async () => {
+    if (!id || !user) return;
+    try {
+      const updated = await marketingApi.getListMembers(id, user.id_user);
+      setMembers(updated);
+    } catch (error) {
+      console.error('Error refrescando miembros', error);
+    }
   };
 
   const handleTabChange = (tab: 'MEMBERS' | 'SETTINGS') => {
     if (activeTab === 'SETTINGS' && hasUnsavedChanges && tab !== 'SETTINGS') {
-      if (!confirm("Tienes cambios sin guardar en la configuración. ¿Deseas salir y perder los cambios?")) {
-        return;
-      }
-      // Reset changes if leaving
-      setEditForm(originalForm);
+      // No permitir cambiar si hay cambios sin guardar
+      return;
     }
     setActiveTab(tab);
   };
@@ -248,13 +333,15 @@ const ListDetail: React.FC = () => {
           >
             <i className="fa-solid fa-users mr-2"></i> Miembros
           </button>
-          <button 
-            onClick={() => handleTabChange('SETTINGS')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'SETTINGS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            <i className="fa-solid fa-gear mr-2"></i> Configuración y Acceso
-            {hasUnsavedChanges && <span className="ml-2 w-2 h-2 bg-amber-500 rounded-full inline-block mb-0.5"></span>}
-          </button>
+          {isCreator && (
+            <button 
+              onClick={() => handleTabChange('SETTINGS')}
+              className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'SETTINGS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            >
+              <i className="fa-solid fa-gear mr-2"></i> Configuración y Acceso
+              {hasUnsavedChanges && <span className="ml-2 w-2 h-2 bg-amber-500 rounded-full inline-block mb-0.5"></span>}
+            </button>
+          )}
         </div>
       </div>
 
@@ -303,9 +390,15 @@ const ListDetail: React.FC = () => {
 
                <button 
                  onClick={() => setIsAddMemberModalOpen(true)}
-                 className="w-full xl:w-auto px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                 disabled={!isCreator}
+                 className={`w-full xl:w-auto px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm ${
+                   isCreator 
+                     ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                 }`}
+                 title={!isCreator ? 'Solo el creador de la lista puede gestionar miembros' : ''}
                >
-                 <i className="fa-solid fa-user-plus"></i> Agregar Miembro
+                 <i className="fa-solid fa-users-gear"></i> Gestionar Miembros
                </button>
             </div>
 
@@ -322,15 +415,15 @@ const ListDetail: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
-                   {Object.keys(processedMembers).length === 0 ? (
-                     <tr>
+                   {totalFilteredMembers === 0 ? (
+                     <tr key="empty-state">
                        <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">
-                         No se encontraron miembros con los filtros actuales.
+                         Sin miembros en la lista.
                        </td>
                      </tr>
                    ) : (
-                     Object.entries(processedMembers).map(([groupKey, groupMembers]) => (
-                       <React.Fragment key={groupKey}>
+                     Object.entries(processedMembers).map(([groupKey, groupMembers], groupIndex) => (
+                       <React.Fragment key={`group-${groupKey}-${groupIndex}`}>
                          {groupBy !== 'NONE' && (
                            <tr className="bg-slate-50 border-b border-slate-200">
                              <td colSpan={5} className="px-6 py-2 text-xs font-bold text-slate-600 uppercase tracking-wider">
@@ -339,7 +432,7 @@ const ListDetail: React.FC = () => {
                            </tr>
                          )}
                          {(groupMembers as ListMember[]).map(member => (
-                           <tr key={member.id_member} className="hover:bg-slate-50 transition-colors group">
+                           <tr key={member.id_contact} className="hover:bg-slate-50 transition-colors group">
                              <td className="px-6 py-4">
                                <div>
                                  <p className="font-semibold text-slate-800 text-sm">{member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Sin nombre'}</p>
@@ -360,7 +453,7 @@ const ListDetail: React.FC = () => {
                                   {member.status === 'SUBSCRIBED' ? (
                                     <button 
                                       title="Desuscribir"
-                                      onClick={() => handleStatusChange(member.id_member, 'UNSUBSCRIBED')}
+                                      onClick={() => handleStatusChange(member.id_contact, member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Sin nombre', 'UNSUBSCRIBED')}
                                       className="w-8 h-8 flex items-center justify-center rounded-lg text-amber-500 hover:bg-amber-50 transition-colors"
                                     >
                                       <i className="fa-solid fa-ban"></i>
@@ -368,7 +461,7 @@ const ListDetail: React.FC = () => {
                                   ) : (
                                     <button 
                                       title="Resuscribir"
-                                      onClick={() => handleStatusChange(member.id_member, 'SUBSCRIBED')}
+                                      onClick={() => handleStatusChange(member.id_contact, member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Sin nombre', 'SUBSCRIBED')}
                                       className="w-8 h-8 flex items-center justify-center rounded-lg text-green-600 hover:bg-green-50 transition-colors"
                                     >
                                       <i className="fa-solid fa-rotate-left"></i>
@@ -376,7 +469,7 @@ const ListDetail: React.FC = () => {
                                   )}
                                   <button 
                                     title="Quitar de la lista"
-                                    onClick={() => handleRemoveMember(member.id_member)}
+                                    onClick={() => handleRemoveMember(member.id_contact, member.full_name || `${member.first_name || ''} ${member.last_name || ''}`.trim() || 'Sin nombre')}
                                     className="w-8 h-8 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 transition-colors"
                                   >
                                     <i className="fa-solid fa-trash-can"></i>
@@ -468,23 +561,12 @@ const ListDetail: React.FC = () => {
                               <input 
                                 type="radio" 
                                 name="visibility" 
-                                value="SHARED" 
-                                checked={editForm.visibility === 'SHARED'}
+                                value="PUBLIC_TENANT" 
+                                checked={editForm.visibility === 'PUBLIC_TENANT'}
                                 onChange={(e) => setEditForm({...editForm, visibility: e.target.value})}
                                 className="text-blue-600 focus:ring-blue-500"
                               />
-                              <span className="text-sm text-slate-700">Compartida</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input 
-                                type="radio" 
-                                name="visibility" 
-                                value="PUBLIC" 
-                                checked={editForm.visibility === 'PUBLIC'}
-                                onChange={(e) => setEditForm({...editForm, visibility: e.target.value})}
-                                className="text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-sm text-slate-700">Pública</span>
+                              <span className="text-sm text-slate-700">Pública en la Empresa</span>
                             </label>
                         </div>
                       </div>
@@ -505,7 +587,7 @@ const ListDetail: React.FC = () => {
                 </div>
 
                 {/* Sharing Settings */}
-                <div className={`bg-white rounded-xl border border-slate-200 shadow-sm p-6 ${editForm.visibility !== 'SHARED' ? 'opacity-50 pointer-events-none' : ''}`}>
+                <div className={`bg-white rounded-xl border border-slate-200 shadow-sm p-6 ${editForm.visibility !== 'PUBLIC_TENANT' ? 'opacity-50 pointer-events-none' : ''}`}>
                     <h3 className="font-bold text-slate-800 mb-2">Acceso Compartido</h3>
                     <p className="text-xs text-slate-500 mb-6 pb-2 border-b border-slate-100">Selecciona los colegas que pueden ver y editar esta lista.</p>
                     
@@ -532,9 +614,9 @@ const ListDetail: React.FC = () => {
                       ))}
                     </div>
                     
-                    {editForm.visibility !== 'SHARED' && (
+                    {editForm.visibility !== 'PUBLIC_TENANT' && (
                       <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-10">
-                        <span className="text-sm font-bold text-slate-600 bg-white px-3 py-1 rounded shadow-sm border">Solo disponible en modo Compartido</span>
+                        <span className="text-sm font-bold text-slate-600 bg-white px-3 py-1 rounded shadow-sm border">Solo disponible en modo Pública en la Empresa</span>
                       </div>
                     )}
                 </div>
@@ -545,42 +627,47 @@ const ListDetail: React.FC = () => {
 
       {/* Add Member Modal */}
       {isAddMemberModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-             <h3 className="font-bold text-lg text-slate-800 mb-4">Agregar Miembro a la Lista</h3>
-             <p className="text-sm text-slate-500 mb-6">Ingresa el correo electrónico del contacto. En producción, esto sería un buscador de contactos.</p>
-             <form onSubmit={handleAddMember}>
-               <div className="mb-6">
-                 <label className="block text-sm font-medium text-slate-700 mb-1">Correo Electrónico</label>
-                 <input 
-                   type="email" 
-                   required
-                   autoFocus
-                   className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-1 focus:ring-brand-500 outline-none"
-                   placeholder="contacto@ejemplo.com"
-                   value={newMemberEmail}
-                   onChange={(e) => setNewMemberEmail(e.target.value)}
-                 />
-               </div>
-               <div className="flex justify-end gap-3">
-                 <button 
-                   type="button" 
-                   onClick={() => setIsAddMemberModalOpen(false)}
-                   className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium"
-                 >
-                   Cancelar
-                 </button>
-                 <button 
-                   type="submit" 
-                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-                 >
-                   Agregar
-                 </button>
-               </div>
-             </form>
-          </div>
-        </div>
+        <AudienceMembersModal
+          isOpen={isAddMemberModalOpen}
+          onClose={() => {
+            setIsAddMemberModalOpen(false);
+            refreshMembers();
+          }}
+          listId={list?.id_list || ''}
+          listName={list?.name || ''}
+          tenantId={user?.id_tenant || ''}
+          userId={user?.id_user || ''}
+        />
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showConfirm}
+        onClose={() => {
+          setShowConfirm(false);
+          setPendingAction(null);
+        }}
+        onConfirm={confirmAction}
+        title={
+          pendingAction?.type === 'remove' ? 'Eliminar Miembro' :
+          pendingAction?.type === 'unsubscribe' ? 'Desuscribir Miembro' :
+          'Resuscribir Miembro'
+        }
+        message={
+          pendingAction?.type === 'remove'
+            ? `¿Seguro desea eliminar a ${pendingAction?.memberName} de la lista? Esta acción no se puede deshacer.`
+            : pendingAction?.type === 'unsubscribe'
+            ? `¿Seguro desea desuscribir a ${pendingAction?.memberName}? No se eliminarán pero no recibirá más correos.`
+            : `¿Seguro desea resuscribir a ${pendingAction?.memberName}? Volverá a recibir correos.`
+        }
+        confirmText={
+          pendingAction?.type === 'remove' ? 'Eliminar' :
+          pendingAction?.type === 'unsubscribe' ? 'Desuscribir' :
+          'Resuscribir'
+        }
+        cancelText="Cancelar"
+        isDestructive={pendingAction?.type === 'remove'}
+      />
     </div>
   );
 };

@@ -158,7 +158,16 @@ export const marketingApi = {
       // Enviamos id_user para aplicar filtros de seguridad (company_permissions / contact_permissions)
       const response = await fetch(`${API_BASE}/api/marketing/lists/members?id_list=${id_list}&id_user=${id_user}`);
       const data = await parseResponse(response);
-      return Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) return [];
+
+      // Algunos flujos devuelven [{ success: true }] cuando la lista está vacía.
+      const normalized = data.filter((item: any) => {
+        if (item && item.success === true && Object.keys(item).length === 1) return false;
+        // Mantener solo registros con algún identificador o email
+        return Boolean(item?.id_member || item?.email || item?.full_name || item?.first_name || item?.last_name);
+      });
+
+      return normalized;
     } catch (error) {
       console.error('❌ Error getListMembers:', error);
       throw error;
@@ -166,25 +175,44 @@ export const marketingApi = {
   },
 
   /**
-   * Agregar o Quitar miembros
+   * Gestionar miembros de la lista
+   * Acciones:
+   * - 'add': Agrega nuevos O reactiva (resuscribe) a los que se dieron de baja.
+   * - 'remove': Elimina la fila de la base de datos (borrón y cuenta nueva).
+   * - 'unsubscribe': Marca como desuscrito (mantiene historial, bloquea envíos).
    */
   async manageListMembers(
     id_list: string,
-    contact_ids: string[], // Array de UUIDs de la tabla client_contacts
-    action: 'add' | 'remove'
+    contact_ids: string[], 
+    action: 'add' | 'remove' | 'unsubscribe'
   ): Promise<void> {
     try {
-      await fetch(`${API_BASE}/api/marketing/lists/manage`, {
+      if (!id_list) throw new Error('id_list is required');
+      if (!contact_ids || contact_ids.length === 0) {
+        console.warn('⚠️ No contact_ids provided to manageListMembers');
+        return;
+      }
+
+      const payload = { 
+        id_list,
+        contact_ids,
+        action 
+      };
+
+      console.log('📤 Enviando payload a manageListMembers:', payload);
+
+      const response = await fetch(`${API_BASE}/api/marketing/lists/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          id_list, 
-          contact_ids, // En n8n: jsonb_array_elements_text(p->'contact_ids')
-          action 
-        }),
+        body: JSON.stringify(payload),
       });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error ${response.status}: ${errorText}`);
+      }
     } catch (error) {
-      console.error('❌ Error manageListMembers:', error);
+      console.error(`❌ Error managing members (${action}):`, error);
       throw error;
     }
   },
