@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { marketingApi } from '../../services/marketingApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { MarketingList } from '../../types';
+import ReactQuill from 'react-quill';
+import 'react-quill/dist/quill.snow.css';
 
 const STEPS = [
   { id: 1, label: 'Detalles' },
@@ -27,11 +29,14 @@ const CampaignWizard: React.FC = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isTestEmailModalOpen, setIsTestEmailModalOpen] = useState(false);
   const [testEmailAddress, setTestEmailAddress] = useState(user?.email_user || '');
+  const [isSendingTest, setIsSendingTest] = useState(false);
   const [lists, setLists] = useState<MarketingList[]>([]);
   const [isLoadingLists, setIsLoadingLists] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [tenantData, setTenantData] = useState<{ corporate_email_address?: string; name_tenant?: string } | null>(null);
   const [isLoadingTenant, setIsLoadingTenant] = useState(false);
+  const [searchLists, setSearchLists] = useState('');
+  const [useRichEditor, setUseRichEditor] = useState(true);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -97,7 +102,20 @@ const CampaignWizard: React.FC = () => {
     if (!id) return;
     
     try {
-      const campaign = await marketingApi.getCampaignDetail(id);
+      const response = await marketingApi.getCampaignDetail(id);
+      // El backend devuelve un array, tomar el primer elemento
+      const campaign = Array.isArray(response) ? response[0] : response;
+      
+      if (!campaign) {
+        console.error('No se encontró la campaña');
+        return;
+      }
+      
+      // Normalizar los IDs de listas - ya vienen como strings desde el backend
+      const normalizedLists = Array.isArray(campaign.target_lists) 
+        ? campaign.target_lists.map((listId: any) => String(listId))
+        : [];
+      
       setFormData(prev => ({
         ...prev,
         name: campaign.name,
@@ -105,8 +123,14 @@ const CampaignWizard: React.FC = () => {
         previewText: campaign.preview_text || '',
         htmlContent: campaign.html_content || prev.htmlContent,
         senderType: campaign.sender_type,
-        selectedLists: Array.isArray(campaign.target_lists) ? campaign.target_lists : [],
+        senderName: campaign.sender_name || prev.senderName,
+        senderEmail: campaign.sender_email || prev.senderEmail,
+        selectedLists: normalizedLists,
       }));
+      
+      console.log('📋 Campaña cargada');
+      console.log('  → Listas seleccionadas:', normalizedLists);
+      console.log('  → Tipo de datos:', normalizedLists.map(id => `${id} (${typeof id})`));
     } catch (error) {
       console.error('Error al cargar campaña:', error);
     }
@@ -136,11 +160,12 @@ const CampaignWizard: React.FC = () => {
   };
   
   const toggleList = (listId: string) => {
+    const normalizedId = String(listId);
     setFormData(prev => ({
       ...prev,
-      selectedLists: prev.selectedLists.includes(listId) 
-        ? prev.selectedLists.filter(id => id !== listId)
-        : [...prev.selectedLists, listId]
+      selectedLists: prev.selectedLists.map(String).includes(normalizedId) 
+        ? prev.selectedLists.filter(id => String(id) !== normalizedId)
+        : [...prev.selectedLists, normalizedId]
     }));
   };
 
@@ -166,22 +191,54 @@ const CampaignWizard: React.FC = () => {
     }));
   };
 
-  // --- Editor Logic ---
-  const insertImage = () => {
-    const url = prompt("Ingresa la URL de la imagen:", "https://picsum.photos/600/300");
-    if (url) {
-      const imgTag = `\n<img src="${url}" alt="Imagen insertada" style="max-width: 100%; border-radius: 8px; margin: 10px 0;" />\n`;
-      setFormData(prev => ({
-        ...prev,
-        htmlContent: prev.htmlContent + imgTag
-      }));
+  const handleSendTest = async () => {
+    if (!user?.id_tenant || !user?.id_user) {
+      alert('Error: No se pudo identificar el usuario');
+      return;
     }
-  };
 
-  const handleSendTest = () => {
-    // Simulate API call
-    alert(`✅ Correo de prueba enviado exitosamente a: ${testEmailAddress}`);
-    setIsTestEmailModalOpen(false);
+    if (!testEmailAddress) {
+      alert('Por favor ingresa un email para la prueba');
+      return;
+    }
+
+    try {
+      setIsSendingTest(true);
+      
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/test`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id_tenant: user.id_tenant,
+          id_user: user.id_user,
+          id_campaign: isEditing ? id : undefined,
+          name: formData.name,
+          subject: formData.subject,
+          preview_text: formData.previewText,
+          html_content: formData.htmlContent,
+          sender_type: formData.senderType,
+          sender_name: formData.senderName,
+          sender_email: formData.senderEmail,
+          target_lists: formData.selectedLists,
+          attachments: formData.attachments,
+          test_email: testEmailAddress,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Error en la respuesta del servidor');
+      }
+
+      alert(`✅ Correo de prueba enviado exitosamente a: ${testEmailAddress}`);
+      setIsTestEmailModalOpen(false);
+    } catch (error) {
+      console.error('Error al enviar correo de prueba:', error);
+      alert('❌ Error al enviar el correo de prueba. Por favor intenta de nuevo.');
+    } finally {
+      setIsSendingTest(false);
+    }
   };
 
   const saveCampaign = async () => {
@@ -208,6 +265,8 @@ const CampaignWizard: React.FC = () => {
           preview_text: formData.previewText,
           html_content: formData.htmlContent,
           sender_type: formData.senderType,
+          sender_name: formData.senderName,
+          sender_email: formData.senderEmail,
           target_lists: formData.selectedLists,
           attachments: formData.attachments,
         });
@@ -227,40 +286,104 @@ const CampaignWizard: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto">
-      {/* Stepper Header */}
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold text-slate-800 mb-6">{isEditing ? 'Editar Campaña' : 'Nueva Campaña'}</h2>
-        <div className="flex items-center justify-between relative">
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-slate-200 -z-10"></div>
-          {STEPS.map((step) => {
+    <div className="flex gap-6 h-full">
+      {/* Left Sidebar - Stepper Vertical */}
+      <div className="w-40 bg-white border-r border-slate-200 p-4">
+        <h2 className="text-lg font-bold text-slate-800 mb-4">{isEditing ? 'Editar' : 'Nueva'}</h2>
+        <div className="space-y-3 relative">
+          {/* Vertical Line */}
+          <div className="absolute left-5 top-0 bottom-0 w-0.5 bg-slate-200"></div>
+          
+          {STEPS.map((step, idx) => {
             const isActive = step.id === currentStep;
             const isCompleted = step.id < currentStep;
+            const isLast = idx === STEPS.length - 1;
+            
             return (
-              <div key={step.id} className="flex flex-col items-center gap-2 bg-slate-50 px-2">
-                <div 
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-colors ${
-                    isActive ? 'bg-brand-600 text-white shadow-lg scale-110' : 
-                    isCompleted ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500'
-                  }`}
+              <div key={step.id} className="relative">
+                <button
+                  onClick={() => setCurrentStep(step.id)}
+                  className="w-full text-left flex items-start gap-3 p-2 rounded-lg transition-all hover:bg-slate-50"
                 >
-                  {isCompleted ? <i className="fa-solid fa-check"></i> : step.id}
-                </div>
-                <span className={`text-xs font-semibold ${isActive ? 'text-brand-600' : 'text-slate-500'}`}>
-                  {step.label}
-                </span>
+                  <div 
+                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 transition-colors ${
+                      isActive ? 'bg-brand-600 text-white shadow-lg' : 
+                      isCompleted ? 'bg-green-500 text-white' : 'bg-slate-200 text-slate-500'
+                    }`}
+                  >
+                    {isCompleted ? <i className="fa-solid fa-check text-xs"></i> : step.id}
+                  </div>
+                  <div className="text-left flex-1">
+                    <p className={`text-sm font-medium ${isActive ? 'text-brand-600' : 'text-slate-600'}`}>
+                      {step.label}
+                    </p>
+                  </div>
+                </button>
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Content Area */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 min-h-[400px]">
+      {/* Right Content - Main Area */}
+      <div className="flex-1 flex flex-col min-h-0">
+        {/* Navigation Controls */}
+        <div className="flex justify-between items-center px-6 py-3 border-b border-slate-200 bg-slate-50 flex-shrink-0">
+          <button 
+            onClick={handleBack}
+            disabled={currentStep === 1}
+            className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
+              currentStep === 1 
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
+                : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            ← Atrás
+          </button>
+
+          <span className="text-sm font-medium text-slate-600">
+            Paso {currentStep} de {STEPS.length}
+          </span>
+
+          {currentStep < 4 ? (
+            <button 
+              onClick={handleNext}
+              className="px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-colors shadow-sm"
+            >
+              Siguiente →
+            </button>
+          ) : (
+             <div className="flex gap-2">
+               <button className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-50">
+                 Programar
+               </button>
+               <button 
+                  onClick={handleFinish}
+                  disabled={isSaving}
+                  className={`px-4 py-2 bg-brand-600 text-white rounded-lg font-medium text-sm hover:bg-brand-700 transition-colors shadow-sm flex items-center gap-2 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {isSaving ? (
+                    <>
+                      <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+                      Guardando
+                    </>
+                  ) : (
+                    <>
+                      <i className="fa-solid fa-save text-xs"></i>
+                      {isEditing ? 'Guardar' : 'Crear'}
+                    </>
+                  )}
+                </button>
+             </div>
+          )}
+        </div>
+
+        {/* Content Area - Scrollable */}
+        <div className="flex-1 overflow-y-auto bg-white p-6">
         
         {/* STEP 1: DETAILS */}
         {currentStep === 1 && (
-          <div className="space-y-6 max-w-2xl mx-auto animate-fadeIn">
+          <div className="space-y-6 max-w-5xl mx-auto animate-fadeIn">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Nombre de la Campaña (Interno)</label>
               <input 
@@ -292,79 +415,23 @@ const CampaignWizard: React.FC = () => {
               />
             </div>
             
-            {/* Sender Type Selection */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-3">¿De dónde deseas enviar este correo?</label>
-              <div className="space-y-2">
-                {/* Personal Email Option */}
-                <label className="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-brand-300" style={{
-                  borderColor: formData.senderType === 'USER' ? '#3B82F6' : '#E2E8F0',
-                  backgroundColor: formData.senderType === 'USER' ? '#EFF6FF' : '#F8FAFC'
-                }}>
-                  <input
-                    type="radio"
-                    name="senderType"
-                    value="USER"
-                    checked={formData.senderType === 'USER'}
-                    onChange={(e) => handleSenderTypeChange(e.target.value as 'USER')}
-                    className="mt-1"
-                  />
-                  <div>
-                    <p className="font-semibold text-slate-800 flex items-center gap-2">
-                      <i className="fa-solid fa-user"></i> Mi correo personal
-                    </p>
-                    <p className="text-sm text-slate-600 mt-1">{user?.email_user}</p>
-                    <p className="text-xs text-slate-500 mt-1">Los destinatarios verán tu correo personal como remitente</p>
-                  </div>
-                </label>
-
-                {/* Corporate Email Option (only if available) */}
-                {tenantData?.corporate_email_address ? (
-                  <label className="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-brand-300" style={{
-                    borderColor: formData.senderType === 'TENANT' ? '#3B82F6' : '#E2E8F0',
-                    backgroundColor: formData.senderType === 'TENANT' ? '#EFF6FF' : '#F8FAFC'
-                  }}>
-                    <input
-                      type="radio"
-                      name="senderType"
-                      value="TENANT"
-                      checked={formData.senderType === 'TENANT'}
-                      onChange={(e) => handleSenderTypeChange(e.target.value as 'TENANT')}
-                      className="mt-1"
-                    />
-                    <div>
-                      <p className="font-semibold text-slate-800 flex items-center gap-2">
-                        <i className="fa-solid fa-building"></i> Correo corporativo
-                      </p>
-                      <p className="text-sm text-slate-600 mt-1">{tenantData.corporate_email_address}</p>
-                      <p className="text-xs text-slate-500 mt-1">Los destinatarios verán el correo de la empresa</p>
-                    </div>
-                  </label>
-                ) : (
-                  <div className="flex items-start gap-3 p-4 border-2 border-slate-200 rounded-lg bg-slate-50">
-                    <i className="fa-solid fa-circle-info text-slate-400 mt-1"></i>
-                    <div>
-                      <p className="font-semibold text-slate-700 flex items-center gap-2">
-                        <i className="fa-solid fa-building"></i> Correo corporativo
-                      </p>
-                      <p className="text-sm text-slate-500 mt-1">No hay un correo corporativo configurado. Configúralo en la sección de Perfil.</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200">
-               <div>
+            {/* Grid: Datos del Remitente (izquierda) + Seleccionar de dónde enviar (derecha) */}
+            <div className="grid grid-cols-3 gap-6 pt-4 border-t border-slate-200">
+              {/* Columnas 1-2: Datos del Remitente */}
+              <div className="col-span-2 space-y-4">
+                <h3 className="text-sm font-semibold text-slate-800">Datos del Remitente</h3>
+                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del Remitente</label>
                   <input 
                     type="text" 
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-700"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
+                    placeholder="Ej: Juan García"
                     value={formData.senderName}
-                    readOnly
+                    onChange={(e) => setFormData({...formData, senderName: e.target.value})}
                   />
-               </div>
-               <div>
+                  <p className="text-xs text-slate-500 mt-1">Este es el nombre que verán los destinatarios</p>
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Email del Remitente</label>
                   <input 
                     type="text" 
@@ -372,7 +439,69 @@ const CampaignWizard: React.FC = () => {
                     value={formData.senderEmail}
                     readOnly
                   />
-               </div>
+                  <p className="text-xs text-slate-500 mt-1">Se selecciona según la opción de envío elegida</p>
+                </div>
+              </div>
+
+              {/* Columna 3: Selección de dónde enviar */}
+              <div className="col-span-1">
+                <h3 className="text-sm font-semibold text-slate-800 mb-3">¿De dónde enviar?</h3>
+                <div className="space-y-2">
+                  {/* Personal Email Option */}
+                  <label className="flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-all hover:border-brand-300" style={{
+                    borderColor: formData.senderType === 'USER' ? '#3B82F6' : '#E2E8F0',
+                    backgroundColor: formData.senderType === 'USER' ? '#EFF6FF' : '#F8FAFC'
+                  }}>
+                    <input
+                      type="radio"
+                      name="senderType"
+                      value="USER"
+                      checked={formData.senderType === 'USER'}
+                      onChange={(e) => handleSenderTypeChange(e.target.value as 'USER')}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <p className="font-semibold text-slate-800 text-sm flex items-center gap-1">
+                        <i className="fa-solid fa-user text-xs"></i> Personal
+                      </p>
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2">{user?.email_user}</p>
+                    </div>
+                  </label>
+
+                  {/* Corporate Email Option (only if available) */}
+                  {tenantData?.corporate_email_address ? (
+                    <label className="flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-all hover:border-brand-300" style={{
+                      borderColor: formData.senderType === 'TENANT' ? '#3B82F6' : '#E2E8F0',
+                      backgroundColor: formData.senderType === 'TENANT' ? '#EFF6FF' : '#F8FAFC'
+                    }}>
+                      <input
+                        type="radio"
+                        name="senderType"
+                        value="TENANT"
+                        checked={formData.senderType === 'TENANT'}
+                        onChange={(e) => handleSenderTypeChange(e.target.value as 'TENANT')}
+                        className="mt-1"
+                      />
+                      <div className="flex-1">
+                        <p className="font-semibold text-slate-800 text-sm flex items-center gap-1">
+                          <i className="fa-solid fa-building text-xs"></i> Corporativo
+                        </p>
+                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">{tenantData.corporate_email_address}</p>
+                      </div>
+                    </label>
+                  ) : (
+                    <div className="flex items-start gap-3 p-3 border-2 border-slate-200 rounded-lg bg-slate-50">
+                      <i className="fa-solid fa-circle-info text-slate-300 text-sm mt-0.5"></i>
+                      <div>
+                        <p className="font-semibold text-slate-600 text-sm flex items-center gap-1">
+                          <i className="fa-solid fa-building text-xs"></i> Corporativo
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">No configurado</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -395,41 +524,73 @@ const CampaignWizard: React.FC = () => {
                 <p className="text-sm text-slate-400 mt-1">Crea una lista primero en la sección de Audiencias</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {lists.map(list => {
-                const idList = (list.id_list ?? list.list_id) as string | undefined;
-                if (!idList) return null;
-                const isSelected = formData.selectedLists.includes(idList);
-                return (
-                  <div 
-                    key={idList}
-                    onClick={() => toggleList(idList)}
-                    className={`cursor-pointer border rounded-xl p-4 flex items-start gap-4 transition-all ${
-                      isSelected 
-                        ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500' 
-                        : 'border-slate-200 hover:border-brand-300 hover:shadow-md'
-                    }`}
-                  >
-                    <div className={`mt-1 w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                      isSelected ? 'bg-brand-600 border-brand-600 text-white' : 'border-slate-300 bg-white'
-                    }`}>
-                      {isSelected && <i className="fa-solid fa-check text-xs"></i>}
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-800">{list.name}</h4>
-                      <p className="text-sm text-slate-600 line-clamp-1">{list.description}</p>
-                      <div className="mt-2 flex items-center gap-4 text-xs text-slate-500">
-                        <span><i className="fa-solid fa-users mr-1"></i> {list.member_count} miembros</span>
-                        <span className={`px-2 py-0.5 rounded ${list.visibility === 'PRIVATE' ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-600'}`}>
-                          <i className={`fa-solid ${list.visibility === 'PRIVATE' ? 'fa-lock' : 'fa-users'} mr-1`}></i>
-                          {list.visibility === 'PRIVATE' ? 'Privada' : 'Pública'}
-                        </span>
+              <>
+                {/* Search Filter */}
+                <div className="mb-4">
+                  <input
+                    type="text"
+                    placeholder="🔍 Buscar listas por nombre o descripción..."
+                    className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none"
+                    value={searchLists}
+                    onChange={(e) => setSearchLists(e.target.value)}
+                  />
+                  {searchLists && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      Se encontraron {lists.filter(l => 
+                        l.name.toLowerCase().includes(searchLists.toLowerCase()) ||
+                        (l.description && l.description.toLowerCase().includes(searchLists.toLowerCase()))
+                      ).length} de {lists.length} listas
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {lists
+                    .filter(l => 
+                      l.name.toLowerCase().includes(searchLists.toLowerCase()) ||
+                      (l.description && l.description.toLowerCase().includes(searchLists.toLowerCase()))
+                    )
+                    .map(list => {
+                    const idList = String(list.id_list ?? list.list_id);
+                    if (!idList || idList === 'undefined') return null;
+                    const isSelected = formData.selectedLists.map(String).includes(idList);
+                    
+                    // Debug log
+                    if (isSelected) {
+                      console.log(`✅ Lista "${list.name}" marcada (ID: ${idList})`);
+                    }
+                    
+                    return (
+                      <div 
+                        key={idList}
+                        onClick={() => toggleList(idList)}
+                        className={`cursor-pointer border rounded-xl p-4 flex items-start gap-4 transition-all ${
+                          isSelected 
+                            ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500' 
+                            : 'border-slate-200 hover:border-brand-300 hover:shadow-md'
+                        }`}
+                      >
+                        <div className={`mt-1 w-5 h-5 rounded border flex items-center justify-center transition-colors ${
+                          isSelected ? 'bg-brand-600 border-brand-600 text-white' : 'border-slate-300 bg-white'
+                        }`}>
+                          {isSelected && <i className="fa-solid fa-check text-xs"></i>}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-800">{list.name}</h4>
+                          <p className="text-sm text-slate-600 line-clamp-1">{list.description}</p>
+                          <div className="mt-2 flex items-center gap-4 text-xs text-slate-500">
+                            <span><i className="fa-solid fa-users mr-1"></i> {list.member_count} miembros</span>
+                            <span className={`px-2 py-0.5 rounded ${list.visibility === 'PRIVATE' ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-600'}`}>
+                              <i className={`fa-solid ${list.visibility === 'PRIVATE' ? 'fa-lock' : 'fa-users'} mr-1`}></i>
+                              {list.visibility === 'PRIVATE' ? 'Privada' : 'Pública'}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-                })}
-              </div>
+                    );
+                    })}
+                </div>
+              </>
             )}
           </div>
         )}
@@ -440,12 +601,6 @@ const CampaignWizard: React.FC = () => {
              {/* Toolbar */}
              <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
                 <div className="flex gap-2">
-                  <button 
-                    onClick={insertImage}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors"
-                  >
-                    <i className="fa-regular fa-image"></i> Insertar Imagen
-                  </button>
                   <button 
                     onClick={() => fileInputRef.current?.click()}
                     className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 rounded text-sm text-slate-700 hover:bg-slate-50 hover:text-brand-600 transition-colors"
@@ -461,75 +616,177 @@ const CampaignWizard: React.FC = () => {
                   />
                 </div>
                 
-                <button 
-                  onClick={() => setIsTestEmailModalOpen(true)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-brand-50 border border-brand-200 rounded text-sm text-brand-700 hover:bg-brand-100 transition-colors"
-                >
-                  <i className="fa-regular fa-paper-plane"></i> Enviar Prueba
-                </button>
+                <div className="flex items-center gap-4">
+                  {/* Toggle Editor Type */}
+                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded border border-slate-300">
+                    <span className="text-xs font-medium text-slate-700">Editor:</span>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={useRichEditor} 
+                        onChange={(e) => setUseRichEditor(e.target.checked)}
+                        className="w-4 h-4 rounded"
+                      />
+                      <span className="text-xs text-slate-600">{useRichEditor ? 'Visual' : 'HTML'}</span>
+                    </label>
+                  </div>
+
+                  <button 
+                    onClick={() => setIsTestEmailModalOpen(true)}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-brand-50 border border-brand-200 rounded text-sm text-brand-700 hover:bg-brand-100 transition-colors"
+                  >
+                    <i className="fa-regular fa-paper-plane"></i> Enviar Prueba
+                  </button>
+                </div>
              </div>
 
-             {/* Main Editor Area */}
-             <div className="flex flex-col lg:flex-row h-[500px] gap-6">
-                {/* Code/Input Side */}
-                <div className="w-full lg:w-1/2 flex flex-col">
-                   <label className="text-sm font-semibold text-slate-700 mb-2 flex justify-between">
-                     <span>Editor HTML</span>
-                     <span className="text-xs text-brand-600 cursor-pointer hover:underline">Usar plantilla</span>
-                   </label>
-                   <textarea 
-                     className="flex-1 w-full p-4 font-mono text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none resize-none bg-slate-900 text-slate-200"
-                     value={formData.htmlContent}
-                     onChange={(e) => setFormData({...formData, htmlContent: e.target.value})}
-                     spellCheck={false}
-                   />
-                   <p className="text-xs text-slate-500 mt-2">Variables disponibles: <code className="bg-slate-100 px-1 rounded">%nombre%</code>, <code className="bg-slate-100 px-1 rounded">%empresa%</code>.</p>
-                </div>
+             {useRichEditor ? (
+               /* Rich Editor (React Quill) */
+               <div className="space-y-4">
+                 <div className="flex flex-col lg:flex-row h-[500px] gap-6">
+                   {/* Quill Editor Side */}
+                   <div className="w-full lg:w-1/2 flex flex-col">
+                     <label className="text-sm font-semibold text-slate-700 mb-2">Editor Visual</label>
+                     <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden bg-white">
+                       <ReactQuill 
+                         value={formData.htmlContent}
+                         onChange={(content) => setFormData({...formData, htmlContent: content})}
+                         theme="snow"
+                         modules={{
+                           toolbar: [
+                             [{ header: [1, 2, 3, false] }],
+                             ['bold', 'italic', 'underline', 'strike'],
+                             ['blockquote', 'code-block'],
+                             [{ list: 'ordered' }, { list: 'bullet' }],
+                             ['link', 'image'],
+                             [{ color: [] }, { background: [] }],
+                             [{ align: [] }],
+                             ['clean']
+                           ]
+                         }}
+                         className="h-full"
+                       />
+                     </div>
+                     <p className="text-xs text-slate-500 mt-2">Variables disponibles: <code className="bg-slate-100 px-1 rounded">%nombre%</code>, <code className="bg-slate-100 px-1 rounded">%empresa%</code>.</p>
+                   </div>
 
-                {/* Preview Side */}
-                <div className="w-full lg:w-1/2 flex flex-col">
-                   <label className="text-sm font-semibold text-slate-700 mb-2">Previsualización en Vivo</label>
-                   <div className="flex-1 border-2 border-slate-200 rounded-lg overflow-hidden bg-slate-100 relative">
-                      <div className="absolute top-0 left-0 w-full bg-white border-b border-slate-200 px-4 py-2 flex gap-2">
+                   {/* Preview Side */}
+                   <div className="w-full lg:w-1/2 flex flex-col">
+                     <label className="text-sm font-semibold text-slate-700 mb-2">Previsualización en Vivo</label>
+                     <div className="flex-1 border-2 border-slate-200 rounded-lg overflow-hidden bg-slate-100 relative">
+                       <div className="absolute top-0 left-0 w-full bg-white border-b border-slate-200 px-4 py-2 flex gap-2 z-10">
                          <div className="w-2 h-2 rounded-full bg-red-400"></div>
                          <div className="w-2 h-2 rounded-full bg-amber-400"></div>
                          <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                      </div>
-                      <div className="mt-8 h-[calc(100%-32px)] overflow-y-auto bg-white m-4 shadow-sm rounded">
+                       </div>
+                       <div className="mt-8 h-[calc(100%-32px)] overflow-y-auto bg-white m-4 shadow-sm rounded">
                          <iframe 
                            title="preview"
-                           srcDoc={formData.htmlContent.replace('%nombre%', 'Juan Pérez')}
+                           srcDoc={`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 16px; }
+    img { max-width: 100%; height: auto; }
+    a { color: #3B82F6; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: 'Courier New', monospace; }
+    blockquote { border-left: 4px solid #e5e7eb; padding-left: 12px; margin-left: 0; color: #6b7280; }
+  </style>
+</head>
+<body>
+${formData.htmlContent.replace(/%nombre%/g, 'Juan Pérez').replace(/%empresa%/g, 'Mi Empresa')}
+</body>
+</html>`}
                            className="w-full h-full pointer-events-none"
                          />
+                       </div>
+                     </div>
+                   </div>
+                 </div>
+
+                 {/* Attachments List */}
+                 {formData.attachments.length > 0 && (
+                   <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                      <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                        <i className="fa-solid fa-paperclip"></i> Archivos Adjuntos ({formData.attachments.length})
+                      </h4>
+                      <div className="flex flex-wrap gap-3">
+                        {formData.attachments.map((file, idx) => (
+                          <div key={idx} className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+                            <div className="w-8 h-8 rounded bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold uppercase">
+                              {file.type.split('/')[1] || 'FILE'}
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-slate-700 truncate max-w-[150px]">{file.name}</p>
+                              <p className="text-[10px] text-slate-400">{file.size}</p>
+                            </div>
+                            <button 
+                              onClick={() => removeAttachment(idx)}
+                              className="ml-2 text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                              <i className="fa-solid fa-times"></i>
+                            </button>
+                          </div>
+                        ))}
                       </div>
                    </div>
-                </div>
-             </div>
+                 )}
+               </div>
+             ) : (
+               /* HTML Code Editor */
+               <div className="flex flex-col lg:flex-row h-[500px] gap-6">
+                  {/* Code/Input Side */}
+                  <div className="w-full lg:w-1/2 flex flex-col">
+                     <label className="text-sm font-semibold text-slate-700 mb-2 flex justify-between">
+                       <span>Editor HTML</span>
+                       <span className="text-xs text-brand-600 cursor-pointer hover:underline">Usar plantilla</span>
+                     </label>
+                     <textarea 
+                       className="flex-1 w-full p-4 font-mono text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none resize-none bg-slate-900 text-slate-200"
+                       value={formData.htmlContent}
+                       onChange={(e) => setFormData({...formData, htmlContent: e.target.value})}
+                       spellCheck={false}
+                     />
+                     <p className="text-xs text-slate-500 mt-2">Variables disponibles: <code className="bg-slate-100 px-1 rounded">%nombre%</code>, <code className="bg-slate-100 px-1 rounded">%empresa%</code>.</p>
+                  </div>
 
-             {/* Attachments List */}
-             {formData.attachments.length > 0 && (
-               <div className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                  <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                    <i className="fa-solid fa-paperclip"></i> Archivos Adjuntos ({formData.attachments.length})
-                  </h4>
-                  <div className="flex flex-wrap gap-3">
-                    {formData.attachments.map((file, idx) => (
-                      <div key={idx} className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
-                        <div className="w-8 h-8 rounded bg-blue-50 text-blue-600 flex items-center justify-center text-xs font-bold uppercase">
-                          {file.type.split('/')[1] || 'FILE'}
+                  {/* Preview Side */}
+                  <div className="w-full lg:w-1/2 flex flex-col">
+                     <label className="text-sm font-semibold text-slate-700 mb-2">Previsualización en Vivo</label>
+                     <div className="flex-1 border-2 border-slate-200 rounded-lg overflow-hidden bg-slate-100 relative">
+                        <div className="absolute top-0 left-0 w-full bg-white border-b border-slate-200 px-4 py-2 flex gap-2 z-10">
+                           <div className="w-2 h-2 rounded-full bg-red-400"></div>
+                           <div className="w-2 h-2 rounded-full bg-amber-400"></div>
+                           <div className="w-2 h-2 rounded-full bg-green-400"></div>
                         </div>
-                        <div>
-                          <p className="text-xs font-medium text-slate-700 truncate max-w-[150px]">{file.name}</p>
-                          <p className="text-[10px] text-slate-400">{file.size}</p>
+                        <div className="mt-8 h-[calc(100%-32px)] overflow-y-auto bg-white m-4 shadow-sm rounded">
+                           <iframe 
+                             title="preview"
+                             srcDoc={`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 16px; }
+    img { max-width: 100%; height: auto; }
+    a { color: #3B82F6; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-family: 'Courier New', monospace; }
+    blockquote { border-left: 4px solid #e5e7eb; padding-left: 12px; margin-left: 0; color: #6b7280; }
+  </style>
+</head>
+<body>
+${formData.htmlContent.replace(/%nombre%/g, 'Juan Pérez').replace(/%empresa%/g, 'Mi Empresa')}
+</body>
+</html>`}
+                             className="w-full h-full pointer-events-none"
+                           />
                         </div>
-                        <button 
-                          onClick={() => removeAttachment(idx)}
-                          className="ml-2 text-slate-400 hover:text-red-500 transition-colors"
-                        >
-                          <i className="fa-solid fa-times"></i>
-                        </button>
-                      </div>
-                    ))}
+                     </div>
                   </div>
                </div>
              )}
@@ -580,63 +837,21 @@ const CampaignWizard: React.FC = () => {
                </div>
             </div>
             
-            <div className="flex justify-center mt-6">
+            <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-slate-700 mb-3">
+                <i className="fa-solid fa-info-circle text-blue-600 mr-2"></i>
+                ¿Quieres revisar cómo se ve el correo antes de enviarlo?
+              </p>
               <button 
-                onClick={() => { setCurrentStep(3); setIsTestEmailModalOpen(true); }}
-                className="text-brand-600 font-medium hover:underline text-sm flex items-center gap-1"
+                onClick={() => setIsTestEmailModalOpen(true)}
+                className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium text-sm flex items-center justify-center gap-2 transition-colors"
               >
-                <i className="fa-regular fa-paper-plane"></i> Enviar una última prueba a mí mismo
+                <i className="fa-regular fa-paper-plane"></i> Enviar Correo de Prueba
               </button>
             </div>
           </div>
         )}
-      </div>
-
-      {/* Footer Controls */}
-      <div className="mt-6 flex justify-between">
-        <button 
-          onClick={handleBack}
-          disabled={currentStep === 1}
-          className={`px-6 py-2 rounded-lg font-medium transition-colors ${
-            currentStep === 1 
-              ? 'bg-slate-100 text-slate-400 cursor-not-allowed' 
-              : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50'
-          }`}
-        >
-          Atrás
-        </button>
-
-        {currentStep < 4 ? (
-          <button 
-            onClick={handleNext}
-            className="px-6 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-sm"
-          >
-            Siguiente
-          </button>
-        ) : (
-           <div className="flex gap-3">
-             <button className="px-6 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50">
-               Programar para después
-             </button>
-             <button 
-                onClick={handleFinish}
-                disabled={isSaving}
-                className={`px-6 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-sm flex items-center gap-2 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {isSaving ? (
-                  <>
-                    <i className="fa-solid fa-spinner fa-spin"></i>
-                    Guardando...
-                  </>
-                ) : (
-                  <>
-                    <i className="fa-solid fa-save"></i>
-                    {isEditing ? 'Guardar Cambios' : 'Crear Campaña'}
-                  </>
-                )}
-              </button>
-           </div>
-        )}
+        </div>
       </div>
 
       {/* Test Email Modal */}
@@ -667,9 +882,19 @@ const CampaignWizard: React.FC = () => {
               </button>
               <button 
                 onClick={handleSendTest}
-                className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors font-medium flex items-center gap-2"
+                disabled={isSendingTest}
+                className={`px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors font-medium flex items-center gap-2 ${isSendingTest ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <i className="fa-solid fa-paper-plane"></i> Enviar
+                {isSendingTest ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-paper-plane"></i> Enviar
+                  </>
+                )}
               </button>
             </div>
           </div>

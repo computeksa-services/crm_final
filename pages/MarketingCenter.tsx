@@ -21,8 +21,8 @@ const MarketingCenter: React.FC = () => {
 
   if (isWizardRoute) {
     return (
-      <div className="min-h-screen bg-slate-50 p-0">
-        <div className="animate-in fade-in duration-300">
+      <div className="h-full bg-slate-50 p-0">
+        <div className="animate-in fade-in duration-300 h-full">
           <Outlet />
         </div>
       </div>
@@ -30,7 +30,7 @@ const MarketingCenter: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50/50 p-6">
+    <div className="h-full bg-slate-50/50 p-6 overflow-y-auto">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header Principal */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
