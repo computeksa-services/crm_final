@@ -36,7 +36,7 @@ const COMPANY_TYPES = [
   'Tecnología y Software', 'Electrónica y Hardware', 'Finanzas y Banca', 'Servicios Legales',
   'Salud y Medicina', 'Educación', 'Construcción e Inmobiliaria', 'Manufactura y Producción',
   'Retail y Comercio', 'Logística y Transporte', 'Alimentos y Bebidas', 'Turismo y Hotelería',
-  'Energía y Minería', 'Marketing y Publicidad', 'Telecomunicaciones', 'Agricultura y Pesca', 'Seguros'
+  'Energía y Minería', 'Marketing y Publicidad', 'Telecomunicaciones', 'Agricultura y Pesca', 'Seguros', 'Otro'
 ];
 
 const CompanyFormModal: React.FC<CompanyFormModalProps> = ({

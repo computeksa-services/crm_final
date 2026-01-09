@@ -38,6 +38,9 @@ const Campaigns: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [campaignToDelete, setCampaignToDelete] = useState<string | null>(null);
+  const [showLaunchConfirm, setShowLaunchConfirm] = useState(false);
+  const [campaignToLaunch, setCampaignToLaunch] = useState<MarketingCampaign | null>(null);
+  const [isLaunching, setIsLaunching] = useState(false);
 
   // Cargar campañas desde la API
   useEffect(() => {
@@ -103,6 +106,28 @@ const Campaigns: React.FC = () => {
   const handleEdit = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     navigate(`/app/marketing/campaigns/edit/${id}`);
+  };
+
+  const handleLaunch = (e: React.MouseEvent, campaign: MarketingCampaign) => {
+    e.stopPropagation();
+    setCampaignToLaunch(campaign);
+    setShowLaunchConfirm(true);
+  };
+
+  const confirmLaunch = async () => {
+    if (!campaignToLaunch || !user?.id_user) return;
+    try {
+      setIsLaunching(true);
+      await marketingApi.launchCampaign(campaignToLaunch.id_campaign, user.id_user);
+      // Refrescar para reflejar el estado real desde backend
+      await loadCampaigns();
+    } catch (err) {
+      console.error('Error lanzando campaña:', err);
+    } finally {
+      setIsLaunching(false);
+      setShowLaunchConfirm(false);
+      setCampaignToLaunch(null);
+    }
   };
 
   // --- Filtering ---
@@ -199,10 +224,37 @@ const Campaigns: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {campaign.sent_at 
-                        ? new Date(campaign.sent_at).toLocaleDateString() + ' ' + new Date(campaign.sent_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                        : campaign.scheduled_at 
-                          ? <span className="text-amber-600"><i className="fa-regular fa-clock mr-1"></i>{new Date(campaign.scheduled_at).toLocaleDateString()}</span>
-                          : '-'
+                        ? (
+                            new Date(campaign.sent_at).toLocaleDateString() + ' ' + 
+                            new Date(campaign.sent_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                          )
+                        : campaign.scheduled_at_local
+                          ? (
+                              <span className="text-amber-600">
+                                <i className="fa-regular fa-clock mr-1"></i>
+                                {new Date(campaign.scheduled_at as string).toLocaleString('es-ES', {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit'
+                                })}
+                              </span>
+                            )
+                          : campaign.scheduled_at
+                            ? (
+                                <span className="text-amber-600">
+                                  <i className="fa-regular fa-clock mr-1"></i>
+                                  {new Date(campaign.scheduled_at as string).toLocaleString('es-ES', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
+                                </span>
+                              )
+                            : '-'
                       }
                     </td>
                     <td className="px-6 py-4">
@@ -245,6 +297,15 @@ const Campaigns: React.FC = () => {
                          >
                            <i className="fa-regular fa-pen-to-square"></i>
                          </button>
+                         {campaign.status === 'DRAFT' && (
+                           <button 
+                             onClick={(e) => handleLaunch(e, campaign)}
+                             className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" 
+                             title="Lanzar ahora"
+                           >
+                             <i className="fa-solid fa-rocket"></i>
+                           </button>
+                         )}
                          <button 
                            onClick={(e) => handleDuplicate(e, campaign)}
                            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" 
@@ -284,6 +345,15 @@ const Campaigns: React.FC = () => {
           confirmText="Eliminar"
           cancelText="Cancelar"
           isDestructive
+        />
+        <ConfirmModal
+          isOpen={showLaunchConfirm}
+          onClose={() => setShowLaunchConfirm(false)}
+          onConfirm={confirmLaunch}
+          title="Lanzar campaña"
+          message="Esta campaña se enviará inmediatamente a las listas seleccionadas. ¿Deseas continuar?"
+          confirmText={isLaunching ? 'Lanzando...' : 'Enviar ahora'}
+          cancelText="Cancelar"
         />
       </div>
     </div>

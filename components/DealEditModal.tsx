@@ -20,7 +20,7 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
   onSuccess,
 }) => {
   const { user } = useAuth();
-  const [deal, setDeal] = useState<Partial<Deal>>(initialData || {});
+  const [deal, setDeal] = useState<Partial<Deal>>({});
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -35,15 +35,28 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   
-  const [expandedSections, setExpandedSections] = useState({ status: true, interest: true, channel: true });
+  const [expandedSections, setExpandedSections] = useState({ status: false, interest: false, channel: false });
   const didLoadDataRef = useRef(false);
 
-  // Inicializar deal cuando cambia initialData
+  // Inicializar deal cuando cambia initialData - asegurar que campos críticos se preserven
   useEffect(() => {
-    if (initialData) {
-      setDeal(initialData);
+    if (initialData && isOpen) {
+      setDeal({
+        id_trato: initialData.id_trato,
+        nombre_trato: initialData.nombre_trato,
+        valor_trato: initialData.valor_trato,
+        descripcion: initialData.descripcion,
+        id_client_company: initialData.id_client_company,
+        id_contact: initialData.id_contact,
+        id_deal_status: initialData.id_deal_status,
+        id_interest: initialData.id_interest,
+        id_channel: initialData.id_channel,
+        fecha_cierre_esperada: initialData.fecha_cierre_esperada,
+        created_at: initialData.created_at,
+        updated_at: initialData.updated_at,
+      });
     }
-  }, [initialData]);
+  }, [initialData, isOpen]);
 
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user || didLoadDataRef.current) return;
@@ -160,13 +173,25 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
       setToast({ message: 'Nombre, Empresa y Contacto son obligatorios.', type: 'error' });
       return;
     }
+    
     setProcessing(true);
     try {
+      // Construir payload con solo los campos esenciales del trato
       const payload = { 
-        ...deal, 
+        id_trato: deal.id_trato,
         id_tenant: user?.id_tenant,
         id_user: user?.id_user,
+        nombre_trato: deal.nombre_trato,
+        valor_trato: deal.valor_trato,
+        descripcion: deal.descripcion,
+        id_client_company: deal.id_client_company,
+        id_contact: deal.id_contact,
+        id_deal_status: deal.id_deal_status,
+        id_interest: deal.id_interest,
+        id_channel: deal.id_channel,
+        fecha_cierre_esperada: deal.fecha_cierre_esperada,
       };
+      
       const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 

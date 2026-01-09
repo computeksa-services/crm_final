@@ -69,7 +69,7 @@ const CampaignsList = ({ onEdit }: { onEdit: (id: string | null) => void }) => {
               <th className="px-6 py-3">Nombre / Asunto</th>
               <th className="px-6 py-3">Estado</th>
               <th className="px-6 py-3">Estadísticas</th>
-              <th className="px-6 py-3">Fecha</th>
+              <th className="px-6 py-3">Envío Programado</th>
               <th className="px-6 py-3 text-right">Acciones</th>
             </tr>
           </thead>
@@ -94,7 +94,18 @@ const CampaignsList = ({ onEdit }: { onEdit: (id: string | null) => void }) => {
                   )}
                 </td>
                 <td className="px-6 py-4 text-slate-500">
-                  {new Date(camp.created_at || '').toLocaleDateString()}
+                  {camp.scheduled_at_local
+                    ? (
+                        new Date(camp.scheduled_at_local).toLocaleString('es-ES', {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        }) + (camp.schedule_timezone && camp.schedule_timezone !== 'UTC' ? ` (${camp.schedule_timezone})` : '')
+                      )
+                    : <span className="text-xs text-slate-400">Inmediato</span>
+                  }
                 </td>
                 <td className="px-6 py-4 text-right">
                   <button 

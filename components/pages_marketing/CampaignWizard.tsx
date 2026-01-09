@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { marketingApi } from '../../services/marketingApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { MarketingList } from '../../types';
-import ReactQuill from 'react-quill';
+import ReactQuill, { Quill } from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 
 const STEPS = [
@@ -25,6 +25,7 @@ const CampaignWizard: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const isEditing = !!id;
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const quillRef = useRef<ReactQuill | null>(null);
 
   const [currentStep, setCurrentStep] = useState(1);
   const [isTestEmailModalOpen, setIsTestEmailModalOpen] = useState(false);
@@ -37,6 +38,13 @@ const CampaignWizard: React.FC = () => {
   const [isLoadingTenant, setIsLoadingTenant] = useState(false);
   const [searchLists, setSearchLists] = useState('');
   const [useRichEditor, setUseRichEditor] = useState(true);
+  const [isImageSelected, setIsImageSelected] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleTime, setScheduleTime] = useState('');
+  const [scheduleError, setScheduleError] = useState('');
+  const [scheduledAt, setScheduledAt] = useState<string | null>(null);
+  const [scheduledTimezone, setScheduledTimezone] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -62,6 +70,54 @@ const CampaignWizard: React.FC = () => {
       loadCampaignData();
     }
   }, [id, isEditing]);
+
+  // Detectar si la selección actual es una imagen para habilitar controles de tamaño
+  useEffect(() => {
+    const quill = quillRef.current?.getEditor();
+    if (!quill) return;
+
+    const handleSelectionChange = (range: any) => {
+      if (!range) {
+        setIsImageSelected(false);
+        return;
+      }
+      const [leaf] = quill.getLeaf(range.index);
+      const node = leaf?.domNode as HTMLElement | undefined;
+      setIsImageSelected(!!node && node.tagName === 'IMG');
+    };
+
+    quill.on('selection-change', handleSelectionChange);
+    return () => {
+      quill.off('selection-change', handleSelectionChange);
+    };
+  }, []);
+
+  // Al hacer clic dentro del editor, si el target es una imagen, forzar selección y habilitar controles
+  useEffect(() => {
+    const quill = quillRef.current?.getEditor();
+    if (!quill) return;
+
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.tagName === 'IMG') {
+        try {
+          const blot = Quill.find(target);
+          const index = quill.getIndex(blot);
+          quill.setSelection(index, 1, 'user');
+        } catch (err) {
+          console.warn('No se pudo seleccionar la imagen en Quill:', err);
+        }
+        setIsImageSelected(true);
+      } else {
+        setIsImageSelected(false);
+      }
+    };
+
+    quill.root.addEventListener('click', handleClick);
+    return () => {
+      quill.root.removeEventListener('click', handleClick);
+    };
+  }, []);
 
   const loadLists = async () => {
     if (!user?.id_tenant || !user?.id_user) return;
@@ -130,7 +186,7 @@ const CampaignWizard: React.FC = () => {
       
       console.log('📋 Campaña cargada');
       console.log('  → Listas seleccionadas:', normalizedLists);
-      console.log('  → Tipo de datos:', normalizedLists.map(id => `${id} (${typeof id})`));
+      console.log('  → Tipo de datos:', normalizedLists.map((id: string) => `${id} (${typeof id})`));
     } catch (error) {
       console.error('Error al cargar campaña:', error);
     }
@@ -167,6 +223,32 @@ const CampaignWizard: React.FC = () => {
         ? prev.selectedLists.filter(id => String(id) !== normalizedId)
         : [...prev.selectedLists, normalizedId]
     }));
+  };
+
+  // Ajustar ancho de imagen seleccionada en el editor visual
+  const setImageWidth = (percent: number) => {
+    const editor = quillRef.current?.getEditor();
+    if (!editor) return;
+    const range = editor.getSelection();
+    if (!range) {
+      alert('Selecciona una imagen en el editor para redimensionarla');
+      return;
+    }
+    const [leaf] = editor.getLeaf(range.index);
+    const domNode: HTMLElement | null = leaf?.domNode || null;
+    if (domNode && domNode.tagName === 'IMG') {
+      const img = domNode as HTMLImageElement;
+      img.style.width = `${percent}%`;
+      img.style.maxWidth = `${percent}%`;
+      img.style.height = 'auto';
+      img.removeAttribute('height');
+      img.setAttribute('width', `${percent}%`);
+      // Sync HTML so el contenido guardado conserve el tamaño elegido
+      const html = editor.root.innerHTML;
+      setFormData(prev => ({ ...prev, htmlContent: html }));
+    } else {
+      alert('Primero haz clic en la imagen para seleccionarla');
+    }
   };
 
   // --- File Attachment Logic ---
@@ -241,7 +323,7 @@ const CampaignWizard: React.FC = () => {
     }
   };
 
-  const saveCampaign = async () => {
+  const saveCampaign = async (scheduleAt?: string, scheduleTimezone?: string) => {
       if (!user?.id_tenant || !user?.id_user) {
         alert('Error: No se pudo identificar el usuario');
         return;
@@ -269,9 +351,11 @@ const CampaignWizard: React.FC = () => {
           sender_email: formData.senderEmail,
           target_lists: formData.selectedLists,
           attachments: formData.attachments,
+          schedule_at: scheduleAt,
+          schedule_timezone: scheduleTimezone,
         });
 
-        alert(`✅ Campaña ${isEditing ? 'actualizada' : 'creada'} correctamente`);
+        alert(`✅ Campaña ${isEditing ? 'actualizada' : 'creada'} correctamente${scheduleAt ? ' y programada' : ''}`);
         navigate('/app/marketing/campaigns');
       } catch (error) {
         console.error('Error al guardar campaña:', error);
@@ -283,6 +367,33 @@ const CampaignWizard: React.FC = () => {
 
   const handleFinish = () => {
     saveCampaign();
+  };
+
+  const handleScheduleSave = async () => {
+    setScheduleError('');
+    if (!scheduleDate || !scheduleTime) {
+      setScheduleError('Selecciona fecha y hora');
+      return;
+    }
+    const dt = new Date(`${scheduleDate}T${scheduleTime}:00`);
+    if (isNaN(dt.getTime())) {
+      setScheduleError('Fecha u hora no válida');
+      return;
+    }
+    const now = new Date();
+    if (dt.getTime() <= now.getTime()) {
+      setScheduleError('La fecha y hora deben ser futuras');
+      return;
+    }
+    
+    // Obtener zona horaria local del sistema
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    
+    setScheduledAt(dt.toISOString());
+    setScheduledTimezone(timeZone);
+    
+    await saveCampaign(dt.toISOString(), timeZone);
+    setIsScheduleModalOpen(false);
   };
 
   return (
@@ -354,7 +465,10 @@ const CampaignWizard: React.FC = () => {
             </button>
           ) : (
              <div className="flex gap-2">
-               <button className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-50">
+               <button 
+                 className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg font-medium text-sm hover:bg-slate-50"
+                 onClick={() => setIsScheduleModalOpen(true)}
+               >
                  Programar
                </button>
                <button 
@@ -617,6 +731,25 @@ const CampaignWizard: React.FC = () => {
                 </div>
                 
                 <div className="flex items-center gap-4">
+                  {/* Controles de tamaño de imagen */}
+                  <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded border border-slate-300">
+                    <span className="text-xs font-medium text-slate-700">Imagen:</span>
+                    {[25, 50, 75, 100].map(size => (
+                      <button
+                        key={size}
+                        onClick={() => setImageWidth(size)}
+                        disabled={!isImageSelected}
+                        className={`text-xs px-2 py-1 rounded border ${
+                          isImageSelected
+                            ? 'border-slate-200 hover:border-brand-300 hover:text-brand-700'
+                            : 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50'
+                        }`}
+                      >
+                        {size}%
+                      </button>
+                    ))}
+                  </div>
+
                   {/* Toggle Editor Type */}
                   <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded border border-slate-300">
                     <span className="text-xs font-medium text-slate-700">Editor:</span>
@@ -648,7 +781,29 @@ const CampaignWizard: React.FC = () => {
                    <div className="w-full lg:w-1/2 flex flex-col">
                      <label className="text-sm font-semibold text-slate-700 mb-2">Editor Visual</label>
                      <div className="flex-1 border border-slate-300 rounded-lg overflow-hidden bg-white">
+                       <style>{`
+                         .ql-editor img {
+                           max-width: 100%;
+                           height: auto;
+                           display: block;
+                           margin: 10px 0;
+                           cursor: pointer;
+                           border: 1px solid #e5e7eb;
+                           border-radius: 4px;
+                           padding: 2px;
+                           transition: all 0.2s ease;
+                         }
+                         .ql-editor img:hover {
+                           border-color: #3b82f6;
+                           box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+                         }
+                         .ql-editor {
+                           min-height: 400px;
+                           padding: 15px;
+                         }
+                       `}</style>
                        <ReactQuill 
+                         ref={quillRef}
                          value={formData.htmlContent}
                          onChange={(content) => setFormData({...formData, htmlContent: content})}
                          theme="snow"
@@ -835,6 +990,22 @@ ${formData.htmlContent.replace(/%nombre%/g, 'Juan Pérez').replace(/%empresa%/g,
                       .reduce((acc, l) => acc + (Number(l.member_count) || 0), 0)} contactos</p>
                   </div>
                </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Programación:</span>
+                <span className="font-bold text-slate-800">
+                  {scheduledAt && scheduledTimezone 
+                    ? new Date(scheduledAt).toLocaleString('es-ES', { 
+                        timeZone: scheduledTimezone,
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      }) + ` (${scheduledTimezone})`
+                    : 'No programada'
+                  }
+                </span>
+              </div>
             </div>
             
             <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -893,6 +1064,63 @@ ${formData.htmlContent.replace(/%nombre%/g, 'Juan Pérez').replace(/%empresa%/g,
                 ) : (
                   <>
                     <i className="fa-solid fa-paper-plane"></i> Enviar
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Schedule Modal */}
+      {isScheduleModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-bold text-slate-800 mb-2">Programar envío</h3>
+            <p className="text-sm text-slate-500 mb-4">Elige fecha y hora futura para dejarla programada. No se enviará antes de esa fecha.</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Fecha</label>
+                <input 
+                  type="date"
+                  value={scheduleDate}
+                  onChange={(e) => setScheduleDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Hora</label>
+                <input 
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(e) => setScheduleTime(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none"
+                />
+              </div>
+            </div>
+            {scheduleError && <p className="text-sm text-red-600 mb-2">{scheduleError}</p>}
+
+            <div className="flex justify-end gap-3 mt-4">
+              <button 
+                onClick={() => setIsScheduleModalOpen(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors font-medium"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleScheduleSave}
+                disabled={isSaving}
+                className={`px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors font-medium flex items-center gap-2 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                {isSaving ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin text-xs"></i>
+                    Programando...
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-clock"></i> Programar y guardar
                   </>
                 )}
               </button>

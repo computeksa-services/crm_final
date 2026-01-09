@@ -291,8 +291,12 @@ export const marketingApi = {
       preview_text?: string;
       html_content?: string;
       sender_type?: 'USER' | 'TENANT';
+      sender_name?: string;
+      sender_email?: string;
       target_lists?: string[];
       attachments?: any[];
+      schedule_at?: string;
+      schedule_timezone?: string;
     }
   ): Promise<MarketingCampaign | void> {
     try {
@@ -366,7 +370,7 @@ export const marketingApi = {
    */
   async launchCampaign(id_campaign: string, id_user: string): Promise<void> {
     try {
-      await fetch(`${API_BASE}/api/marketing/launch`, {
+      await fetch(`${API_BASE}/api/marketing/campaigns/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_campaign, id_user }),

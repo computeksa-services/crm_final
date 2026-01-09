@@ -473,6 +473,8 @@ export interface MarketingCampaign {
   html_content: string;
   status: 'DRAFT' | 'SCHEDULED' | 'SENT' | 'PAUSED' | 'PROCESSING' | 'SENDING' | 'FAILED';
   scheduled_at?: string;
+  scheduled_at_local?: string; // hora local calculada por backend
+  schedule_timezone?: string; // zona horaria asociada a la programación
   sent_at?: string;
   sender_type: 'USER' | 'TENANT';
   id_sender_integration?: string;
