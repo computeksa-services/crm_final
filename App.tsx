@@ -28,6 +28,16 @@ import FinancialsList from './pages/FinancialsList';
 import FinancialCreate from './pages/FinancialCreate';
 import FinancialDetail from './pages/FinancialDetail';
 import AuthCallbackPage from './pages/AuthCallbackPage';
+import MarketingCenter from './pages/MarketingCenter';
+
+// Marketing Pages
+import MarketingDashboard from './components/pages_marketing/Dashboard';
+import MarketingCampaigns from './components/pages_marketing/Campaigns';
+import MarketingCampaignDetail from './components/pages_marketing/CampaignDetail';
+import MarketingCampaignWizard from './components/pages_marketing/CampaignWizard';
+import MarketingLists from './components/pages_marketing/Lists';
+import MarketingListDetail from './components/pages_marketing/ListDetail';
+import MarketingIntegrations from './components/pages_marketing/Integrations';
 
 // Componente para proteger rutas
 const ProtectedRoute = () => {
@@ -81,6 +91,19 @@ const App: React.FC = () => {
               <Route path="client-contacts/:id" element={<ClientContactDetail />} />
               <Route path="products" element={<ProductsList />} />
               <Route path="settings" element={<SettingsPage />} />
+              
+              {/* Marketing Center - Sistema independiente con subrutas */}
+              <Route path="marketing" element={<MarketingCenter />}>
+                <Route index element={<Navigate to="/app/marketing/dashboard" replace />} />
+                <Route path="dashboard" element={<MarketingDashboard />} />
+                <Route path="campaigns" element={<MarketingCampaigns />} />
+                <Route path="campaigns/new" element={<MarketingCampaignWizard />} />
+                <Route path="campaigns/edit/:id" element={<MarketingCampaignWizard />} />
+                <Route path="campaigns/:id" element={<MarketingCampaignDetail />} />
+                <Route path="lists" element={<MarketingLists />} />
+                <Route path="lists/:id" element={<MarketingListDetail />} />
+                <Route path="integrations" element={<MarketingIntegrations />} />
+              </Route>
             </Route>
           </Routes>
         </BrowserRouter>

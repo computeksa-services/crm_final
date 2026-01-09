@@ -429,3 +429,75 @@ export interface CalendarEvent {
     is_organizer: boolean;
   }>;
 }
+
+// --- MARKETING MODULE TYPES ---
+export interface MarketingList {
+  // API devuelve id_list; normalizamos manteniendo list_id como alias
+  id_list?: string;
+  list_id?: string;
+  tenant_id?: string;
+  id_tenant?: string;
+  name: string;
+  description?: string;
+  visibility: 'PRIVATE' | 'PUBLIC_TENANT';
+  type?: 'STATIC' | 'DYNAMIC';
+  member_count: number | string;
+  created_at: string;
+  created_by?: string;
+  updated_at?: string;
+}
+
+export interface ListMember {
+  id_member?: string;
+  id_contact: string;
+  id_list?: string;
+  email?: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string; // Nuevo: nombre completo desde backend
+  status?: 'ACTIVE' | 'UNSUBSCRIBED' | 'SUBSCRIBED'; // Agregado SUBSCRIBED
+  added_at?: string;
+  joined_at?: string; // Nuevo: fecha de ingreso
+  position?: string;
+  id_client_company?: string; // Nuevo: ID de la empresa
+  company_name?: string; // Nuevo: nombre de la empresa
+  company_city?: string; // Nuevo: ciudad de la empresa
+}
+
+export interface MarketingCampaign {
+  id_campaign: string;
+  id_tenant: string;
+  id_user: string;
+  name: string;
+  subject: string;
+  html_content: string;
+  sender_type: 'USER' | 'TENANT';
+  target_lists?: string[];
+  status?: 'DRAFT' | 'SCHEDULED' | 'SENT' | 'PAUSED' | 'PROCESSING' | 'SENDING' | 'FAILED';
+  attachments?: Array<{
+    file_name: string;
+    file_url: string;
+  }>;
+  created_at: string;
+  sent_at?: string;
+  scheduled_at?: string;
+  recipient_count?: number;
+  open_count?: number;
+  click_count?: number;
+  created_by_name?: string;
+  avatar_url?: string;
+  total_audience?: string | number;
+  target_lists_display?: string;
+  sent_count?: string | number;
+  failed_count?: string | number;
+}
+
+export interface CampaignTemplate {
+  template_id: string;
+  tenant_id: string;
+  name: string;
+  subject: string;
+  html_content: string;
+  created_at: string;
+  is_default?: boolean;
+}

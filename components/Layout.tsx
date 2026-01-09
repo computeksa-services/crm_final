@@ -24,6 +24,13 @@ const NAV_GROUPS = [
       { label: 'Tratos', path: '/app/deals', icon: 'fa-handshake', roles: ['superadmin', 'admin', 'usuario'] },
     ]
   },
+  // Marketing Center oculto temporalmente hasta finalizar features
+  // {
+  //   title: 'Marketing',
+  //   items: [
+  //     { label: 'Marketing Center', path: '/app/marketing', icon: 'fa-bullseye', roles: ['superadmin', 'admin', 'usuario'] },
+  //   ]
+  // },
   {
     title: 'Directorio',
     items: [
@@ -53,6 +60,7 @@ const PAGE_NAMES: { [key: string]: string } = {
   'settings': 'Ajustes',
   'companies': 'Tenants',
   'profile': 'Mi Perfil',
+  'marketing': 'Marketing Center',
 };
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { DealStatus } from '../types';
+import { DealStatus } from '../types'; // Asegúrate de agregar notify_client?: boolean en tu type DealStatus
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import IconPicker from '../components/IconPicker';
 
-// Paleta de colores estándar (puedes centralizarla en un archivo constants.ts)
+// Paleta de colores estándar
 const PRESET_COLORS = [
   '#6366f1', // Indigo
   '#ef4444', // Red
@@ -17,15 +17,20 @@ const PRESET_COLORS = [
   '#64748b', // Slate
 ];
 
+// Extendemos la interfaz localmente por si no la has actualizado en types.ts aún
+interface ExtendedDealStatus extends DealStatus {
+  notify_client?: boolean;
+}
+
 const SettingsDealStatuses: React.FC = () => {
   const { user } = useAuth();
   
   // Datos
-  const [statuses, setStatuses] = useState<DealStatus[]>([]);
+  const [statuses, setStatuses] = useState<ExtendedDealStatus[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Edición
-  const [editingStatus, setEditingStatus] = useState<Partial<DealStatus> | null>(null);
+  const [editingStatus, setEditingStatus] = useState<Partial<ExtendedDealStatus> | null>(null);
   
   // UI States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -50,7 +55,7 @@ const SettingsDealStatuses: React.FC = () => {
         return;
       }
       const data = await response.json();
-      const sortedData = data.sort((a: DealStatus, b: DealStatus) => a.status_order - b.status_order);
+      const sortedData = data.sort((a: ExtendedDealStatus, b: ExtendedDealStatus) => a.status_order - b.status_order);
       setStatuses(sortedData);
       setOrderChanged(false);
     } catch (error) {
@@ -97,7 +102,6 @@ const SettingsDealStatuses: React.FC = () => {
       const updatePromises = statuses.map((item, index) => {
         const newOrder = index + 1;
         const payload = { ...item, status_order: newOrder, id_tenant: user.id_tenant };
-        // Nota: Asegúrate de que tu API de update soporte actualizar solo el orden sin borrar otros campos
         return fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -124,12 +128,13 @@ const SettingsDealStatuses: React.FC = () => {
         icon: 'fa-solid fa-layer-group', 
         status_order: newOrder, 
         is_default: false,
-        status_category: 'DRAFT' 
+        status_category: 'DRAFT',
+        notify_client: false // Inicializar en false
     });
     setIsModalOpen(true);
   };
 
-  const handleEdit = (status: DealStatus) => {
+  const handleEdit = (status: ExtendedDealStatus) => {
     setEditingStatus(status);
     setIsModalOpen(true);
   };
@@ -196,26 +201,22 @@ const SettingsDealStatuses: React.FC = () => {
       </div>
   );
 
-  // Agrupar estados por categoría
+  // Filtros de categorías
   const draftStatuses = statuses.filter(s => s.status_category === 'DRAFT' || !s.status_category);
   const progressStatuses = statuses.filter(s => s.status_category === 'PROGRESS');
   const pausedStatuses = statuses.filter(s => s.status_category === 'PAUSED');
   const wonStatuses = statuses.filter(s => s.status_category === 'WON');
   const lostStatuses = statuses.filter(s => s.status_category === 'LOST');
 
-  const handleDragOverCategory = (e: React.DragEvent, category: 'DRAFT' | 'PROGRESS' | 'PAUSED' | 'WON' | 'LOST') => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
+  const handleDragOverCategory = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); };
 
-  const handleDropOnCategory = async (e: React.DragEvent, category: 'DRAFT' | 'PROGRESS' | 'PAUSED' | 'WON' | 'LOST') => {
+  const handleDropOnCategory = async (e: React.DragEvent, category: string) => {
     e.preventDefault();
     if (draggedItemIndex === null) return;
 
     const draggedStatus = statuses[draggedItemIndex];
-    if (draggedStatus.status_category === category) return; // Ya está en esta categoría
+    if (draggedStatus.status_category === category) return; 
 
-    // Actualizar categoría
     const updatedStatus = { ...draggedStatus, status_category: category, id_tenant: user?.id_tenant };
     
     try {
@@ -226,8 +227,7 @@ const SettingsDealStatuses: React.FC = () => {
       });
 
       if (!response.ok) throw new Error('Error al actualizar');
-      
-      setToast({ message: `Estado movido a ${category === 'OPEN' ? 'Abierto' : category === 'WON' ? 'Ganado' : 'Perdido'}`, type: 'success' });
+      setToast({ message: 'Categoría actualizada', type: 'success' });
       fetchData();
     } catch (error) {
       setToast({ message: 'Error al cambiar categoría', type: 'error' });
@@ -236,7 +236,7 @@ const SettingsDealStatuses: React.FC = () => {
     }
   };
 
-  const renderStatusCard = (status: DealStatus) => {
+  const renderStatusCard = (status: ExtendedDealStatus) => {
     const globalIndex = statuses.findIndex(s => s.id_status === status.id_status);
     const isDragging = draggedItemIndex === globalIndex;
 
@@ -255,37 +255,28 @@ const SettingsDealStatuses: React.FC = () => {
         </div>
 
         <div 
-          className="w-9 h-9 rounded-lg flex items-center justify-center shadow-sm"
-          style={{ 
-            backgroundColor: `${status.color}15`, 
-            color: status.color 
-          }}
+          className="w-9 h-9 rounded-lg flex items-center justify-center shadow-sm relative"
+          style={{ backgroundColor: `${status.color}15`, color: status.color }}
         >
           <i className={status.icon}></i>
+          {status.notify_client && (
+            <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full shadow-sm" title="Notifica al cliente">
+                <i className="fa-solid fa-envelope"></i>
+            </span>
+          )}
         </div>
         <div>
-          <span 
-            className="block font-bold text-sm"
-            style={{ color: status.color }}
-          >
+          <span className="block font-bold text-sm" style={{ color: status.color }}>
             {status.name}
           </span>
         </div>
       </div>
 
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button 
-          onClick={() => handleEdit(status)} 
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-          title="Editar"
-        >
+        <button onClick={() => handleEdit(status)} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors">
           <i className="fa-solid fa-pen-to-square text-xs"></i>
         </button>
-        <button 
-          onClick={() => handleDelete(status.id_status)} 
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-          title="Eliminar"
-        >
+        <button onClick={() => handleDelete(status.id_status)} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors">
           <i className="fa-solid fa-trash-can text-xs"></i>
         </button>
       </div>
@@ -301,23 +292,15 @@ const SettingsDealStatuses: React.FC = () => {
       <div className="flex justify-between items-center mb-6">
         <div>
             <h3 className="text-lg font-bold text-slate-800">Estados del Pipeline</h3>
-            <p className="text-sm text-slate-500">Arrastra los estados entre categorías para cambiar su comportamiento.</p>
+            <p className="text-sm text-slate-500">Configura el flujo de ventas y notificaciones.</p>
         </div>
         <div className="flex items-center gap-2">
           {orderChanged && (
-            <button
-              onClick={saveNewOrder}
-              disabled={savingOrder}
-              className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-4 py-2 rounded-xl shadow-sm font-medium transition-all flex items-center"
-            >
-              {savingOrder ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-floppy-disk mr-2"></i>}
-              Guardar orden
+            <button onClick={saveNewOrder} disabled={savingOrder} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl shadow-sm font-medium transition-all flex items-center">
+              {savingOrder ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-floppy-disk mr-2"></i>} Guardar orden
             </button>
           )}
-          <button 
-              onClick={handleAddNew} 
-              className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl shadow-sm font-medium transition-all flex items-center"
-          >
+          <button onClick={handleAddNew} className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-xl shadow-sm font-medium transition-all flex items-center">
             <i className="fa-solid fa-plus mr-2"></i> Nuevo
           </button>
         </div>
@@ -325,141 +308,40 @@ const SettingsDealStatuses: React.FC = () => {
 
       {statuses.length === 0 ? (
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-12 text-center text-slate-400">
-          <i className="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i>
-          <p>No hay estados configurados.</p>
+          <i className="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i> <p>No hay estados configurados.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          
-          {/* BORRADOR */}
-          <div 
-            onDragOver={(e) => handleDragOverCategory(e, 'DRAFT')}
-            onDrop={(e) => handleDropOnCategory(e, 'DRAFT')}
-            className="bg-white rounded-2xl shadow-sm border-2 border-slate-200 overflow-hidden"
-          >
-            <div className="bg-gradient-to-r from-slate-500 to-slate-600 p-4 text-white">
-              <div className="flex items-center gap-2 mb-1">
-                <i className="fa-solid fa-file-lines"></i>
-                <h4 className="font-bold text-sm uppercase tracking-wide">Borrador</h4>
-              </div>
-              <p className="text-xs text-slate-100">En planificación</p>
-            </div>
-            <div className="p-3 space-y-2 min-h-[200px]">
-              {draftStatuses.length === 0 ? (
-                <div className="text-center text-slate-400 text-xs py-8">
-                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
-                  <p>Arrastra estados aquí</p>
-                </div>
-              ) : (
-                draftStatuses.map((status) => renderStatusCard(status))
-              )}
-            </div>
-          </div>
-
-          {/* EN PROGRESO */}
-          <div 
-            onDragOver={(e) => handleDragOverCategory(e, 'PROGRESS')}
-            onDrop={(e) => handleDropOnCategory(e, 'PROGRESS')}
-            className="bg-white rounded-2xl shadow-sm border-2 border-emerald-200 overflow-hidden"
-          >
-            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 text-white">
-              <div className="flex items-center gap-2 mb-1">
-                <i className="fa-solid fa-arrows-spin"></i>
-                <h4 className="font-bold text-sm uppercase tracking-wide">En Progreso</h4>
-              </div>
-              <p className="text-xs text-emerald-100">Trato activo</p>
-            </div>
-            <div className="p-3 space-y-2 min-h-[200px]">
-              {progressStatuses.length === 0 ? (
-                <div className="text-center text-slate-400 text-xs py-8">
-                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
-                  <p>Arrastra estados aquí</p>
-                </div>
-              ) : (
-                progressStatuses.map((status) => renderStatusCard(status))
-              )}
-            </div>
-          </div>
-
-          {/* PAUSADO */}
-          <div 
-            onDragOver={(e) => handleDragOverCategory(e, 'PAUSED')}
-            onDrop={(e) => handleDropOnCategory(e, 'PAUSED')}
-            className="bg-white rounded-2xl shadow-sm border-2 border-amber-200 overflow-hidden"
-          >
-            <div className="bg-gradient-to-r from-amber-500 to-amber-600 p-4 text-white">
-              <div className="flex items-center gap-2 mb-1">
-                <i className="fa-solid fa-pause"></i>
-                <h4 className="font-bold text-sm uppercase tracking-wide">Pausado</h4>
-              </div>
-              <p className="text-xs text-amber-100">Temporalmente detenido</p>
-            </div>
-            <div className="p-3 space-y-2 min-h-[200px]">
-              {pausedStatuses.length === 0 ? (
-                <div className="text-center text-slate-400 text-xs py-8">
-                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
-                  <p>Arrastra estados aquí</p>
-                </div>
-              ) : (
-                pausedStatuses.map((status) => renderStatusCard(status))
-              )}
-            </div>
-          </div>
-
-          {/* GANADO */}
-          <div 
-            onDragOver={(e) => handleDragOverCategory(e, 'WON')}
-            onDrop={(e) => handleDropOnCategory(e, 'WON')}
-            className="bg-white rounded-2xl shadow-sm border-2 border-blue-200 overflow-hidden"
-          >
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-4 text-white">
-              <div className="flex items-center gap-2 mb-1">
-                <i className="fa-solid fa-trophy"></i>
-                <h4 className="font-bold text-sm uppercase tracking-wide">Ganado</h4>
-              </div>
-              <p className="text-xs text-blue-100">Venta cerrada</p>
-            </div>
-            <div className="p-3 space-y-2 min-h-[200px]">
-              {wonStatuses.length === 0 ? (
-                <div className="text-center text-slate-400 text-xs py-8">
-                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
-                  <p>Arrastra estados aquí</p>
-                </div>
-              ) : (
-                wonStatuses.map((status) => renderStatusCard(status))
-              )}
-            </div>
-          </div>
-
-          {/* PERDIDO */}
-          <div 
-            onDragOver={(e) => handleDragOverCategory(e, 'LOST')}
-            onDrop={(e) => handleDropOnCategory(e, 'LOST')}
-            className="bg-white rounded-2xl shadow-sm border-2 border-red-200 overflow-hidden"
-          >
-            <div className="bg-gradient-to-r from-red-500 to-red-600 p-4 text-white">
-              <div className="flex items-center gap-2 mb-1">
-                <i className="fa-solid fa-circle-xmark"></i>
-                <h4 className="font-bold text-sm uppercase tracking-wide">Perdido</h4>
-              </div>
-              <p className="text-xs text-red-100">Venta fallida</p>
-            </div>
-            <div className="p-3 space-y-2 min-h-[200px]">
-              {lostStatuses.length === 0 ? (
-                <div className="text-center text-slate-400 text-xs py-8">
-                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
-                  <p>Arrastra estados aquí</p>
-                </div>
-              ) : (
-                lostStatuses.map((status) => renderStatusCard(status))
-              )}
-            </div>
-          </div>
-
+          {/* Renderizado de columnas usando los arrays filtrados */}
+          {['DRAFT', 'PROGRESS', 'PAUSED', 'WON', 'LOST'].map(cat => {
+             const list = cat === 'DRAFT' ? draftStatuses : cat === 'PROGRESS' ? progressStatuses : cat === 'PAUSED' ? pausedStatuses : cat === 'WON' ? wonStatuses : lostStatuses;
+             const colors: any = { DRAFT: 'slate', PROGRESS: 'emerald', PAUSED: 'amber', WON: 'blue', LOST: 'red' };
+             const titles: any = { DRAFT: 'Borrador', PROGRESS: 'En Progreso', PAUSED: 'Pausado', WON: 'Ganado', LOST: 'Perdido' };
+             const icons: any = { DRAFT: 'fa-file-lines', PROGRESS: 'fa-arrows-spin', PAUSED: 'fa-pause', WON: 'fa-trophy', LOST: 'fa-circle-xmark' };
+             
+             return (
+               <div 
+                 key={cat}
+                 onDragOver={(e) => handleDragOverCategory(e)}
+                 onDrop={(e) => handleDropOnCategory(e, cat)}
+                 className={`bg-white rounded-2xl shadow-sm border-2 border-${colors[cat]}-200 overflow-hidden`}
+               >
+                 <div className={`bg-gradient-to-r from-${colors[cat]}-500 to-${colors[cat]}-600 p-4 text-white`}>
+                   <div className="flex items-center gap-2 mb-1">
+                     <i className={`fa-solid ${icons[cat]}`}></i>
+                     <h4 className="font-bold text-sm uppercase tracking-wide">{titles[cat]}</h4>
+                   </div>
+                 </div>
+                 <div className="p-3 space-y-2 min-h-[200px]">
+                   {list.map(status => renderStatusCard(status))}
+                 </div>
+               </div>
+             )
+          })}
         </div>
       )}
 
-      {/* Modal Simplificado */}
+      {/* Modal de Edición / Creación */}
       {isModalOpen && editingStatus && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all relative">
@@ -473,7 +355,7 @@ const SettingsDealStatuses: React.FC = () => {
                 </button>
             </div>
             
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-5">
               
               {/* Vista Previa */}
               <div className="flex justify-center">
@@ -503,80 +385,99 @@ const SettingsDealStatuses: React.FC = () => {
                 />
               </div>
 
-              {/* Comportamiento del Sistema */}
+              {/* Categoría */}
               <div>
                 <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                  Comportamiento del Sistema <span className="text-red-500">*</span>
+                  Comportamiento del Sistema
                 </label>
                 <select
                   value={editingStatus.status_category || 'DRAFT'}
-                  onChange={(e) => setEditingStatus({ ...editingStatus, status_category: e.target.value as 'DRAFT' | 'PROGRESS' | 'PAUSED' | 'WON' | 'LOST' })}
+                  onChange={(e) => setEditingStatus({ ...editingStatus, status_category: e.target.value as any })}
                   className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all bg-white"
                 >
-                  <option value="DRAFT">📝 Borrador - Trato en planificación</option>
-                  <option value="PROGRESS">🔄 En Progreso - Trato activo</option>
-                  <option value="PAUSED">⏸️ Pausado - Temporalmente detenido</option>
-                  <option value="WON">🎉 Ganado - Éxito, venta cerrada</option>
-                  <option value="LOST">❌ Perdido - Venta fallida</option>
+                  <option value="DRAFT">📝 Borrador</option>
+                  <option value="PROGRESS">🔄 En Progreso</option>
+                  <option value="PAUSED">⏸️ Pausado</option>
+                  <option value="WON">🎉 Ganado</option>
+                  <option value="LOST">❌ Perdido</option>
                 </select>
-                <p className="text-xs text-slate-400 mt-1.5">
-                  Define cómo se comporta este estado en la lógica del sistema
-                </p>
               </div>
 
-              {/* Color Picker */}
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Color</label>
-                <div className="flex flex-wrap gap-3">
-                    {PRESET_COLORS.map(color => (
-                        <button
-                            key={color}
-                            type="button"
-                            onClick={() => setEditingStatus({ ...editingStatus, color })}
-                            className={`w-8 h-8 rounded-full transition-all border-2 ${
-                                editingStatus.color === color 
-                                ? 'border-slate-600 scale-110 shadow-sm' 
-                                : 'border-transparent hover:scale-105'
-                            }`}
-                            style={{ backgroundColor: color }}
-                        />
-                    ))}
-                </div>
-              </div>
-
-              {/* Icon Picker */}
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Icono</label>
-                <button
-                    type="button"
-                    onClick={() => setShowIconPicker(true)}
-                    className="w-full flex items-center justify-between px-4 py-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all text-left group"
-                >
-                   <div className="flex items-center gap-3">
-                       <div 
-                         className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-white group-hover:shadow-sm transition-all"
-                         style={{ color: editingStatus.color }} 
-                        >
-                           <i className={editingStatus.icon || 'fa-solid fa-icons'}></i>
+              <div className="grid grid-cols-2 gap-4">
+                 {/* Color Picker */}
+                 <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Color</label>
+                    <div className="flex flex-wrap gap-2">
+                        {PRESET_COLORS.map(color => (
+                            <button
+                                key={color}
+                                type="button"
+                                onClick={() => setEditingStatus({ ...editingStatus, color })}
+                                className={`w-6 h-6 rounded-full transition-all border-2 ${
+                                    editingStatus.color === color ? 'border-slate-600 scale-110' : 'border-transparent hover:scale-105'
+                                }`}
+                                style={{ backgroundColor: color }}
+                            />
+                        ))}
+                    </div>
+                 </div>
+                 {/* Icon Picker */}
+                 <div>
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Icono</label>
+                    <button
+                        type="button"
+                        onClick={() => setShowIconPicker(true)}
+                        className="w-full flex items-center justify-between px-3 py-2 border border-slate-200 rounded-xl hover:bg-slate-50 transition-all text-left"
+                    >
+                       <div className="flex items-center gap-2">
+                           <i className={`${editingStatus.icon || 'fa-solid fa-icons'} text-slate-500`}></i>
+                           <span className="text-xs text-slate-600">Cambiar</span>
                        </div>
-                       <span className="text-sm text-slate-600 font-medium">
-                           Cambiar icono...
-                       </span>
-                   </div>
-                   <i className="fa-solid fa-chevron-right text-xs text-slate-400"></i>
-                </button>
+                    </button>
+                 </div>
               </div>
 
-              {/* Opciones Avanzadas (Opcional - Checkbox para Default) */}
-              <div className="flex items-center bg-slate-50 p-3 rounded-lg border border-slate-100">
+              {/* --- AQUÍ ESTÁ LA NUEVA CONFIGURACIÓN DE NOTIFICACIONES --- */}
+              <div className="border-t border-slate-100 pt-4 mt-2">
+                 <div 
+                    onClick={() => setEditingStatus({ ...editingStatus, notify_client: !editingStatus.notify_client })}
+                    className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${
+                        editingStatus.notify_client 
+                        ? 'bg-blue-50 border-blue-200' 
+                        : 'bg-slate-50 border-slate-100 hover:bg-slate-100'
+                    }`}
+                 >
+                    <div className="flex gap-3 items-center">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${editingStatus.notify_client ? 'bg-blue-200 text-blue-600' : 'bg-slate-200 text-slate-400'}`}>
+                            <i className="fa-solid fa-envelope"></i>
+                        </div>
+                        <div>
+                            <p className={`text-sm font-bold ${editingStatus.notify_client ? 'text-blue-900' : 'text-slate-600'}`}>
+                                Notificar al Cliente
+                            </p>
+                            <p className="text-xs text-slate-500 leading-tight">
+                                Enviar correo automático al entrar aquí.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    {/* Toggle Switch Visual */}
+                    <div className={`w-10 h-5 rounded-full relative transition-colors ${editingStatus.notify_client ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                        <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm ${editingStatus.notify_client ? 'left-6' : 'left-1'}`}></div>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Checkbox Default */}
+              <div className="flex items-center gap-3 px-1">
                  <input 
                     type="checkbox" 
                     id="is_default" 
                     checked={editingStatus.is_default || false} 
                     onChange={(e) => setEditingStatus({ ...editingStatus, is_default: e.target.checked })} 
-                    className="h-4 w-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500" 
+                    className="h-4 w-4 text-brand-600 rounded border-gray-300 focus:ring-brand-500 cursor-pointer" 
                  />
-                 <label htmlFor="is_default" className="ml-3 text-sm text-slate-700 cursor-pointer select-none">
+                 <label htmlFor="is_default" className="text-xs font-semibold text-slate-600 cursor-pointer select-none">
                     Marcar como estado inicial por defecto
                  </label>
               </div>
