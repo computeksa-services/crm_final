@@ -209,28 +209,50 @@ const QuotesList: React.FC = () => {
   const handleInlineUpdate = async (quote: Quote, updates: Partial<Quote>) => {
     if (!user?.id_tenant || !user?.id_user) return;
     
-    setQuotes(prev => prev.map(q => q.id_cotizacion === quote.id_cotizacion ? { ...q, ...updates } : q));
+    const isStatusChange = updates.id_quote_status && updates.id_quote_status !== quote.id_quote_status;
+    const targetStatus = isStatusChange
+      ? quoteStatuses.find((s) => s.id_status === updates.id_quote_status)
+      : undefined;
 
-    try {
-        const payload = updates.id_quote_status 
-            ? { id_cotizacion: quote.id_cotizacion, id_quote_status: updates.id_quote_status, id_tenant: user.id_tenant, id_user: user.id_user }
-            : { ...quote, ...updates, id_tenant: user.id_tenant, id_user: user.id_user };
-            
-        const endpoint = updates.id_quote_status ? '/api/status/quotes' : '/api/quotes/update';
-        
-        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}${endpoint}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        
-        if (!res.ok) throw new Error();
-        setToast({ message: 'Actualizado correctamente.', type: 'success' });
-        fetchData(); 
-    } catch {
-        setToast({ message: 'Error al actualizar.', type: 'error' });
-        fetchData(); 
+    const runUpdate = async () => {
+      setQuotes(prev => prev.map(q => q.id_cotizacion === quote.id_cotizacion ? { ...q, ...updates } : q));
+
+      try {
+          const payload = updates.id_quote_status 
+              ? { id_cotizacion: quote.id_cotizacion, id_quote_status: updates.id_quote_status, id_tenant: user.id_tenant, id_user: user.id_user }
+              : { ...quote, ...updates, id_tenant: user.id_tenant, id_user: user.id_user };
+              
+          const endpoint = updates.id_quote_status ? '/api/status/quotes' : '/api/quotes/update';
+          
+          const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}${endpoint}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+          });
+          
+          if (!res.ok) throw new Error();
+          setToast({ message: 'Actualizado correctamente.', type: 'success' });
+          fetchData(); 
+      } catch {
+          setToast({ message: 'Error al actualizar.', type: 'error' });
+          fetchData(); 
+      }
+    };
+
+    if (isStatusChange) {
+      setConfirmState({
+        isOpen: true,
+        title: 'Confirmar Cambio de Estado',
+        message: `¿Estás seguro de cambiar el estado a "${targetStatus?.name}"?`,
+        onConfirm: () => {
+          runUpdate();
+          setConfirmState((p) => ({ ...p, isOpen: false }));
+        },
+      });
+      return;
     }
+
+    runUpdate();
   };
 
   const handleDelete = (id: string) => {

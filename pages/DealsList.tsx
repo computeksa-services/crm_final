@@ -336,12 +336,15 @@ const DealsList: React.FC = () => {
       }
     };
 
-    if (isStatusChange && targetStatus?.status_category === 'LOST') {
+    if (isStatusChange) {
+      const isLostStatus = targetStatus?.status_category === 'LOST';
       setConfirmState({
         isOpen: true,
-        title: 'Marcar Trato como Perdido',
-        message: 'Esto marcará todas las cotizaciones asociadas como Perdidas. ¿Deseas continuar?',
-        isDestructive: true,
+        title: isLostStatus ? 'Marcar Trato como Perdido' : 'Confirmar Cambio de Estado',
+        message: isLostStatus 
+          ? 'Esto marcará todas las cotizaciones asociadas como Perdidas. ¿Deseas continuar?'
+          : `¿Estás seguro de cambiar el estado a "${targetStatus?.name}"?`,
+        isDestructive: isLostStatus,
         onConfirm: () => {
           runUpdate();
           setConfirmState((p) => ({ ...p, isOpen: false }));

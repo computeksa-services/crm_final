@@ -85,6 +85,11 @@ const Calendar: React.FC = () => {
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [attendeeInput, setAttendeeInput] = useState('');
   const [showAttendeeSuggestions, setShowAttendeeSuggestions] = useState(false);
+  
+  // Deal search state
+  const [dealSearchInput, setDealSearchInput] = useState('');
+  const [showDealSuggestions, setShowDealSuggestions] = useState(false);
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
 
   // Estado para confirmación de cambios
   const [showConfirmChanges, setShowConfirmChanges] = useState(false);
@@ -184,7 +189,23 @@ const Calendar: React.FC = () => {
       if (dealsResponse.ok) {
         const dealsText = await dealsResponse.text();
         if (dealsText.trim()) {
-          dealsData = JSON.parse(dealsText);
+          const raw = JSON.parse(dealsText);
+          // El endpoint puede devolver { data: { tratos: [...] } } o directamente un array
+          const payload = Array.isArray(raw) ? (raw[0]?.data ?? raw[0] ?? {}) : (raw.data ?? raw);
+          const dealsList = Array.isArray(payload.tratos) ? payload.tratos : (Array.isArray(payload) ? payload : []);
+          
+          // Normalizar deals igual que en DealsList
+          dealsData = dealsList.map((d: any) => ({
+            id_trato: d.id_trato,
+            nombre_trato: d.nombre_trato,
+            client_company_name: d.empresa_nombre ?? d.client_company_name,
+            id_client_company: d.id_client_company ?? d.empresa_id ?? d.id_empresa ?? '',
+            id_contact: d.id_contact ?? d.contacto_id ?? d.id_contacto ?? '',
+            valor_trato: d.valor_numeric ?? d.valor_trato ?? 0,
+            id_deal_status: d.estado_id ?? d.id_deal_status ?? d.id_estado ?? '',
+            estado_nombre: d.estado_nombre,
+            id_user: d.id_owner ?? d.id_user,
+          }));
         }
       }
       
@@ -259,6 +280,24 @@ const Calendar: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [currentDate, viewMode, user]);
+
+  // Cerrar sugerencias de deals al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.deal-search-container')) {
+        setShowDealSuggestions(false);
+      }
+      if (!target.closest('.attendee-search-container')) {
+        setShowAttendeeSuggestions(false);
+      }
+    };
+    
+    if (showDealSuggestions || showAttendeeSuggestions) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showDealSuggestions, showAttendeeSuggestions]);
 
   const navigate = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate);
@@ -343,11 +382,17 @@ const Calendar: React.FC = () => {
 
   // --- FORM HANDLERS ---
 
-  const handleOpenModal = () => {
+  const handleOpenModal = (clickedDate?: Date, clickedHour?: number) => {
     setIsEditing(false);
     setEditingEventId(null);
     
-    const now = new Date();
+    const now = clickedDate ? new Date(clickedDate) : new Date();
+    
+    // Si se proporcionó una hora específica, usarla
+    if (clickedHour !== undefined) {
+      now.setHours(clickedHour, 0, 0, 0);
+    }
+    
     const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
     
     // Formatear para datetime-local usando hora local del sistema
@@ -373,6 +418,9 @@ const Calendar: React.FC = () => {
     });
     setAttendees([]);
     setAttendeeInput('');
+    setSelectedDeal(null);
+    setDealSearchInput('');
+    setShowDealSuggestions(false);
     setIsModalOpen(true);
   };
 
@@ -1101,27 +1149,97 @@ const Calendar: React.FC = () => {
               </div>
 
               {/* Relaciones CRM */}
-              <div>
+              <div className="deal-search-container">
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   <i className="fa-solid fa-handshake mr-1"></i> Trato Relacionado
                 </label>
-                <select 
-                  name="id_trato"
-                  value={formData.id_trato}
-                  onChange={(e) => handleDealChange(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
-                >
-                  <option value="">-- Seleccionar un trato --</option>
-                  {deals && deals.length > 0 ? (
-                    deals.map(d => (
-                      <option key={d.id_trato} value={d.id_trato}>
-                        {d.nombre_trato} {d.client_company_name ? `(${d.client_company_name})` : ''}
-                      </option>
-                    ))
-                  ) : (
-                    <option disabled>No hay tratos disponibles</option>
+                
+                {/* Selected Deal Display */}
+                {selectedDeal && (
+                  <div className="mb-2 p-3 bg-brand-50 border border-brand-200 rounded-lg flex items-center justify-between">
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-brand-900">{selectedDeal.nombre_trato}</p>
+                      {selectedDeal.client_company_name && (
+                        <p className="text-xs text-brand-600">{selectedDeal.client_company_name}</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDeal(null);
+                        setFormData(prev => ({ ...prev, id_trato: '' }));
+                        setDealSearchInput('');
+                      }}
+                      className="ml-2 text-brand-600 hover:text-brand-800 transition-colors"
+                    >
+                      <i className="fa-solid fa-times"></i>
+                    </button>
+                  </div>
+                )}
+                
+                {/* Search Input */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={dealSearchInput}
+                    onChange={(e) => {
+                      setDealSearchInput(e.target.value);
+                      setShowDealSuggestions(true);
+                    }}
+                    onFocus={() => setShowDealSuggestions(true)}
+                    placeholder="Buscar trato por nombre o empresa..."
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                  />
+                  
+                  {/* Suggestions Dropdown */}
+                  {showDealSuggestions && dealSearchInput && (
+                    <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                      {deals
+                        .filter(d => 
+                          d.nombre_trato?.toLowerCase().includes(dealSearchInput.toLowerCase()) ||
+                          d.client_company_name?.toLowerCase().includes(dealSearchInput.toLowerCase())
+                        )
+                        .slice(0, 50)
+                        .map(deal => (
+                          <button
+                            key={deal.id_trato}
+                            type="button"
+                            onClick={() => {
+                              setSelectedDeal(deal);
+                              setFormData(prev => ({ ...prev, id_trato: deal.id_trato }));
+                              setDealSearchInput('');
+                              setShowDealSuggestions(false);
+                              handleDealChange(deal.id_trato);
+                            }}
+                            className="w-full px-4 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors"
+                          >
+                            <div className="font-medium text-sm text-slate-800">{deal.nombre_trato}</div>
+                            {deal.client_company_name && (
+                              <div className="text-xs text-slate-500 mt-0.5">{deal.client_company_name}</div>
+                            )}
+                            {deal.estado_nombre && (
+                              <div className="text-xs text-slate-400 mt-0.5">Estado: {deal.estado_nombre}</div>
+                            )}
+                          </button>
+                        ))
+                      }
+                      {deals.filter(d => 
+                        d.nombre_trato?.toLowerCase().includes(dealSearchInput.toLowerCase()) ||
+                        d.client_company_name?.toLowerCase().includes(dealSearchInput.toLowerCase())
+                      ).length === 0 && (
+                        <div className="px-4 py-3 text-sm text-slate-500 text-center">
+                          No se encontraron tratos
+                        </div>
+                      )}
+                    </div>
                   )}
-                </select>
+                </div>
+                
+                {deals && deals.length > 0 && !selectedDeal && (
+                  <p className="text-xs text-slate-500 mt-1">
+                    {deals.length} {deals.length === 1 ? 'trato disponible' : 'tratos disponibles'}
+                  </p>
+                )}
               </div>
 
               {/* Asistentes */}
@@ -1649,7 +1767,7 @@ const Calendar: React.FC = () => {
 interface ViewProps {
   events: CalendarEvent[];
   currentDate: Date;
-  onOpenModal: () => void;
+  onOpenModal: (date?: Date, hour?: number) => void;
   onEventClick: (eventId: string) => void;
 }
 
@@ -1733,7 +1851,7 @@ const MonthView: React.FC<ViewProps> = ({ events, currentDate, onOpenModal, onEv
                   {date.getDate()}
                 </span>
                 <button 
-                  onClick={onOpenModal}
+                  onClick={() => onOpenModal(date)}
                   className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-brand-500 transition-opacity"
                 >
                   <i className="fa-solid fa-plus-circle"></i>
@@ -1838,7 +1956,28 @@ const WeekView: React.FC<ViewProps> = ({ events, currentDate, onOpenModal, onEve
                 });
 
                 return (
-                  <div key={dayIdx} className="border-r border-b border-slate-100 p-1 hover:bg-slate-50 group relative">
+                  <div 
+                    key={dayIdx} 
+                    className="border-r border-b border-slate-100 p-1 hover:bg-slate-50 group relative cursor-pointer"
+                    onClick={(e) => {
+                      // Solo crear si no se hace clic en un evento existente
+                      if (!(e.target as HTMLElement).closest('[data-event-card]')) {
+                        onOpenModal(day, hour);
+                      }
+                    }}
+                  >
+                    {/* Botón flotante para crear */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenModal(day, hour);
+                      }}
+                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity w-5 h-5 bg-brand-600 text-white rounded-full flex items-center justify-center hover:bg-brand-700 text-[10px] shadow-lg z-10"
+                      title="Crear evento"
+                    >
+                      <i className="fa-solid fa-plus"></i>
+                    </button>
+                    
                     {dayEvents.map(ev => {
                       const startDate = new Date(ev.start);
                       const timeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
@@ -1846,6 +1985,7 @@ const WeekView: React.FC<ViewProps> = ({ events, currentDate, onOpenModal, onEve
                       return (
                         <div 
                           key={ev.id}
+                          data-event-card
                           onClick={() => onEventClick(ev.id)}
                           className="text-xs p-1 rounded mb-1 cursor-pointer border-l-2 hover:shadow-md transition-shadow"
                           style={{
@@ -1907,7 +2047,27 @@ const DayView: React.FC<ViewProps> = ({ events, currentDate, onOpenModal, onEven
               <div className="w-20 p-3 text-sm text-slate-500 text-right border-r border-slate-100 bg-slate-50">
                 {hour.toString().padStart(2, '0')}:00
               </div>
-              <div className="flex-1 p-2 space-y-2">
+              <div 
+                className="flex-1 p-2 space-y-2 relative cursor-pointer"
+                onClick={(e) => {
+                  // Solo crear si no se hace clic en un evento existente
+                  if (!(e.target as HTMLElement).closest('[data-event-card]')) {
+                    onOpenModal(currentDate, hour);
+                  }
+                }}
+              >
+                {/* Botón flotante para crear */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenModal(currentDate, hour);
+                  }}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity w-6 h-6 bg-brand-600 text-white rounded-full flex items-center justify-center hover:bg-brand-700 text-xs shadow-lg z-10"
+                  title="Crear evento"
+                >
+                  <i className="fa-solid fa-plus"></i>
+                </button>
+                
                 {hourEvents.map(ev => {
                   const startDate = new Date(ev.start);
                   const endDate = new Date(ev.end);
@@ -1916,6 +2076,7 @@ const DayView: React.FC<ViewProps> = ({ events, currentDate, onOpenModal, onEven
                   return (
                     <div 
                       key={ev.id}
+                      data-event-card
                       onClick={() => onEventClick(ev.id)}
                       className="p-3 rounded-lg border-l-4 cursor-pointer hover:shadow-md transition-shadow"
                       style={{
