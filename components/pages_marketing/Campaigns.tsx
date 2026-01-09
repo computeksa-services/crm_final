@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MOCK_CAMPAIGNS } from '../marketingMockData';
-import { MarketingCampaign } from '../marketingTypes';
+import { MarketingCampaign } from '../../types';
+import { marketingApi } from '../../services/marketingApi';
+import { useAuth } from '../../contexts/AuthContext';
+import ConfirmModal from '../ConfirmModal';
 
 const StatusBadge = ({ status }: { status: string }) => {
   const styles: {[key: string]: string} = {
@@ -29,9 +31,32 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 const Campaigns: React.FC = () => {
   const navigate = useNavigate();
-  const [campaigns, setCampaigns] = useState<MarketingCampaign[]>(MOCK_CAMPAIGNS);
+  const { user } = useAuth();
+  const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [campaignToDelete, setCampaignToDelete] = useState<string | null>(null);
+
+  // Cargar campañas desde la API
+  useEffect(() => {
+    loadCampaigns();
+  }, []);
+
+  const loadCampaigns = async () => {
+    if (!user?.id_tenant) return;
+    
+    try {
+      setIsLoading(true);
+      const data = await marketingApi.getCampaigns(user.id_tenant);
+      setCampaigns(data);
+    } catch (error) {
+      console.error('Error al cargar campañas:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // --- Actions ---
 
@@ -45,16 +70,33 @@ const Campaigns: React.FC = () => {
       created_at: new Date().toISOString(),
       sent_at: undefined,
       scheduled_at: undefined,
-      stats: { sent: 0, opened: 0, clicked: 0 }
+      open_count: 0,
+      click_count: 0,
+      recipient_count: 0
     };
     setCampaigns([newCampaign, ...campaigns]);
-    alert("Campaña duplicada correctamente");
   };
 
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (confirm("¿Estás seguro de que deseas eliminar esta campaña? Esta acción no se puede deshacer.")) {
-      setCampaigns(prev => prev.filter(c => c.id_campaign !== id));
+    setCampaignToDelete(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!campaignToDelete || !user?.id_tenant || !user?.id_user) return;
+    try {
+      await marketingApi.manageCampaign('delete', {
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+        id_campaign: campaignToDelete,
+      });
+      setCampaigns(prev => prev.filter(c => c.id_campaign !== campaignToDelete));
+    } catch (err) {
+      console.error('Error eliminando campaña:', err);
+    } finally {
+      setShowDeleteConfirm(false);
+      setCampaignToDelete(null);
     }
   };
 
@@ -126,7 +168,14 @@ const Campaigns: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredCampaigns.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
+                    <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+                    Cargando campañas...
+                  </td>
+                </tr>
+              ) : filteredCampaigns.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-slate-400">
                     No se encontraron campañas con los filtros seleccionados.
@@ -161,11 +210,23 @@ const Campaigns: React.FC = () => {
                          <div className="flex items-center gap-4 text-xs">
                             <div className="flex items-center gap-1" title="Tasa de Apertura">
                               <i className="fa-regular fa-envelope-open text-slate-400"></i>
-                              <span className="font-medium text-slate-700">{((campaign.stats?.opened || 0) / (campaign.stats?.sent || 1) * 100).toFixed(1)}%</span>
+                              <span className="font-medium text-slate-700">
+                                {(() => {
+                                  const sent = Number(campaign.sent_count || campaign.recipient_count || 0);
+                                  const opened = Number(campaign.open_count || 0);
+                                  return sent > 0 ? ((opened / sent) * 100).toFixed(1) : '0.0';
+                                })()}%
+                              </span>
                             </div>
                             <div className="flex items-center gap-1" title="Tasa de Clicks">
                               <i className="fa-solid fa-mouse-pointer text-slate-400"></i>
-                              <span className="font-medium text-slate-700">{((campaign.stats?.clicked || 0) / (campaign.stats?.sent || 1) * 100).toFixed(1)}%</span>
+                              <span className="font-medium text-slate-700">
+                                {(() => {
+                                  const sent = Number(campaign.sent_count || campaign.recipient_count || 0);
+                                  const clicked = Number(campaign.click_count || 0);
+                                  return sent > 0 ? ((clicked / sent) * 100).toFixed(1) : '0.0';
+                                })()}%
+                              </span>
                             </div>
                          </div>
                       ) : (
@@ -173,7 +234,7 @@ const Campaigns: React.FC = () => {
                       )}
                     </td>
                     <td className="px-6 py-4 text-sm text-slate-600">
-                      {campaign.created_by === 'usr_123' ? 'Tú' : 'Compartido'}
+                      {campaign.created_by === user?.id_user ? 'Tú' : (campaign.created_by_name || 'Compartido')}
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -213,9 +274,23 @@ const Campaigns: React.FC = () => {
              <button className="px-2 py-1 border border-slate-300 rounded bg-white text-slate-600 text-xs disabled:opacity-50" disabled>Next</button>
            </div>
         </div>
+        {/* Confirmación de eliminación */}
+        <ConfirmModal
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={confirmDelete}
+          title="Eliminar campaña"
+          message="Esta acción eliminará la campaña de forma permanente. ¿Deseas continuar?"
+          confirmText="Eliminar"
+          cancelText="Cancelar"
+          isDestructive
+        />
       </div>
     </div>
   );
 };
 
 export default Campaigns;
+
+// Modal de confirmación
+// Nota: colocado al final del componente (retorno JSX)

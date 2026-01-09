@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { MOCK_LISTS, MOCK_CAMPAIGNS, CURRENT_USER } from '../marketingMockData';
+import { marketingApi } from '../../services/marketingApi';
+import { useAuth } from '../../contexts/AuthContext';
+import { MarketingList } from '../../types';
 
 const STEPS = [
   { id: 1, label: 'Detalles' },
@@ -17,44 +19,121 @@ interface Attachment {
 
 const CampaignWizard: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const isEditing = !!id;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [currentStep, setCurrentStep] = useState(1);
   const [isTestEmailModalOpen, setIsTestEmailModalOpen] = useState(false);
-  const [testEmailAddress, setTestEmailAddress] = useState(CURRENT_USER.email_user);
+  const [testEmailAddress, setTestEmailAddress] = useState(user?.email_user || '');
+  const [lists, setLists] = useState<MarketingList[]>([]);
+  const [isLoadingLists, setIsLoadingLists] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [tenantData, setTenantData] = useState<{ corporate_email_address?: string; name_tenant?: string } | null>(null);
+  const [isLoadingTenant, setIsLoadingTenant] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
     subject: '',
     previewText: '',
-    senderName: CURRENT_USER.name_user,
-    senderEmail: CURRENT_USER.email_user,
+    senderName: user?.name_user || '',
+    senderEmail: user?.email_user || '',
+    senderType: 'USER' as 'USER' | 'TENANT',
     selectedLists: [] as string[],
     htmlContent: '<div style="font-family: sans-serif; padding: 20px;">\n  <h1>Hola %nombre%,</h1>\n  <p>Escribe tu mensaje aquí...</p>\n  <br>\n  <p>Saludos,<br>El equipo</p>\n</div>',
     attachments: [] as Attachment[]
   });
 
-  // Load data if editing
+  // Cargar listas disponibles
   useEffect(() => {
-    if (isEditing) {
-      const existingCampaign = MOCK_CAMPAIGNS.find(c => c.id_campaign === id);
-      if (existingCampaign) {
-        setFormData(prev => ({
-          ...prev,
-          name: existingCampaign.name,
-          subject: existingCampaign.subject,
-          previewText: existingCampaign.preview_text || '',
-          htmlContent: existingCampaign.html_content || prev.htmlContent,
-          // Note: In a real app, we would load existing attachments here
-        }));
-      }
+    loadLists();
+    loadTenantData();
+  }, []);
+
+  // Cargar datos si está editando
+  useEffect(() => {
+    if (isEditing && id) {
+      loadCampaignData();
     }
   }, [id, isEditing]);
 
+  const loadLists = async () => {
+    if (!user?.id_tenant || !user?.id_user) return;
+    
+    try {
+      setIsLoadingLists(true);
+      const data = await marketingApi.getLists(user.id_tenant, user.id_user);
+      setLists(data);
+    } catch (error) {
+      console.error('Error al cargar listas:', error);
+    } finally {
+      setIsLoadingLists(false);
+    }
+  };
+
+  const loadTenantData = async () => {
+    if (!user?.id_tenant) return;
+
+    try {
+      setIsLoadingTenant(true);
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/detail?id_tenant=${user.id_tenant}`);
+      if (res.ok) {
+        const data = await res.json();
+        const tenant = Array.isArray(data) ? data[0] : data;
+        setTenantData({
+          corporate_email_address: tenant?.corporate_email_address,
+          name_tenant: tenant?.name_tenant
+        });
+      }
+    } catch (error) {
+      console.error('Error al cargar datos del tenant:', error);
+    } finally {
+      setIsLoadingTenant(false);
+    }
+  };
+
+  const loadCampaignData = async () => {
+    if (!id) return;
+    
+    try {
+      const campaign = await marketingApi.getCampaignDetail(id);
+      setFormData(prev => ({
+        ...prev,
+        name: campaign.name,
+        subject: campaign.subject,
+        previewText: campaign.preview_text || '',
+        htmlContent: campaign.html_content || prev.htmlContent,
+        senderType: campaign.sender_type,
+        selectedLists: Array.isArray(campaign.target_lists) ? campaign.target_lists : [],
+      }));
+    } catch (error) {
+      console.error('Error al cargar campaña:', error);
+    }
+  };
+
   const handleNext = () => setCurrentStep(prev => Math.min(prev + 1, 4));
   const handleBack = () => setCurrentStep(prev => Math.max(prev - 1, 1));
+  
+  const handleSenderTypeChange = (type: 'USER' | 'TENANT') => {
+    let senderEmail = '';
+    let senderName = '';
+
+    if (type === 'USER') {
+      senderEmail = user?.email_user || '';
+      senderName = user?.name_user || '';
+    } else if (type === 'TENANT' && tenantData?.corporate_email_address) {
+      senderEmail = tenantData.corporate_email_address;
+      senderName = tenantData.name_tenant || 'Empresa';
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      senderType: type,
+      senderEmail,
+      senderName
+    }));
+  };
   
   const toggleList = (listId: string) => {
     setFormData(prev => ({
@@ -105,11 +184,46 @@ const CampaignWizard: React.FC = () => {
     setIsTestEmailModalOpen(false);
   };
 
+  const saveCampaign = async () => {
+      if (!user?.id_tenant || !user?.id_user) {
+        alert('Error: No se pudo identificar el usuario');
+        return;
+      }
+
+      if (!formData.name || !formData.subject) {
+        alert('Por favor completa los campos obligatorios: Nombre y Asunto');
+        return;
+      }
+
+      try {
+        setIsSaving(true);
+        const action = isEditing ? 'update' : 'create';
+      
+        await marketingApi.manageCampaign(action, {
+          id_tenant: user.id_tenant,
+          id_user: user.id_user,
+          id_campaign: isEditing ? id : undefined,
+          name: formData.name,
+          subject: formData.subject,
+          preview_text: formData.previewText,
+          html_content: formData.htmlContent,
+          sender_type: formData.senderType,
+          target_lists: formData.selectedLists,
+          attachments: formData.attachments,
+        });
+
+        alert(`✅ Campaña ${isEditing ? 'actualizada' : 'creada'} correctamente`);
+        navigate('/app/marketing/campaigns');
+      } catch (error) {
+        console.error('Error al guardar campaña:', error);
+        alert('❌ Error al guardar la campaña. Por favor intenta de nuevo.');
+      } finally {
+        setIsSaving(false);
+      }
+  };
+
   const handleFinish = () => {
-    // Logic to save campaign would go here
-    const action = isEditing ? "Updating" : "Creating";
-    console.log(`${action} Campaign:`, formData);
-    navigate('/app/marketing/campaigns');
+    saveCampaign();
   };
 
   return (
@@ -177,12 +291,75 @@ const CampaignWizard: React.FC = () => {
                 onChange={(e) => setFormData({...formData, previewText: e.target.value})}
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            
+            {/* Sender Type Selection */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-3">¿De dónde deseas enviar este correo?</label>
+              <div className="space-y-2">
+                {/* Personal Email Option */}
+                <label className="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-brand-300" style={{
+                  borderColor: formData.senderType === 'USER' ? '#3B82F6' : '#E2E8F0',
+                  backgroundColor: formData.senderType === 'USER' ? '#EFF6FF' : '#F8FAFC'
+                }}>
+                  <input
+                    type="radio"
+                    name="senderType"
+                    value="USER"
+                    checked={formData.senderType === 'USER'}
+                    onChange={(e) => handleSenderTypeChange(e.target.value as 'USER')}
+                    className="mt-1"
+                  />
+                  <div>
+                    <p className="font-semibold text-slate-800 flex items-center gap-2">
+                      <i className="fa-solid fa-user"></i> Mi correo personal
+                    </p>
+                    <p className="text-sm text-slate-600 mt-1">{user?.email_user}</p>
+                    <p className="text-xs text-slate-500 mt-1">Los destinatarios verán tu correo personal como remitente</p>
+                  </div>
+                </label>
+
+                {/* Corporate Email Option (only if available) */}
+                {tenantData?.corporate_email_address ? (
+                  <label className="flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-brand-300" style={{
+                    borderColor: formData.senderType === 'TENANT' ? '#3B82F6' : '#E2E8F0',
+                    backgroundColor: formData.senderType === 'TENANT' ? '#EFF6FF' : '#F8FAFC'
+                  }}>
+                    <input
+                      type="radio"
+                      name="senderType"
+                      value="TENANT"
+                      checked={formData.senderType === 'TENANT'}
+                      onChange={(e) => handleSenderTypeChange(e.target.value as 'TENANT')}
+                      className="mt-1"
+                    />
+                    <div>
+                      <p className="font-semibold text-slate-800 flex items-center gap-2">
+                        <i className="fa-solid fa-building"></i> Correo corporativo
+                      </p>
+                      <p className="text-sm text-slate-600 mt-1">{tenantData.corporate_email_address}</p>
+                      <p className="text-xs text-slate-500 mt-1">Los destinatarios verán el correo de la empresa</p>
+                    </div>
+                  </label>
+                ) : (
+                  <div className="flex items-start gap-3 p-4 border-2 border-slate-200 rounded-lg bg-slate-50">
+                    <i className="fa-solid fa-circle-info text-slate-400 mt-1"></i>
+                    <div>
+                      <p className="font-semibold text-slate-700 flex items-center gap-2">
+                        <i className="fa-solid fa-building"></i> Correo corporativo
+                      </p>
+                      <p className="text-sm text-slate-500 mt-1">No hay un correo corporativo configurado. Configúralo en la sección de Perfil.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-200">
                <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Nombre del Remitente</label>
                   <input 
                     type="text" 
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-500"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-700"
                     value={formData.senderName}
                     readOnly
                   />
@@ -191,7 +368,7 @@ const CampaignWizard: React.FC = () => {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Email del Remitente</label>
                   <input 
                     type="text" 
-                    className="w-full px-4 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-500"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-300 bg-slate-50 text-slate-700"
                     value={formData.senderEmail}
                     readOnly
                   />
@@ -206,13 +383,27 @@ const CampaignWizard: React.FC = () => {
             <h3 className="text-lg font-semibold text-slate-800">Selecciona las listas de destinatarios</h3>
             <p className="text-sm text-slate-500 mb-4">El correo se enviará a todos los contactos activos en las listas seleccionadas.</p>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {MOCK_LISTS.map(list => {
-                const isSelected = formData.selectedLists.includes(list.id_list);
+            {isLoadingLists ? (
+              <div className="text-center py-12">
+                <i className="fa-solid fa-spinner fa-spin text-3xl text-brand-600 mb-2"></i>
+                <p className="text-slate-500">Cargando listas...</p>
+              </div>
+            ) : lists.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed border-slate-200 rounded-xl">
+                <i className="fa-solid fa-inbox text-4xl text-slate-300 mb-2"></i>
+                <p className="text-slate-500">No hay listas de difusión disponibles</p>
+                <p className="text-sm text-slate-400 mt-1">Crea una lista primero en la sección de Audiencias</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {lists.map(list => {
+                const idList = (list.id_list ?? list.list_id) as string | undefined;
+                if (!idList) return null;
+                const isSelected = formData.selectedLists.includes(idList);
                 return (
                   <div 
-                    key={list.id_list}
-                    onClick={() => toggleList(list.id_list)}
+                    key={idList}
+                    onClick={() => toggleList(idList)}
                     className={`cursor-pointer border rounded-xl p-4 flex items-start gap-4 transition-all ${
                       isSelected 
                         ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500' 
@@ -229,13 +420,17 @@ const CampaignWizard: React.FC = () => {
                       <p className="text-sm text-slate-600 line-clamp-1">{list.description}</p>
                       <div className="mt-2 flex items-center gap-4 text-xs text-slate-500">
                         <span><i className="fa-solid fa-users mr-1"></i> {list.member_count} miembros</span>
-                        <span><i className={`fa-solid ${list.type === 'DYNAMIC' ? 'fa-bolt text-purple-500' : 'fa-list text-blue-500'} mr-1`}></i> {list.type}</span>
+                        <span className={`px-2 py-0.5 rounded ${list.visibility === 'PRIVATE' ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-600'}`}>
+                          <i className={`fa-solid ${list.visibility === 'PRIVATE' ? 'fa-lock' : 'fa-users'} mr-1`}></i>
+                          {list.visibility === 'PRIVATE' ? 'Privada' : 'Pública'}
+                        </span>
                       </div>
                     </div>
                   </div>
                 );
-              })}
-            </div>
+                })}
+              </div>
+            )}
           </div>
         )}
 
@@ -375,7 +570,12 @@ const CampaignWizard: React.FC = () => {
                   <span className="text-slate-500">Destinatarios:</span>
                   <div className="text-right">
                     <span className="font-bold text-slate-800">{formData.selectedLists.length} Listas seleccionadas</span>
-                    <p className="text-xs text-slate-500">Aprox. {MOCK_LISTS.filter(l => formData.selectedLists.includes(l.id_list)).reduce((acc, l) => acc + l.member_count, 0)} contactos</p>
+                    <p className="text-xs text-slate-500">Aprox. {lists
+                      .filter(l => {
+                        const idL = (l.id_list ?? l.list_id) as string | undefined;
+                        return !!idL && formData.selectedLists.includes(idL);
+                      })
+                      .reduce((acc, l) => acc + (Number(l.member_count) || 0), 0)} contactos</p>
                   </div>
                </div>
             </div>
@@ -420,9 +620,20 @@ const CampaignWizard: React.FC = () => {
              </button>
              <button 
                 onClick={handleFinish}
-                className="px-6 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-sm flex items-center gap-2"
+                disabled={isSaving}
+                className={`px-6 py-2 bg-brand-600 text-white rounded-lg font-medium hover:bg-brand-700 transition-colors shadow-sm flex items-center gap-2 ${isSaving ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <i className="fa-solid fa-paper-plane"></i> {isEditing ? 'Guardar Cambios' : 'Enviar Ahora'}
+                {isSaving ? (
+                  <>
+                    <i className="fa-solid fa-spinner fa-spin"></i>
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <i className="fa-solid fa-save"></i>
+                    {isEditing ? 'Guardar Cambios' : 'Crear Campaña'}
+                  </>
+                )}
               </button>
            </div>
         )}

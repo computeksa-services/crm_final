@@ -467,26 +467,30 @@ export interface ListMember {
 export interface MarketingCampaign {
   id_campaign: string;
   id_tenant: string;
-  id_user: string;
   name: string;
   subject: string;
+  preview_text?: string;
   html_content: string;
+  status: 'DRAFT' | 'SCHEDULED' | 'SENT' | 'PAUSED' | 'PROCESSING' | 'SENDING' | 'FAILED';
+  scheduled_at?: string;
+  sent_at?: string;
   sender_type: 'USER' | 'TENANT';
-  target_lists?: string[];
-  status?: 'DRAFT' | 'SCHEDULED' | 'SENT' | 'PAUSED' | 'PROCESSING' | 'SENDING' | 'FAILED';
+  id_sender_integration?: string;
+  created_by: string;
+  created_at: string;
+  updated_at?: string;
   attachments?: Array<{
     file_name: string;
     file_url: string;
   }>;
-  created_at: string;
-  sent_at?: string;
-  scheduled_at?: string;
-  recipient_count?: number;
-  open_count?: number;
-  click_count?: number;
+  // Campos opcionales calculados/joined que vienen de la API
+  recipient_count?: number | string;
+  open_count?: number | string;
+  click_count?: number | string;
   created_by_name?: string;
   avatar_url?: string;
   total_audience?: string | number;
+  target_lists?: string[] | string; // puede ser array o string "Sin listas asignadas"
   target_lists_display?: string;
   sent_count?: string | number;
   failed_count?: string | number;

@@ -1,12 +1,42 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { MOCK_CAMPAIGNS } from '../marketingMockData';
+import { MarketingCampaign } from '../../types';
+import { marketingApi } from '../../services/marketingApi';
 
 const CampaignDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const campaign = MOCK_CAMPAIGNS.find(c => c.id_campaign === id);
+  const [campaign, setCampaign] = useState<MarketingCampaign | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'STATS' | 'PREVIEW'>('STATS');
+
+  useEffect(() => {
+    loadCampaignDetail();
+  }, [id]);
+
+  const loadCampaignDetail = async () => {
+    if (!id) return;
+    
+    try {
+      setIsLoading(true);
+      const data = await marketingApi.getCampaignDetail(id);
+      setCampaign(data);
+    } catch (error) {
+      console.error('Error al cargar detalle de campaña:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="p-8 text-center text-slate-500">
+        <i className="fa-solid fa-spinner fa-spin mr-2"></i>
+        Cargando campaña...
+      </div>
+    );
+  }
 
   if (!campaign) {
     return <div className="p-8 text-center text-slate-500">Campaña no encontrada</div>;
@@ -73,90 +103,176 @@ const CampaignDetail: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
            <p className="text-xs font-bold text-slate-500 uppercase">Enviados</p>
-           <p className="text-3xl font-bold text-slate-800 mt-2">{campaign.stats?.sent?.toLocaleString() || 0}</p>
+           <p className="text-3xl font-bold text-slate-800 mt-2">{Number(campaign.sent_count || campaign.recipient_count || 0).toLocaleString()}</p>
            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-             <i className="fa-solid fa-check-circle"></i> 99.8% Entregabilidad
+             <i className="fa-solid fa-check-circle"></i> {campaign.failed_count ? (100 - (Number(campaign.failed_count) / Number(campaign.sent_count || 1) * 100)).toFixed(1) : '99.8'}% Entregabilidad
            </p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
            <p className="text-xs font-bold text-slate-500 uppercase">Aperturas</p>
-           <p className="text-3xl font-bold text-brand-600 mt-2">{campaign.stats?.opened?.toLocaleString() || 0}</p>
+           <p className="text-3xl font-bold text-brand-600 mt-2">{Number(campaign.open_count || 0).toLocaleString()}</p>
            <p className="text-xs text-slate-500 mt-1">
-             Tasa: {((campaign.stats?.opened || 0) / (campaign.stats?.sent || 1) * 100).toFixed(1)}%
+             Tasa: {(() => {
+               const sent = Number(campaign.sent_count || campaign.recipient_count || 0);
+               const opened = Number(campaign.open_count || 0);
+               return sent > 0 ? ((opened / sent) * 100).toFixed(1) : '0.0';
+             })()}%
            </p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
            <p className="text-xs font-bold text-slate-500 uppercase">Clicks</p>
-           <p className="text-3xl font-bold text-blue-600 mt-2">{campaign.stats?.clicked?.toLocaleString() || 0}</p>
+           <p className="text-3xl font-bold text-blue-600 mt-2">{Number(campaign.click_count || 0).toLocaleString()}</p>
            <p className="text-xs text-slate-500 mt-1">
-             CTR: {((campaign.stats?.clicked || 0) / (campaign.stats?.sent || 1) * 100).toFixed(1)}%
+             CTR: {(() => {
+               const sent = Number(campaign.sent_count || campaign.recipient_count || 0);
+               const clicked = Number(campaign.click_count || 0);
+               return sent > 0 ? ((clicked / sent) * 100).toFixed(1) : '0.0';
+             })()}%
            </p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
            <p className="text-xs font-bold text-slate-500 uppercase">Rebotes</p>
-           <p className="text-3xl font-bold text-red-500 mt-2">2</p>
-           <p className="text-xs text-slate-500 mt-1">0.2% Tasa de rebote</p>
+           <p className="text-3xl font-bold text-red-500 mt-2">{Number(campaign.failed_count || 0).toLocaleString()}</p>
+           <p className="text-xs text-slate-500 mt-1">
+             {(() => {
+               const sent = Number(campaign.sent_count || campaign.recipient_count || 0);
+               const failed = Number(campaign.failed_count || 0);
+               return sent > 0 ? ((failed / sent) * 100).toFixed(1) : '0.0';
+             })()}% Tasa de rebote
+           </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         {/* Main Chart */}
-         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-            <h3 className="font-bold text-slate-800 mb-6">Actividad en tiempo real (24h)</h3>
-            <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={data}>
-                  <defs>
-                    <linearGradient id="gradOpen" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
-                      <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                  <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                  <Area type="monotone" dataKey="opens" stroke="#6366f1" strokeWidth={3} fill="url(#gradOpen)" />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-         </div>
+      {/* Tabs */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+        <div className="border-b border-slate-200">
+          <div className="flex gap-1 px-6">
+            <button
+              onClick={() => setActiveTab('STATS')}
+              className={`px-4 py-3 font-medium text-sm transition-colors relative ${
+                activeTab === 'STATS'
+                  ? 'text-brand-600 border-b-2 border-brand-600'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <i className="fa-solid fa-chart-line mr-2"></i>
+              Resultados
+            </button>
+            <button
+              onClick={() => setActiveTab('PREVIEW')}
+              className={`px-4 py-3 font-medium text-sm transition-colors relative ${
+                activeTab === 'PREVIEW'
+                  ? 'text-brand-600 border-b-2 border-brand-600'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              <i className="fa-regular fa-eye mr-2"></i>
+              Previsualización
+            </button>
+          </div>
+        </div>
 
-         {/* Right Details */}
-         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-             <h3 className="font-bold text-slate-800 mb-4">Configuración</h3>
-             <div className="space-y-4 text-sm">
-                <div className="flex justify-between border-b border-slate-100 pb-2">
-                   <span className="text-slate-500">Enviado el:</span>
-                   <span className="font-medium">{campaign.sent_at ? new Date(campaign.sent_at).toLocaleString() : 'Pendiente'}</span>
-                </div>
-                <div className="flex justify-between border-b border-slate-100 pb-2">
-                   <span className="text-slate-500">Remitente:</span>
-                   <span className="font-medium">Carlos Rodriguez</span>
-                </div>
-                <div className="pt-2">
-                   <span className="text-slate-500 block mb-2">Listas incluidas:</span>
-                   <div className="flex flex-wrap gap-2">
-                      <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs">Clientes VIP</span>
-                      <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs">Leads Q3</span>
-                   </div>
-                </div>
-             </div>
-             
-             <div className="mt-8">
-               <h3 className="font-bold text-slate-800 mb-4">Enlaces más clicados</h3>
-               <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                     <span className="text-blue-600 hover:underline truncate w-2/3 cursor-pointer">https://computeksa.com/ofertas</span>
-                     <span className="font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">85 clicks</span>
+        <div className="p-6">
+          {activeTab === 'STATS' ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Main Chart */}
+                <div className="lg:col-span-2">
+                  <h3 className="font-bold text-slate-800 mb-6">Actividad en tiempo real (24h)</h3>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={data}>
+                        <defs>
+                          <linearGradient id="gradOpen" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                        <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                        <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                        <Area type="monotone" dataKey="opens" stroke="#6366f1" strokeWidth={3} fill="url(#gradOpen)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                     <span className="text-blue-600 hover:underline truncate w-2/3 cursor-pointer">https://computeksa.com/blog/ai</span>
-                     <span className="font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded">34 clicks</span>
+                </div>
+
+                {/* Right Details */}
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="font-bold text-slate-800 mb-4">Configuración</h3>
+                    <div className="space-y-4 text-sm">
+                      <div className="flex justify-between border-b border-slate-100 pb-2">
+                        <span className="text-slate-500">Enviado el:</span>
+                        <span className="font-medium">{campaign.sent_at ? new Date(campaign.sent_at).toLocaleString() : 'Pendiente'}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-100 pb-2">
+                        <span className="text-slate-500">Remitente:</span>
+                        <span className="font-medium">{campaign.created_by_name || 'N/A'}</span>
+                      </div>
+                      <div className="pt-2">
+                        <span className="text-slate-500 block mb-2">Listas incluidas:</span>
+                        <div className="flex flex-wrap gap-2">
+                          {campaign.target_lists_display ? (
+                            <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs">
+                              {campaign.target_lists_display}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">Sin listas asignadas</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-100 pb-2">
+                        <span className="text-slate-500">Audiencia Total:</span>
+                        <span className="font-medium">{campaign.total_audience || 0}</span>
+                      </div>
+                    </div>
                   </div>
-               </div>
-             </div>
-         </div>
+                  
+                  <div>
+                    <h3 className="font-bold text-slate-800 mb-4">Enlaces más clicados</h3>
+                    <div className="space-y-3">
+                      <div className="text-center text-sm text-slate-400 py-4">
+                        No hay datos disponibles
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            // Previsualización del correo
+            <div className="space-y-4">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-700">De:</span>
+                    <span className="text-slate-600">{campaign.created_by_name || 'Remitente'}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-slate-700">Asunto:</span>
+                    <span className="text-slate-600">{campaign.subject}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white border border-slate-200 rounded-lg p-6 min-h-[400px]">
+                {campaign.html_content ? (
+                  <div 
+                    className="prose max-w-none"
+                    dangerouslySetInnerHTML={{ __html: campaign.html_content }}
+                  />
+                ) : (
+                  <div className="text-center text-slate-400 py-12">
+                    <i className="fa-regular fa-file-lines text-4xl mb-2"></i>
+                    <p>No hay contenido para previsualizar</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

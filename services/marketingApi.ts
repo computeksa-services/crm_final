@@ -270,10 +270,42 @@ export const marketingApi = {
     try {
       const response = await fetch(`${API_BASE}/api/marketing/campaigns/detail?id_campaign=${id_campaign}`);
       const data = await parseResponse(response);
-      // Retornar el objeto directo
       return Array.isArray(data) ? data[0] : data;
     } catch (error) {
       console.error('❌ Error getCampaignDetail:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Gestionar campañas (crear, actualizar, eliminar)
+   */
+  async manageCampaign(
+    action: 'create' | 'update' | 'delete',
+    payload: {
+      id_tenant: string;
+      id_user: string;
+      id_campaign?: string;
+      name?: string;
+      subject?: string;
+      preview_text?: string;
+      html_content?: string;
+      sender_type?: 'USER' | 'TENANT';
+      target_lists?: string[];
+      attachments?: any[];
+    }
+  ): Promise<MarketingCampaign | void> {
+    try {
+      const response = await fetch(`${API_BASE}/api/marketing/campaigns/manage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, ...payload }),
+      });
+      const data = await parseResponse(response);
+      if (action === 'delete') return;
+      return Array.isArray(data) ? data[0] : data;
+    } catch (error) {
+      console.error(`❌ Error manageCampaign (${action}):`, error);
       throw error;
     }
   },

@@ -15,10 +15,23 @@ const MarketingCenter: React.FC = () => {
     return location.pathname.includes(path);
   };
 
+  // Vista enfocada (sin navegación ni header) para el wizard de campañas
+  const isWizardRoute = location.pathname.includes('/app/marketing/campaigns/new')
+    || location.pathname.includes('/app/marketing/campaigns/edit');
+
+  if (isWizardRoute) {
+    return (
+      <div className="min-h-screen bg-slate-50 p-0">
+        <div className="animate-in fade-in duration-300">
+          <Outlet />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50/50 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        
         {/* Header Principal */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
