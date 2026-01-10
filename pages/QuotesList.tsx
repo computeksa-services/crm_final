@@ -120,7 +120,10 @@ const QuotesList: React.FC = () => {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
-  const [grouping, setGrouping] = useState<GroupingState>([]);
+  const [grouping, setGrouping] = useState<GroupingState>(() => {
+    const saved = localStorage.getItem('quotesList_grouping');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
 
@@ -170,6 +173,11 @@ const QuotesList: React.FC = () => {
   }, [user]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Guardar estado de agrupación en localStorage
+  useEffect(() => {
+    localStorage.setItem('quotesList_grouping', JSON.stringify(grouping));
+  }, [grouping]);
 
   // --- FILTERS LOGIC ---
   useEffect(() => {
@@ -317,36 +325,6 @@ const QuotesList: React.FC = () => {
   // --- COLUMNS DEFINITION ---
   const columns = useMemo<ColumnDef<Quote>[]>(() => [
     {
-      accessorKey: 'client_company_name',
-      header: 'Cliente',
-      size: 220,
-      enableColumnFilter: true,
-      cell: ({ row, getValue, column }) => {
-        // CORRECCIÓN PRINCIPAL: Solo renderizar grupo si ESTA columna es la agrupada
-        if (row.getIsGrouped()) {
-            return grouping.includes(column.id) ? renderGroupCell(row, getValue() as string || 'Sin Cliente') : null;
-        }
-        return (
-            <div className="flex flex-col">
-                <span className="font-bold text-slate-700 text-xs uppercase">{getValue() as string}</span>
-                <span className="text-[10px] text-slate-400">{row.original.contact_full_name || 'Sin contacto'}</span>
-            </div>
-        );
-      }
-    },
-    {
-        accessorKey: 'formatted_no_cotizacion',
-        header: 'Nro.',
-        size: 100,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="font-bold text-brand-600 text-xs">{getValue() as string}</span>
-    },
-    {
-        accessorKey: 'nombre_cotizacion',
-        header: 'Nombre',
-        size: 200,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-slate-700 text-sm font-medium">{getValue() as string}</span>
-    },
-    {
         accessorKey: 'id_quote_status',
         header: 'Estado',
         size: 160,
@@ -374,6 +352,36 @@ const QuotesList: React.FC = () => {
              const statusName = status ? status.name : 'Desconocido';
              return filterValue.length === 0 || filterValue.includes(statusName);
         }
+    },
+    {
+        accessorKey: 'formatted_no_cotizacion',
+        header: 'Nro.',
+        size: 80,
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="font-bold text-brand-600 text-xs">{getValue() as string}</span>
+    },
+    {
+        accessorKey: 'nombre_cotizacion',
+        header: 'Nombre',
+        size: 200,
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-slate-700 text-sm font-medium">{getValue() as string}</span>
+    },
+    {
+      accessorKey: 'client_company_name',
+      header: 'Cliente',
+      size: 220,
+      enableColumnFilter: true,
+      cell: ({ row, getValue, column }) => {
+        // CORRECCIÓN PRINCIPAL: Solo renderizar grupo si ESTA columna es la agrupada
+        if (row.getIsGrouped()) {
+            return grouping.includes(column.id) ? renderGroupCell(row, getValue() as string || 'Sin Cliente') : null;
+        }
+        return (
+            <div className="flex flex-col">
+                <span className="font-bold text-slate-700 text-xs uppercase">{getValue() as string}</span>
+                <span className="text-[11px] text-slate-400">{row.original.contact_full_name || 'Sin contacto'}</span>
+            </div>
+        );
+      }
     },
     {
         accessorKey: 'total',
@@ -543,9 +551,12 @@ const QuotesList: React.FC = () => {
                                 {getFacetedValues(header.column.id).map(([val, count]) => {
                                     const isChecked = (columnFilters.find(f => f.id === header.column.id)?.value as string[] || []).includes(val);
                                     return (
-                                        <label key={val} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer">
-                                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${isChecked ? 'bg-brand-600 border-brand-600' : 'bg-white border-slate-300'}`}>{isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}</div>
-                                            <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
+                                        <label key={val} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer group transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>{isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}</div>
+                                                <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
+                                            </div>
+                                            <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600">({count})</span>
                                             <input type="checkbox" className="hidden" checked={isChecked} onChange={() => {
                                                 const current = (columnFilters.find(f => f.id === header.column.id)?.value as string[]) || [];
                                                 const next = current.includes(val) ? current.filter(v => v !== val) : [...current, val];

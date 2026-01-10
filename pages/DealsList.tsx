@@ -266,6 +266,16 @@ const DealsList: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  // Función para obtener valores facetados con contadores
+  const getFacetedValues = (columnId: string) => {
+    const counts = new Map<string, number>();
+    deals.forEach(deal => {
+      const val = (deal as any)[columnId] || '(Vacío)';
+      counts.set(val, (counts.get(val) || 0) + 1);
+    });
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  };
+
   const handleEdit = (deal: Deal) => {
     setSelectedDealForEdit(deal);
     setIsEditModalOpen(true);
@@ -401,7 +411,7 @@ const DealsList: React.FC = () => {
         return (
         <div className="flex flex-col">
           <span className="text-[11px] font-black text-slate-700 uppercase leading-tight">{getValue() as string}</span>
-          <span className="text-[10px] text-slate-400">{row.original.contact_full_name}</span>
+          <span className="text-[11px] text-slate-400">{row.original.contact_full_name}</span>
         </div>
         );
       }
@@ -580,15 +590,18 @@ const DealsList: React.FC = () => {
                             </div>
                           ) : (
                             <div className="max-h-60 overflow-y-auto px-1">
-                                {Array.from(new Set(deals.map(d => (d as any)[header.column.id] || '(Vacío)'))).map(val => {
+                                {getFacetedValues(header.column.id).map(([val, count]) => {
                                     const activeValues = (columnFilters.find(f => f.id === header.column.id)?.value as string[]) || [];
                                     const isChecked = activeValues.includes(val);
                                     return (
-                                        <label key={val} className="flex items-center gap-3 px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer">
-                                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${isChecked ? 'bg-brand-600 border-brand-600' : 'bg-white border-slate-300'}`}>
-                                                {isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}
+                                        <label key={val} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer group transition-colors">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>
+                                                    {isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}
+                                                </div>
+                                                <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
                                             </div>
-                                            <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
+                                            <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600">({count})</span>
                                             <input type="checkbox" className="hidden" checked={isChecked} onChange={() => {
                                                 const next = isChecked ? activeValues.filter(v => v !== val) : [...activeValues, val];
                                                 header.column.setFilterValue(next.length ? next : undefined);

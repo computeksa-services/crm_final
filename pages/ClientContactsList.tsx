@@ -33,7 +33,10 @@ const ClientContactsList: React.FC = () => {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'first_name', desc: false }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
-  const [grouping, setGrouping] = useState<GroupingState>([]); 
+  const [grouping, setGrouping] = useState<GroupingState>(() => {
+    const saved = localStorage.getItem('contactsList_grouping');
+    return saved ? JSON.parse(saved) : [];
+  }); 
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
 
@@ -91,6 +94,11 @@ const ClientContactsList: React.FC = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Guardar estado de agrupación en localStorage
+  useEffect(() => {
+    localStorage.setItem('contactsList_grouping', JSON.stringify(grouping));
+  }, [grouping]);
 
   // --- HELPERS ---
   const getCompanyNameForContact = useCallback((contact: ClientContact) => {
@@ -241,7 +249,7 @@ const ClientContactsList: React.FC = () => {
       size: 180,
       enableColumnFilter: true,
       cell: ({ row, getValue }) => 
-        row.getIsGrouped() ? null : <span className="text-slate-500 text-xs">{getValue() as string || '-'}</span>,
+        row.getIsGrouped() ? null : <span className="text-slate-500 text-[13px]">{getValue() as string || '-'}</span>,
       filterFn: (row, id, filterValue: string[]) => 
         filterValue.length === 0 || filterValue.includes(row.getValue(id) || '(Vacío)')
     },
@@ -251,7 +259,15 @@ const ClientContactsList: React.FC = () => {
       size: 250,
       enableColumnFilter: false,
       cell: ({ row, getValue }) => 
-        row.getIsGrouped() ? null : <span className="text-brand-600 text-xs truncate block hover:underline">{getValue() as string}</span>,
+        row.getIsGrouped() ? null : <span className="text-brand-600 text-[13px] truncate block hover:underline">{getValue() as string}</span>,
+    },
+    {
+      accessorKey: 'phone',
+      header: 'Teléfono',
+      size: 150,
+      enableColumnFilter: false,
+      cell: ({ row, getValue }) => 
+        row.getIsGrouped() ? null : <span className="text-slate-600 text-[13px]">{getValue() as string || '-'}</span>,
     },
     {
       id: 'actions',

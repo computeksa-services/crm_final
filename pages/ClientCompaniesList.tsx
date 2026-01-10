@@ -34,7 +34,10 @@ const ClientCompaniesList: React.FC = () => {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'name_company', desc: false }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
-  const [grouping, setGrouping] = useState<GroupingState>([]);
+  const [grouping, setGrouping] = useState<GroupingState>(() => {
+    const saved = localStorage.getItem('companiesList_grouping');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
 
@@ -80,6 +83,11 @@ const ClientCompaniesList: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Guardar estado de agrupación en localStorage
+  useEffect(() => {
+    localStorage.setItem('companiesList_grouping', JSON.stringify(grouping));
+  }, [grouping]);
 
   const handleGroupingChange = useCallback((newGrouping: string[]) => {
     setGrouping(newGrouping);
