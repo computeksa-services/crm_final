@@ -252,9 +252,9 @@ export const marketingApi = {
   /**
    * Listar historial de campañas
    */
-  async getCampaigns(id_tenant: string): Promise<MarketingCampaign[]> {
+  async getCampaigns(id_tenant: string, id_user: string): Promise<MarketingCampaign[]> {
     try {
-      const response = await fetch(`${API_BASE}/api/marketing/campaigns?id_tenant=${id_tenant}`);
+      const response = await fetch(`${API_BASE}/api/marketing/campaigns?id_tenant=${encodeURIComponent(id_tenant)}&id_user=${encodeURIComponent(id_user)}`);
       const data = await parseResponse(response);
       return Array.isArray(data) ? data : [];
     } catch (error) {
@@ -281,7 +281,7 @@ export const marketingApi = {
    * Gestionar campañas (crear, actualizar, eliminar)
    */
   async manageCampaign(
-    action: 'create' | 'update' | 'delete',
+    action: 'create' | 'update' | 'delete' | 'duplicate' ,
     payload: {
       id_tenant: string;
       id_user: string;
@@ -310,6 +310,28 @@ export const marketingApi = {
       return Array.isArray(data) ? data[0] : data;
     } catch (error) {
       console.error(`❌ Error manageCampaign (${action}):`, error);
+      throw error;
+    }
+  },
+
+  /**
+   * Duplicar campaña: backend requiere { id_campaign, id_tenant, id_user, action: 'duplicate' }
+   */
+  async duplicateCampaign(
+    id_campaign: string,
+    id_tenant: string,
+    id_user: string
+  ): Promise<MarketingCampaign> {
+    try {
+      const response = await fetch(`${API_BASE}/api/marketing/campaigns/manage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'duplicate', id_campaign, id_tenant, id_user }),
+      });
+      const data = await parseResponse(response);
+      return Array.isArray(data) ? data[0] : data;
+    } catch (error) {
+      console.error('❌ Error duplicateCampaign:', error);
       throw error;
     }
   },
@@ -377,6 +399,32 @@ export const marketingApi = {
       });
     } catch (error) {
       console.error('❌ Error launchCampaign:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Control de campaña en curso: enviar, pausar, reanudar
+   * El backend debe aceptar { id_campaign, id_user, action }
+   * action: 'send' | 'pause' | 'resume' (o 'send' para reanudar)
+   */
+  async campaignAction(
+    id_campaign: string,
+    id_user: string,
+    action: 'send' | 'pause' | 'resume'
+  ): Promise<void> {
+    try {
+      const response = await fetch(`${API_BASE}/api/marketing/campaigns/action`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_campaign, id_user, action }),
+      });
+      if (!response.ok) {
+        const txt = await response.text();
+        throw new Error(`HTTP ${response.status}: ${txt}`);
+      }
+    } catch (error) {
+      console.error('❌ Error campaignAction:', error);
       throw error;
     }
   },

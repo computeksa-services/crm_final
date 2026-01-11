@@ -150,10 +150,10 @@ const CampaignDetail: React.FC<Props> = ({ campaignId, onClose, onRefresh }) => 
                 <p className="text-slate-700 font-semibold">{formatLocalDate(campaign.sent_at)}</p>
               </div>
             )}
-            {campaign.scheduled_at && (
+            {campaign.scheduled_at_local && (
               <div>
                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Programado Para</label>
-                <p className="text-slate-700 font-semibold">{formatLocalDate(campaign.scheduled_at)}</p>
+                <p className="text-slate-700 font-semibold">{campaign.scheduled_at_local}</p>
               </div>
             )}
           </div>

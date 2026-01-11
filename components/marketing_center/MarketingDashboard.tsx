@@ -23,7 +23,7 @@ const MarketingDashboard: React.FC<DashboardProps> = ({ tenantId, tenantId: stri
         // Cargamos listas y campañas en paralelo para calcular KPIs
         const [lists, campaigns] = await Promise.all([
           marketingApi.getLists(tenantId, ''), // User empty to see all public
-          marketingApi.getCampaigns(tenantId)
+          marketingApi.getCampaigns(tenantId, '')
         ]);
 
         const sentCampaignsList = campaigns.filter(c => c.status === 'SENT');

@@ -42,6 +42,23 @@ const CampaignDetail: React.FC = () => {
     return <div className="p-8 text-center text-slate-500">Campaña no encontrada</div>;
   }
 
+  const normalizeStatus = (s?: string) => (s === 'PAUSE' ? 'PAUSED' : s || 'DRAFT');
+  const toNumber = (v: any): number => {
+    if (v === null || v === undefined) return 0;
+    if (typeof v === 'number') return v;
+    const n = parseFloat(String(v));
+    return isNaN(n) ? 0 : n;
+  };
+  const progress = (() => {
+    const p = toNumber(campaign.progress_percentage);
+    if (p > 0) return Math.max(0, Math.min(100, p));
+    const total = toNumber(campaign.total_target);
+    const sent = toNumber(campaign.sent_count);
+    const failed = toNumber(campaign.failed_count);
+    const processed = sent + failed;
+    return total > 0 ? Math.round((processed / total) * 100) : 0;
+  })();
+
   const handleDelete = () => {
     if (confirm("¿Estás seguro de que deseas eliminar esta campaña? Esta acción no se puede deshacer.")) {
       // In a real app, you would make an API call here.
@@ -73,13 +90,30 @@ const CampaignDetail: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <h2 className="text-2xl font-bold text-slate-800">{campaign.name}</h2>
                   <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${
-                    campaign.status === 'SENT' ? 'bg-green-100 text-green-700 border-green-200' : 
-                    campaign.status === 'DRAFT' ? 'bg-slate-100 text-slate-600 border-slate-200' : 'bg-amber-100 text-amber-700 border-amber-200'
+                    normalizeStatus(campaign.status) === 'SENT' || normalizeStatus(campaign.status) === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-200' : 
+                    normalizeStatus(campaign.status) === 'DRAFT' ? 'bg-slate-100 text-slate-600 border-slate-200' : 
+                    normalizeStatus(campaign.status) === 'PAUSED' ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                    normalizeStatus(campaign.status) === 'FAILED' ? 'bg-red-100 text-red-600 border-red-200' :
+                    'bg-blue-100 text-blue-700 border-blue-200'
                   }`}>
-                    {campaign.status}
+                    {normalizeStatus(campaign.status)}
                   </span>
                 </div>
                 <p className="text-slate-500 text-sm">Asunto: {campaign.subject}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  {campaign.avatar_url ? (
+                    <img src={campaign.avatar_url} alt={campaign.created_by_name || 'Usuario'} className="w-6 h-6 rounded-full" />
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-slate-200" />
+                  )}
+                  <span className="text-xs text-slate-500">Creado por: <span className="font-medium text-slate-700">{campaign.created_by_name || 'N/A'}</span></span>
+                </div>
+                <div className="mt-3">
+                  <div className="h-2 bg-slate-100 rounded overflow-hidden max-w-md">
+                    <div className={`h-2 ${progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }} />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">Progreso: {progress}%</p>
+                </div>
              </div>
          </div>
 
@@ -103,40 +137,44 @@ const CampaignDetail: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
            <p className="text-xs font-bold text-slate-500 uppercase">Enviados</p>
-           <p className="text-3xl font-bold text-slate-800 mt-2">{Number(campaign.sent_count || campaign.recipient_count || 0).toLocaleString()}</p>
+           <p className="text-3xl font-bold text-slate-800 mt-2">{toNumber(campaign.sent_count || campaign.processed_count).toLocaleString()}</p>
            <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-             <i className="fa-solid fa-check-circle"></i> {campaign.failed_count ? (100 - (Number(campaign.failed_count) / Number(campaign.sent_count || 1) * 100)).toFixed(1) : '99.8'}% Entregabilidad
+             <i className="fa-solid fa-check-circle"></i> {(() => {
+               const sent = toNumber(campaign.sent_count || campaign.processed_count);
+               const failed = toNumber(campaign.failed_count);
+               return sent > 0 ? (100 - (failed / sent) * 100).toFixed(1) : '0.0';
+             })()}% Entregabilidad
            </p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
            <p className="text-xs font-bold text-slate-500 uppercase">Aperturas</p>
-           <p className="text-3xl font-bold text-brand-600 mt-2">{Number(campaign.open_count || 0).toLocaleString()}</p>
+           <p className="text-3xl font-bold text-brand-600 mt-2">{toNumber(campaign.open_count).toLocaleString()}</p>
            <p className="text-xs text-slate-500 mt-1">
-             Tasa: {(() => {
-               const sent = Number(campaign.sent_count || campaign.recipient_count || 0);
-               const opened = Number(campaign.open_count || 0);
+             Tasa: {campaign.open_rate ? toNumber(campaign.open_rate).toFixed(1) : (() => {
+               const sent = toNumber(campaign.sent_count || campaign.processed_count);
+               const opened = toNumber(campaign.open_count);
                return sent > 0 ? ((opened / sent) * 100).toFixed(1) : '0.0';
              })()}%
            </p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
            <p className="text-xs font-bold text-slate-500 uppercase">Clicks</p>
-           <p className="text-3xl font-bold text-blue-600 mt-2">{Number(campaign.click_count || 0).toLocaleString()}</p>
+           <p className="text-3xl font-bold text-blue-600 mt-2">{toNumber(campaign.click_count).toLocaleString()}</p>
            <p className="text-xs text-slate-500 mt-1">
              CTR: {(() => {
-               const sent = Number(campaign.sent_count || campaign.recipient_count || 0);
-               const clicked = Number(campaign.click_count || 0);
+               const sent = toNumber(campaign.sent_count || campaign.processed_count);
+               const clicked = toNumber(campaign.click_count);
                return sent > 0 ? ((clicked / sent) * 100).toFixed(1) : '0.0';
              })()}%
            </p>
         </div>
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
            <p className="text-xs font-bold text-slate-500 uppercase">Rebotes</p>
-           <p className="text-3xl font-bold text-red-500 mt-2">{Number(campaign.failed_count || 0).toLocaleString()}</p>
+           <p className="text-3xl font-bold text-red-500 mt-2">{toNumber(campaign.failed_count).toLocaleString()}</p>
            <p className="text-xs text-slate-500 mt-1">
              {(() => {
-               const sent = Number(campaign.sent_count || campaign.recipient_count || 0);
-               const failed = Number(campaign.failed_count || 0);
+               const sent = toNumber(campaign.sent_count || campaign.processed_count);
+               const failed = toNumber(campaign.failed_count);
                return sent > 0 ? ((failed / sent) * 100).toFixed(1) : '0.0';
              })()}% Tasa de rebote
            </p>
@@ -204,12 +242,16 @@ const CampaignDetail: React.FC = () => {
                     <h3 className="font-bold text-slate-800 mb-4">Configuración</h3>
                     <div className="space-y-4 text-sm">
                       <div className="flex justify-between border-b border-slate-100 pb-2">
+                        <span className="text-slate-500">Programado para:</span>
+                        <span className="font-medium">{campaign.scheduled_at_local || 'No programado'}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-100 pb-2">
                         <span className="text-slate-500">Enviado el:</span>
-                        <span className="font-medium">{campaign.sent_at ? new Date(campaign.sent_at).toLocaleString() : 'Pendiente'}</span>
+                        <span className="font-medium">{campaign.sent_at ? new Date(campaign.sent_at).toLocaleString('es-ES') : 'Pendiente'}</span>
                       </div>
                       <div className="flex justify-between border-b border-slate-100 pb-2">
                         <span className="text-slate-500">Remitente:</span>
-                        <span className="font-medium">{campaign.created_by_name || 'N/A'}</span>
+                        <span className="font-medium">{campaign.sender_name || campaign.created_by_name || 'N/A'} {campaign.sender_email ? `<${campaign.sender_email}>` : ''}</span>
                       </div>
                       <div className="pt-2">
                         <span className="text-slate-500 block mb-2">Listas incluidas:</span>
@@ -225,7 +267,15 @@ const CampaignDetail: React.FC = () => {
                       </div>
                       <div className="flex justify-between border-b border-slate-100 pb-2">
                         <span className="text-slate-500">Audiencia Total:</span>
-                        <span className="font-medium">{campaign.total_audience || 0}</span>
+                        <span className="font-medium">{toNumber(campaign.total_target).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-100 pb-2">
+                        <span className="text-slate-500">Procesados:</span>
+                        <span className="font-medium">{toNumber(campaign.processed_count).toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between pb-2">
+                        <span className="text-slate-500">Restantes:</span>
+                        <span className="font-medium">{toNumber(campaign.remaining_count).toLocaleString()}</span>
                       </div>
                     </div>
                   </div>

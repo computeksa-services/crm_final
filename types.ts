@@ -471,12 +471,14 @@ export interface MarketingCampaign {
   subject: string;
   preview_text?: string;
   html_content: string;
-  status: 'DRAFT' | 'SCHEDULED' | 'SENT' | 'PAUSED' | 'PROCESSING' | 'SENDING' | 'FAILED';
+  status: 'DRAFT' | 'SCHEDULED' | 'SENT' | 'PAUSED' | 'PROCESSING' | 'SENDING' | 'FAILED' | 'COMPLETED' | 'PAUSE';
   scheduled_at?: string;
   scheduled_at_local?: string; // hora local calculada por backend
   schedule_timezone?: string; // zona horaria asociada a la programación
   sent_at?: string;
   sender_type: 'USER' | 'TENANT';
+  sender_name?: string;
+  sender_email?: string;
   id_sender_integration?: string;
   created_by: string;
   created_at: string;
@@ -489,6 +491,7 @@ export interface MarketingCampaign {
   recipient_count?: number | string;
   open_count?: number | string;
   click_count?: number | string;
+  open_rate?: number | string;
   created_by_name?: string;
   avatar_url?: string;
   total_audience?: string | number;
@@ -496,6 +499,15 @@ export interface MarketingCampaign {
   target_lists_display?: string;
   sent_count?: string | number;
   failed_count?: string | number;
+  // Campos adicionales según la nueva respuesta del API de campañas
+  total_target?: string | number;
+  processed_count?: string | number;
+  remaining_count?: string | number;
+  successful_sents?: string | number;
+  failed_sents?: string | number;
+  unique_opens?: string | number;
+  unique_clicks?: string | number;
+  progress_percentage?: string | number;
 }
 
 export interface CampaignTemplate {
