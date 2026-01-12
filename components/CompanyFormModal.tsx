@@ -12,31 +12,8 @@ interface CompanyFormModalProps {
   onSuccess?: (company: ClientCompany) => void;
 }
 
-// Datos de referencia (mismo que en ClientCompaniesList y ClientCompanyDetail)
-const COUNTRIES = [
-  { id: 'AF', name: 'Afganistán' }, { id: 'AL', name: 'Albania' }, { id: 'DE', name: 'Alemania' },
-  { id: 'AD', name: 'Andorra' }, { id: 'AO', name: 'Angola' }, { id: 'AR', name: 'Argentina' },
-  { id: 'AU', name: 'Australia' }, { id: 'AT', name: 'Austria' }, { id: 'BE', name: 'Bélgica' },
-  { id: 'BO', name: 'Bolivia' }, { id: 'BR', name: 'Brasil' }, { id: 'CA', name: 'Canadá' },
-  { id: 'CL', name: 'Chile' }, { id: 'CN', name: 'China' }, { id: 'CO', name: 'Colombia' },
-  { id: 'CR', name: 'Costa Rica' }, { id: 'CU', name: 'Cuba' }, { id: 'EC', name: 'Ecuador' },
-  { id: 'SV', name: 'El Salvador' }, { id: 'ES', name: 'España' }, { id: 'US', name: 'Estados Unidos' },
-  { id: 'FR', name: 'Francia' }, { id: 'GT', name: 'Guatemala' }, { id: 'HN', name: 'Honduras' },
-  { id: 'IT', name: 'Italia' }, { id: 'MX', name: 'México' }, { id: 'NI', name: 'Nicaragua' },
-  { id: 'PA', name: 'Panamá' }, { id: 'PY', name: 'Paraguay' }, { id: 'PE', name: 'Perú' },
-  { id: 'PR', name: 'Puerto Rico' }, { id: 'DO', name: 'República Dominicana' }, { id: 'UY', name: 'Uruguay' },
-  { id: 'VE', name: 'Venezuela' },
-];
-
 const COMPANY_LABELS = [
   'Cliente', 'Muy Interesado', 'Interesado', 'Poco Interesado', 'Ex-Cliente',
-];
-
-const COMPANY_TYPES = [
-  'Tecnología y Software', 'Electrónica y Hardware', 'Finanzas y Banca', 'Servicios Legales',
-  'Salud y Medicina', 'Educación', 'Construcción e Inmobiliaria', 'Manufactura y Producción',
-  'Retail y Comercio', 'Logística y Transporte', 'Alimentos y Bebidas', 'Turismo y Hotelería',
-  'Energía y Minería', 'Marketing y Publicidad', 'Telecomunicaciones', 'Agricultura y Pesca', 'Seguros', 'Otro'
 ];
 
 const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
@@ -47,6 +24,8 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
   onSuccess,
 }) => {
   const { user } = useAuth();
+  const [countries, setCountries] = useState<{id: string; name: string}[]>([]);
+  const [companyTypes, setCompanyTypes] = useState<{id_company_types: string; name: string}[]>([]);
   const [formData, setFormData] = useState<Partial<ClientCompany>>({
     id_type: 'RUC',
     id_number: '',
@@ -63,6 +42,40 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
 
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  // Cargar países desde API
+  useEffect(() => {
+    const loadCountries = async () => {
+      if (!user?.id_tenant || !user?.id_user) return;
+      try {
+        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        if (response.ok) {
+          const data = await response.json();
+          setCountries(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        console.error('Error loading countries:', error);
+      }
+    };
+    loadCountries();
+  }, [user]);
+
+  // Cargar tipos de empresa desde API
+  useEffect(() => {
+    const loadCompanyTypes = async () => {
+      if (!user?.id_tenant || !user?.id_user) return;
+      try {
+        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        if (response.ok) {
+          const data = await response.json();
+          setCompanyTypes(Array.isArray(data) ? data : []);
+        }
+      } catch (error) {
+        console.error('Error loading company types:', error);
+      }
+    };
+    loadCompanyTypes();
+  }, [user]);
 
   // Inicializar formulario SOLO cuando el modal se abre
   useEffect(() => {
@@ -100,6 +113,31 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
     }
   }, [isOpen]); // SOLO depende de isOpen
 
+  // Validación de cédula ecuatoriana
+  const validateCedula = (cedula: string): boolean => {
+    if (!/^\d{10}$/.test(cedula)) return false;
+    
+    const provincia = parseInt(cedula.substring(0, 2));
+    if (provincia < 1 || provincia > 24) return false;
+    
+    const tercerDigito = parseInt(cedula[2]);
+    if (tercerDigito > 5) return false;
+    
+    const coeficientes = [2, 1, 2, 1, 2, 1, 2, 1, 2];
+    let suma = 0;
+    
+    for (let i = 0; i < 9; i++) {
+      let valor = parseInt(cedula[i]) * coeficientes[i];
+      if (valor > 9) valor -= 9;
+      suma += valor;
+    }
+    
+    const digitoVerificador = parseInt(cedula[9]);
+    const resultado = (10 - (suma % 10)) % 10;
+    
+    return resultado === digitoVerificador;
+  };
+
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
   ) => {
@@ -117,6 +155,35 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         setToast({ message: 'El número de identificación es requerido.', type: 'error' });
         setSubmitting(false);
         return;
+      }
+
+      // Validaciones específicas por tipo de ID
+      const idType = formData.id_type || 'RUC';
+      const idNumber = formData.id_number.trim();
+
+      if (idType === 'RUC') {
+        if (!/^\d{13}$/.test(idNumber)) {
+          setToast({ message: 'El RUC debe tener exactamente 13 dígitos numéricos.', type: 'error' });
+          setSubmitting(false);
+          return;
+        }
+        if (!idNumber.endsWith('001')) {
+          setToast({ message: 'El RUC debe terminar en 001.', type: 'error' });
+          setSubmitting(false);
+          return;
+        }
+      } else if (idType === 'CI') {
+        if (!validateCedula(idNumber)) {
+          setToast({ message: 'La cédula ingresada no es válida.', type: 'error' });
+          setSubmitting(false);
+          return;
+        }
+      } else if (idType === 'IDENTIFICACION DEL EXTERIOR') {
+        if (!/^[A-Za-z0-9-]+$/.test(idNumber)) {
+          setToast({ message: 'El ID del exterior solo puede contener letras, números y guion medio.', type: 'error' });
+          setSubmitting(false);
+          return;
+        }
       }
 
       if (!formData.name_company?.trim()) {
@@ -225,7 +292,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
                 <option value="RUC">RUC</option>
                 <option value="CI">Cédula</option>
                 <option value="PASAPORTE">Pasaporte</option>
-                <option value="IDENTIFICACION DEL EXTERIOR">ID. del Exterior</option>
+                <option value="IDENTIFICACION DEL EXTERIOR">ID DEL EXTERIOR</option>
               </select>
             </div>
             <div className="col-span-2">
@@ -239,8 +306,18 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
                 value={formData.id_number || ''}
                 onChange={handleInputChange}
                 className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-brand-500"
-                placeholder="17900..."
+                placeholder={
+                  formData.id_type === 'RUC' ? '1790016919001' :
+                  formData.id_type === 'CI' ? '1714567890' :
+                  formData.id_type === 'IDENTIFICACION DEL EXTERIOR' ? 'ABC-123456' : '...'
+                }
               />
+              <p className="text-[10px] text-slate-400 mt-1 ml-1">
+                {formData.id_type === 'RUC' && '13 dígitos numéricos, debe terminar en 001'}
+                {formData.id_type === 'CI' && '10 dígitos numéricos (cédula válida)'}
+                {formData.id_type === 'IDENTIFICACION DEL EXTERIOR' && 'Letras, números y guion medio permitidos'}
+                {formData.id_type === 'PASAPORTE' && 'Formato alfanumérico'}
+              </p>
             </div>
           </div>
 
@@ -274,7 +351,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
               >
                 <option value="">Seleccionar país</option>
-                {COUNTRIES.map(country => (
+                {countries.map(country => (
                   <option key={country.id} value={country.id}>{country.name}</option>
                 ))}
               </select>
@@ -324,8 +401,8 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
               >
                 <option value="">Seleccionar tipo</option>
-                {COMPANY_TYPES.map(type => (
-                  <option key={type} value={type}>{type}</option>
+                {companyTypes.map(type => (
+                  <option key={type.id_company_types} value={type.id_company_types}>{type.name}</option>
                 ))}
               </select>
             </div>
