@@ -405,19 +405,20 @@ export const marketingApi = {
 
   /**
    * Control de campaña en curso: enviar, pausar, reanudar
-   * El backend debe aceptar { id_campaign, id_user, action }
-   * action: 'send' | 'pause' | 'resume' (o 'send' para reanudar)
+   * El backend debe recibir { id_campaign, id_tenant, id_user, action }
    */
-  async campaignAction(
-    id_campaign: string,
-    id_user: string,
-    action: 'send' | 'pause' | 'resume'
-  ): Promise<void> {
+  async campaignAction(payload: {
+    id_campaign: string;
+    id_tenant: string;
+    id_user: string;
+    action: 'send' | 'pause' | 'resume';
+  }): Promise<void> {
+    const { id_campaign, id_tenant, id_user, action } = payload;
     try {
-      const response = await fetch(`${API_BASE}/api/marketing/campaigns/action`, {
+      const response = await fetch(`${API_BASE}/api/marketing/campaigns/manage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_campaign, id_user, action }),
+        body: JSON.stringify({ id_campaign, id_tenant, id_user, action }),
       });
       if (!response.ok) {
         const txt = await response.text();

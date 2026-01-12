@@ -1,13 +1,25 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 import { MarketingCampaign } from '../../types';
 import { marketingApi } from '../../services/marketingApi';
-import { useAuth } from '../../contexts/AuthContext';
+import Toast from '../Toast';
 import ConfirmModal from '../ConfirmModal';
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  flexRender,
+  ColumnDef,
+  SortingState,
+  ColumnFiltersState,
+  PaginationState,
+} from '@tanstack/react-table';
 
+// --- HELPER: Status Badge ---
 const StatusBadge = ({ status }: { status: string }) => {
-  const normalize = (s?: string): string => (s === 'PAUSE' ? 'PAUSED' : (s || 'DRAFT'));
-  const st = normalize(status || 'DRAFT');
   const styles: {[key: string]: string} = {
     SENT: 'bg-green-100 text-green-700 border-green-200',
     COMPLETED: 'bg-green-100 text-green-700 border-green-200',
@@ -15,475 +27,658 @@ const StatusBadge = ({ status }: { status: string }) => {
     SCHEDULED: 'bg-amber-100 text-amber-700 border-amber-200',
     SENDING: 'bg-blue-100 text-blue-700 border-blue-200',
     PROCESSING: 'bg-blue-100 text-blue-700 border-blue-200',
-    PAUSED: 'bg-amber-100 text-amber-700 border-amber-200',
-    ARCHIVED: 'bg-gray-100 text-gray-500 border-gray-200',
+    PAUSED: 'bg-orange-100 text-orange-700 border-orange-200',
     FAILED: 'bg-red-100 text-red-600 border-red-200',
   };
+  
   const labels: {[key: string]: string} = {
-    SENT: 'Enviada',
-    COMPLETED: 'Finalizada',
-    DRAFT: 'Borrador',
-    SCHEDULED: 'Programada',
-    SENDING: 'Enviando',
-    PROCESSING: 'Procesando',
-    PAUSED: 'Pausada',
-    ARCHIVED: 'Archivada',
-    FAILED: 'Fallida',
+    SENT: 'Enviada', COMPLETED: 'Finalizada', DRAFT: 'Borrador',
+    SCHEDULED: 'Programada', SENDING: 'Enviando', PROCESSING: 'Procesando',
+    PAUSED: 'Pausada', FAILED: 'Fallida',
   };
+
+  const st = status || 'DRAFT';
   return (
-    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${styles[st] || styles.DRAFT}`}>
+    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${styles[st] || styles.DRAFT}`}>
       {labels[st] || st}
     </span>
   );
 };
 
+// --- HELPER: Formatear Fecha String (Sin cambiar zona horaria) ---
+const formatDateString = (dateStr?: string) => {
+  if (!dateStr) return '-';
+  const dateObj = new Date(dateStr);
+  if (isNaN(dateObj.getTime())) return dateStr.substring(0, 16);
+
+  return (
+    <div className="flex flex-col">
+       <span className="text-xs font-semibold text-slate-700">
+         {dateObj.toLocaleDateString()}
+       </span>
+       <span className="text-[10px] text-slate-400">
+         {dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+       </span>
+    </div>
+  );
+};
+
+// --- MAIN COMPONENT ---
 const Campaigns: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
-  const [filterStatus, setFilterStatus] = useState<string>('ALL');
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [campaignToDelete, setCampaignToDelete] = useState<string | null>(null);
-  const [showLaunchConfirm, setShowLaunchConfirm] = useState(false);
-  const [campaignToLaunch, setCampaignToLaunch] = useState<MarketingCampaign | null>(null);
-  const [isLaunching, setIsLaunching] = useState(false);
-
-  // Cargar campañas desde la API
-  useEffect(() => {
-    loadCampaigns();
-  }, []);
-
-  const loadCampaigns = async () => {
-    if (!user?.id_tenant || !user?.id_user) return;
-    
-    try {
-      setIsLoading(true);
-      const data = await marketingApi.getCampaigns(user.id_tenant, user.id_user);
-      setCampaigns(data);
-    } catch (error) {
-      console.error('Error al cargar campañas:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // --- Actions ---
-
-  const handleDuplicate = (e: React.MouseEvent, campaign: MarketingCampaign) => {
-    e.stopPropagation();
-    (async () => {
-      if (!user?.id_tenant || !user?.id_user) return;
-      try {
-        const duplicated = await marketingApi.duplicateCampaign(
-          campaign.id_campaign,
-          user.id_tenant,
-          user.id_user
-        );
-        // Prepend duplicated campaign in list and navigate to edit
-        setCampaigns(prev => [duplicated, ...prev]);
-        if (duplicated?.id_campaign) {
-          navigate(`/app/marketing/campaigns/edit/${duplicated.id_campaign}`);
-        } else {
-          // Fallback: refresh list
-          await loadCampaigns();
-        }
-      } catch (err) {
-        console.error('Error duplicando campaña:', err);
-      }
-    })();
-  };
-
-  const handleDelete = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    setCampaignToDelete(id);
-    setShowDeleteConfirm(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!campaignToDelete || !user?.id_tenant || !user?.id_user) return;
-    try {
-      await marketingApi.manageCampaign('delete', {
-        id_tenant: user.id_tenant,
-        id_user: user.id_user,
-        id_campaign: campaignToDelete,
-      });
-      setCampaigns(prev => prev.filter(c => c.id_campaign !== campaignToDelete));
-    } catch (err) {
-      console.error('Error eliminando campaña:', err);
-    } finally {
-      setShowDeleteConfirm(false);
-      setCampaignToDelete(null);
-    }
-  };
-
-  const handleEdit = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    navigate(`/app/marketing/campaigns/edit/${id}`);
-  };
-
-  const handleLaunch = (e: React.MouseEvent, campaign: MarketingCampaign) => {
-    e.stopPropagation();
-    setCampaignToLaunch(campaign);
-    setShowLaunchConfirm(true);
-  };
-
-  const confirmLaunch = async () => {
-    if (!campaignToLaunch || !user?.id_user) return;
-    try {
-      setIsLaunching(true);
-      await marketingApi.launchCampaign(campaignToLaunch.id_campaign, user.id_user);
-      // Refrescar para reflejar el estado real desde backend
-      await loadCampaigns();
-    } catch (err) {
-      console.error('Error lanzando campaña:', err);
-    } finally {
-      setIsLaunching(false);
-      setShowLaunchConfirm(false);
-      setCampaignToLaunch(null);
-    }
-  };
-
-  // Helpers y acciones de pausa/reanudar
-  const toNumber = (v: any): number => {
-    if (v === null || v === undefined) return 0;
-    if (typeof v === 'number') return v;
-    const n = parseFloat(String(v));
-    return isNaN(n) ? 0 : n;
-  };
-
-  const normalizeStatus = (s?: string) => (s === 'PAUSE' ? 'PAUSED' : s || 'DRAFT');
-
-  const calcProgress = (c: MarketingCampaign): number => {
-    const p = toNumber(c.progress_percentage);
-    if (p > 0) return Math.max(0, Math.min(100, p));
-    const total = toNumber(c.total_target) || toNumber(c.recipient_count);
-    const success = toNumber(c.successful_sents) || toNumber(c.sent_count);
-    const failed = toNumber(c.failed_sents) || toNumber(c.failed_count);
-    const processed = success + failed;
-    if (total > 0) return Math.round((processed / total) * 100);
-    return 0;
-  };
-
-  const handlePause = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (!user?.id_user) return;
-    await marketingApi.campaignAction(id, user.id_user, 'pause');
-    await loadCampaigns();
-  };
-
-  const handleResume = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (!user?.id_user) return;
-    await marketingApi.campaignAction(id, user.id_user, 'send');
-    await loadCampaigns();
-  };
-
-  // --- Filtering ---
-
-  const filteredCampaigns = campaigns.filter(c => {
-    if (filterStatus === 'ALL') return true;
-    return c.status === filterStatus;
+  
+  // --- STATE ---
+  const [data, setData] = useState<MarketingCampaign[]>([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Table State
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [globalFilter, setGlobalFilter] = useState('');
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 20 });
+  
+  // UI State
+  const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
+  const filterMenuRef = useRef<HTMLDivElement>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  
+  // Modal Confirm State
+  const [confirmState, setConfirmState] = useState({ 
+    isOpen: false, 
+    title: '', 
+    message: '', 
+    confirmText: 'Confirmar',
+    isDestructive: false,
+    onConfirm: async () => {}, 
   });
 
-  return (
-    <div className="space-y-6" onClick={() => setIsFilterOpen(false)}>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-slate-800">Campañas</h2>
-          <p className="text-slate-500">Gestiona y monitorea tus envíos de correo masivo.</p>
+  // --- DATA LOADING ---
+  const fetchData = useCallback(async () => {
+    if (!user?.id_tenant || !user?.id_user) return;
+    setLoading(true);
+    try {
+      const result = await marketingApi.getCampaigns(user.id_tenant, user.id_user);
+      setData(result);
+    } catch (error) {
+      console.error(error);
+      setToast({ message: 'Error al cargar campañas', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Click outside to close filters
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
+        setActiveFilterMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // --- ACTIONS HANDLERS ---
+
+  // Navegar al detalle
+  const handleRowClick = (id: string) => {
+    navigate(`/app/marketing/campaigns/${id}`);
+  };
+
+  const handleEdit = (e: React.MouseEvent, row: MarketingCampaign) => {
+    e.stopPropagation();
+    navigate(`/app/marketing/campaigns/edit/${row.id_campaign}`);
+  };
+
+  const handleDuplicate = (e: React.MouseEvent, row: MarketingCampaign) => {
+    e.stopPropagation();
+    setConfirmState({
+      isOpen: true,
+      title: 'Duplicar Campaña',
+      message: `¿Crear una copia de "${row.name}"?`,
+      confirmText: 'Duplicar',
+      isDestructive: false,
+      onConfirm: async () => {
+        try {
+          if(!user?.id_tenant || !user?.id_user) return;
+          // Action: duplicate
+          const newCamp = await marketingApi.manageCampaign('duplicate', {
+             id_tenant: user.id_tenant,
+             id_user: user.id_user,
+             id_campaign: row.id_campaign
+          }) as MarketingCampaign;
+          
+          setToast({ message: 'Campaña duplicada correctamente', type: 'success' });
+          if(newCamp?.id_campaign) navigate(`/app/marketing/campaigns/edit/${newCamp.id_campaign}`);
+          else fetchData();
+        } catch (e) {
+          setToast({ message: 'Error al duplicar', type: 'error' });
+        } finally {
+            setConfirmState(prev => ({...prev, isOpen: false}));
+        }
+      }
+    });
+  };
+
+  const handleDelete = (e: React.MouseEvent, row: MarketingCampaign) => {
+    e.stopPropagation();
+    setConfirmState({
+      isOpen: true,
+      title: 'Eliminar Campaña',
+      message: `¿Estás seguro de eliminar "${row.name}"? Esta acción no se puede deshacer.`,
+      confirmText: 'Eliminar',
+      isDestructive: true,
+      onConfirm: async () => {
+        try {
+          if(!user?.id_tenant || !user?.id_user) return;
+          // Action: delete
+          await marketingApi.manageCampaign('delete', {
+            id_tenant: user.id_tenant,
+            id_user: user.id_user,
+            id_campaign: row.id_campaign
+          });
+          setToast({ message: 'Campaña eliminada', type: 'success' });
+          setData(prev => prev.filter(c => c.id_campaign !== row.id_campaign));
+        } catch (e) {
+          setToast({ message: 'Error al eliminar', type: 'error' });
+        } finally {
+            setConfirmState(prev => ({...prev, isOpen: false}));
+        }
+      }
+    });
+  };
+
+  const handleLaunch = (e: React.MouseEvent, row: MarketingCampaign) => {
+    e.stopPropagation();
+    setConfirmState({
+      isOpen: true,
+      title: 'Lanzar Campaña',
+      message: `La campaña se enviará inmediatamente. ¿Confirmar envío?`,
+      confirmText: 'Enviar Ahora',
+      isDestructive: false,
+      onConfirm: async () => {
+        try {
+            if(!user?.id_tenant || !user?.id_user) return;
+            // IMPORTANTE: Aquí se usa campaignAction que va al endpoint /send
+            // NO se usa manageCampaign (endpoint /manage)
+            await marketingApi.campaignAction({
+              id_campaign: row.id_campaign,
+              id_tenant: user.id_tenant,
+              id_user: user.id_user,
+              action: 'send',
+            });
+            setToast({ message: 'Campaña iniciada', type: 'success' });
+            fetchData();
+        } catch (e) {
+            setToast({ message: 'Error al iniciar', type: 'error' });
+        } finally {
+            setConfirmState(prev => ({...prev, isOpen: false}));
+        }
+      }
+    });
+  };
+
+  const handlePause = (e: React.MouseEvent, row: MarketingCampaign) => {
+    e.stopPropagation();
+    setConfirmState({
+      isOpen: true,
+      title: 'Pausar Envío',
+      message: 'Se detendrá el envío. Podrás reanudarlo después.',
+      confirmText: 'Pausar',
+      isDestructive: false,
+      onConfirm: async () => {
+        try {
+            if(!user?.id_tenant || !user?.id_user) return;
+            // Action: pause
+            await marketingApi.campaignAction({
+              id_campaign: row.id_campaign,
+              id_tenant: user.id_tenant,
+              id_user: user.id_user,
+              action: 'pause',
+            });
+            setToast({ message: 'Campaña pausada', type: 'success' });
+            fetchData();
+        } catch (e) {
+            setToast({ message: 'Error al pausar', type: 'error' });
+        } finally {
+            setConfirmState(prev => ({...prev, isOpen: false}));
+        }
+      }
+    });
+  };
+
+  const handleResume = (e: React.MouseEvent, row: MarketingCampaign) => {
+    e.stopPropagation();
+    setConfirmState({
+      isOpen: true,
+      title: 'Reanudar Envío',
+      message: `¿Continuar con el envío de correos pendientes?`,
+      confirmText: 'Reanudar',
+      isDestructive: false,
+      onConfirm: async () => {
+        try {
+            if(!user?.id_tenant || !user?.id_user) return;
+            // Action: send (vuelve a activar el estado SENDING)
+            await marketingApi.campaignAction({
+              id_campaign: row.id_campaign,
+              id_tenant: user.id_tenant,
+              id_user: user.id_user,
+              action: 'send',
+            });
+            setToast({ message: 'Campaña reanudada', type: 'success' });
+            fetchData();
+        } catch (e) {
+            setToast({ message: 'Error al reanudar', type: 'error' });
+        } finally {
+            setConfirmState(prev => ({...prev, isOpen: false}));
+        }
+      }
+    });
+  };
+
+  // --- TABLE HELPERS ---
+
+  const toNumber = (v: any) => {
+    if(!v) return 0;
+    const n = parseFloat(v);
+    return isNaN(n) ? 0 : n;
+  }
+
+  const getFacetedUniqueValues = (columnId: string) => {
+    const counts = new Map<string, number>();
+    data.forEach(row => {
+      const val = (row as any)[columnId] || 'DRAFT';
+      counts.set(val, (counts.get(val) || 0) + 1);
+    });
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+  };
+
+  const toggleFilterValue = (columnId: string, value: string) => {
+    const currentFilters = [...columnFilters];
+    const filterIndex = currentFilters.findIndex(f => f.id === columnId);
+    if (filterIndex > -1) {
+      const activeValues = currentFilters[filterIndex].value as string[];
+      if (activeValues.includes(value)) {
+        const next = activeValues.filter(v => v !== value);
+        if (next.length === 0) currentFilters.splice(filterIndex, 1);
+        else currentFilters[filterIndex].value = next;
+      } else {
+        currentFilters[filterIndex].value = [...activeValues, value];
+      }
+    } else {
+      currentFilters.push({ id: columnId, value: [value] });
+    }
+    setColumnFilters(currentFilters);
+  };
+
+  // --- COLUMNS DEFINITION ---
+
+  const columns = useMemo<ColumnDef<MarketingCampaign>[]>(() => [
+    {
+      accessorKey: 'name',
+      header: 'Campaña',
+      size: 280,
+      cell: ({ row }) => (
+        <div className="flex flex-col">
+          <span className="font-bold text-slate-800 text-sm group-hover:text-brand-600 transition-colors">
+            {row.original.name}
+          </span>
+          <span className="text-xs text-slate-400 truncate max-w-[240px]">
+            {row.original.subject || '(Sin asunto)'}
+          </span>
         </div>
-        <div className="flex gap-3">
-          <div className="relative">
-            <button 
-              onClick={(e) => { e.stopPropagation(); setIsFilterOpen(!isFilterOpen); }}
-              className={`px-4 py-2 bg-white border text-slate-700 rounded-lg hover:bg-slate-50 font-medium text-sm transition-colors flex items-center gap-2 ${isFilterOpen ? 'border-brand-500 text-brand-600' : 'border-slate-300'}`}
-            >
-              <i className="fa-solid fa-filter"></i> 
-              {filterStatus === 'ALL' ? 'Todos los estados' : filterStatus}
-              <i className="fa-solid fa-chevron-down text-xs ml-1"></i>
-            </button>
+      )
+    },
+    {
+      accessorKey: 'status',
+      header: 'Estado',
+      size: 110,
+      enableColumnFilter: true,
+      cell: ({ getValue }) => <StatusBadge status={getValue() as string} />,
+      filterFn: (row, id, filterValue: string[]) => 
+        filterValue.length === 0 || filterValue.includes(row.getValue(id) || 'DRAFT')
+    },
+    {
+      id: 'progress',
+      header: 'Progreso',
+      size: 160,
+      cell: ({ row }) => {
+        const c = row.original;
+        const status = c.status || 'DRAFT';
+        const total = toNumber(c.total_target) || toNumber(c.recipient_count);
+        const success = toNumber(c.successful_sents) || toNumber(c.sent_count);
+        const percentage = toNumber(c.progress_percentage);
+        
+        let barColor = 'bg-blue-500';
+        if(status === 'PAUSED') barColor = 'bg-amber-500';
+        if(status === 'COMPLETED' || status === 'SENT') barColor = 'bg-green-500';
+        
+        // Cambio "Est." por "Total:"
+        if(status === 'DRAFT') return <span className="text-xs text-slate-400 font-medium">Total: {total}</span>;
+
+        return (
+          <div className="w-full">
+            <div className="flex justify-between text-[10px] text-slate-500 mb-1 font-bold">
+               <span>{percentage}%</span>
+               <span>{success}/{total}</span>
+            </div>
+            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+               <div className={`h-full ${barColor} transition-all duration-500`} style={{ width: `${percentage}%` }}></div>
+            </div>
+          </div>
+        )
+      }
+    },
+    {
+        accessorKey: 'created_at', // Default sorting key
+        id: 'date_display',
+        header: 'Programación',
+        size: 140,
+        cell: ({ row }) => {
+            const c = row.original;
+            // Prioridad: Fecha Enviado > Fecha Programada Local > Fecha Programada UTC
+            if (c.sent_at) {
+                return formatDateString(c.sent_at);
+            }
+            if (c.scheduled_at_local) {
+                return (
+                    <div className="flex flex-col">
+                        <span className="text-[9px] font-black text-amber-500 uppercase tracking-wide mb-0.5">
+                            <i className="fa-regular fa-clock mr-1"></i>Prog.
+                        </span>
+                        {formatDateString(c.scheduled_at_local)}
+                    </div>
+                )
+            }
+             if (c.scheduled_at) {
+                return (
+                    <div className="flex flex-col">
+                         <span className="text-[9px] font-black text-amber-500 uppercase tracking-wide mb-0.5">
+                            <i className="fa-regular fa-clock mr-1"></i>Prog.
+                         </span>
+                         {formatDateString(c.scheduled_at)}
+                    </div>
+                )
+            }
+            return <span className="text-xs text-slate-400 font-medium">-</span>;
+        }
+    },
+    {
+        // Nueva Columna "Creado por"
+        accessorKey: 'created_by_name',
+        header: 'Creado',
+        size: 100,
+        cell: ({ row }) => {
+            const name = row.original.created_by_name || 'Desconocido';
+            const avatar = row.original.avatar_url;
+            return (
+                <div className="flex items-center gap-2">
+                    {avatar ? (
+                        <img src={avatar} alt={name} className="w-6 h-6 rounded-full border border-slate-200" />
+                    ) : (
+                        <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-500 border border-slate-200 font-bold">
+                            {name.charAt(0)}
+                        </div>
+                    )}
+                    <span className="text-xs text-slate-600 font-medium truncate max-w-[80px]">{name}</span>
+                </div>
+            )
+        }
+    },
+    {
+        id: 'stats',
+        header: 'Métricas',
+        size: 120,
+        cell: ({ row }) => {
+            const c = row.original;
+            const sent = toNumber(c.total_target) || toNumber(c.recipient_count);
+            const opens = toNumber(c.unique_opens || c.open_count);
+            const clicks = toNumber(c.unique_clicks || c.click_count);
             
-            {isFilterOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-10 py-1 animate-fadeIn">
-                {['ALL', 'DRAFT', 'SCHEDULED', 'SENDING', 'PAUSED', 'SENT', 'COMPLETED'].map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => setFilterStatus(status)}
-                    className={`block w-full text-left px-4 py-2 text-sm hover:bg-slate-50 ${filterStatus === status ? 'text-brand-600 font-semibold bg-brand-50' : 'text-slate-700'}`}
-                  >
-                    {status === 'ALL' ? 'Todos' : <StatusBadge status={status} />}
-                  </button>
-                ))}
-              </div>
+            const openRate = sent > 0 ? ((opens/sent)*100).toFixed(0) : 0;
+            const clickRate = sent > 0 ? ((clicks/sent)*100).toFixed(0) : 0;
+
+            if(['DRAFT','SCHEDULED'].includes(c.status || '')) return <span className="text-xs text-slate-300">-</span>;
+
+            return (
+                <div className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                        <span className="text-[9px] font-black text-slate-400 uppercase">Opens</span>
+                        <span className="text-xs font-bold text-slate-700">{openRate}%</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <span className="text-[9px] font-black text-slate-400 uppercase">Clicks</span>
+                        <span className="text-xs font-bold text-slate-700">{clickRate}%</span>
+                    </div>
+                </div>
+            )
+        }
+    },
+    {
+      id: 'actions',
+      header: '',
+      size: 90, // Reducido el tamaño
+      enableColumnFilter: false,
+      cell: ({ row }) => {
+        const c = row.original;
+        const st = c.status || 'DRAFT';
+        
+        return (
+          <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            
+            {/* Lanzar (Solo draft) */}
+            {st === 'DRAFT' && (
+                <button onClick={(e) => handleLaunch(e, c)} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors" title="Lanzar">
+                    <i className="fa-solid fa-rocket text-[10px]"></i>
+                </button>
+            )}
+
+            {/* Pausar (Solo sending) */}
+            {['SENDING','PROCESSING'].includes(st) && (
+                <button onClick={(e) => handlePause(e, c)} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" title="Pausar">
+                    <i className="fa-solid fa-pause text-[10px]"></i>
+                </button>
+            )}
+
+            {/* Reanudar (Solo paused) */}
+            {st === 'PAUSED' && (
+                <button onClick={(e) => handleResume(e, c)} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors" title="Reanudar">
+                    <i className="fa-solid fa-play text-[10px]"></i>
+                </button>
+            )}
+
+            {/* Editar (siempre visible pero lleva al wizard) */}
+            <button onClick={(e) => handleEdit(e, c)} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-slate-50 rounded transition-colors" title="Editar">
+               <i className="fa-solid fa-pen text-[10px]"></i>
+            </button>
+
+            {/* Eliminar */}
+            {['DRAFT','COMPLETED','FAILED','ARCHIVED'].includes(st) && (
+                <button onClick={(e) => handleDelete(e, c)} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors" title="Eliminar">
+                <i className="fa-solid fa-trash text-[10px]"></i>
+                </button>
             )}
           </div>
+        );
+      }
+    }
+  ], []);
 
-          <Link 
-            to="/app/marketing/campaigns/new"
-            className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2"
-          >
-            <i className="fa-solid fa-plus"></i> Crear Campaña
-          </Link>
-        </div>
+  // --- TABLE INSTANCE ---
+
+  const table = useReactTable({
+    data,
+    columns,
+    state: { sorting, columnFilters, globalFilter, pagination },
+    onSortingChange: setSorting,
+    onColumnFiltersChange: setColumnFilters,
+    onGlobalFilterChange: setGlobalFilter,
+    onPaginationChange: setPagination,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+  });
+
+  // --- RENDER ---
+
+  return (
+    // FIX: Usamos h-full en el contenedor para asegurar que ocupe todo el espacio disponible
+    <div className="flex flex-col h-full bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans">
+      
+      {/* TOOLBAR */}
+      <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
+         <div className="relative w-full sm:w-64">
+             <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+             <input 
+                 value={globalFilter} 
+                 onChange={e => setGlobalFilter(e.target.value)}
+                 placeholder="Buscar campañas..." 
+                 className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm transition-all"
+             />
+         </div>
+         <button 
+            onClick={() => navigate('/app/marketing/campaigns/new')}
+            className="px-4 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-700 shadow-sm border border-brand-700 transition-all flex items-center gap-2"
+         >
+             <i className="fa-solid fa-plus"></i> Nueva Campaña
+         </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[400px]">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Nombre</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Estado</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Progreso</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Programación/Envío</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Stats</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Creado por</th>
-                <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {isLoading ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                    <i className="fa-solid fa-spinner fa-spin mr-2"></i>
-                    Cargando campañas...
-                  </td>
-                </tr>
-              ) : filteredCampaigns.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                    No se encontraron campañas con los filtros seleccionados.
-                  </td>
-                </tr>
-              ) : (
-                filteredCampaigns.map((campaign) => (
-                  <tr 
-                    key={campaign.id_campaign} 
-                    className="hover:bg-slate-50 transition-colors cursor-pointer group"
-                    onClick={() => navigate(`/app/marketing/campaigns/${campaign.id_campaign}`)}
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-slate-800 hover:text-brand-600 transition-colors">{campaign.name}</span>
-                        <span className="text-xs text-slate-500">{campaign.subject}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <StatusBadge status={campaign.status} />
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {(() => {
-                        const status = normalizeStatus(campaign.status);
-                        const total = toNumber(campaign.total_target) || toNumber(campaign.recipient_count);
-                        const success = toNumber(campaign.successful_sents) || toNumber(campaign.sent_count);
-                        const failed = toNumber(campaign.failed_sents) || toNumber(campaign.failed_count);
-                        const remaining = toNumber(campaign.remaining_count);
-                        const progress = calcProgress(campaign);
-
-                        if (status === 'DRAFT') {
-                          return (
-                            <div>
-                              <p className="text-sm text-slate-600">Audiencia estimada: <span className="font-semibold">{total}</span> personas</p>
-                              <div className="h-2 bg-slate-100 rounded mt-2 overflow-hidden">
-                                <div className="h-2 bg-slate-300" style={{ width: '0%' }}></div>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        if (status === 'SENDING' || status === 'PROCESSING') {
-                          return (
-                            <div>
-                              <p className="text-sm text-slate-600">Enviando... <span className="font-semibold">{progress}%</span></p>
-                              <div className="h-2 bg-slate-100 rounded mt-2 overflow-hidden" title={`${progress}%`}>
-                                <div className="h-2 bg-blue-500 transition-all" style={{ width: `${progress}%` }}></div>
-                              </div>
-                              <p className="text-xs text-slate-500 mt-1">{success} enviados, {failed} fallidos, {remaining} restantes</p>
-                            </div>
-                          );
-                        }
-
-                        if (status === 'PAUSED') {
-                          return (
-                            <div>
-                              <p className="text-sm text-amber-700">Pausada al <span className="font-semibold">{progress}%</span></p>
-                              <div className="h-2 bg-slate-100 rounded mt-2 overflow-hidden">
-                                <div className="h-2 bg-amber-500" style={{ width: `${progress}%` }}></div>
-                              </div>
-                              <p className="text-xs text-slate-500 mt-1">{remaining} correos detenidos en cola</p>
-                            </div>
-                          );
-                        }
-
-                        if (status === 'COMPLETED' || status === 'SENT') {
-                          return (
-                            <div>
-                              <p className="text-sm text-green-700">Finalizada (<span className="font-semibold">100%</span>)</p>
-                              <div className="h-2 bg-slate-100 rounded mt-2 overflow-hidden">
-                                <div className="h-2 bg-green-500" style={{ width: `100%` }}></div>
-                              </div>
-                              <p className="text-xs text-slate-500 mt-1">Total: {total}. Éxito: {success}. Rebote: {failed}.</p>
-                            </div>
-                          );
-                        }
-
-                        if (status === 'FAILED') {
-                          return (
-                            <div>
-                              <p className="text-sm text-red-600">Fallida</p>
-                              <p className="text-xs text-slate-500 mt-1">Enviados: {success}. Fallidos: {failed}.</p>
-                            </div>
-                          );
-                        }
-
-                        return <span className="text-xs text-slate-400">-</span>;
-                      })()}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {campaign.sent_at 
-                        ? (
-                            new Date(campaign.sent_at).toLocaleDateString() + ' ' + 
-                            new Date(campaign.sent_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                          )
-                        : campaign.scheduled_at_local
-                          ? (
-                              <span className="text-amber-600">
-                                <i className="fa-regular fa-clock mr-1"></i>
-                                {campaign.scheduled_at_local as string}
-                              </span>
-                            )
-                          : <span className="text-xs text-slate-400">Inmediato</span>
-                      }
-                      {campaign.target_lists_display && (
-                        <div className="text-[11px] text-slate-400 mt-1">Audiencias: {campaign.target_lists_display}</div>
-                      )}
-                    </td>
-                    <td className="px-6 py-4">
-                      {(() => {
-                        const sent = toNumber(campaign.sent_count || campaign.recipient_count || campaign.total_target);
-                        const opened = toNumber(campaign.unique_opens || campaign.open_count);
-                        const clicked = toNumber(campaign.unique_clicks || campaign.click_count);
-                        const openRate = sent > 0 ? ((opened / sent) * 100).toFixed(1) : '0.0';
-                        const clickRate = sent > 0 ? ((clicked / sent) * 100).toFixed(1) : '0.0';
+      {/* TABLE CONTAINER - flex-1 y overflow-auto para scroll interno */}
+      <div className="flex-1 overflow-auto relative bg-slate-50/10">
+        <table className="w-full border-separate border-spacing-0">
+          <thead className="sticky top-0 z-40 shadow-sm">
+             {table.getHeaderGroups().map(headerGroup => (
+                <tr key={headerGroup.id}>
+                    {headerGroup.headers.map(header => {
+                        const isFiltered = columnFilters.some(f => f.id === header.column.id);
                         return (
-                          <div className="flex items-center gap-4 text-xs">
-                            <div className="flex items-center gap-1" title="Aperturas únicas">
-                              <i className="fa-regular fa-envelope-open text-slate-400"></i>
-                              <span className="font-medium text-slate-700">{openRate}%</span>
+                            <th key={header.id} style={{ width: header.getSize() }} className="border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left relative group">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 cursor-pointer select-none" onClick={header.column.getToggleSortingHandler()}>
+                                        <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                                            {flexRender(header.column.columnDef.header, header.getContext())}
+                                        </span>
+                                        {{
+                                            asc: <i className="fa-solid fa-sort-up text-brand-600"></i>,
+                                            desc: <i className="fa-solid fa-sort-down text-brand-600"></i>,
+                                        }[header.column.getIsSorted() as string] ?? null}
+                                    </div>
+                                    {header.column.columnDef.enableColumnFilter !== false && header.column.id !== 'actions' && (
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); setActiveFilterMenu(activeFilterMenu === header.column.id ? null : header.column.id); }}
+                                            className={`w-5 h-5 rounded flex items-center justify-center transition-all ${isFiltered ? 'bg-brand-100 text-brand-600' : 'text-slate-300 hover:text-slate-500'}`}
+                                        >
+                                            <i className="fa-solid fa-filter text-[10px]"></i>
+                                        </button>
+                                    )}
+                                </div>
+                                {/* Dropdown Filter */}
+                                {activeFilterMenu === header.column.id && (
+                                    <div ref={filterMenuRef} className="absolute top-full left-0 mt-1 w-48 bg-white shadow-xl rounded-xl border border-slate-200 z-50 py-2 animate-fadeIn">
+                                        <div className="max-h-60 overflow-y-auto px-1">
+                                            {getFacetedUniqueValues(header.column.id).map(([val, count]) => {
+                                                const active = (columnFilters.find(f => f.id === header.column.id)?.value as string[]) || [];
+                                                const checked = active.includes(val);
+                                                return (
+                                                    <label key={val} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer transition-colors">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center ${checked ? 'bg-brand-600 border-brand-600' : 'bg-white border-slate-300'}`}>
+                                                                {checked && <i className="fa-solid fa-check text-[8px] text-white"></i>}
+                                                            </div>
+                                                            <span className="text-xs font-bold text-slate-700 uppercase">{val}</span>
+                                                        </div>
+                                                        <span className="text-[10px] font-bold text-slate-400">({count})</span>
+                                                        <input type="checkbox" className="hidden" checked={checked} onChange={() => toggleFilterValue(header.column.id, val)} />
+                                                    </label>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                            </th>
+                        )
+                    })}
+                </tr>
+             ))}
+          </thead>
+          <tbody className="bg-white">
+             {loading ? (
+                 <tr>
+                    <td colSpan={columns.length} className="py-24 text-center">
+                        <i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i>
+                        <p className="text-slate-400 text-sm font-medium">Cargando campañas...</p>
+                    </td>
+                 </tr>
+             ) : table.getRowModel().rows.length === 0 ? (
+                 <tr>
+                    <td colSpan={columns.length} className="py-24 text-center">
+                        <div className="flex flex-col items-center">
+                            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-3">
+                                <i className="fa-solid fa-paper-plane text-2xl text-slate-300"></i>
                             </div>
-                            <div className="flex items-center gap-1" title="Clicks únicos">
-                              <i className="fa-solid fa-mouse-pointer text-slate-400"></i>
-                              <span className="font-medium text-slate-700">{clickRate}%</span>
-                            </div>
-                          </div>
-                        );
-                      })()}
+                            <p className="text-slate-500 font-bold">No se encontraron campañas</p>
+                        </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      <div className="flex items-center gap-2">
-                        {campaign.avatar_url ? (
-                          <img src={campaign.avatar_url} alt={campaign.created_by_name || 'Usuario'} className="w-6 h-6 rounded-full" />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-[10px] text-slate-600">
-                            {(campaign.created_by_name || 'U').slice(0,1)}
-                          </div>
-                        )}
-                        <span>{campaign.created_by === user?.id_user ? 'Tú' : (campaign.created_by_name || 'Compartido')}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <button 
-                           onClick={(e) => handleEdit(e, campaign.id_campaign)}
-                           className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors" 
-                           title="Editar"
-                         >
-                           <i className="fa-regular fa-pen-to-square"></i>
-                         </button>
-                         {normalizeStatus(campaign.status) === 'DRAFT' && (
-                           <button 
-                             onClick={(e) => handleLaunch(e, campaign)}
-                             className="p-2 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" 
-                             title="Lanzar ahora"
-                           >
-                             <i className="fa-solid fa-rocket"></i>
-                           </button>
-                         )}
-                         {['SENDING','PROCESSING'].includes(normalizeStatus(campaign.status)) && (
-                           <button 
-                             onClick={(e) => handlePause(e, campaign.id_campaign)}
-                             className="p-2 text-amber-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg transition-colors" 
-                             title="Pausar"
-                           >
-                             <i className="fa-solid fa-pause"></i>
-                           </button>
-                         )}
-                         {normalizeStatus(campaign.status) === 'PAUSED' && (
-                           <button 
-                             onClick={(e) => handleResume(e, campaign.id_campaign)}
-                             className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-colors" 
-                             title="Reanudar"
-                           >
-                             <i className="fa-solid fa-play"></i>
-                           </button>
-                         )}
-                         <button 
-                           onClick={(e) => handleDuplicate(e, campaign)}
-                           className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors" 
-                           title="Duplicar"
-                         >
-                           <i className="fa-regular fa-copy"></i>
-                         </button>
-                         <button 
-                           onClick={(e) => handleDelete(e, campaign.id_campaign)}
-                           className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" 
-                           title="Eliminar"
-                         >
-                           <i className="fa-regular fa-trash-can"></i>
-                         </button>
-                      </div>
-                    </td>
-                  </tr>
+                 </tr>
+             ) : (
+                table.getRowModel().rows.map(row => (
+                    <tr 
+                        key={row.id} 
+                        // FIX: Navegar a vista detalle
+                        onClick={() => handleRowClick(row.original.id_campaign)}
+                        className="hover:bg-blue-50/30 cursor-pointer group border-b border-slate-100 transition-colors"
+                    >
+                        {row.getVisibleCells().map(cell => (
+                            <td key={cell.id} className="px-4 py-3 border-r border-slate-50 text-sm text-slate-600">
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                            </td>
+                        ))}
+                    </tr>
                 ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <div className="bg-slate-50 px-6 py-3 border-t border-slate-200 flex items-center justify-between">
-           <span className="text-xs text-slate-500">Mostrando {filteredCampaigns.length} campañas</span>
-           <div className="flex gap-1">
-             <button className="px-2 py-1 border border-slate-300 rounded bg-white text-slate-400 text-xs disabled:opacity-50" disabled>Prev</button>
-             <button className="px-2 py-1 border border-slate-300 rounded bg-white text-slate-600 text-xs disabled:opacity-50" disabled>Next</button>
-           </div>
-        </div>
-        {/* Confirmación de eliminación */}
-        <ConfirmModal
-          isOpen={showDeleteConfirm}
-          onClose={() => setShowDeleteConfirm(false)}
-          onConfirm={confirmDelete}
-          title="Eliminar campaña"
-          message="Esta acción eliminará la campaña de forma permanente. ¿Deseas continuar?"
-          confirmText="Eliminar"
-          cancelText="Cancelar"
-          isDestructive
-        />
-        <ConfirmModal
-          isOpen={showLaunchConfirm}
-          onClose={() => setShowLaunchConfirm(false)}
-          onConfirm={confirmLaunch}
-          title="Lanzar campaña"
-          message="Esta campaña se enviará inmediatamente a las listas seleccionadas. ¿Deseas continuar?"
-          confirmText={isLaunching ? 'Lanzando...' : 'Enviar ahora'}
-          cancelText="Cancelar"
-        />
+             )}
+          </tbody>
+        </table>
       </div>
+
+      {/* FOOTER */}
+      <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
+         <div className="flex items-center gap-4">
+            <span>{data.length} REGISTROS</span>
+            {columnFilters.length > 0 && (
+                <button onClick={() => setColumnFilters([])} className="text-red-500 hover:text-red-700 font-black flex items-center gap-1">
+                    <i className="fa-solid fa-filter-circle-xmark"></i> Limpiar
+                </button>
+            )}
+         </div>
+         <div className="flex items-center gap-2">
+            <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="p-1 hover:text-brand-600 disabled:opacity-20"><i className="fa-solid fa-chevron-left"></i></button>
+            <span className="bg-white px-3 py-1 border border-slate-200 rounded shadow-sm text-brand-600 font-black tracking-normal">
+              {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+            </span>
+            <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 hover:text-brand-600 disabled:opacity-20"><i className="fa-solid fa-chevron-right"></i></button>
+         </div>
+      </div>
+
+      {/* MODALS */}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <ConfirmModal 
+        isOpen={confirmState.isOpen} 
+        title={confirmState.title} 
+        message={confirmState.message} 
+        confirmText={confirmState.confirmText}
+        isDestructive={confirmState.isDestructive}
+        onConfirm={confirmState.onConfirm}
+        onClose={() => setConfirmState(prev => ({...prev, isOpen: false}))} 
+      />
     </div>
   );
 };
 
 export default Campaigns;
-
-// Modal de confirmación
-// Nota: colocado al final del componente (retorno JSX)
