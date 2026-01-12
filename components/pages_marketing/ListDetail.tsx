@@ -21,7 +21,7 @@ const ListDetail: React.FC = () => {
   const [members, setMembers] = useState<ListMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'MEMBERS' | 'SETTINGS'>('MEMBERS');
-  
+
   // Member View State
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<'ALL' | 'ACTIVE' | 'UNSUBSCRIBED' | 'SUBSCRIBED'>('ALL');
@@ -35,7 +35,7 @@ const ListDetail: React.FC = () => {
 
   // Add Member Modal State
   const [isAddMemberModalOpen, setIsAddMemberModalOpen] = useState(false);
-  
+
   // Confirmation Modal State
   const [showConfirm, setShowConfirm] = useState(false);
   const [pendingAction, setPendingAction] = useState<{
@@ -53,7 +53,7 @@ const ListDetail: React.FC = () => {
 
   const loadListData = async () => {
     if (!id || !user) return;
-    
+
     try {
       setLoading(true);
       
@@ -96,14 +96,12 @@ const ListDetail: React.FC = () => {
   }, [editForm, originalForm]);
 
   // --- Logic for Filtering & Grouping ---
-  // MOVED UP to avoid React Error #310 (Hook called conditionally)
-  // Fix: Explicitly type the variable instead of relying on useMemo generic which can be flaky in TSX
   const processedMembers: Record<string, ListMember[]> = useMemo(() => {
     // 1. Filter
     let result = members.filter(m => {
       const fullName = m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim();
       const matchesSearch = fullName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            (m.email || '').toLowerCase().includes(searchQuery.toLowerCase());
+                           (m.email || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = filterStatus === 'ALL' || m.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
@@ -151,7 +149,7 @@ const ListDetail: React.FC = () => {
     if (!id || !user) return;
 
     console.log('💾 Enviando actualización de lista:', { id_list: id, id_user: user.id_user, id_tenant: user.id_tenant, ...editForm });
-    
+
     try {
       const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/lists/update`, {
         method: 'POST',
@@ -195,41 +193,27 @@ const ListDetail: React.FC = () => {
       }
       return u;
     }));
-    // Note: In a real app, this should also trigger "unsaved changes" if not immediate
   };
 
   const handleRemoveMember = (memberId: string, memberName: string) => {
-    console.log('🗑️ handleRemoveMember llamado:', { memberId, memberName });
-    if (!memberId || memberId.trim() === '') {
-      console.error('❌ memberId inválido:', memberId);
-      return;
-    }
+    if (!memberId || memberId.trim() === '') return;
     setPendingAction({ type: 'remove', memberId, memberName });
     setShowConfirm(true);
   };
 
   const handleStatusChange = (memberId: string, memberName: string, newStatus: 'SUBSCRIBED' | 'UNSUBSCRIBED') => {
-    console.log('🔄 handleStatusChange llamado:', { memberId, memberName, newStatus });
-    if (!memberId || memberId.trim() === '') {
-      console.error('❌ memberId inválido:', memberId);
-      return;
-    }
+    if (!memberId || memberId.trim() === '') return;
     const actionType = newStatus === 'UNSUBSCRIBED' ? 'unsubscribe' : 'resubscribe';
     setPendingAction({ type: actionType, memberId, memberName });
     setShowConfirm(true);
   };
 
   const confirmAction = async () => {
-    console.log('🔐 confirmAction ejecutado:', { pendingAction, id, user: user?.id_user });
-    if (!pendingAction || !id || !user) {
-      console.error('❌ Datos incompletos:', { hasPendingAction: !!pendingAction, hasId: !!id, hasUser: !!user });
-      return;
-    }
+    if (!pendingAction || !id || !user) return;
 
     setIsActionLoading(true);
     try {
       const contactIds = [pendingAction.memberId];
-      console.log('📤 Enviando al API:', { id_list: id, contact_ids: contactIds, action: pendingAction.type });
       
       if (pendingAction.type === 'remove') {
         await marketingApi.manageListMembers(id, contactIds, 'remove');
@@ -239,11 +223,7 @@ const ListDetail: React.FC = () => {
         await marketingApi.manageListMembers(id, contactIds, 'add');
       }
       
-      console.log('✅ Acción completada, refrescando lista...');
-      // Refrescar la lista
       await refreshMembers();
-      
-      // Cerrar modal
       setShowConfirm(false);
       setPendingAction(null);
     } catch (error) {
@@ -267,7 +247,6 @@ const ListDetail: React.FC = () => {
 
   const handleTabChange = (tab: 'MEMBERS' | 'SETTINGS') => {
     if (activeTab === 'SETTINGS' && hasUnsavedChanges && tab !== 'SETTINGS') {
-      // No permitir cambiar si hay cambios sin guardar
       return;
     }
     setActiveTab(tab);
@@ -286,9 +265,9 @@ const ListDetail: React.FC = () => {
 
   const getGroupTitle = (key: string) => {
     if (groupBy === 'STATUS') {
-       if (key === 'SUBSCRIBED') return 'Suscritos';
-       if (key === 'UNSUBSCRIBED') return 'Desuscritos';
-       if (key === 'BOUNCED') return 'Rebotados';
+      if (key === 'SUBSCRIBED') return 'Suscritos';
+      if (key === 'UNSUBSCRIBED') return 'Desuscritos';
+      if (key === 'BOUNCED') return 'Rebotados';
     }
     return key;
   };
@@ -296,31 +275,21 @@ const ListDetail: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2 text-sm text-slate-500 mb-2">
-          <Link to="/app/marketing/lists" className="hover:text-blue-600">Listas</Link>
-          <i className="fa-solid fa-chevron-right text-[10px]"></i>
-          <span className="text-slate-800 font-medium">Detalle</span>
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 pt-2">
+        <div>
+          <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+            {list.name}
+            <span className={`text-xs px-2 py-0.5 rounded border uppercase tracking-wide ${ list.visibility === 'SHARED' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' :  list.visibility === 'PUBLIC' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-600 border-slate-100' }`}>
+              {list.visibility}
+            </span>
+          </h2>
+          <p className="text-slate-500 mt-1">{list.description || 'Sin descripción'}</p>
         </div>
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-           <div>
-             <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-               {list.name}
-               <span className={`text-xs px-2 py-0.5 rounded border uppercase tracking-wide ${
-                  list.visibility === 'SHARED' ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 
-                  list.visibility === 'PUBLIC' ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-600 border-slate-100'
-               }`}>
-                 {list.visibility}
-               </span>
-             </h2>
-             <p className="text-slate-500 mt-1">{list.description || 'Sin descripción'}</p>
-           </div>
-           <div className="flex gap-3">
-              <div className="text-right px-4 py-1 bg-white border border-slate-200 rounded-lg shadow-sm">
-                 <p className="text-xs text-slate-500 font-bold uppercase">Miembros</p>
-                 <p className="text-xl font-bold text-slate-800">{members.length}</p>
-              </div>
-           </div>
+        <div className="flex gap-3">
+          <div className="text-right px-4 py-1 bg-white border border-slate-200 rounded-lg shadow-sm">
+            <p className="text-xs text-slate-500 font-bold uppercase">Miembros</p>
+            <p className="text-xl font-bold text-slate-800">{members.length}</p>
+          </div>
         </div>
       </div>
 
@@ -338,7 +307,7 @@ const ListDetail: React.FC = () => {
               onClick={() => handleTabChange('SETTINGS')}
               className={`pb-3 text-sm font-medium border-b-2 transition-colors ${activeTab === 'SETTINGS' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
             >
-              <i className="fa-solid fa-gear mr-2"></i> Configuración y Acceso
+              <i className="fa-solid fa-gear mr-2"></i> Configuración
               {hasUnsavedChanges && <span className="ml-2 w-2 h-2 bg-amber-500 rounded-full inline-block mb-0.5"></span>}
             </button>
           )}
@@ -492,18 +461,18 @@ const ListDetail: React.FC = () => {
         )}
 
         {activeTab === 'SETTINGS' && (
-          <div className="space-y-6">
+          <div className="max-w-3xl mx-auto space-y-6">
              {/* Unsaved Changes Banner */}
              {hasUnsavedChanges && (
-               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between animate-fadeIn">
+               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4 animate-fadeIn">
                   <div className="flex items-center gap-3">
                     <i className="fa-solid fa-triangle-exclamation text-amber-500 text-xl"></i>
                     <div>
                       <p className="font-bold text-amber-800 text-sm">Cambios sin guardar</p>
-                      <p className="text-xs text-amber-700">Tienes modificaciones pendientes en la configuración de la lista.</p>
+                      <p className="text-xs text-amber-700">Tienes modificaciones pendientes en la configuración.</p>
                     </div>
                   </div>
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 w-full sm:w-auto justify-end">
                     <button 
                       onClick={() => setEditForm(originalForm)}
                       className="text-sm font-medium text-amber-700 hover:text-amber-900"
@@ -520,107 +489,118 @@ const ListDetail: React.FC = () => {
                </div>
              )}
 
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* General Info Form */}
-                <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-                    <h3 className="font-bold text-slate-800 mb-6 pb-2 border-b border-slate-100">Información General</h3>
-                    <form onSubmit={handleUpdateList} className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Nombre de la lista</label>
-                        <input 
-                          type="text" 
-                          className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none"
-                          value={editForm.name}
-                          onChange={(e) => setEditForm({...editForm, name: e.target.value})}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Descripción</label>
-                        <textarea 
-                          rows={3}
-                          className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none resize-none"
-                          value={editForm.description}
-                          onChange={(e) => setEditForm({...editForm, description: e.target.value})}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Visibilidad</label>
-                        <div className="flex gap-4">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input 
-                                type="radio" 
-                                name="visibility" 
-                                value="PRIVATE" 
-                                checked={editForm.visibility === 'PRIVATE'}
-                                onChange={(e) => setEditForm({...editForm, visibility: e.target.value})}
-                                className="text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-sm text-slate-700">Privada</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                              <input 
-                                type="radio" 
-                                name="visibility" 
-                                value="PUBLIC_TENANT" 
-                                checked={editForm.visibility === 'PUBLIC_TENANT'}
-                                onChange={(e) => setEditForm({...editForm, visibility: e.target.value})}
-                                className="text-blue-600 focus:ring-blue-500"
-                              />
-                              <span className="text-sm text-slate-700">Pública en la Empresa</span>
-                            </label>
-                        </div>
-                      </div>
-                      <div className="pt-4 flex justify-end">
-                        <button 
-                          type="submit" 
-                          disabled={!hasUnsavedChanges}
-                          className={`px-6 py-2 font-medium rounded-lg transition-colors ${
-                            hasUnsavedChanges 
-                             ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-sm' 
-                             : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                          }`}
-                        >
-                          Guardar Cambios
-                        </button>
-                      </div>
-                    </form>
+            {/* General Info Form */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sm:p-8">
+                <div className="mb-6 pb-4 border-b border-slate-100">
+                    <h3 className="text-lg font-bold text-slate-800">Información General</h3>
+                    <p className="text-sm text-slate-500">Actualiza los detalles básicos de esta lista de contactos.</p>
                 </div>
-
-                {/* Sharing Settings */}
-                <div className={`bg-white rounded-xl border border-slate-200 shadow-sm p-6 ${editForm.visibility !== 'PUBLIC_TENANT' ? 'opacity-50 pointer-events-none' : ''}`}>
-                    <h3 className="font-bold text-slate-800 mb-2">Acceso Compartido</h3>
-                    <p className="text-xs text-slate-500 mb-6 pb-2 border-b border-slate-100">Selecciona los colegas que pueden ver y editar esta lista.</p>
-                    
-                    <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
-                      {sharedUsers.map(user => (
-                        <div key={user.id_user} className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full bg-slate-200" />
-                              <div className="leading-tight">
-                                <p className="text-sm font-semibold text-slate-700">{user.name}</p>
-                                <p className="text-[10px] text-slate-400">{user.email}</p>
-                              </div>
-                            </div>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input 
-                                type="checkbox" 
-                                className="sr-only peer"
-                                checked={user.has_access}
-                                onChange={() => handleToggleShare(user.id_user)}
-                              />
-                              <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                            </label>
-                        </div>
-                      ))}
+                
+                <form onSubmit={handleUpdateList} className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Nombre de la lista</label>
+                    <input 
+                      type="text" 
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none transition-shadow"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                      placeholder="Ej. Clientes Potenciales Q1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1.5">Descripción</label>
+                    <textarea 
+                      rows={4}
+                      className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-1 focus:ring-blue-500 outline-none resize-none transition-shadow"
+                      value={editForm.description}
+                      onChange={(e) => setEditForm({...editForm, description: e.target.value})}
+                      placeholder="Describe el propósito de esta lista..."
+                    />
+                  </div>
+                  
+                  <div className="pt-2">
+                    <label className="block text-sm font-medium text-slate-700 mb-3">Visibilidad</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${editForm.visibility === 'PRIVATE' ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                          <div className="mt-0.5">
+                            <input 
+                              type="radio" 
+                              name="visibility" 
+                              value="PRIVATE" 
+                              checked={editForm.visibility === 'PRIVATE'}
+                              onChange={(e) => setEditForm({...editForm, visibility: e.target.value})}
+                              className="text-blue-600 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                             <span className="block text-sm font-semibold text-slate-800">Privada</span>
+                             <span className="block text-xs text-slate-500 mt-0.5">Solo tú y los administradores pueden verla.</span>
+                          </div>
+                        </label>
+                        
+                        <label className={`flex items-start gap-3 p-4 rounded-xl border cursor-pointer transition-all ${editForm.visibility === 'PUBLIC_TENANT' ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+                          <div className="mt-0.5">
+                            <input 
+                              type="radio" 
+                              name="visibility" 
+                              value="PUBLIC_TENANT" 
+                              checked={editForm.visibility === 'PUBLIC_TENANT'}
+                              onChange={(e) => setEditForm({...editForm, visibility: e.target.value})}
+                              className="text-blue-600 focus:ring-blue-500"
+                            />
+                          </div>
+                          <div>
+                             <span className="block text-sm font-semibold text-slate-800">Pública en la Empresa</span>
+                             <span className="block text-xs text-slate-500 mt-0.5">Visible para todos los miembros de tu organización.</span>
+                          </div>
+                        </label>
                     </div>
-                    
-                    {editForm.visibility !== 'PUBLIC_TENANT' && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-10">
-                        <span className="text-sm font-bold text-slate-600 bg-white px-3 py-1 rounded shadow-sm border">Solo disponible en modo Pública en la Empresa</span>
-                      </div>
-                    )}
+                  </div>
+
+                  <div className="pt-6 flex justify-end border-t border-slate-100 mt-6">
+                    <button 
+                      type="submit" 
+                      disabled={!hasUnsavedChanges}
+                      className={`px-6 py-2.5 font-medium rounded-lg transition-colors shadow-sm ${
+                        hasUnsavedChanges 
+                         ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                         : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      }`}
+                    >
+                      Guardar Cambios
+                    </button>
+                  </div>
+                </form>
+            </div>
+
+            {/* Sharing Settings (HIDDEN FOR NOW as requested) */}
+            <div className="hidden bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                <h3 className="font-bold text-slate-800 mb-2">Acceso Compartido</h3>
+                <p className="text-xs text-slate-500 mb-6 pb-2 border-b border-slate-100">Selecciona los colegas que pueden ver y editar esta lista.</p>
+                
+                <div className={`space-y-4 max-h-[300px] overflow-y-auto pr-2 ${editForm.visibility !== 'PUBLIC_TENANT' ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {sharedUsers.map(user => (
+                    <div key={user.id_user} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <img src={user.avatar || 'https://via.placeholder.com/32'} alt={user.name} className="w-8 h-8 rounded-full bg-slate-200" />
+                          <div className="leading-tight">
+                            <p className="text-sm font-semibold text-slate-700">{user.name}</p>
+                            <p className="text-[10px] text-slate-400">{user.email}</p>
+                          </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                            type="checkbox" 
+                            className="sr-only peer"
+                            checked={user.has_access}
+                            onChange={() => handleToggleShare(user.id_user)}
+                          />
+                          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                  ))}
                 </div>
-             </div>
+            </div>
           </div>
         )}
       </div>

@@ -117,14 +117,14 @@ export const marketingApi = {
   },
 
   /**
-   * Eliminar una lista
+   * Eliminar una lista (nuevo endpoint)
    */
-  async deleteList(id_list: string, id_user: string): Promise<void> {
+  async deleteList(id_list: string, id_tenant: string, id_user: string): Promise<void> {
     try {
-      await fetch(`${API_BASE}/api/marketing/lists`, {
-        method: 'DELETE', // Asegúrate de configurar DELETE en n8n
+      await fetch(`${API_BASE}/api/marketing/lists/delete`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_list, id_user }),
+        body: JSON.stringify({ id_list, id_tenant, id_user }),
       });
     } catch (error) {
       console.error('❌ Error deleteList:', error);

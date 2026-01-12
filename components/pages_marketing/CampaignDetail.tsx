@@ -3,13 +3,28 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { MarketingCampaign } from '../../types';
 import { marketingApi } from '../../services/marketingApi';
+import { useAuth } from '../../contexts/AuthContext';
+import ConfirmModal from '../ConfirmModal';
+import Toast from '../Toast';
 
 const CampaignDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  
   const [campaign, setCampaign] = useState<MarketingCampaign | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'STATS' | 'PREVIEW'>('STATS');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  
+  const [confirmState, setConfirmState] = useState({ 
+    isOpen: false, 
+    title: '', 
+    message: '', 
+    confirmText: 'Confirmar',
+    isDestructive: false,
+    onConfirm: async () => {}, 
+  });
 
   useEffect(() => {
     loadCampaignDetail();
@@ -17,39 +32,30 @@ const CampaignDetail: React.FC = () => {
 
   const loadCampaignDetail = async () => {
     if (!id) return;
-    
     try {
       setIsLoading(true);
       const data = await marketingApi.getCampaignDetail(id);
       setCampaign(data);
     } catch (error) {
-      console.error('Error al cargar detalle de campaña:', error);
+      console.error('Error al cargar detalle:', error);
+      setToast({ message: 'Error al cargar la campaña', type: 'error' });
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="p-8 text-center text-slate-500">
-        <i className="fa-solid fa-spinner fa-spin mr-2"></i>
-        Cargando campaña...
-      </div>
-    );
-  }
-
-  if (!campaign) {
-    return <div className="p-8 text-center text-slate-500">Campaña no encontrada</div>;
-  }
-
+  // --- HELPERS ---
   const normalizeStatus = (s?: string) => (s === 'PAUSE' ? 'PAUSED' : s || 'DRAFT');
+  
   const toNumber = (v: any): number => {
     if (v === null || v === undefined) return 0;
-    if (typeof v === 'number') return v;
     const n = parseFloat(String(v));
     return isNaN(n) ? 0 : n;
   };
+
+  // --- LOGICA DE PROGRESO ---
   const progress = (() => {
+    if (!campaign) return 0;
     const p = toNumber(campaign.progress_percentage);
     if (p > 0) return Math.max(0, Math.min(100, p));
     const total = toNumber(campaign.total_target);
@@ -59,271 +65,440 @@ const CampaignDetail: React.FC = () => {
     return total > 0 ? Math.round((processed / total) * 100) : 0;
   })();
 
-  const handleDelete = () => {
-    if (confirm("¿Estás seguro de que deseas eliminar esta campaña? Esta acción no se puede deshacer.")) {
-      // In a real app, you would make an API call here.
-      alert("Campaña eliminada correctamente.");
-      navigate('/app/marketing/campaigns');
+  // --- ACCIONES ---
+
+  const handleAction = (actionType: 'delete' | 'launch' | 'pause' | 'resume') => {
+    if (!campaign || !user?.id_tenant || !user?.id_user) return;
+
+    // Validación específica para Lanzar
+    if (actionType === 'launch') {
+        const totalAudience = toNumber(campaign.total_target);
+        if (totalAudience <= 0) {
+            alert("⚠️ No puedes lanzar esta campaña.\n\nLa audiencia es 0. Asegúrate de asignar listas de distribución y que estas contengan contactos activos.");
+            return;
+        }
     }
+
+    const config = {
+        delete: {
+            title: 'Eliminar Campaña',
+            message: '¿Estás seguro de eliminar esta campaña permanentemente?',
+            confirmText: 'Eliminar',
+            isDestructive: true,
+            fn: async () => {
+                await marketingApi.manageCampaign('delete', {
+                    id_tenant: user.id_tenant,
+                    id_user: user.id_user,
+                    id_campaign: campaign.id_campaign
+                });
+                navigate('/app/marketing/campaigns');
+            }
+        },
+        launch: {
+            title: 'Lanzar Campaña',
+            message: `Se enviará a ${campaign.total_target} destinatarios. ¿Confirmar envío?`,
+            confirmText: 'Enviar Ahora',
+            isDestructive: false,
+            fn: async () => {
+                await marketingApi.campaignAction(campaign.id_campaign, user.id_tenant, user.id_user, 'send');
+                setToast({ message: 'Campaña iniciada', type: 'success' });
+                loadCampaignDetail();
+            }
+        },
+        pause: {
+            title: 'Pausar Campaña',
+            message: 'Se detendrá el envío de correos pendientes.',
+            confirmText: 'Pausar',
+            isDestructive: false,
+            fn: async () => {
+                await marketingApi.campaignAction(campaign.id_campaign, user.id_tenant, user.id_user, 'pause');
+                setToast({ message: 'Campaña pausada', type: 'success' });
+                loadCampaignDetail();
+            }
+        },
+        resume: {
+            title: 'Reanudar Campaña',
+            message: 'Se continuará con el envío de correos pendientes.',
+            confirmText: 'Reanudar',
+            isDestructive: false,
+            fn: async () => {
+                await marketingApi.campaignAction(campaign.id_campaign, user.id_tenant, user.id_user, 'send');
+                setToast({ message: 'Campaña reanudada', type: 'success' });
+                loadCampaignDetail();
+            }
+        }
+    };
+
+    const selected = config[actionType];
+
+    setConfirmState({
+        isOpen: true,
+        title: selected.title,
+        message: selected.message,
+        confirmText: selected.confirmText,
+        isDestructive: selected.isDestructive,
+        onConfirm: async () => {
+            try {
+                await selected.fn();
+            } catch (error) {
+                setToast({ message: 'Error al procesar la acción', type: 'error' });
+            } finally {
+                setConfirmState(prev => ({...prev, isOpen: false}));
+            }
+        }
+    });
   };
 
-  // Mock timeline data for this campaign
-  const data = [
-    { time: '09:00', opens: 0 },
-    { time: '10:00', opens: 120 },
-    { time: '11:00', opens: 350 },
-    { time: '12:00', opens: 480 },
-    { time: '13:00', opens: 550 },
-    { time: '14:00', opens: 600 },
-    { time: '15:00', opens: 620 },
+  // --- RENDERIZADO CONDICIONAL DEL BOTÓN PRINCIPAL ---
+  const renderMainActionButton = () => {
+    if (!campaign) return null;
+    const status = normalizeStatus(campaign.status);
+    const audienceSize = toNumber(campaign.total_target);
+    const hasAudience = audienceSize > 0;
+
+    // 1. DRAFT -> Botón Lanzar
+    if (status === 'DRAFT') {
+        return (
+            <button 
+                onClick={() => handleAction('launch')}
+                className={`px-5 py-2.5 rounded-lg font-bold shadow-sm flex items-center gap-2 transition-all ${
+                    hasAudience 
+                    ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-200' 
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+                title={hasAudience ? 'Iniciar envío masivo' : 'Agrega listas con contactos para enviar'}
+            >
+                <i className="fa-solid fa-rocket"></i>
+                Lanzar Campaña
+            </button>
+        );
+    }
+
+    // 2. SENDING -> Botón Pausar
+    if (status === 'SENDING' || status === 'PROCESSING') {
+        return (
+            <button 
+                onClick={() => handleAction('pause')}
+                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow-sm shadow-amber-200 transition-all flex items-center gap-2"
+            >
+                <i className="fa-solid fa-pause"></i>
+                Pausar Envío
+            </button>
+        );
+    }
+
+    // 3. PAUSED -> Botón Reanudar
+    if (status === 'PAUSED') {
+        return (
+            <button 
+                onClick={() => handleAction('resume')}
+                className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-sm shadow-green-200 transition-all flex items-center gap-2"
+            >
+                <i className="fa-solid fa-play"></i>
+                Reanudar Envío
+            </button>
+        );
+    }
+
+    // 4. COMPLETED / FAILED -> No botón principal (o tal vez duplicar)
+    return null;
+  };
+
+  if (isLoading) {
+    return (
+      <div className="h-96 flex flex-col items-center justify-center text-slate-400">
+        <i className="fa-solid fa-circle-notch fa-spin text-3xl mb-3 text-brand-500"></i>
+        <p>Cargando detalles...</p>
+      </div>
+    );
+  }
+
+  if (!campaign) {
+    return <div className="p-8 text-center text-slate-500">Campaña no encontrada</div>;
+  }
+
+  // Mock data para el gráfico (se podría conectar a datos reales si el backend los provee por hora)
+  const chartData = [
+    { time: '00:00', opens: 0 }, { time: '04:00', opens: 0 },
+    { time: '08:00', opens: Math.floor(toNumber(campaign.open_count) * 0.2) },
+    { time: '12:00', opens: Math.floor(toNumber(campaign.open_count) * 0.6) },
+    { time: '16:00', opens: Math.floor(toNumber(campaign.open_count) * 0.9) },
+    { time: '20:00', opens: toNumber(campaign.open_count) },
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-         <div className="flex items-center gap-4">
-             <Link to="/app/marketing/campaigns" className="text-slate-400 hover:text-slate-600">
-               <i className="fa-solid fa-arrow-left text-lg"></i>
-             </Link>
-             <div>
-                <div className="flex items-center gap-3">
-                  <h2 className="text-2xl font-bold text-slate-800">{campaign.name}</h2>
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium border ${
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+         {/* Info Izquierda */}
+         <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight">{campaign.name}</h2>
+                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${
                     normalizeStatus(campaign.status) === 'SENT' || normalizeStatus(campaign.status) === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-200' : 
                     normalizeStatus(campaign.status) === 'DRAFT' ? 'bg-slate-100 text-slate-600 border-slate-200' : 
                     normalizeStatus(campaign.status) === 'PAUSED' ? 'bg-amber-100 text-amber-700 border-amber-200' :
-                    normalizeStatus(campaign.status) === 'FAILED' ? 'bg-red-100 text-red-600 border-red-200' :
-                    'bg-blue-100 text-blue-700 border-blue-200'
-                  }`}>
-                    {normalizeStatus(campaign.status)}
-                  </span>
+                    normalizeStatus(campaign.status) === 'SENDING' ? 'bg-blue-100 text-blue-700 border-blue-200 animate-pulse' :
+                    'bg-red-100 text-red-600 border-red-200'
+                }`}>
+                    {normalizeStatus(campaign.status) === 'SENDING' ? 'Enviando...' : normalizeStatus(campaign.status)}
+                </span>
+            </div>
+            
+            <p className="text-slate-500 text-sm mb-3">
+                <span className="font-semibold text-slate-700">Asunto:</span> {campaign.subject}
+            </p>
+
+            <div className="flex items-center gap-4 text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                    {campaign.avatar_url ? (
+                        <img src={campaign.avatar_url} alt="User" className="w-5 h-5 rounded-full" />
+                    ) : (
+                        <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[10px]">
+                            {(campaign.created_by_name || 'U').charAt(0)}
+                        </div>
+                    )}
+                    <span>{campaign.created_by_name || 'Desconocido'}</span>
                 </div>
-                <p className="text-slate-500 text-sm">Asunto: {campaign.subject}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  {campaign.avatar_url ? (
-                    <img src={campaign.avatar_url} alt={campaign.created_by_name || 'Usuario'} className="w-6 h-6 rounded-full" />
-                  ) : (
-                    <div className="w-6 h-6 rounded-full bg-slate-200" />
-                  )}
-                  <span className="text-xs text-slate-500">Creado por: <span className="font-medium text-slate-700">{campaign.created_by_name || 'N/A'}</span></span>
-                </div>
-                <div className="mt-3">
-                  <div className="h-2 bg-slate-100 rounded overflow-hidden max-w-md">
-                    <div className={`h-2 ${progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }} />
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">Progreso: {progress}%</p>
-                </div>
-             </div>
+                <span>•</span>
+                <span>Creado: {new Date(campaign.created_at).toLocaleDateString()}</span>
+            </div>
          </div>
 
-         <div className="flex gap-3">
+         {/* Acciones Derecha */}
+         <div className="flex flex-wrap items-center gap-3">
+            {/* Botón Principal (Lanzar/Pausar/Reanudar) */}
+            {renderMainActionButton()}
+
+            {/* Botones Secundarios */}
             <Link 
                 to={`/app/marketing/campaigns/edit/${id}`}
-                className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition-colors flex items-center gap-2"
+                className="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition-colors flex items-center gap-2"
             >
-                <i className="fa-regular fa-pen-to-square"></i> Editar
+                <i className="fa-regular fa-pen-to-square"></i> <span className="hidden sm:inline">Editar</span>
             </Link>
-            <button 
-                onClick={handleDelete}
-                className="px-4 py-2 bg-white border border-slate-300 text-red-600 rounded-lg hover:bg-red-50 font-medium transition-colors flex items-center gap-2"
-            >
-                <i className="fa-regular fa-trash-can"></i> Eliminar
-            </button>
+            
+            {(normalizeStatus(campaign.status) === 'DRAFT' || normalizeStatus(campaign.status) === 'COMPLETED' || normalizeStatus(campaign.status) === 'FAILED') && (
+                <button 
+                    onClick={() => handleAction('delete')}
+                    className="px-4 py-2.5 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-medium transition-colors flex items-center gap-2"
+                >
+                    <i className="fa-regular fa-trash-can"></i>
+                </button>
+            )}
          </div>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-           <p className="text-xs font-bold text-slate-500 uppercase">Enviados</p>
-           <p className="text-3xl font-bold text-slate-800 mt-2">{toNumber(campaign.sent_count || campaign.processed_count).toLocaleString()}</p>
-           <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
-             <i className="fa-solid fa-check-circle"></i> {(() => {
-               const sent = toNumber(campaign.sent_count || campaign.processed_count);
-               const failed = toNumber(campaign.failed_count);
-               return sent > 0 ? (100 - (failed / sent) * 100).toFixed(1) : '0.0';
-             })()}% Entregabilidad
-           </p>
+      {/* Progress Bar (Solo si no es Draft) */}
+      {normalizeStatus(campaign.status) !== 'DRAFT' && (
+          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+              <div className="flex justify-between text-xs font-bold text-slate-600 mb-2">
+                  <span>Progreso del envío</span>
+                  <span>{progress}% ({toNumber(campaign.sent_count) + toNumber(campaign.failed_count)} / {campaign.total_target})</span>
+              </div>
+              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-1000 ${
+                        normalizeStatus(campaign.status) === 'PAUSED' ? 'bg-amber-400 striped-bar' : 
+                        progress === 100 ? 'bg-green-500' : 'bg-blue-500'
+                    }`} 
+                    style={{ width: `${progress}%` }} 
+                  />
+              </div>
+          </div>
+      )}
+
+      {/* Stats Overview Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Enviados</p>
+           <div className="mt-2">
+                <p className="text-2xl font-bold text-slate-800">{toNumber(campaign.sent_count || campaign.processed_count).toLocaleString()}</p>
+                <p className="text-xs text-green-600 font-bold mt-1">
+                    {(() => {
+                        const sent = toNumber(campaign.sent_count || campaign.processed_count);
+                        const total = toNumber(campaign.total_target);
+                        return total > 0 ? ((sent / total) * 100).toFixed(1) : '0.0';
+                    })()}% del objetivo
+                </p>
+           </div>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-           <p className="text-xs font-bold text-slate-500 uppercase">Aperturas</p>
-           <p className="text-3xl font-bold text-brand-600 mt-2">{toNumber(campaign.open_count).toLocaleString()}</p>
-           <p className="text-xs text-slate-500 mt-1">
-             Tasa: {campaign.open_rate ? toNumber(campaign.open_rate).toFixed(1) : (() => {
-               const sent = toNumber(campaign.sent_count || campaign.processed_count);
-               const opened = toNumber(campaign.open_count);
-               return sent > 0 ? ((opened / sent) * 100).toFixed(1) : '0.0';
-             })()}%
-           </p>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Aperturas Únicas</p>
+           <div className="mt-2">
+                <p className="text-2xl font-bold text-brand-600">{toNumber(campaign.open_count).toLocaleString()}</p>
+                <p className="text-xs text-slate-500 mt-1">
+                    <span className="font-bold text-slate-700">{campaign.open_rate ? toNumber(campaign.open_rate).toFixed(1) : '0.0'}%</span> Tasa de apertura
+                </p>
+           </div>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-           <p className="text-xs font-bold text-slate-500 uppercase">Clicks</p>
-           <p className="text-3xl font-bold text-blue-600 mt-2">{toNumber(campaign.click_count).toLocaleString()}</p>
-           <p className="text-xs text-slate-500 mt-1">
-             CTR: {(() => {
-               const sent = toNumber(campaign.sent_count || campaign.processed_count);
-               const clicked = toNumber(campaign.click_count);
-               return sent > 0 ? ((clicked / sent) * 100).toFixed(1) : '0.0';
-             })()}%
-           </p>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Clics Únicos</p>
+           <div className="mt-2">
+                <p className="text-2xl font-bold text-blue-500">{toNumber(campaign.click_count).toLocaleString()}</p>
+                <p className="text-xs text-slate-500 mt-1">
+                    <span className="font-bold text-slate-700">{(() => {
+                        const sent = toNumber(campaign.sent_count);
+                        const clicked = toNumber(campaign.click_count);
+                        return sent > 0 ? ((clicked / sent) * 100).toFixed(1) : '0.0';
+                    })()}%</span> CTR
+                </p>
+           </div>
         </div>
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-           <p className="text-xs font-bold text-slate-500 uppercase">Rebotes</p>
-           <p className="text-3xl font-bold text-red-500 mt-2">{toNumber(campaign.failed_count).toLocaleString()}</p>
-           <p className="text-xs text-slate-500 mt-1">
-             {(() => {
-               const sent = toNumber(campaign.sent_count || campaign.processed_count);
-               const failed = toNumber(campaign.failed_count);
-               return sent > 0 ? ((failed / sent) * 100).toFixed(1) : '0.0';
-             })()}% Tasa de rebote
-           </p>
+        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Rebotes / Fallos</p>
+           <div className="mt-2">
+                <p className="text-2xl font-bold text-red-500">{toNumber(campaign.failed_count).toLocaleString()}</p>
+                <p className="text-xs text-slate-500 mt-1">
+                    <span className="font-bold text-slate-700">{(() => {
+                        const sent = toNumber(campaign.sent_count) + toNumber(campaign.failed_count);
+                        const failed = toNumber(campaign.failed_count);
+                        return sent > 0 ? ((failed / sent) * 100).toFixed(1) : '0.0';
+                    })()}%</span> Tasa de rebote
+                </p>
+           </div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-        <div className="border-b border-slate-200">
-          <div className="flex gap-1 px-6">
+      {/* Tabs & Content */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="border-b border-slate-200 bg-slate-50/50">
+          <div className="flex gap-1 px-4 pt-2">
             <button
               onClick={() => setActiveTab('STATS')}
-              className={`px-4 py-3 font-medium text-sm transition-colors relative ${
+              className={`px-4 py-3 font-bold text-sm transition-colors border-b-2 ${
                 activeTab === 'STATS'
-                  ? 'text-brand-600 border-b-2 border-brand-600'
-                  : 'text-slate-500 hover:text-slate-700'
+                  ? 'text-brand-600 border-brand-600 bg-white rounded-t-lg'
+                  : 'text-slate-500 border-transparent hover:text-slate-700'
               }`}
             >
-              <i className="fa-solid fa-chart-line mr-2"></i>
-              Resultados
+              <i className="fa-solid fa-chart-line mr-2"></i> Resultados
             </button>
             <button
               onClick={() => setActiveTab('PREVIEW')}
-              className={`px-4 py-3 font-medium text-sm transition-colors relative ${
+              className={`px-4 py-3 font-bold text-sm transition-colors border-b-2 ${
                 activeTab === 'PREVIEW'
-                  ? 'text-brand-600 border-b-2 border-brand-600'
-                  : 'text-slate-500 hover:text-slate-700'
+                  ? 'text-brand-600 border-brand-600 bg-white rounded-t-lg'
+                  : 'text-slate-500 border-transparent hover:text-slate-700'
               }`}
             >
-              <i className="fa-regular fa-eye mr-2"></i>
-              Previsualización
+              <i className="fa-regular fa-eye mr-2"></i> Diseño
             </button>
           </div>
         </div>
 
         <div className="p-6">
           {activeTab === 'STATS' ? (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Main Chart */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Gráfico */}
                 <div className="lg:col-span-2">
-                  <h3 className="font-bold text-slate-800 mb-6">Actividad en tiempo real (24h)</h3>
-                  <div className="h-80">
+                  <h3 className="font-bold text-slate-800 mb-6 text-sm uppercase tracking-wide">Actividad de Aperturas</h3>
+                  <div className="h-72 w-full bg-slate-50 rounded-lg border border-slate-100 p-4">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={data}>
+                      <AreaChart data={chartData}>
                         <defs>
                           <linearGradient id="gradOpen" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2}/>
-                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                            <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
                           </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                        <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 12}} />
+                        <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
                         <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                        <Area type="monotone" dataKey="opens" stroke="#6366f1" strokeWidth={3} fill="url(#gradOpen)" />
+                        <Area type="monotone" dataKey="opens" stroke="#3B82F6" strokeWidth={3} fill="url(#gradOpen)" name="Aperturas" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
 
-                {/* Right Details */}
+                {/* Detalles Técnicos */}
                 <div className="space-y-6">
                   <div>
-                    <h3 className="font-bold text-slate-800 mb-4">Configuración</h3>
-                    <div className="space-y-4 text-sm">
+                    <h3 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wide">Configuración</h3>
+                    <div className="space-y-3 text-sm">
                       <div className="flex justify-between border-b border-slate-100 pb-2">
-                        <span className="text-slate-500">Programado para:</span>
-                        <span className="font-medium">{campaign.scheduled_at_local || 'No programado'}</span>
+                        <span className="text-slate-500">Programado:</span>
+                        <span className="font-bold text-slate-700">{campaign.scheduled_at_local ? new Date(campaign.scheduled_at_local).toLocaleString() : 'Inmediato'}</span>
                       </div>
                       <div className="flex justify-between border-b border-slate-100 pb-2">
-                        <span className="text-slate-500">Enviado el:</span>
-                        <span className="font-medium">{campaign.sent_at ? new Date(campaign.sent_at).toLocaleString('es-ES') : 'Pendiente'}</span>
+                        <span className="text-slate-500">Enviado:</span>
+                        <span className="font-bold text-slate-700">{campaign.sent_at ? new Date(campaign.sent_at).toLocaleString() : '-'}</span>
                       </div>
-                      <div className="flex justify-between border-b border-slate-100 pb-2">
-                        <span className="text-slate-500">Remitente:</span>
-                        <span className="font-medium">{campaign.sender_name || campaign.created_by_name || 'N/A'} {campaign.sender_email ? `<${campaign.sender_email}>` : ''}</span>
+                      <div className="flex flex-col border-b border-slate-100 pb-2">
+                        <span className="text-slate-500 mb-1">Remitente:</span>
+                        <span className="font-bold text-slate-800 truncate">{campaign.sender_name}</span>
+                        <span className="text-xs text-slate-400 truncate">{campaign.sender_email}</span>
                       </div>
                       <div className="pt-2">
-                        <span className="text-slate-500 block mb-2">Listas incluidas:</span>
+                        <span className="text-slate-500 block mb-2">Audiencias:</span>
                         <div className="flex flex-wrap gap-2">
                           {campaign.target_lists_display ? (
-                            <span className="px-2 py-1 bg-slate-100 text-slate-600 rounded text-xs">
-                              {campaign.target_lists_display}
-                            </span>
+                            campaign.target_lists_display.split(',').map((list, i) => (
+                                <span key={i} className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded text-xs font-semibold">
+                                {list.trim()}
+                                </span>
+                            ))
                           ) : (
-                            <span className="text-xs text-slate-400 italic">Sin listas asignadas</span>
+                            <span className="text-xs text-red-400 bg-red-50 px-2 py-1 rounded border border-red-100 italic">Sin audiencia</span>
                           )}
                         </div>
                       </div>
-                      <div className="flex justify-between border-b border-slate-100 pb-2">
-                        <span className="text-slate-500">Audiencia Total:</span>
-                        <span className="font-medium">{toNumber(campaign.total_target).toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between border-b border-slate-100 pb-2">
-                        <span className="text-slate-500">Procesados:</span>
-                        <span className="font-medium">{toNumber(campaign.processed_count).toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between pb-2">
-                        <span className="text-slate-500">Restantes:</span>
-                        <span className="font-medium">{toNumber(campaign.remaining_count).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <h3 className="font-bold text-slate-800 mb-4">Enlaces más clicados</h3>
-                    <div className="space-y-3">
-                      <div className="text-center text-sm text-slate-400 py-4">
-                        No hay datos disponibles
-                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
             </div>
           ) : (
-            // Previsualización del correo
-            <div className="space-y-4">
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4">
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-700">De:</span>
-                    <span className="text-slate-600">{campaign.created_by_name || 'Remitente'}</span>
+            // Preview Tab
+            <div className="max-w-3xl mx-auto space-y-4">
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm space-y-2">
+                  <div className="flex gap-2">
+                      <span className="text-slate-500 font-medium w-16 text-right">De:</span>
+                      <span className="text-slate-800 font-bold">{campaign.sender_name} &lt;{campaign.sender_email}&gt;</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-slate-700">Asunto:</span>
-                    <span className="text-slate-600">{campaign.subject}</span>
+                  <div className="flex gap-2">
+                      <span className="text-slate-500 font-medium w-16 text-right">Asunto:</span>
+                      <span className="text-slate-800 font-bold">{campaign.subject}</span>
                   </div>
-                </div>
               </div>
-
-              <div className="bg-white border border-slate-200 rounded-lg p-6 min-h-[400px]">
-                {campaign.html_content ? (
-                  <div 
-                    className="prose max-w-none"
-                    dangerouslySetInnerHTML={{ __html: campaign.html_content }}
-                  />
-                ) : (
-                  <div className="text-center text-slate-400 py-12">
-                    <i className="fa-regular fa-file-lines text-4xl mb-2"></i>
-                    <p>No hay contenido para previsualizar</p>
-                  </div>
-                )}
+              
+              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+                <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex gap-1.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
+                </div>
+                <div className="bg-white p-8 min-h-[500px]">
+                    {campaign.html_content ? (
+                    <iframe 
+                        title="preview"
+                        srcDoc={campaign.html_content}
+                        className="w-full h-[600px] border-none"
+                    />
+                    ) : (
+                    <div className="text-center text-slate-400 py-12">
+                        <i className="fa-regular fa-file-lines text-4xl mb-2"></i>
+                        <p>Sin contenido</p>
+                    </div>
+                    )}
+                </div>
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      
+      <ConfirmModal 
+        isOpen={confirmState.isOpen} 
+        title={confirmState.title} 
+        message={confirmState.message} 
+        confirmText={confirmState.confirmText}
+        isDestructive={confirmState.isDestructive}
+        onConfirm={confirmState.onConfirm}
+        onClose={() => setConfirmState(prev => ({...prev, isOpen: false}))} 
+      />
     </div>
   );
 };
