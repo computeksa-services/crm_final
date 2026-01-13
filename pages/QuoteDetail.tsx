@@ -1529,10 +1529,16 @@ const QuoteDetail: React.FC = () => {
                     </div>
                  </div>
                  <div>
-                    <span className="text-xs text-slate-400 block mb-1">Fecha</span>
-                    <span className="text-slate-700 text-sm font-medium bg-slate-50 px-2 py-1 rounded border border-slate-100 block text-center">
-                        {new Date(quote.fecha_emision).toLocaleDateString()}
-                    </span>
+                  <span className="text-xs text-slate-400 block mb-1">Fecha Emisión</span>
+                  <span className="text-slate-700 text-sm font-medium bg-slate-50 px-2 py-1 rounded border border-slate-100 block text-center">
+                    {quote.fecha_emision_fmt || (quote.fecha_emision ? new Date(quote.fecha_emision).toLocaleDateString() : '')}
+                  </span>
+                 </div>
+                 <div>
+                  <span className="text-xs text-slate-400 block mb-1">Creado</span>
+                  <span className="text-slate-700 text-sm font-medium bg-slate-50 px-2 py-1 rounded border border-slate-100 block text-center">
+                    {quote.created_at_fmt || (quote.created_at ? (new Date(quote.created_at).toLocaleDateString() + ' ' + new Date(quote.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : '')}
+                  </span>
                  </div>
               </div>
             </div>

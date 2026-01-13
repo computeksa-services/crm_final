@@ -25,6 +25,9 @@ const QuoteCreate: React.FC = () => {
   const [quote, setQuote] = useState<Partial<Quote>>({});
   const [newDeal, setNewDeal] = useState<any>({}); 
   const [filteredContacts, setFilteredContacts] = useState<ClientContact[]>([]);
+  const [filteredDeals, setFilteredDeals] = useState<Deal[]>([]);
+  const [ccError, setCcError] = useState<string | null>(null);
+  const [ccInput, setCcInput] = useState('');
   
   // --- ESTADOS DE UI ---
   const [createNewDeal, setCreateNewDeal] = useState(false);
@@ -37,18 +40,20 @@ const QuoteCreate: React.FC = () => {
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [condicionOption, setCondicionOption] = useState<string>('Contado');
 
-  // --- CARGA INICIAL ---
+
+  // --- CARGA INICIAL Y EDICIÓN ---
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
 
     const tenantId = user.id_tenant;
     const userId = user.id_user;
     const queryParams = new URLSearchParams(location.search);
-    
+
     const dealId = queryParams.get('dealId');
     const clientCompanyId = queryParams.get('clientCompanyId');
     const contactId = queryParams.get('contactId');
     const dealName = queryParams.get('dealName');
+    const quoteId = queryParams.get('id');
 
     try {
       setIsLoading(true);
@@ -97,61 +102,73 @@ const QuoteCreate: React.FC = () => {
       setInterestStatuses(interestStatusesData);
       setDealChannels(channelsData);
 
-      // Valores por defecto
-      const defaultInterest = interestStatusesData.find((s: CustomStatus) => s.is_default) || interestStatusesData[0];
-      const defaultChannel = channelsData.find((c: DealChannel) => c.is_default) || channelsData[0];
-
-      // Inicializar Quote (Todos los campos de la BD)
-      const initialQuote: Partial<Quote> = {
-        nombre_cotizacion: dealName ? `Cotización para ${dealName}` : '',
-        id_trato: dealId || '',
-        id_client_company: clientCompanyId || '',
-        id_contact: contactId || '',
-        // id_quote_status se manejará automáticamente como DRAFT en el backend o payload
-        tiempo_entrega: '5-7 días laborables',
-        garantia: '12 meses',
-        validez_oferta: '30 días',
-        condicion_pago: 'Contado',
-        nota: '',
-        mensaje: '',
-        correos_adicionales: '',
-        id_tenant: tenantId,
-        id_user: userId,
-        version: 0,
-        estado_decision: UserDecision.PENDING,
-        total: "$0.00",
-        is_private: false
-      };
-
-      // Inicializar Nuevo Trato
-      setNewDeal({
-        nombre_trato: dealName ? `Trato - ${dealName}` : '',
-        id_client_company: clientCompanyId || '',
-        id_contact: contactId || '',
-        id_interest: (defaultInterest as any)?.id_status || (defaultInterest as any)?.id_interest || '',
-        id_channel: defaultChannel?.id_channel || '',
-        id_tenant: tenantId,
-        id_user_owner: userId,
-        id_user: userId,
-        descripcion: ''
-      });
-
-      if (initialQuote.id_client_company) {
-        setFilteredContacts(contactsData.filter((c: ClientContact) => c.id_client_company === initialQuote.id_client_company));
+      // Si hay id de cotización, cargar datos para edición
+      if (quoteId) {
+        // Obtener datos de la cotización
+        const quoteRes = await fetch(`https://service.computeksa.com/webhook/api/quotes/detail?id_cotizacion=${quoteId}&id_tenant=${tenantId}&id_user=${userId}`);
+        if (!quoteRes.ok) throw new Error('No se pudo cargar la cotización');
+        const quoteText = await quoteRes.text();
+        const quoteData = quoteText ? JSON.parse(quoteText) : null;
+        const q = Array.isArray(quoteData) ? quoteData[0] : quoteData;
+        if (q) {
+          setQuote(q);
+          setCondicionOption(q.condicion_pago && ['Contado','15 días','30 días','60 días','90 días'].includes(q.condicion_pago)
+            ? q.condicion_pago
+            : (q.condicion_pago ? 'OTRO' : 'Contado'));
+          if (q.id_client_company) {
+            setFilteredContacts(contactsData.filter((c: ClientContact) => String(c.id_client_company) === String(q.id_client_company)));
+          }
+        }
+      } else {
+        // Valores por defecto para nueva cotización
+        const defaultInterest = interestStatusesData.find((s: CustomStatus) => s.is_default) || interestStatusesData[0];
+        const defaultChannel = channelsData.find((c: DealChannel) => c.is_default) || channelsData[0];
+        const initialQuote: Partial<Quote> = {
+          nombre_cotizacion: dealName ? `Cotización para ${dealName}` : '',
+          id_trato: dealId || '',
+          id_client_company: clientCompanyId || '',
+          id_contact: contactId || '',
+          tiempo_entrega: '5-7 días laborables',
+          garantia: '12 meses',
+          validez_oferta: '30 días',
+          condicion_pago: 'Contado',
+          nota: '',
+          mensaje: '',
+          correos_adicionales: '',
+          id_tenant: tenantId,
+          id_user: userId,
+          version: 0,
+          estado_decision: UserDecision.PENDING,
+          total: "$0.00",
+          is_private: false
+        };
+        setQuote(initialQuote);
+        setCondicionOption(
+          initialQuote.condicion_pago && ['Contado','15 días','30 días','60 días','90 días'].includes(initialQuote.condicion_pago)
+            ? initialQuote.condicion_pago
+            : (initialQuote.condicion_pago ? 'OTRO' : 'Contado')
+        );
+        if (initialQuote.id_client_company) {
+          setFilteredContacts(contactsData.filter((c: ClientContact) => String(c.id_client_company) === String(initialQuote.id_client_company)));
+          setFilteredDeals(dealsData.filter((d: Deal) => String(d.id_client_company) === String(initialQuote.id_client_company)));
+        }
+        // Inicializar Nuevo Trato
+        setNewDeal({
+          nombre_trato: dealName ? `Trato - ${dealName}` : '',
+          id_client_company: clientCompanyId || '',
+          id_contact: contactId || '',
+          id_interest: (defaultInterest as any)?.id_status || (defaultInterest as any)?.id_interest || '',
+          id_channel: defaultChannel?.id_channel || '',
+          id_tenant: tenantId,
+          id_user_owner: userId,
+          id_user: userId,
+          descripcion: ''
+        });
+        // Si no hay trato en URL y no hay tratos disponibles, forzar creación
+        if (!dealId && dealsData.length === 0) {
+          setCreateNewDeal(true);
+        }
       }
-
-      setQuote(initialQuote);
-      setCondicionOption(
-        initialQuote.condicion_pago && ['Contado','15 días','30 días','60 días','90 días'].includes(initialQuote.condicion_pago)
-          ? initialQuote.condicion_pago
-          : (initialQuote.condicion_pago ? 'OTRO' : 'Contado')
-      );
-      
-      // Si no hay trato en URL y no hay tratos disponibles, forzar creación
-      if (!dealId && dealsData.length === 0) {
-        setCreateNewDeal(true);
-      }
-
     } catch (error: any) {
       console.error("Error loading data:", error);
       setToast({ message: 'Error al cargar datos del sistema.', type: 'error' });
@@ -167,11 +184,41 @@ const QuoteCreate: React.FC = () => {
   // Filtrar contactos al cambiar empresa
   useEffect(() => {
     if (quote?.id_client_company) {
-      setFilteredContacts(contacts.filter(c => c.id_client_company === quote.id_client_company));
+      setFilteredContacts(contacts.filter(c => String(c.id_client_company).trim() === String(quote.id_client_company).trim()));
     } else {
       setFilteredContacts([]);
     }
   }, [quote?.id_client_company, contacts]);
+
+  // Nuevo: Llamar endpoint para tratos de la empresa seleccionada cuando cambia la empresa
+  useEffect(() => {
+    const fetchDealsByCompany = async () => {
+      if (!quote?.id_client_company || !user?.id_tenant || !user?.id_user) {
+        setFilteredDeals([]);
+        return;
+      }
+      try {
+        const params = new URLSearchParams({
+          id_tenant: user.id_tenant,
+          id_user: user.id_user,
+          id_client_company: quote.id_client_company
+        }).toString();
+        console.log('Llamando a /api/deals/by_company con GET y params:', params);
+        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/by_company?${params}`);
+        console.log('Respuesta de /api/deals/by_company:', res);
+        if (!res.ok) throw new Error('No se pudieron cargar los tratos de la empresa');
+        const data = await res.json();
+        console.log('Datos recibidos de /api/deals/by_company:', data);
+        let tratos = data?.data?.tratos || data?.tratos || data || [];
+        if (!Array.isArray(tratos)) tratos = [];
+        setFilteredDeals(tratos);
+      } catch (e) {
+        console.error('Error al llamar a /api/deals/by_company:', e);
+        setFilteredDeals([]);
+      }
+    };
+    fetchDealsByCompany();
+  }, [quote?.id_client_company, user?.id_tenant, user?.id_user]);
 
   // Computed values para mostrar detalles de selección
   const selectedCompany = useMemo(() => 
@@ -188,48 +235,96 @@ const QuoteCreate: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    
-    if (name === 'nombre_cotizacion') {
-      setQuote(prev => ({ ...prev, nombre_cotizacion: value }));
-      // Lógica: Si estamos creando un trato nuevo, actualizar su nombre automáticamente con el prefijo
-      if (createNewDeal) {
-        setNewDeal(prev => ({ ...prev, nombre_trato: `Trato - ${value}` }));
-      }
+    if (name === 'correos_adicionales') {
+      setCcInput(value);
+      return;
     }
-    else if (name === 'id_trato') {
-      const selectedDeal = deals.find(d => d.id_trato === value);
-      setQuote(prev => ({ 
-        ...prev, 
-        id_trato: value,
-        id_client_company: selectedDeal?.id_client_company || '',
-        id_contact: selectedDeal?.id_contact || '',
-      }));
-      setNewDeal(prev => ({ 
-        ...prev, 
-        id_client_company: selectedDeal?.id_client_company || '', 
-        id_contact: selectedDeal?.id_contact || '' 
-      }));
-    } else if (name === 'id_client_company' && value === '__ADD_NEW_COMPANY__') {
-      setIsCompanyModalOpen(true);
-    } else if (name === 'id_contact' && value === '__ADD_NEW_CONTACT__') {
-      setIsContactModalOpen(true);
-    } else {
-      setQuote(prev => ({ ...prev, [name]: value }));
-      if (['id_client_company', 'id_contact'].includes(name)) {
-        setNewDeal(prev => ({ ...prev, [name]: value }));
+    if (name === 'id_client_company') {
+      if (value === '__ADD_NEW_COMPANY__') {
+        setIsCompanyModalOpen(true);
+        return;
       }
+      setQuote(prev => ({ ...prev, id_client_company: value, id_contact: '', id_trato: '' }));
+      setNewDeal((prev: any) => ({ ...prev, id_client_company: value, id_contact: '' }));
+      setFilteredContacts(contacts.filter(c => String(c.id_client_company) === String(value)));
+      setFilteredDeals(deals.filter(d => String(d.id_client_company) === String(value)));
+      return;
     }
+    if (name === 'id_contact') {
+      if (value === '__ADD_NEW_CONTACT__') {
+        setIsContactModalOpen(true);
+        return;
+      }
+      setQuote(prev => ({ ...prev, id_contact: value }));
+      setNewDeal((prev: any) => ({ ...prev, id_contact: value }));
+      return;
+    }
+    if (name === 'id_trato') {
+      setQuote(prev => ({ ...prev, id_trato: value }));
+      return;
+    }
+    setQuote(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Maneja agregar correo al presionar Enter o coma
+  const handleCcInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      // Permitir ingresar varios correos separados por coma en el input
+      const value = ccInput;
+      if (value.includes(',')) {
+        const regexCorreo = /[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/g;
+        const matches = value.match(regexCorreo) || [];
+        const arrobas = (value.match(/@/g) || []).length;
+        if (matches.length < arrobas) {
+          setCcError('Parece que hay correos pegados sin coma. Revisa y separa cada correo con una coma.');
+          return;
+        }
+        const invalids = matches.filter(email => !/^([a-zA-Z0-9_.+-]+)@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/.test(email));
+        if (invalids.length > 0) {
+          setCcError('Uno o más correos no son válidos');
+          return;
+        }
+        setCcError(null);
+        const current = (quote.correos_adicionales || '').split(',').map(v => v.trim()).filter(Boolean);
+        const nuevos = matches.filter(email => !current.includes(email));
+        setQuote(prev => ({ ...prev, correos_adicionales: [...current, ...nuevos].join(',') }));
+        setCcInput('');
+        return;
+      }
+      const email = ccInput.trim();
+      if (!email) return;
+      if (!/^([a-zA-Z0-9_.+-]+)@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/.test(email)) {
+        setCcError('Correo inválido');
+        return;
+      }
+      setCcError(null);
+      const current = (quote.correos_adicionales || '').split(',').map(v => v.trim()).filter(Boolean);
+      if (current.includes(email)) {
+        setCcError('Correo ya agregado');
+        return;
+      }
+      setQuote(prev => ({ ...prev, correos_adicionales: [...current, email].join(',') }));
+      setCcInput('');
+    }
+  };
+
+  // Elimina un correo de la lista
+  const handleRemoveCc = (email: string) => {
+    const current = (quote.correos_adicionales || '').split(',').map(v => v.trim()).filter(Boolean);
+    setQuote(prev => ({ ...prev, correos_adicionales: current.filter(e => e !== email).join(',') }));
+    setCcError(null);
   };
 
   const handleNewDealChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setNewDeal(prev => ({ ...prev, [name]: value }));
+    setNewDeal((prev: any) => ({ ...prev, [name]: value }));
   };
 
   const handleCompanyCreated = (newCompany: ClientCompany) => {
     setCompanies(prev => [...prev, newCompany]);
     setQuote(prev => ({ ...prev, id_client_company: newCompany.id_client_company, id_contact: '' }));
-    setNewDeal(prev => ({ ...prev, id_client_company: newCompany.id_client_company, id_contact: '' }));
+    setNewDeal((prev: any) => ({ ...prev, id_client_company: newCompany.id_client_company, id_contact: '' }));
     setFilteredContacts(contacts.filter(c => String(c.id_client_company) === String(newCompany.id_client_company)));
     setIsCompanyModalOpen(false);
     setToast({ message: 'Empresa creada exitosamente.', type: 'success' });
@@ -241,10 +336,11 @@ const QuoteCreate: React.FC = () => {
       setFilteredContacts(prev => [...prev, newContact]);
     }
     setQuote(prev => ({ ...prev, id_contact: newContact.id_contact }));
-    setNewDeal(prev => ({ ...prev, id_contact: newContact.id_contact }));
+    setNewDeal((prev: any) => ({ ...prev, id_contact: newContact.id_contact }));
     setIsContactModalOpen(false);
     setToast({ message: 'Contacto creado exitosamente.', type: 'success' });
   };
+
 
   const handleSave = async () => {
     // Validaciones
@@ -277,12 +373,11 @@ const QuoteCreate: React.FC = () => {
           ...newDeal,
           id_client_company: quote.id_client_company,
           id_contact: quote.id_contact,
-          status_category_deals: 'DRAFT', // <-- CAMBIO SOLICITADO
+          status_category_deals: 'DRAFT',
           id_tenant: user?.id_tenant,
           id_user_owner: user?.id_user,
           id_user: user?.id_user,
           created_at: new Date().toISOString(),
-          // Limpieza de campos opcionales
           valor_trato: undefined 
         };
 
@@ -309,31 +404,40 @@ const QuoteCreate: React.FC = () => {
         associatedDealId = dealData?.id_trato || dealData?.id;
       }
 
-      // 2. Crear Cotización
+      // 2. Crear o Editar Cotización
+      const queryParams = new URLSearchParams(location.search);
+      const quoteId = queryParams.get('id');
       const quotePayload = { 
         ...quote,
         id_trato: associatedDealId,
         id_tenant: user?.id_tenant,
         id_user: user?.id_user,
         fecha_emision: new Date().toISOString(),
-        status_category_quotes: 'DRAFT', // <-- CAMBIO SOLICITADO
-        
-        // Aseguramos valores por defecto de la BD
+        status_category_quotes: 'DRAFT',
         total: quote.total || 0,
         estado_decision: 'PENDIENTE',
         version: 0
       };
 
-      console.log('Quote payload to send:', quotePayload);
-
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(quotePayload),
-      });
+      let res;
+      if (quoteId) {
+        // Modo edición: actualizar cotización existente
+        res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...quotePayload, id_cotizacion: quoteId }),
+        });
+      } else {
+        // Modo creación: crear nueva cotización
+        res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(quotePayload),
+        });
+      }
 
       if (!res.ok) {
-          let errorMessage = 'Error al crear la cotización.';
+          let errorMessage = quoteId ? 'Error al actualizar la cotización.' : 'Error al crear la cotización.';
           try {
             const text = await res.text();
             if (text) {
@@ -346,7 +450,7 @@ const QuoteCreate: React.FC = () => {
           throw new Error(errorMessage);
       }
 
-      setToast({ message: '¡Cotización creada correctamente!', type: 'success' });
+      setToast({ message: quoteId ? '¡Cotización actualizada correctamente!' : '¡Cotización creada correctamente!', type: 'success' });
       
       setTimeout(() => {
         const dealIdParam = new URLSearchParams(location.search).get('dealId');
@@ -439,7 +543,9 @@ const QuoteCreate: React.FC = () => {
                             >
                                 <option value="">-- Seleccionar Empresa --</option>
                                 <option value="__ADD_NEW_COMPANY__" className="font-bold text-emerald-600">+ Nueva Empresa</option>
-                                {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
+                                {companies.map(company => (
+                                  <option key={company.id_client_company} value={company.id_client_company}>{company.name_company}</option>
+                                ))}
                             </select>
                             <div className="absolute right-3 top-3 text-slate-400 pointer-events-none">
                                 {isLocked ? <i className="fa-solid fa-lock text-xs"></i> : <i className="fa-solid fa-chevron-down text-xs"></i>}
@@ -467,41 +573,45 @@ const QuoteCreate: React.FC = () => {
                         )}
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Contacto <span className="text-red-500">*</span></label>
-                        <div className="relative">
-                            <select 
-                                name="id_contact" 
-                                value={quote.id_contact || ''} 
-                                onChange={handleInputChange} 
-                                disabled={isLocked || !quote.id_client_company}
-                                className={`w-full px-3 py-2.5 border rounded-lg text-sm outline-none appearance-none ${isLocked || !quote.id_client_company ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-white border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
-                            >
-                                <option value="">-- Seleccionar Contacto --</option>
-                                <option value="__ADD_NEW_CONTACT__" className="font-bold text-emerald-600">+ Nuevo Contacto</option>
-                                {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{c.first_name} {c.last_name}</option>)}
-                            </select>
-                            <div className="absolute right-3 top-3 text-slate-400 pointer-events-none">
-                                {isLocked ? <i className="fa-solid fa-lock text-xs"></i> : <i className="fa-solid fa-chevron-down text-xs"></i>}
-                            </div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Contacto <span className="text-red-500">*</span></label>
+                      <div className="relative">
+                        <select 
+                          name="id_contact" 
+                          value={quote.id_contact || ''} 
+                          onChange={handleInputChange} 
+                          disabled={isLocked || !quote.id_client_company}
+                          className={`w-full px-3 py-2.5 border rounded-lg text-sm outline-none appearance-none ${isLocked || !quote.id_client_company ? 'bg-slate-50 text-slate-500 border-slate-200' : 'bg-white border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
+                        >
+                          <option value="">-- Seleccionar Contacto --</option>
+                          <option value="__ADD_NEW_CONTACT__" className="font-bold text-emerald-600">+ Nuevo Contacto</option>
+                          {filteredContacts.map(contact => (
+                            <option key={String(contact.id_contact)} value={contact.id_contact}>{contact.first_name} {contact.last_name}</option>
+                          ))}
+                        </select>
+                        <div className="absolute right-3 top-3 text-slate-400 pointer-events-none">
+                          {isLocked ? <i className="fa-solid fa-lock text-xs"></i> : <i className="fa-solid fa-chevron-down text-xs"></i>}
                         </div>
-                        {/* Detalles de contacto */}
-                        {selectedContact && (
-                            <div className="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-2">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
-                                        {selectedContact.first_name?.charAt(0)}{selectedContact.last_name?.charAt(0)}
-                                    </div>
-                                    <div className="flex-1">
-                                        <p className="font-bold text-slate-800">{selectedContact.first_name} {selectedContact.last_name}</p>
-                                        {selectedContact.position && <p className="text-slate-500 text-[10px]">{selectedContact.position}</p>}
-                                    </div>
-                                </div>
-                                <div className="space-y-1 text-slate-600">
-                                    <p className="flex items-center gap-2"><i className="fa-solid fa-envelope opacity-50 w-3"></i> {selectedContact.email}</p>
-                                    {selectedContact.phone && <p className="flex items-center gap-2"><i className="fa-solid fa-phone opacity-50 w-3"></i> {selectedContact.phone}</p>}
-                                </div>
+                      </div>
+                      {/* Detalles de contacto */}
+                      {selectedContact && (
+                        <div className="mt-3 bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                              {selectedContact.first_name?.charAt(0)}{selectedContact.last_name?.charAt(0)}
                             </div>
-                        )}
+                            <div className="flex-1">
+                              <p className="font-bold text-slate-800">{selectedContact.first_name} {selectedContact.last_name}</p>
+                              {selectedContact.position && <p className="text-slate-500 text-[10px]">{selectedContact.position}</p>}
+                            </div>
+                          </div>
+                          <div className="space-y-1 text-slate-600">
+                            <p className="flex items-center gap-2"><i className="fa-solid fa-envelope opacity-50 w-3"></i> {selectedContact.email}</p>
+                            {selectedContact.phone && <p className="flex items-center gap-2"><i className="fa-solid fa-phone opacity-50 w-3"></i> {selectedContact.phone}</p>}
+                          </div>
+                        </div>
+                      )}
+                      {/* Selector de tratos relacionados con la empresa */}
+                      {/* Selector de tratos relacionado removido. Usar solo la tarjeta de Vinculación de Trato (Opcional) más abajo. */}
                     </div>
                 </div>
             </div>
@@ -614,13 +724,29 @@ const QuoteCreate: React.FC = () => {
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1.5">Correos en copia (CC)</label>
-                        <input 
-                            name="correos_adicionales" 
-                            value={quote.correos_adicionales || ''} 
-                            onChange={handleInputChange} 
-                            className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                            placeholder="email1@ejemplo.com, email2@..." 
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {(quote.correos_adicionales || '').split(',').map((email, idx) => {
+                            const trimmed = email.trim();
+                            if (!trimmed) return null;
+                            return (
+                              <span key={trimmed + idx} className="inline-flex items-center bg-slate-200 text-slate-700 rounded-full px-2 py-0.5 text-xs font-medium mr-1">
+                                {trimmed}
+                                <button type="button" className="ml-1 text-slate-500 hover:text-red-500 focus:outline-none" onClick={() => handleRemoveCc(trimmed)}>
+                                  ×
+                                </button>
+                              </span>
+                            );
+                          })}
+                        </div>
+                        <input
+                          name="correos_adicionales"
+                          value={ccInput}
+                          onChange={handleInputChange}
+                          onKeyDown={handleCcInputKeyDown}
+                          className={`w-full px-3 py-2 border ${ccError ? 'border-red-500' : 'border-slate-300'} rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-sm`}
+                          placeholder="Agrega un correo y presiona Enter"
                         />
+                        {ccError && <div className="text-xs text-red-500 mt-1">{ccError}</div>}
                     </div>
 
                     <div className="pt-4 border-t border-slate-100">
@@ -687,17 +813,17 @@ const QuoteCreate: React.FC = () => {
 
                         {!createNewDeal ? (
                             <div className="relative">
-                                <label className="block text-xs font-bold text-slate-600 mb-1.5">Trato Abierto</label>
-                                <select 
-                                    name="id_trato" 
-                                    value={quote.id_trato || ''} 
-                                    onChange={handleInputChange} 
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none text-sm"
-                                >
-                                    <option value="">-- Ninguno --</option>
-                                    {deals.map(d => <option key={d.id_trato} value={d.id_trato}>{d.nombre_trato}</option>)}
-                                </select>
-                                <i className="fa-solid fa-chevron-down absolute right-3 top-9 text-slate-400 text-xs pointer-events-none"></i>
+                              <label className="block text-xs font-bold text-slate-600 mb-1.5">Trato Abierto</label>
+                              <select 
+                                name="id_trato" 
+                                value={quote.id_trato || ''} 
+                                onChange={handleInputChange} 
+                                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none text-sm"
+                              >
+                                <option value="">-- Ninguno --</option>
+                                {filteredDeals.map(d => <option key={d.id_trato} value={d.id_trato}>{d.nombre_trato}</option>)}
+                              </select>
+                              <i className="fa-solid fa-chevron-down absolute right-3 top-9 text-slate-400 text-xs pointer-events-none"></i>
                             </div>
                         ) : (
                             <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">

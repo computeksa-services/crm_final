@@ -409,11 +409,28 @@ const QuotesList: React.FC = () => {
         }
     },
     {
-        accessorKey: 'fecha_emision',
-        header: 'Fecha',
-        size: 120,
-        filterFn: dateRangeFilter,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs text-slate-500">{formatDateTime(getValue() as string)}</span>
+      accessorKey: 'fecha_emision',
+      header: 'Fecha Emisión',
+      size: 120,
+      filterFn: dateRangeFilter,
+      cell: ({ row }) => {
+        const fecha = row.original.fecha_emision_fmt || row.original.fecha_emision;
+        return <span className="text-xs text-slate-500">{fecha}</span>;
+      }
+    },
+    {
+      accessorKey: 'created_at',
+      header: 'Creado',
+      size: 140,
+      cell: ({ row }) => {
+        // Preferir el campo formateado si existe, si no, formatear localmente
+        let fecha = row.original.created_at_fmt;
+        if (!fecha && row.original.created_at) {
+          const d = new Date(row.original.created_at);
+          fecha = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        }
+        return <span className="text-xs text-slate-500">{fecha}</span>;
+      }
     },
     {
         id: 'actions',
@@ -428,7 +445,7 @@ const QuotesList: React.FC = () => {
                 <div className="flex items-center justify-end gap-1">
                     {canEdit && (
                         <>
-                            <button onClick={(e) => { e.stopPropagation(); handleEdit(q); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
+                            <button onClick={(e) => { e.stopPropagation(); navigate(`/app/quotes/new?id=${q.id_cotizacion}`); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
                             <button onClick={(e) => { e.stopPropagation(); setShareQuoteId(q.id_cotizacion); setIsShareOpen(true); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
                         </>
                     )}
