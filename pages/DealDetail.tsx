@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Deal, Quote, DealStatus } from '../types';
 import Toast from '../components/Toast';
@@ -208,6 +208,12 @@ const DealDetail: React.FC = () => {
       setDeal(mappedDeal);
       setQuotes(mappedQuotes);
       setDealStatuses(mappedStatuses);
+
+      // Actualizar breadcrumb con el nombre del trato
+      navigate(location.pathname, { 
+        state: { breadcrumb: mappedDeal.nombre_trato }, 
+        replace: true 
+      });
 
     } catch (e) {
       setToast({ message: 'Error al cargar los detalles.', type: 'error' });

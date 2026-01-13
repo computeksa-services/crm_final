@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import CollectionModal from '../components/CollectionModal';
@@ -18,6 +18,7 @@ type ContactOption = {
 const FinancialDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   const [transaction, setTransaction] = useState<Partial<FinancialTransaction> | null>(null);
@@ -340,6 +341,10 @@ const FinancialDetail: React.FC = () => {
       } as FinancialTransaction;
 
       setTransaction(normalizedTx);
+
+      // Update breadcrumb with invoice number or client name
+      const displayName = normalizedTx.invoice_number || normalizedTx.client_name || 'Transacción';
+      navigate(location.pathname, { state: { breadcrumb: displayName }, replace: true });
 
       // Fetch contacts for this company (same as company detail view)
       if (normalizedTx.id_client_company) {

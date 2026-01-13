@@ -363,34 +363,55 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <i className={`fa-solid fa-indent text-lg transition-transform ${!isDesktopSidebarOpen ? 'rotate-180' : ''}`}></i>
               </button>
               
-              {/* Breadcrumb / Page Title with ID detection */}
-              <div className="hidden sm:block text-slate-400 text-sm">
+              {/* Breadcrumb dinámico - mejorado con links */}
+              <div className="hidden sm:flex items-center gap-1 text-xs text-slate-400">
                 {(() => {
                   const pathSegments = location.pathname.split('/').filter(Boolean);
                   const lastSegment = pathSegments[pathSegments.length - 1] || 'dashboard';
-                  const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'settings', 'calendar', 'dashboard', 'new'];
+                  const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'settings', 'calendar', 'dashboard', 'new', 'marketing'];
                   
-                  let breadcrumbPath = '';
+                  let breadcrumbs: { label: string; path: string; isActive: boolean }[] = [];
                   
                   // Si el último segmento NO está en rutas conocidas, es un ID → mostrar ruta/Detalle
                   if (!knownRoutes.includes(lastSegment) && pathSegments.length > 1) {
                     const collectionKey = pathSegments[pathSegments.length - 2];
                     const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    breadcrumbPath = `/ ${collectionName} / Detalle`;
+                    const collectionPath = `/app/${collectionKey}`;
+                    
+                    breadcrumbs = [
+                      { label: collectionName, path: collectionPath, isActive: false },
+                      { label: location.state?.breadcrumb || 'Detalle', path: location.pathname, isActive: true }
+                    ];
                   }
                   // Si es "new" → mostrar /Nuevo/colección
                   else if (lastSegment === 'new' && pathSegments.length > 1) {
                     const collectionKey = pathSegments[pathSegments.length - 2];
                     const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    breadcrumbPath = `/ Nuevo / ${collectionName}`;
+                    const collectionPath = `/app/${collectionKey}`;
+                    
+                    breadcrumbs = [
+                      { label: collectionName, path: collectionPath, isActive: false },
+                      { label: 'Nuevo', path: location.pathname, isActive: true }
+                    ];
                   }
                   // Ruta normal
                   else {
                     const pageName = PAGE_NAMES[lastSegment] || lastSegment.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    breadcrumbPath = `/ ${pageName}`;
+                    breadcrumbs = [{ label: pageName, path: location.pathname, isActive: true }];
                   }
 
-                  return <span className="text-slate-800 font-medium">{breadcrumbPath}</span>;
+                  return breadcrumbs.map((crumb, idx) => (
+                    <React.Fragment key={crumb.path}>
+                      {idx > 0 && <span className="mx-0.5 text-slate-300">&gt;</span>}
+                      {crumb.isActive ? (
+                        <span className="text-slate-700 font-medium">{crumb.label}</span>
+                      ) : (
+                        <Link to={crumb.path} className="text-slate-400 hover:text-brand-600 transition-colors font-medium">
+                          {crumb.label}
+                        </Link>
+                      )}
+                    </React.Fragment>
+                  ));
                 })()}
               </div>
           </div>

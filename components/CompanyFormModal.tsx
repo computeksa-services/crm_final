@@ -90,7 +90,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         id_country: initialData.id_country || 'EC',
         city: initialData.city || '',
         address: initialData.address || '',
-        id_company_type: initialData.id_company_type || initialData.company_type_name || '',
+        id_company_type: (initialData as any).id_company_type || (initialData as any).id_company_types || '',
         id_label: initialData.id_label || initialData.label_name || '',
         email_company: initialData.email_company || '',
         phone_company: initialData.phone_company || '',

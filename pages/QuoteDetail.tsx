@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Quote, QuoteItem, UserDecision, Product, QuoteStatus, PdfVersion, ProductType } from '../types';
 import Toast from '../components/Toast';
@@ -103,6 +103,12 @@ const QuoteDetail: React.FC = () => {
       if (q.available_statuses && Array.isArray(q.available_statuses)) {
         setQuoteStatuses(q.available_statuses);
       }
+
+      // Actualizar breadcrumb con el nombre de la cotización
+      navigate(location.pathname, {
+        state: { breadcrumb: q.nombre_cotizacion },
+        replace: true
+      });
 
       // Nota: Las llamadas a /api/products y /api/products_type se harán solo cuando el usuario
       // haga clic en "Agregar" (handleAddItem), no durante la carga inicial

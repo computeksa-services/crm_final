@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ClientCompany, ClientContact } from '../types';
 import Toast from '../components/Toast';
@@ -86,6 +86,12 @@ const ClientCompanyDetail: React.FC = () => {
 
       setCompany(companyObj);
       setContacts(Array.isArray(companyObj.contacts) ? companyObj.contacts : []);
+
+      // Actualizar breadcrumb con el nombre de la empresa
+      navigate(location.pathname, {
+        state: { breadcrumb: companyObj.name_company },
+        replace: true
+      });
 
     } catch (e: any) {
       console.error("Error:", e);

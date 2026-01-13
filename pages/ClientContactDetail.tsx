@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ClientContact, ClientCompany } from '../types';
 import Toast from '../components/Toast';
@@ -8,6 +8,7 @@ import ConfirmModal from '../components/ConfirmModal';
 const ClientContactDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   // --- ESTADOS ---
@@ -55,6 +56,11 @@ const ClientContactDetail: React.FC = () => {
         : null;
       
       setContact(foundContact);
+
+      // Update breadcrumb with contact name
+      if (foundContact) {
+        navigate(location.pathname, { state: { breadcrumb: foundContact.full_name || foundContact.email }, replace: true });
+      }
 
       if (!foundContact) {
         setLoading(false);
