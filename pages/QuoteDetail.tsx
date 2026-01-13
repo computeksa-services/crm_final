@@ -1132,7 +1132,7 @@ const QuoteDetail: React.FC = () => {
               {/* Row 1: Condiciones Comerciales */}
               <div className="grid grid-cols-4 gap-4 pb-3 border-b border-slate-100">
                 <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Entrega</p>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tiempo de Entrega</p>
                   <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.tiempo_entrega || '-'}</p>
                 </div>
                 <div>
@@ -1140,7 +1140,7 @@ const QuoteDetail: React.FC = () => {
                   <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.garantia || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Validez</p>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Validez Oferta</p>
                   <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.validez_oferta || '-'}</p>
                 </div>
                 <div>
