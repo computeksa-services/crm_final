@@ -11,14 +11,6 @@ const ROUTE_LABELS: { [key: string]: string } = {
   'financials': 'Cartera',
   'client-companies': 'Empresas',
   'client-contacts': 'Contactos',
-  'client-company-detail': 'Detalle',
-  'client-contact-detail': 'Detalle',
-  'deal-create': 'Nuevo',
-  'deal-detail': 'Detalle',
-  'quote-create': 'Nueva',
-  'quote-detail': 'Detalle',
-  'financial-create': 'Nuevo',
-  'financial-detail': 'Detalle',
   'products': 'Productos',
   'users': 'Usuarios',
   'settings': 'Ajustes',
@@ -36,43 +28,80 @@ const Breadcrumb: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+
   // Partir pathname en segmentos
   const segments = location.pathname
     .split('/')
     .filter((s) => s && s !== 'app');
 
-  // Acumular breadcrumbs con rutas navegables
-  const breadcrumbs = segments.reduce<{ label: string; path: string; isActive: boolean; isId: boolean }[]>(
-    (acc, segment, index) => {
-      const isId = ID_PATTERN.test(segment);
-      const isLast = index === segments.length - 1;
-      
-      // Acumular ruta desde /app
-      const path = '/app/' + segments.slice(0, index + 1).join('/');
-      
-      // Obtener label del diccionario o usar el segmento como fallback
-      let label = ROUTE_LABELS[segment] || segment;
-      
-      // Si es ID y es el último segmento, intentar usar breadcrumb del state
-      if (isId && isLast && location.state?.breadcrumb) {
-        label = location.state.breadcrumb;
-      } else if (isId) {
-        label = 'Detalle';
-      }
+  // Detectar contexto de acción (nuevo, editar, detalle)
+  const queryParams = new URLSearchParams(location.search);
+  const isQuoteNew = location.pathname.startsWith('/app/quotes/new');
+  // Forzar modo edición si hay id en query, aunque el pathname no cambie
+  const quoteEditId = queryParams.get('id');
+  const isQuoteEdit = isQuoteNew && !!quoteEditId;
+  const isDealNew = location.pathname.startsWith('/app/deals/new');
+  const isDealEdit = isDealNew && queryParams.has('id');
 
-      acc.push({
-        label,
-        path,
-        isActive: isLast,
-        isId,
+  // Construir breadcrumbs jerárquicos
+  let breadcrumbs: { label: string; path: string; isActive: boolean }[] = [];
+  if (segments[0] === 'quotes') {
+    // Cotizaciones
+    breadcrumbs.push({ label: 'Cotizaciones', path: '/app/quotes', isActive: false });
+    if (isQuoteNew) {
+      // Si hay id en query, es edición
+      breadcrumbs.push({
+        label: isQuoteEdit ? 'Editar Cotización' : 'Nueva Cotización',
+        path: location.pathname + location.search,
+        isActive: true,
       });
-
-      return acc;
-    },
-    []
-  );
+    } else if (segments[1] && (segments[1] === 'new')) {
+      breadcrumbs.push({
+        label: 'Nueva Cotización',
+        path: location.pathname + location.search,
+        isActive: true,
+      });
+    } else if (segments[1] && ID_PATTERN.test(segments[1])) {
+      breadcrumbs.push({
+        label: location.state?.breadcrumb || 'Detalle Cotización',
+        path: location.pathname,
+        isActive: true,
+      });
+    }
+  } else if (segments[0] === 'deals') {
+    // Tratos
+    breadcrumbs.push({ label: 'Tratos', path: '/app/deals', isActive: false });
+    if (isDealNew) {
+      breadcrumbs.push({
+        label: isDealEdit ? 'Editar Trato' : 'Nuevo Trato',
+        path: location.pathname + location.search,
+        isActive: true,
+      });
+    } else if (ID_PATTERN.test(segments[1])) {
+      // Detalle de trato
+      breadcrumbs.push({
+        label: location.state?.breadcrumb || 'Detalle Trato',
+        path: location.pathname,
+        isActive: true,
+      });
+    }
+  } else {
+    // Otros módulos
+    let path = '/app';
+    segments.forEach((segment, idx) => {
+      path += '/' + segment;
+      const isLast = idx === segments.length - 1;
+      let label = ROUTE_LABELS[segment] || segment;
+      // Si es ID y hay breadcrumb en state
+      if (ID_PATTERN.test(segment) && location.state?.breadcrumb) {
+        label = location.state.breadcrumb;
+      }
+      breadcrumbs.push({ label, path, isActive: isLast });
+    });
+  }
 
   // Si no hay segmentos, no renderizar
+
   if (breadcrumbs.length === 0) return null;
 
   return (

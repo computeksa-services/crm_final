@@ -478,32 +478,43 @@ const QuoteCreate: React.FC = () => {
 
   const isLocked = !!location.search.includes('dealId');
 
+
+  // Determine if editing or creating
+  const queryParams = new URLSearchParams(location.search);
+  const quoteId = queryParams.get('id');
+  const isEditing = !!quoteId;
+
   return (
     <div className="w-full px-4 md:px-8 py-6 animate-fade-in pb-20 max-w-[1600px] mx-auto">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      
       {/* Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
-         <div>
-            <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Nueva Cotización</h1>
-            <p className="text-sm text-slate-500">Complete los datos para generar un nuevo registro.</p>
-         </div>
-         <div className="flex items-center gap-3 w-full md:w-auto">
-            <button 
-              onClick={() => navigate(-1)} 
-              className="flex-1 md:flex-none px-4 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all text-sm"
-            >
-              Cancelar
-            </button>
-            <button 
-              onClick={handleSave} 
-              disabled={processing}
-              className="flex-1 md:flex-none px-6 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-70 text-sm"
-            >
-              {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-save"></i>}
-              Guardar Registro
-            </button>
-         </div>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 tracking-tight">
+            {isEditing ? 'Editar Cotización' : 'Nueva Cotización'}
+          </h1>
+          <p className="text-sm text-slate-500">
+            {isEditing
+              ? `Modifique los datos de la cotización #${quote.formatted_no_cotizacion || quoteId || ''}.`
+              : 'Complete los datos para generar un nuevo registro.'}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex-1 md:flex-none px-4 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all text-sm"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={processing}
+            className="flex-1 md:flex-none px-6 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-70 text-sm"
+          >
+            {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-save"></i>}
+            Guardar Registro
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -705,11 +716,20 @@ const QuoteCreate: React.FC = () => {
 
         {/* COLUMNA DERECHA (Sidebar) */}
         <div className="space-y-6">
-            
-            {/* NOTAS Y CORREOS */}
+
+            {/* ESTADO INICIAL */}
+            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+                <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-2">Estado Inicial</p>
+                <div className="flex items-center gap-2">
+                    <span className="w-3 h-3 rounded-full bg-slate-400"></span>
+                    <span className="font-bold text-slate-700">Borrador (Draft)</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-2">La cotización se creará en estado borrador. Podrá agregar ítems y cambiar el estado en el siguiente paso.</p>
+            </div>
+
+            {/* INFORMACIÓN ADICIONAL */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                 <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Información Adicional</h2>
-                
                 <div className="space-y-4">
                     <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1.5">Nota Interna (Opcional)</label>
@@ -748,35 +768,31 @@ const QuoteCreate: React.FC = () => {
                         />
                         {ccError && <div className="text-xs text-red-500 mt-1">{ccError}</div>}
                     </div>
-
-                    <div className="pt-4 border-t border-slate-100">
-                        <label className="flex items-start gap-3 cursor-pointer group">
-                            <div className="flex items-center h-5">
-                                <input
-                                type="checkbox"
-                                name="is_private"
-                                checked={quote.is_private || false}
-                                onChange={(e) => setQuote({ ...quote, is_private: e.target.checked })}
-                                className="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
-                                />
-                            </div>
-                            <div>
-                                <span className="block text-sm font-semibold text-slate-700 group-hover:text-brand-700">Cotización Privada</span>
-                                <span className="block text-xs text-slate-400 mt-1">Visible solo para administradores.</span>
-                            </div>
-                        </label>
-                    </div>
                 </div>
             </div>
 
-            {/* RESUMEN VISUAL (Opcional, ayuda a llenar el espacio) */}
-            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-                <p className="text-xs text-slate-500 uppercase tracking-widest font-bold mb-2">Estado Inicial</p>
-                <div className="flex items-center gap-2">
-                    <span className="w-3 h-3 rounded-full bg-slate-400"></span>
-                    <span className="font-bold text-slate-700">Borrador (Draft)</span>
-                </div>
-                <p className="text-xs text-slate-400 mt-2">La cotización se creará en estado borrador. Podrá agregar ítems y cambiar el estado en el siguiente paso.</p>
+            {/* COTIZACIÓN PRIVADA */}
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+                <label className="flex items-start gap-3 cursor-pointer group">
+                    <div className="flex items-center h-5 pt-1">
+                        <input
+                        type="checkbox"
+                        name="is_private"
+                        checked={quote.is_private || false}
+                        onChange={(e) => setQuote({ ...quote, is_private: e.target.checked })}
+                        className="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
+                        />
+                    </div>
+                    <div>
+                        <span className="block text-sm font-semibold text-slate-700 group-hover:text-brand-700">Cotización Privada</span>
+                        <span className="block text-xs text-slate-400 mt-1">
+                          Si marcas la cotización como privada, solo los administradores podrán verla.<br/>
+                          Los miembros solo verán cotizaciones públicas del trato.<br/>
+                          Esto es útil si compartes el trato con colaboradores pero quieres ocultar esta cotización específica.<br/>
+                          <span className="text-brand-600 font-semibold">Los administradores siempre pueden ver todas las cotizaciones.</span>
+                        </span>
+                    </div>
+                </label>
             </div>
 
             {/* VINCULACIÓN DE TRATO (OPCIONAL) */}
@@ -801,30 +817,36 @@ const QuoteCreate: React.FC = () => {
                                 onClick={() => { setCreateNewDeal(false); setQuote(p => ({...p, id_trato: ''})); }}
                                 className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all ${!createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
-                                Existente
+                                Trato Existente
                             </button>
                             <button
                                 onClick={() => { setCreateNewDeal(true); setQuote(p => ({...p, id_trato: ''})); }}
                                 className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all ${createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                             >
-                                Nuevo
+                                Nuevo Trato
                             </button>
                         </div>
 
                         {!createNewDeal ? (
-                            <div className="relative">
-                              <label className="block text-xs font-bold text-slate-600 mb-1.5">Trato Abierto</label>
-                              <select 
-                                name="id_trato" 
-                                value={quote.id_trato || ''} 
-                                onChange={handleInputChange} 
-                                className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none text-sm"
-                              >
-                                <option value="">-- Ninguno --</option>
-                                {filteredDeals.map(d => <option key={d.id_trato} value={d.id_trato}>{d.nombre_trato}</option>)}
-                              </select>
-                              <i className="fa-solid fa-chevron-down absolute right-3 top-9 text-slate-400 text-xs pointer-events-none"></i>
-                            </div>
+                            (!filteredDeals || filteredDeals.length === 0 || (filteredDeals.length === 1 && filteredDeals[0]?.success === true)) ? (
+                              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs text-slate-500 text-center">
+                                No hay tratos existentes para esta empresa.
+                              </div>
+                            ) : (
+                              <div className="relative">
+                                <label className="block text-xs font-bold text-slate-600 mb-1.5">Trato Abierto</label>
+                                <select 
+                                  name="id_trato" 
+                                  value={quote.id_trato || ''} 
+                                  onChange={handleInputChange} 
+                                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none text-sm"
+                                >
+                                  <option value="">-- Ninguno --</option>
+                                  {filteredDeals.map(d => <option key={d.id_trato} value={d.id_trato}>{d.nombre_trato}</option>)}
+                                </select>
+                                <i className="fa-solid fa-chevron-down absolute right-3 top-9 text-slate-400 text-xs pointer-events-none"></i>
+                              </div>
+                            )
                         ) : (
                             <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">
                                 <div>

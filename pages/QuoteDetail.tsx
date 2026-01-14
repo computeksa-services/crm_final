@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Quote, QuoteItem, UserDecision, Product, QuoteStatus, PdfVersion, ProductType } from '../types';
@@ -7,702 +7,434 @@ import ConfirmModal from '../components/ConfirmModal';
 import ShareModal from '../components/ShareModal';
 import QuoteFormModal from '../components/QuoteFormModal';
 
+// --- HELPER: Selector de Estado (Estilo DealDetail) ---
+const StatusSelector: React.FC<{
+  currentStatusId: string;
+  statuses: QuoteStatus[];
+  onSelect: (id: string) => void;
+  disabled: boolean;
+}> = ({ currentStatusId, statuses, onSelect, disabled }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Buscar estado actual
+  const current = statuses.find(s => s.id_status === currentStatusId) || {
+    name: 'Desconocido', color: '#94a3b8', icon: 'fa-circle'
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div className="relative inline-block text-left w-full sm:w-auto" ref={dropdownRef}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 px-3 py-2.5 rounded-lg font-bold text-xs border transition-all ${disabled ? 'opacity-70 cursor-not-allowed' : 'hover:brightness-95 active:scale-95'}`}
+        style={{
+          backgroundColor: `${current.color}15`,
+          color: current.color,
+          borderColor: `${current.color}40`
+        }}
+      >
+        <div className="flex items-center gap-2 truncate">
+            <i className={`${current.icon || 'fa-solid fa-circle'} text-[10px]`}></i>
+            <span className="uppercase tracking-wide truncate">{current.name}</span>
+        </div>
+        {!disabled && <i className="fa-solid fa-chevron-down text-[10px] ml-1 opacity-70"></i>}
+      </button>
+
+      {isOpen && !disabled && (
+        <div className="absolute right-0 mt-1 w-full sm:w-56 bg-white rounded-lg shadow-xl border border-slate-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
+          <div className="py-1 max-h-60 overflow-y-auto">
+            {statuses.map((status) => (
+              <button
+                key={status.id_status}
+                onClick={() => { onSelect(status.id_status); setIsOpen(false); }}
+                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2 transition-colors border-b border-slate-50 last:border-0"
+              >
+                <i className={`${status.icon || 'fa-solid fa-circle'} text-[10px]`} style={{ color: status.color }}></i>
+                <span className="text-xs font-bold text-slate-700 uppercase">{status.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- COMPONENTE PRINCIPAL ---
 const QuoteDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
 
   // --- ESTADOS ---
   const [quote, setQuote] = useState<Quote | null>(null);
   const [items, setItems] = useState<QuoteItem[]>([]);
   const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]);
+  
+  // Data auxiliar para edición
   const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
-  const [pdfVersions, setPdfVersions] = useState<PdfVersion[]>([]);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
 
-  // Estados de UI
+  // UI States
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  
-  // Estados de Formulario Modal
+
+  // Form States (Product Modal)
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [itemQuantity, setItemQuantity] = useState<number>(1);
-  
-  // Estados para crear productos desde el modal
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
   const [newProduct, setNewProduct] = useState<any>({
-    codigo: '',
-    descripcion: '',
-    tipo: 'BIEN',
-    categoria: '',
-    precio_unitario: 0,
-    imagen_url: ''
+    codigo: '', descripcion: '', tipo: 'BIEN', categoria: '', precio_unitario: 0, imagen_url: ''
   });
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Estado de Confirmación
+  // Confirm Modal State
   const [confirmState, setConfirmState] = useState({
-    isOpen: false,
-    title: '',
-    message: '',
-    onConfirm: () => {},
-    isDestructive: false,
+    isOpen: false, title: '', message: '', onConfirm: () => {}, isDestructive: false,
   });
 
-  // --- CARGA DE DATOS (OPTIMIZADA: UNA SOLA LLAMADA) ---
+  // --- FETCH DATA ---
   const fetchData = useCallback(async () => {
     if (!id || !user?.id_tenant || !user?.id_user) return;
     
-    const tenantId = user.id_tenant;
-    const userId = user.id_user;
-
     try {
-      // UNA SOLA LLAMADA: Obtiene todo (quote, items, versions, access, detalles, etc.)
-      const quoteResponse = await fetch(`https://service.computeksa.com/webhook/api/quotes/detail?id_cotizacion=${id}&id_tenant=${tenantId}&id_user=${userId}`);
+      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/detail?id_cotizacion=${id}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       
-      if (!quoteResponse.ok) {
-        if (quoteResponse.status === 404) {
-          setQuote(null);
-        } else {
-          throw new Error('Error al cargar la cotización.');
-        }
-        setLoading(false);
+      if (!response.ok) {
+        if (response.status === 404) setQuote(null);
+        else throw new Error('Error al cargar.');
         return;
       }
 
-      const quoteResponseText = await quoteResponse.text();
-      let q: Quote | null = null;
-      if (quoteResponseText) {
-        const parsedResponse = JSON.parse(quoteResponseText);
-        q = Array.isArray(parsedResponse) ? parsedResponse[0] : parsedResponse;
+      const text = await response.text();
+      const parsed = text ? JSON.parse(text) : null;
+      // La API devuelve un array [{...}], tomamos el primero
+      const q: any = Array.isArray(parsed) ? parsed[0] : parsed;
+
+      if (q) {
+        // Normalizamos la data para asegurar que React tenga lo que espera
+        // Mapeamos los campos anidados si es necesario, aunque TS ayuda, en runtime es mejor asegurar
+        setQuote(q);
+        setItems(q.items || []);
+        setQuoteStatuses(q.available_statuses || []);
+
+        // Actualizar breadcrumb
+        navigate(location.pathname, { state: { breadcrumb: q.nombre_cotizacion }, replace: true });
+      } else {
+        setQuote(null);
       }
-      setQuote(q || null);
-
-      if (!q) {
-        setLoading(false);
-        return;
-      }
-
-      // Los items vienen en q.items (no necesita llamada separada)
-      if (q.items && Array.isArray(q.items)) {
-        setItems(q.items);
-      }
-
-      // Los PDFs vienen en q.versions (no necesita llamada separada)
-      if (q.versions && Array.isArray(q.versions)) {
-        const validVersions = q.versions.filter((v: any) => v && v.file_url && v.version_number !== undefined && v.version_number !== null);
-        setPdfVersions(validVersions);
-      }
-
-      // Los estados disponibles vienen en q.available_statuses (no necesita llamada separada)
-      if (q.available_statuses && Array.isArray(q.available_statuses)) {
-        setQuoteStatuses(q.available_statuses);
-      }
-
-      // Actualizar breadcrumb con el nombre de la cotización
-      navigate(location.pathname, {
-        state: { breadcrumb: q.nombre_cotizacion },
-        replace: true
-      });
-
-      // Nota: Las llamadas a /api/products y /api/products_type se harán solo cuando el usuario
-      // haga clic en "Agregar" (handleAddItem), no durante la carga inicial
-
-    } catch (e: any) {
-      console.error("Error fatal:", e);
+    } catch (e) {
+      console.error(e);
       setToast({ message: 'Error al cargar los datos.', type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [id, user]); // <--- CORREGIDO: Dependencias mínimas para evitar bucle
+  }, [id, user, navigate, location.pathname]);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-  
-  // Activar modo edición si viene por URL
-  useEffect(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      // Ya no usamos isEditing, ahora usamos isConditionsModalOpen
-    } catch {}
-  }, []);
-  
-  // --- HANDLERS (LOGICA SIMPLIFICADA) ---
+  useEffect(() => { fetchData(); }, [fetchData]);
 
+  // --- HANDLERS ---
   const convertGoogleDriveUrl = (url: string): string => {
     if (!url) return '';
-    
-    // Si ya es una URL de proxy, devolverla
     if (url.includes('images.weserv.nl')) return url;
-    
-    // Extraer el ID del archivo de URL de Google Drive
     const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
     if (match && match[1]) {
-      const directUrl = `https://drive.google.com/uc?id=${match[1]}&export=view`;
-      // Usar un proxy para evitar problemas de CORS
-      return `https://images.weserv.nl/?url=${encodeURIComponent(directUrl)}&n=-1`;
+      // Usamos weserv como proxy para caché y CORS de imágenes de Drive
+      return `https://images.weserv.nl/?url=${encodeURIComponent(`https://drive.google.com/uc?id=${match[1]}&export=view`)}&n=-1`;
     }
-    
-    // Si no se puede extraer, devolver la URL original
     return url;
   };
-  
+
   const getNextProductCode = () => {
     if (availableProducts.length === 0) return 'COD-001';
-    
     const codes = availableProducts
       .map(p => p.codigo || '')
       .filter(c => c.startsWith('COD-'))
       .map(c => parseInt(c.replace('COD-', '')) || 0)
       .sort((a, b) => b - a);
-    
-    const nextNum = (codes[0] || 0) + 1;
-    return `COD-${String(nextNum).padStart(3, '0')}`;
+    return `COD-${String((codes[0] || 0) + 1).padStart(3, '0')}`;
+  };
+
+  const handleStatusChange = (newStatusId: string) => {
+    const newStatus = quoteStatuses.find(s => s.id_status === newStatusId);
+    setConfirmState({
+      isOpen: true,
+      title: 'Actualizar Estado',
+      message: `¿Cambiar el estado a "${newStatus?.name}"?`,
+      isDestructive: false,
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        setProcessing(true);
+        try {
+          const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/quotes`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id_cotizacion: quote?.id_cotizacion,
+              id_quote_status: newStatusId,
+              id_tenant: user?.id_tenant,
+              id_user: user?.id_user
+            })
+          });
+          if (res.ok) {
+            // Optimistic update
+            if (quote) {
+                setQuote({ 
+                    ...quote, 
+                    id_quote_status: newStatusId,
+                    // Actualizamos status_detail localmente para reflejar el cambio en UI inmediato
+                    status_detail: newStatus as any 
+                });
+            }
+            setToast({ message: 'Estado actualizado.', type: 'success' });
+            fetchData(); // Recargar para asegurar consistencia
+          } else throw new Error();
+        } catch {
+          setToast({ message: 'Error al actualizar estado.', type: 'error' });
+        } finally {
+          setProcessing(false);
+        }
+      }
+    });
   };
 
   const handleAddItem = async () => {
-    if (!quote || (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin')) {
-      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
-      return;
-    }
-    
+    if (!user?.id_tenant) return;
     setProcessing(true);
     try {
-      // Cargar productos y tipos de productos solo cuando se abre el modal
-      const tenantId = user?.id_tenant;
-      const userId = user?.id_user;
-      
-      const [productsRes, typesRes] = await Promise.all([
-        fetch(`https://service.computeksa.com/webhook/api/products?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`https://service.computeksa.com/webhook/api/products_type?id_tenant=${tenantId}`)
+      const [pRes, tRes] = await Promise.all([
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`)
       ]);
       
-      if (productsRes.ok) {
-        const productsText = await productsRes.text();
-        const products = productsText ? JSON.parse(productsText) : [];
-        setAvailableProducts(products);
-      }
-      
-      if (typesRes.ok) {
-        const typesText = await typesRes.text();
-        const types = typesText ? JSON.parse(typesText) : [];
-        setProductTypes(types);
-      }
+      if (pRes.ok) setAvailableProducts(JSON.parse(await pRes.text()) || []);
+      if (tRes.ok) setProductTypes(JSON.parse(await tRes.text()) || []);
       
       setIsCreatingProduct(false);
       setSelectedProductId(null);
       setItemQuantity(1);
       setIsProductModalOpen(true);
-    } catch (e) {
+    } catch {
       setToast({ message: 'Error al cargar productos.', type: 'error' });
-    } finally {
-      setProcessing(false);
-    }
-  };
-  
-  const handleToggleCreateProduct = () => {
-    setIsCreatingProduct(!isCreatingProduct);
-    if (!isCreatingProduct) {
-      // Inicializar nuevo producto con valores por defecto
-      setNewProduct({
-        codigo: '',
-        descripcion: '',
-        tipo: productTypes.length > 0 ? productTypes[0].type : 'BIEN',
-        categoria: '',
-        precio_unitario: 0,
-        imagen_url: ''
-      });
-      setImageFile(null);
-    }
-  };
-  
-  const handleProductInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setNewProduct((prev: any) => ({ ...prev, [name]: value }));
-  };
-  
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 800 * 1024) {
-        setToast({ message: 'Imagen muy pesada (Max 800KB).', type: 'error' });
-        return;
-      }
-      
-      setImageFile(file);
-      
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setNewProduct((prev: any) => ({ ...prev, imagen_url: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-  
-  const handleCreateAndAddProduct = async () => {
-    if (!newProduct.descripcion || !newProduct.tipo || !user?.id_tenant) {
-      setToast({ message: 'Descripción y Tipo son obligatorios.', type: 'error' });
-      return;
-    }
-    
-    setProcessing(true);
-    
-    try {
-      // 1. Crear el producto
-      const formData = new FormData();
-      formData.append('id_product', '');
-      formData.append('id_tenant', user.id_tenant);
-      formData.append('codigo', newProduct.codigo || '');
-      formData.append('descripcion', newProduct.descripcion);
-      formData.append('tipo', newProduct.tipo);
-      formData.append('categoria', newProduct.categoria || '');
-      formData.append('precio_unitario', String(Number(newProduct.precio_unitario)));
-      formData.append('imagen_subida', String(!!imageFile));
-      
-      if (imageFile) {
-        formData.append('imagen', imageFile);
-      }
-      
-      const createResponse = await fetch('https://service.computeksa.com/webhook/api/products', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      if (!createResponse.ok) throw new Error('Error al crear el producto.');
-      
-      // 2. Recargar la lista de productos para obtener el recién creado
-      const productsResponse = await fetch(`https://service.computeksa.com/webhook/api/products?id_tenant=${user.id_tenant}`);
-      if (!productsResponse.ok) throw new Error('Producto creado pero no se pudo recargar la lista.');
-      
-      const productsText = await productsResponse.text();
-      const updatedProducts = productsText ? JSON.parse(productsText) : [];
-      
-      // 3. Buscar el producto recién creado por descripción
-      const createdProduct = updatedProducts.find((p: any) => 
-        p.descripcion === newProduct.descripcion && 
-        p.tipo === newProduct.tipo &&
-        p.categoria === (newProduct.categoria || '')
-      );
-      
-      if (!createdProduct || !createdProduct.id_product) {
-        // El producto se creó pero no lo encontramos, actualizar lista y cerrar
-        setAvailableProducts(updatedProducts);
-        setToast({ message: 'Producto creado. Selecciónalo de la lista para añadirlo.', type: 'success' });
-        setIsCreatingProduct(false);
-        setNewProduct({
-          codigo: '',
-          descripcion: '',
-          tipo: 'BIEN',
-          categoria: '',
-          precio_unitario: 0,
-          imagen_url: ''
-        });
-        setImageFile(null);
-        setProcessing(false);
-        return;
-      }
-      
-      // 4. Actualizar la lista de productos disponibles
-      setAvailableProducts(updatedProducts);
-      
-      // 5. Añadir el producto a la cotización
-      const precioUnitario = parseFloat(newProduct.precio_unitario) || 0;
-      const subtotalItem = itemQuantity * precioUnitario;
-      
-      const addItemPayload = {
-        id_cotizacion: quote?.id_cotizacion,
-        id_tenant: user.id_tenant,
-        id_user: user.id_user,
-        descripcion: newProduct.descripcion,
-        cantidad: itemQuantity,
-        precio_unitario: precioUnitario,
-        subtotal: subtotalItem,
-        id_producto: createdProduct.id_product
-      };
-      
-      const addResponse = await fetch('https://service.computeksa.com/webhook/api/products-selected', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(addItemPayload),
-      });
-      
-      if (!addResponse.ok) throw new Error('Producto creado pero no se pudo añadir a la cotización.');
-      
-      setToast({ message: 'Producto creado y añadido correctamente.', type: 'success' });
-      
-      // Limpiar modal y estados
-      setIsProductModalOpen(false);
-      setIsCreatingProduct(false);
-      setNewProduct({
-        codigo: '',
-        descripcion: '',
-        tipo: 'BIEN',
-        categoria: '',
-        precio_unitario: 0,
-        imagen_url: ''
-      });
-      setImageFile(null);
-      setItemQuantity(1);
-      
-      // Recargar datos
-      fetchData();
-      
-    } catch (e: any) {
-      setToast({ message: e.message || 'Error al crear el producto.', type: 'error' });
     } finally {
       setProcessing(false);
     }
   };
 
   const handleProductSelection = async () => {
-    if (!selectedProductId || !quote || !user?.id_tenant || !user?.id_user) return;
-    
-    if (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
-      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
-      return;
-    }
-
-    const selectedProduct = availableProducts.find(p => p.id_product === selectedProductId);
-    if (!selectedProduct) {
-      setToast({ message: 'Producto no encontrado.', type: 'error' });
-      return;
-    }
+    if (!selectedProductId || !quote || !user) return;
+    const prod = availableProducts.find(p => p.id_product === selectedProductId);
+    if (!prod) return;
 
     setProcessing(true);
-
-    // Solo calculamos el subtotal del ITEM
-    const precioUnitario = parseFloat((selectedProduct.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
-    const subtotalItem = itemQuantity * precioUnitario;
-
-    const payload = {
-      id_cotizacion: quote.id_cotizacion,
-      id_tenant: user.id_tenant,
-      id_user: user.id_user,
-      descripcion: selectedProduct.descripcion, 
-      cantidad: itemQuantity,
-      precio_unitario: precioUnitario,
-      subtotal: subtotalItem,
-      id_producto: selectedProduct.id_product
-    };
-
+    const precio = parseFloat((prod.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
+    
     try {
-      // 1. Guardar Item
-      const response = await fetch('https://service.computeksa.com/webhook/api/products-selected', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) throw new Error('Error al conectar con el servidor.');
-
-      setToast({ message: 'Artículo añadido.', type: 'success' });
-      
-      // Limpiar modal
-      setIsProductModalOpen(false);
-      setSelectedProductId(null);
-      setItemQuantity(1);
-      
-      // 2. Recargar (La BD ya calculó el nuevo total global)
-      fetchData();
-
-    } catch (e: any) {
-      setToast({ message: e.message || 'Error al añadir.', type: 'error' });
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleUpdateItem = async (itemId: string, newCantidad: number, newPrecioUnitario: number) => {
-    if (!quote || !user?.id_tenant || !user?.id_user || !itemId) return;
-    
-    if (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
-      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
-      return;
-    }
-    
-    // Evitar llamadas innecesarias
-    const currentItem = items.find(i => (i.id_articulo_cot || i.id_quote_item) === itemId);
-    const cantidadAnt = parseFloat(currentItem?.cantidad as any) || 0;
-    const precioAnt = parseFloat((currentItem?.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
-
-    if (newCantidad === cantidadAnt && newPrecioUnitario === precioAnt) return;
-
-    setProcessing(true);
-    
-    const updatedSubtotal = newCantidad * newPrecioUnitario;
-    const payload = {
-      id_articulo_cot: itemId,
-      cantidad: newCantidad,
-      precio_unitario: newPrecioUnitario,
-      subtotal: updatedSubtotal,
-      id_tenant: user.id_tenant,
-      id_user: user.id_user,
-    };
-
-    try {
-      // 1. Actualizar Item
-      const response = await fetch('https://service.computeksa.com/webhook/api/quote-items/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) throw new Error('Error del servidor al actualizar.');
-
-      setToast({ message: 'Artículo actualizado.', type: 'success' });
-      
-      // 2. Recargar (La BD ya calculó el nuevo total global)
-      fetchData(); 
-
-    } catch (e: any) {
-      setToast({ message: e.message || 'Error al actualizar.', type: 'error' });
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleDeleteItem = (itemId: string) => {
-    if (!quote || (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin')) {
-      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
-      return;
-    }
-    
-    setConfirmState({
-      isOpen: true,
-      title: 'Eliminar Artículo',
-      message: '¿Está seguro que desea eliminar este artículo?',
-      isDestructive: true,
-      onConfirm: async () => {
-        if (!quote || !user?.id_tenant || !user?.id_user) return;
-        setProcessing(true);
-        
-        const payload = { 
-          id_articulo_cot: itemId,
-          id_tenant: user.id_tenant,
-          id_user: user.id_user,
-        };
-
-        try {
-          // 1. Eliminar Item
-          const response = await fetch('https://service.computeksa.com/webhook/api/quote-items/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-
-          if (!response.ok) throw new Error('Error al eliminar.');
-
-          setToast({ message: 'Artículo eliminado.', type: 'success' });
-          
-          // 2. Actualizar estado local inmediatamente (UI optimista)
-          setItems(prevItems => prevItems.filter(item => (item.id_articulo_cot || item.id_quote_item) !== itemId));
-          
-          // 3. Recargar datos completos de la API
-          setTimeout(() => fetchData(), 300); 
-
-        } catch (e: any) {
-          setToast({ message: e.message || 'Error al eliminar.', type: 'error' });
-        } finally {
-          setProcessing(false);
-          setConfirmState({ ...confirmState, isOpen: false });
-        }
-      },
-    });
-  };
-
-  const handleSaveEdit = async (updatedData: Partial<Quote>) => {
-    if (!quote || !user) return;
-    
-    if (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
-      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
-      return;
-    }
-    
-    setProcessing(true);
-    try {
-        const payload = {
-            id_cotizacion: quote.id_cotizacion,
-            id_tenant: user.id_tenant,
-            id_user: user.id_user,
-            id_client_company: quote.id_client_company,
-            id_contact: quote.id_contact || null,
-            nombre_cotizacion: updatedData.nombre_cotizacion !== undefined ? updatedData.nombre_cotizacion : quote.nombre_cotizacion,
-            id_quote_status: updatedData.id_quote_status !== undefined ? updatedData.id_quote_status : quote.id_quote_status,
-            tiempo_entrega: updatedData.tiempo_entrega !== undefined ? updatedData.tiempo_entrega : (quote.tiempo_entrega || ''),
-            garantia: updatedData.garantia !== undefined ? updatedData.garantia : (quote.garantia || ''),
-            validez_oferta: updatedData.validez_oferta !== undefined ? updatedData.validez_oferta : (quote.validez_oferta || ''),
-            nota: updatedData.nota !== undefined ? updatedData.nota : (quote.nota || ''),
-            mensaje: updatedData.mensaje !== undefined ? updatedData.mensaje : (quote.mensaje || ''),
-            correos_adicionales: updatedData.correos_adicionales !== undefined ? updatedData.correos_adicionales : (quote.correos_adicionales || ''),
-            is_private: quote.is_private || false,
-            id_trato: quote.id_trato || null,
-        };
-
-        console.log('Quote update payload:', payload);
-
-        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        });
-        
-        if (!response.ok) {
-          const text = await response.text();
-          console.error('API response error:', text);
-          throw new Error('Error al actualizar cotización.');
-        }
-        
-        console.log('Quote updated successfully, reloading data...');
-        setToast({ message: 'Cotización actualizada correctamente.', type: 'success' });
-        
-        // Recargar todos los datos completos desde el servidor (esperar a que se complete)
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await fetchData();
-        
-    } catch (e: any) {
-        console.error('Save edit error:', e);
-        setToast({ message: e.message || 'Error al guardar.', type: 'error' });
-    } finally {
-        setProcessing(false);
-    }
-  };
-
-  const handleGeneratePDF = async () => {
-    if (!quote || !user?.id_user || !user?.id_tenant) {
-      setToast({ message: 'Faltan datos de usuario o cotización.', type: 'error' });
-      return;
-    }
-    
-    if (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
-      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
-      return;
-    }
-
-    setProcessing(true);
-    try {
-      const payload = {
-        id_cotizacion: quote.id_cotizacion,
-        id_tenant: user.id_tenant,
-        id_user: user.id_user,
-      };
-
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/generate-pdf`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) throw new Error('Error al generar PDF.');
-
-      const data = await response.json();
-
-      const redirectUrl = data?.redirect_url || data?.redirect;
-      const pdfUrl = data?.url_pdf || data?.pdf_url || data?.url || data?.link;
-
-      if (redirectUrl) {
-        window.location.assign(redirectUrl);
-      } else if (pdfUrl) {
-        window.open(pdfUrl, '_blank');
-      }
-
-      // Refrescar datos locales (cotización y versiones) después de generar
-      await fetchData();
-
-      setToast({ message: 'PDF generado con éxito.', type: 'success' });
-    } catch (e: any) {
-      setToast({ message: e?.message || 'Error al generar el PDF.', type: 'error' });
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  const handleSendQuoteClick = (id_version?: string) => {
-    if (!quote) return;
-    
-    // Recolectar emails destinatarios
-    const recipients: { name?: string; email: string }[] = [];
-    
-    // Email del contacto principal
-    if (quote.contact_detail?.email) {
-      recipients.push({
-        name: quote.contact_detail.full_name,
-        email: quote.contact_detail.email,
-      });
-    }
-    
-    // Emails adicionales en copia
-    if (quote.correos_adicionales) {
-      const additionalEmails = quote.correos_adicionales
-        .split(',')
-        .map((email) => email.trim())
-        .filter((email) => email.length > 0);
-      additionalEmails.forEach((email) => {
-        recipients.push({ email });
-      });
-    }
-
-    const recipientText = recipients.length > 0 
-      ? recipients.map((r) => r.name ? `${r.name} (${r.email})` : r.email).join('\n')
-      : 'No hay destinatarios configurados';
-
-    setConfirmState({
-      isOpen: true,
-      title: '¿Enviar Cotización?',
-      message: `Se enviará a los siguientes destinatarios:\n\n${recipientText}`,
-      onConfirm: () => handleSendQuote(id_version),
-      isDestructive: false,
-    });
-  };
-
-  const handleSendQuote = async (id_version?: string) => {
-    if (!quote || !user?.id_user) return;
-    
-    if (quote.access_level !== 'EDIT' && user?.rol_user !== 'admin') {
-      setToast({ message: 'No tienes permiso para modificar esta cotización.', type: 'error' });
-      return;
-    }
-    
-    setProcessing(true);
-    try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/send`, {
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products-selected`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id_cotizacion: quote.id_cotizacion,
+          id_tenant: user.id_tenant,
           id_user: user.id_user,
-          id_version: id_version || null,
-          id_trato: quote.id_trato || null,
+          descripcion: prod.descripcion, 
+          cantidad: itemQuantity,
+          precio_unitario: precio,
+          subtotal: itemQuantity * precio,
+          id_producto: prod.id_product
         }),
       });
-      if (!response.ok) throw new Error('Error al enviar cotización.');
+      if (!res.ok) throw new Error();
       
-      setToast({ message: 'Cotización enviada con éxito.', type: 'success' });
-      
-      // Reload full data after sending to ensure proper state
-      setTimeout(() => {
-        fetchData();
-      }, 500);
-      
-      console.log('Quote sent successfully, reloading data...');
-    } catch (e: any) {
-      setToast({ message: e.message || 'Error al enviar.', type: 'error' });
+      setToast({ message: 'Artículo añadido.', type: 'success' });
+      setIsProductModalOpen(false);
+      fetchData();
+    } catch {
+      setToast({ message: 'Error al añadir artículo.', type: 'error' });
     } finally {
       setProcessing(false);
     }
   };
 
-  const handleDecisionChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    if(!quote || !user?.id_tenant || !user?.id_user) return;
-    const newDecision = e.target.value as UserDecision;
-    
+  const handleCreateAndAddProduct = async () => {
+    if (!newProduct.descripcion || !user) return;
+    setProcessing(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/decision`, {
+      const formData = new FormData();
+      Object.keys(newProduct).forEach(key => formData.append(key, newProduct[key]));
+      formData.append('id_tenant', user.id_tenant);
+      formData.append('imagen_subida', String(!!imageFile));
+      if (imageFile) formData.append('imagen', imageFile);
+
+      const createRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products`, { method: 'POST', body: formData });
+      if (!createRes.ok) throw new Error('Error al crear producto');
+
+      // Recargar y añadir
+      const pRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products?id_tenant=${user.id_tenant}`);
+      const products = await pRes.json();
+      const created = products.find((p: any) => p.descripcion === newProduct.descripcion);
+      
+      if (created) {
+        setAvailableProducts(products);
+        setSelectedProductId(created.id_product);
+        
+        const precio = parseFloat(newProduct.precio_unitario) || 0;
+        await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products-selected`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id_cotizacion: quote?.id_cotizacion,
+            id_tenant: user.id_tenant,
+            id_user: user.id_user,
+            descripcion: created.descripcion,
+            cantidad: itemQuantity,
+            precio_unitario: precio,
+            subtotal: itemQuantity * precio,
+            id_producto: created.id_product
+          })
+        });
+        setToast({ message: 'Producto creado y añadido.', type: 'success' });
+        setIsProductModalOpen(false);
+        fetchData();
+      }
+    } catch (e: any) {
+      setToast({ message: e.message || 'Error.', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleUpdateItem = async (idItem: string, cant: number, precio: number) => {
+    if (!quote || !user) return;
+    setProcessing(true);
+    try {
+      await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quote-items/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_articulo_cot: idItem,
+          cantidad: cant,
+          precio_unitario: precio,
+          subtotal: cant * precio,
+          id_tenant: user.id_tenant,
+          id_user: user.id_user,
+        })
+      });
+      fetchData();
+    } catch {
+      setToast({ message: 'Error al actualizar.', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleDeleteItem = (idItem: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: 'Eliminar Artículo',
+      message: '¿Seguro que deseas eliminar este ítem?',
+      isDestructive: true,
+      onConfirm: async () => {
+        setConfirmState(prev => ({...prev, isOpen: false}));
+        if (!quote || !user) return;
+        setProcessing(true);
+        try {
+          await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quote-items/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_articulo_cot: idItem, id_tenant: user.id_tenant, id_user: user.id_user })
+          });
+          setItems(prev => prev.filter(i => (i.id_articulo_cot || i.id_quote_item) !== idItem));
+          setTimeout(fetchData, 300);
+          setToast({ message: 'Artículo eliminado.', type: 'success' });
+        } catch {
+          setToast({ message: 'Error al eliminar.', type: 'error' });
+        } finally {
+          setProcessing(false);
+        }
+      }
+    });
+  };
+
+  const handleGeneratePDF = async () => {
+    if (!quote || !user) return;
+    setProcessing(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/generate-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_cotizacion: quote.id_cotizacion, id_tenant: user.id_tenant, id_user: user.id_user })
+      });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      const url = data.redirect_url || data.url_pdf || data.url;
+      if (url) window.open(url, '_blank');
+      setToast({ message: 'PDF Generado.', type: 'success' });
+      fetchData();
+    } catch {
+      setToast({ message: 'Error al generar PDF.', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleSendQuote = async (idVersion?: string) => {
+    if (!quote || !user) return;
+    const destEmail = quote.contact_detail?.email || 'el cliente';
+    setConfirmState({
+        isOpen: true,
+        title: 'Enviar Cotización',
+        message: `¿Enviar cotización a ${destEmail}?`,
+        isDestructive: false,
+        onConfirm: async () => {
+            setConfirmState(prev => ({...prev, isOpen: false}));
+            setProcessing(true);
+            try {
+            const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                id_cotizacion: quote.id_cotizacion,
+                id_user: user.id_user,
+                id_version: idVersion || null,
+                id_trato: quote.id_trato
+                })
+            });
+            if (!res.ok) throw new Error();
+            setToast({ message: 'Enviada correctamente.', type: 'success' });
+            fetchData();
+            } catch {
+            setToast({ message: 'Error al enviar.', type: 'error' });
+            } finally {
+            setProcessing(false);
+            }
+        }
+    });
+  };
+
+  const handleDecisionChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if(!quote || !user) return;
+    const newDecision = e.target.value as UserDecision;
+    try {
+      await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/decision`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -712,885 +444,731 @@ const QuoteDetail: React.FC = () => {
           id_user: user.id_user,
         }),
       });
-      if (!response.ok) throw new Error('Error al actualizar decisión.');
-      
       setQuote({...quote, estado_decision: newDecision});
       setToast({ message: 'Decisión actualizada.', type: 'success' });
-    } catch (e: any) {
-      setToast({ message: e.message || 'Error al actualizar.', type: 'error' });
+    } catch {
+      setToast({ message: 'Error al actualizar.', type: 'error' });
     }
   };
 
-  // --- RENDERIZADO ---
+  // --- RENDER ---
 
   if (loading) return (
-    <div className="flex h-64 items-center justify-center">
-      <div className="flex flex-col items-center space-y-3">
+    <div className="flex h-[calc(100vh-200px)] items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
         <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500"></i>
-        <p className="text-slate-500 font-medium animate-pulse">Cargando detalles...</p>
+        <p className="text-slate-400 font-medium animate-pulse">Cargando cotización...</p>
       </div>
     </div>
   );
-  
+
   if (!quote) return (
-    <div className="flex h-64 items-center justify-center">
-        <div className="text-center bg-red-50 p-8 rounded-xl border border-red-100">
-            <i className="fa-solid fa-triangle-exclamation text-4xl text-red-400 mb-3"></i>
-            <h3 className="text-lg font-bold text-red-700">Cotización no encontrada</h3>
-            <button onClick={() => navigate('/app/quotes')} className="mt-4 px-4 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50">
-                Volver al listado
-            </button>
-        </div>
+    <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-center">
+        <h2 className="text-xl font-bold text-slate-800">Cotización no encontrada</h2>
+        <button onClick={() => navigate('/app/quotes')} className="mt-4 px-6 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-all">
+            Volver
+        </button>
     </div>
   );
 
-  const hasItems = items.length > 0;
-  
-  // Encontrar el status actual
-  const currentStatus = quoteStatuses.find(s => s.id_status === quote.id_quote_status);
-  const currentStatusCategory = currentStatus?.status_category;
-  
-  // Estados finales que bloquean modificaciones basados en la categoría del sistema
-  const canEditItems = currentStatusCategory !== 'ACCEPTED' && currentStatusCategory !== 'REJECTED';
-  const isReady = currentStatusCategory === 'SENT';
+  const canEdit = quote.access_level === 'EDIT' || user?.rol_user === 'admin';
   const isSent = quote.estado_decision !== UserDecision.PENDING;
   
-  const showGenerateBtn = hasItems;
-  const showSendBtn = isReady; 
+  // Encontrar estado actual (usar status_detail de la API o buscar en available_statuses)
+  const currentStatusObj = (quote as any).status_detail || quoteStatuses.find(s => s.id_status === quote.id_quote_status);
+  const currentStatusCategory = currentStatusObj?.status_category || currentStatusObj?.category;
+  const isItemsLocked = currentStatusCategory === 'ACCEPTED' || currentStatusCategory === 'REJECTED';
 
   return (
-    <div className="w-full space-y-6 pb-12 animate-fade-in px-6 lg:px-8">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      <ConfirmModal {...confirmState} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} />
+    <div className="w-full px-4 md:px-6 pb-20 animate-fade-in font-sans">
+      
+      {/* --- HEADER PRINCIPAL --- */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            
+            {/* Lado Izquierdo: Info Principal */}
+            <div className="flex-1 min-w-0 space-y-2 w-full">
+                <div className="flex items-center gap-2">
+                    {quote.is_private && (
+                        <span className="text-[10px] bg-amber-50 text-amber-600 px-2 py-0.5 rounded border border-amber-100 font-bold uppercase tracking-wider">
+                            <i className="fa-solid fa-lock mr-1"></i> Privado
+                        </span>
+                    )}
+                </div>
+                
+                <h1 className="text-2xl font-bold text-slate-800 tracking-tight leading-tight">
+                    <span className="font-medium text-slate-600 truncate">{quote.nombre_cotizacion}</span>
+                </h1>
+                
+                <div className="flex items-center gap-2 text-sm text-slate-500">
+                    Cotización #{quote.formatted_no_cotizacion}
+                </div>
+            </div>
 
-      {/* Product Selection Modal */}
+            {/* Lado Derecho: Acciones y Totales */}
+            <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
+                <div className="text-left lg:text-right w-full lg:w-auto">
+                    <div className="text-3xl font-mono font-bold text-slate-800 tracking-tight">
+                        {quote.total}
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
+                    {/* Selector de Estado */}
+                    <StatusSelector 
+                        currentStatusId={quote.id_quote_status || ''} 
+                        statuses={quoteStatuses} 
+                        onSelect={handleStatusChange} 
+                        disabled={!canEdit || processing}
+                    />
+
+                    {canEdit && (
+                        <>
+                            <button 
+                                onClick={() => navigate(`/app/quotes/new?id=${quote.id_cotizacion}`)}
+                                className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:border-brand-200 hover:bg-brand-50 transition-all shadow-sm"
+                            >
+                                <i className="fa-solid fa-pen"></i> Editar
+                            </button>
+                            <button 
+                                onClick={() => setIsShareOpen(true)}
+                                className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
+                            >
+                                <i className="fa-solid fa-share-nodes"></i> Compartir
+                            </button>
+                        </>
+                    )}
+                </div>
+            </div>
+        </div>
+      </div>
+
+      {/* --- GRID DE CONTENIDO --- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        {/* COLUMNA IZQUIERDA (Info Meta - 1/3) */}
+        <div className="space-y-6">
+            
+            {/* TARJETA: Cliente y Contacto */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3 bg-white">
+                    <span className="w-2 h-6 bg-blue-500 rounded-full"></span>
+                    <div>
+                        <h3 className="font-bold text-slate-800 text-sm">Cliente</h3>
+                        <p className="text-xs text-slate-500">Información del destinatario</p>
+                    </div>
+                </div>
+                <div className="p-6 space-y-5">
+                    {/* Empresa */}
+                    <div className="flex items-start gap-3 group">
+                        <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center shrink-0 border border-blue-100">
+                            <i className="fa-solid fa-building"></i>
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Empresa</p>
+                            <Link to={`/app/client-companies/${quote.id_client_company}`} className="font-bold text-slate-800 text-sm hover:text-blue-600 hover:underline block truncate">
+                                {quote.company_detail?.name || 'Empresa desconocida'}
+                            </Link>
+                            {quote.company_detail?.ruc && (
+                                <p className="text-xs text-slate-500 mt-0.5">RUC: {quote.company_detail.ruc}</p>
+                            )}
+                            {quote.company_detail?.address && (
+                                <div className="flex items-start gap-1 mt-1 text-xs text-slate-500">
+                                    <i className="fa-solid fa-location-dot mt-0.5 opacity-60"></i>
+                                    <span className="line-clamp-2">{quote.company_detail.address}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="h-px bg-slate-50 w-full"></div>
+
+                    {/* Contacto */}
+                    {quote.id_contact && (
+                        <div className="flex items-start gap-3 group">
+                            <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0 border border-slate-200">
+                                <i className="fa-solid fa-user"></i>
+                            </div>
+                            <div className="min-w-0">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Contacto</p>
+                                <Link to={`/app/client-contacts/${quote.id_contact}`} className="font-bold text-slate-800 text-sm hover:text-brand-600 hover:underline block truncate">
+                                    {quote.contact_detail?.full_name || 'Sin nombre'}
+                                </Link>
+                                {quote.contact_detail?.position && (
+                                    <p className="text-xs text-slate-500 italic truncate">{quote.contact_detail.position}</p>
+                                )}
+                                {quote.contact_detail?.email && (
+                                    <div className="flex items-center gap-1.5 mt-1 text-xs text-slate-500 truncate">
+                                        <i className="fa-solid fa-envelope opacity-60"></i>
+                                        <span className="truncate">{quote.contact_detail.email}</span>
+                                    </div>
+                                )}
+                                {quote.contact_detail?.phone && (
+                                    <div className="flex items-center gap-1.5 mt-1 text-xs text-slate-500">
+                                        <i className="fa-solid fa-phone opacity-60"></i>
+                                        <span>{quote.contact_detail.phone}</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* TARJETA: Condiciones Comerciales */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3 bg-white">
+                    <span className="w-2 h-6 bg-orange-500 rounded-full"></span>
+                    <div>
+                        <h3 className="font-bold text-slate-800 text-sm">Condiciones</h3>
+                        <p className="text-xs text-slate-500">Términos de la oferta</p>
+                    </div>
+                </div>
+                <div className="p-6">
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-2">
+                        <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Validez</p>
+                            <p className="text-[13px] font-bold text-slate-700">{quote.validez_oferta || '-'}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Garantía</p>
+                            <p className="text-[13px] font-bold text-slate-700">{quote.garantia || '-'}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Entrega</p>
+                            <p className="text-[13px] font-bold text-slate-700">{quote.tiempo_entrega || '-'}</p>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Pago</p>
+                            <p className="text-[13px] font-bold text-slate-700">{quote.condicion_pago || '-'}</p>
+                        </div>
+                    </div>
+                    
+                    {quote.nota && (
+                        <div className="mt-4 pt-4 border-t border-slate-100">
+                             <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Nota Interna</p>
+                             <div className="bg-amber-50 border border-amber-100 rounded-lg p-2.5">
+                                <p className="text-xs text-amber-900 italic">{quote.nota}</p>
+                             </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* TARJETA: Información Adicional (Vendedor y Trato) */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                 <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3 bg-white">
+                    <span className="w-2 h-6 bg-purple-500 rounded-full"></span>
+                    <div>
+                        <h3 className="font-bold text-slate-800 text-sm">Detalles</h3>
+                        <p className="text-xs text-slate-500">Contexto y responsable</p>
+                    </div>
+                </div>
+                <div className="p-6 space-y-4">
+                    {/* Vendedor */}
+                    <div className="flex items-center gap-3">
+                        <img 
+                            src={quote.owner_detail?.avatar || `https://ui-avatars.com/api/?name=${quote.owner_detail?.name || 'U'}`} 
+                            alt="Owner" 
+                            className="w-8 h-8 rounded-full border border-slate-200"
+                        />
+                        <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Elaborado por</p>
+                            <p className="text-xs font-bold text-slate-700">{quote.owner_detail?.name || 'Desconocido'}</p>
+                            <p className="text-[10px] text-slate-500">{quote.owner_detail?.email}</p>
+                        </div>
+                    </div>
+
+                    {/* Trato Asociado */}
+                    {quote.deal_detail && (
+                        <div className="pt-3 border-t border-slate-100">
+                             <p className="text-[10px] font-bold text-slate-400 uppercase mb-2">Trato Asociado</p>
+                             <Link to={`/app/deals/${quote.deal_detail.id}`} className="flex items-center gap-3 group bg-slate-50 p-2.5 rounded-xl border border-slate-100 hover:border-brand-300 hover:bg-brand-50 transition-all">
+                                 <div className="w-8 h-8 rounded-lg bg-white text-brand-600 flex items-center justify-center text-sm shadow-sm border border-slate-100">
+                                     <i className="fa-solid fa-handshake"></i>
+                                 </div>
+                                 <div className="min-w-0">
+                                     <p className="text-xs font-bold text-slate-700 group-hover:text-brand-700 truncate">{quote.deal_detail.name}</p>
+                                     <p className="text-[10px] text-slate-500 font-mono">{quote.deal_detail.value}</p>
+                                 </div>
+                             </Link>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2 pt-2">
+                        <div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Creado</p>
+                            <p className="text-[11px] text-slate-600 font-mono">{quote.created_at_fmt || '-'}</p>
+                        </div>
+                        <div>
+                             <p className="text-[10px] font-bold text-slate-400 uppercase">Emisión</p>
+                             <p className="text-[11px] text-slate-600 font-mono">{quote.fecha_emision_fmt || '-'}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* TARJETA: Decisión (Si ya fue enviada) */}
+            {isSent && (
+                 <div className="bg-gradient-to-br from-purple-50 to-white rounded-2xl shadow-sm border border-purple-100 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-purple-100 flex items-center gap-3">
+                        <span className="w-2 h-6 bg-purple-600 rounded-full"></span>
+                        <div>
+                            <h3 className="font-bold text-purple-900 text-sm">Decisión del Cliente</h3>
+                        </div>
+                    </div>
+                    <div className="p-6">
+                        <p className="text-xs text-slate-500 mb-3 leading-relaxed">
+                            Registra la respuesta oficial del cliente para actualizar el estado del trato automáticamente.
+                        </p>
+                        <select 
+                            value={quote.estado_decision || ''}
+                            onChange={handleDecisionChange}
+                            disabled={!canEdit}
+                            className="w-full px-4 py-2 bg-white border border-purple-200 rounded-lg text-sm font-bold text-purple-800 focus:ring-2 focus:ring-purple-500 outline-none shadow-sm cursor-pointer"
+                        >
+                            <option value={UserDecision.PENDING}>⏳ Pendiente de Respuesta</option>
+                            <option value={UserDecision.APPROVED}>✅ APROBADO (Ganado)</option>
+                            <option value={UserDecision.REJECTED}>❌ RECHAZADO (Perdido)</option>
+                            <option value={UserDecision.NEGOCIAR}>💬 En Negociación</option>
+                        </select>
+                    </div>
+                 </div>
+            )}
+
+        </div>
+
+        {/* COLUMNA DERECHA (Contenido Principal - 2/3) */}
+        <div className="lg:col-span-2 space-y-6">
+
+            {/* TARJETA: Artículos */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                  <div className="flex items-center gap-3">
+                    <span className="w-2 h-6 bg-brand-500 rounded-full"></span>
+                    <div>
+                        <h3 className="font-bold text-slate-800 text-sm">Artículos</h3>
+                        <p className="text-xs text-slate-500">Detalle de productos y servicios</p>
+                    </div>
+                  </div>
+                  {canEdit && !isItemsLocked && (
+                    <button 
+                        onClick={handleAddItem}
+                        className="text-[13px] font-bold text-white bg-brand-600 hover:bg-brand-700 px-3 py-1.5 rounded shadow-sm transition-all flex items-center gap-2"
+                    >
+                        <i className="fa-solid fa-plus text-[10px]"></i> Agregar
+                    </button>
+                  )}
+                </div>
+                
+                {items.length === 0 ? (
+                    <div className="p-12 text-center bg-slate-50/50">
+                        <div className="bg-white w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-slate-300">
+                            <i className="fa-solid fa-basket-shopping text-xl"></i>
+                        </div>
+                        <p className="text-slate-500 text-sm">Sin artículos agregados.</p>
+                    </div>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-slate-500 font-bold uppercase bg-slate-50 border-b border-slate-100 tracking-wider">
+                                <tr>
+                                    <th className="px-6 py-3">Descripción</th>
+                                    <th className="px-4 py-3 text-right">Cant.</th>
+                                    <th className="px-4 py-3 text-right">Precio</th>
+                                    <th className="px-6 py-3 text-right">Total</th>
+                                    <th className="w-10"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {items.map((item, idx) => {
+                                    const cant = parseFloat(item.cantidad as any) || 0;
+                                    const precio = parseFloat((item.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
+                                    return (
+                                        <tr key={idx} className="group hover:bg-slate-50/60 transition-colors">
+                                            <td className="px-6 py-4">
+                                                <div className="flex gap-4">
+                                                    {/* Imagen del Producto */}
+                                                    <div className="w-12 h-12 rounded-lg border border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0">
+                                                        {item.imagen_url ? (
+                                                            <img 
+                                                                src={convertGoogleDriveUrl(item.imagen_url)} 
+                                                                alt="" 
+                                                                className="w-full h-full object-cover"
+                                                                onError={(e) => {
+                                                                    (e.target as HTMLImageElement).style.display = 'none';
+                                                                    (e.target as HTMLImageElement).parentElement!.innerHTML = '<i class="fa-solid fa-image text-slate-300"></i>';
+                                                                }}
+                                                            />
+                                                        ) : (
+                                                            <i className="fa-solid fa-box text-slate-300"></i>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <div className="flex flex-col justify-center">
+                                                        <span className="font-bold text-slate-700 text-[13px] line-clamp-2">{item.descripcion}</span>
+                                                        {item.formatted_product_code && (
+                                                            <span className="text-[10px] text-slate-400 font-mono mt-0.5">{item.formatted_product_code}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4 text-right align-middle">
+                                                <input 
+                                                    type="number" min="1" disabled={!canEdit || isItemsLocked}
+                                                    defaultValue={cant}
+                                                    onBlur={(e) => handleUpdateItem(item.id_articulo_cot || '', parseFloat(e.target.value)||1, precio)}
+                                                    className="w-14 text-right bg-transparent hover:bg-white border border-transparent hover:border-slate-200 rounded px-1 py-1 focus:ring-1 focus:ring-brand-500 outline-none text-slate-700 font-medium transition-all"
+                                                />
+                                            </td>
+                                            <td className="px-4 py-4 text-right align-middle">
+                                                <input 
+                                                    type="number" step="0.01" disabled={!canEdit || isItemsLocked}
+                                                    defaultValue={precio.toFixed(2)}
+                                                    onBlur={(e) => handleUpdateItem(item.id_articulo_cot || '', cant, parseFloat(e.target.value)||0)}
+                                                    className="w-20 text-right bg-transparent hover:bg-white border border-transparent hover:border-slate-200 rounded px-1 py-1 focus:ring-1 focus:ring-brand-500 outline-none text-slate-700 font-medium transition-all"
+                                                />
+                                            </td>
+                                            <td className="px-6 py-4 text-right font-bold text-slate-700 align-middle">
+                                                {(cant * precio).toLocaleString('en-US', {style:'currency', currency:'USD'})}
+                                            </td>
+                                            <td className="px-2 text-center align-middle">
+                                                {canEdit && !isItemsLocked && (
+                                                    <button onClick={() => handleDeleteItem(item.id_articulo_cot || '')} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2 rounded-lg hover:bg-red-50">
+                                                        <i className="fa-solid fa-trash-can"></i>
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                                <tr className="bg-slate-50 border-t border-slate-200">
+                                    <td colSpan={3} className="px-6 py-4 text-right font-bold text-slate-600 uppercase text-xs tracking-wider">Total General</td>
+                                    <td className="px-6 py-4 text-right font-black text-slate-800 text-xl font-mono tracking-tight">{quote.total}</td>
+                                    <td></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+            </div>
+
+            {/* TARJETA: Mensaje al Cliente (Si existe) */}
+            {quote.mensaje && (
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3 bg-white">
+                        <span className="w-2 h-6 bg-cyan-500 rounded-full"></span>
+                        <div>
+                            <h3 className="font-bold text-slate-800 text-sm">Mensaje para el Cliente</h3>
+                            <p className="text-xs text-slate-500">Notas visibles en el PDF</p>
+                        </div>
+                    </div>
+                    <div className="p-6 bg-slate-50/50">
+                        <div className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed font-medium">
+                            {quote.mensaje}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* TARJETA: Historial de PDFs (Versiones) */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                  <div className="flex items-center gap-3">
+                    <span className="w-2 h-6 bg-indigo-500 rounded-full"></span>
+                    <div>
+                        <h3 className="font-bold text-slate-800 text-sm">Versiones PDF</h3>
+                        <p className="text-xs text-slate-500">Documentos generados</p>
+                    </div>
+                  </div>
+                  {canEdit && items.length > 0 && (
+                     <button 
+                        onClick={handleGeneratePDF}
+                        disabled={processing}
+                        className="text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg transition-colors font-bold flex items-center disabled:opacity-50 uppercase tracking-wide border border-indigo-100"
+                     >
+                        {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-1.5"></i> : <i className="fa-solid fa-file-pdf mr-1.5"></i>}
+                        Generar v{(quote.versions?.length || 0) + 1}
+                     </button>
+                  )}
+                </div>
+                <div className="p-0">
+                    {(!quote.versions || quote.versions.length === 0) ? (
+                        <div className="text-center py-6 text-slate-400 text-xs italic">No hay PDFs generados aún.</div>
+                    ) : (
+                        <div className="divide-y divide-slate-50">
+                            {quote.versions.map(pdf => (
+                                <div key={pdf.id_version} className="px-6 py-4 hover:bg-slate-50 transition-colors flex items-center justify-between group">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-sm border border-indigo-100">
+                                            <i className="fa-solid fa-file-pdf"></i>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-slate-700">Versión {pdf.version_number}</p>
+                                            <p className="text-[11px] text-slate-500 mt-0.5">
+                                                {pdf.created_at ? new Date(pdf.created_at).toLocaleString() : '-'}
+                                            </p>
+                                            <p className="text-[10px] text-slate-400">Por {pdf.creator_name || 'Sistema'}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <a 
+                                            href={pdf.file_url} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-xs font-bold text-slate-600 hover:text-indigo-600 px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:border-indigo-200 transition-all shadow-sm"
+                                        >
+                                            <i className="fa-solid fa-external-link-alt mr-1"></i> Abrir
+                                        </a>
+                                        {canEdit && (
+                                            <button 
+                                                onClick={() => handleSendQuote(pdf.id_version)} 
+                                                className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors"
+                                            >
+                                                <i className="fa-solid fa-paper-plane mr-1"></i> Enviar
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* TARJETA: Historial de Envíos */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
+                  <div className="flex items-center gap-3">
+                    <span className="w-2 h-6 bg-slate-500 rounded-full"></span>
+                    <div>
+                        <h3 className="font-bold text-slate-800 text-sm">Registro de Envíos</h3>
+                        <p className="text-xs text-slate-500">Bitácora de comunicación</p>
+                    </div>
+                  </div>
+                  {quote.sent_history?.length > 0 && (
+                      <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-bold">
+                          {quote.sent_history.length} envíos
+                      </span>
+                  )}
+                </div>
+                <div className="p-6">
+                    {!quote.sent_history?.length ? (
+                        <div className="text-center py-4 text-slate-400 text-xs italic">
+                            <i className="fa-solid fa-inbox text-xl mb-2 opacity-50 block"></i>
+                            Sin actividad de envíos.
+                        </div>
+                    ) : (
+                        <div className="relative border-l-2 border-slate-100 ml-2 space-y-8 pl-6 py-2">
+                            {quote.sent_history.map((log, idx) => (
+                                <div key={idx} className="relative group">
+                                    <div className="absolute -left-[31px] top-1.5 w-3 h-3 rounded-full bg-slate-200 border-2 border-white shadow-sm group-hover:bg-emerald-400 transition-colors"></div>
+                                    
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="text-[13px] font-bold text-slate-700 flex items-center gap-2">
+                                                    <span className="bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded text-[10px] font-bold border border-emerald-200 uppercase tracking-wide">
+                                                        {log.method}
+                                                    </span>
+                                                    <span>Enviado a <span className="text-slate-900">{log.sent_to}</span></span>
+                                                </p>
+                                            </div>
+                                            <span className="text-[11px] text-slate-400 bg-slate-50 px-2 py-1 rounded border border-slate-100 font-mono">
+                                                {log.sent_at_fmt}
+                                            </span>
+                                        </div>
+                                        
+                                        <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-xs text-slate-600 space-y-1">
+                                            <div className="flex gap-2">
+                                                <span className="font-bold text-slate-400 w-12 text-right">Asunto:</span>
+                                                <span className="font-medium italic text-slate-800">{log.subject}</span>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <span className="font-bold text-slate-400 w-12 text-right">Versión:</span>
+                                                <span>PDF v{log.version_enviada}</span>
+                                            </div>
+                                            {log.sent_cc && (
+                                                <div className="flex gap-2">
+                                                    <span className="font-bold text-slate-400 w-12 text-right">CC:</span>
+                                                    <span className="truncate">{log.sent_cc}</span>
+                                                </div>
+                                            )}
+                                             <div className="flex gap-2">
+                                                <span className="font-bold text-slate-400 w-12 text-right">Por:</span>
+                                                <span>{log.sent_by_name}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+        </div>
+      </div>
+
+      {/* --- MODALES --- */}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <ConfirmModal {...confirmState} onClose={() => setConfirmState({...confirmState, isOpen: false})} />
+      
+      {isShareOpen && quote && (
+        <ShareModal entity="quotes" id={quote.id_cotizacion} isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} onShared={() => setToast({ message: 'Compartido.', type: 'success' })} />
+      )}
+
+      {quote && (
+        <QuoteFormModal
+            isOpen={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            initialData={quote}
+            onSuccess={(updated) => { setQuote(updated); setIsEditModalOpen(false); setToast({ message: 'Actualizado.', type: 'success' }); fetchData(); }}
+        />
+      )}
+
+      {/* MODAL DE PRODUCTOS */}
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center">
-                <span className="w-8 h-8 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center mr-3 text-sm">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
+              <h2 className="font-bold text-slate-800 flex items-center gap-2">
+                <span className="w-8 h-8 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center text-sm">
                     <i className={`fa-solid ${isCreatingProduct ? 'fa-plus' : 'fa-box-open'}`}></i>
                 </span>
-                {isCreatingProduct ? 'Crear Nuevo Producto' : 'Seleccionar Artículo'}
+                {isCreatingProduct ? 'Crear Nuevo Producto' : 'Seleccionar Producto'}
               </h2>
-              <button onClick={() => setIsProductModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center">
+              <button onClick={() => setIsProductModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 flex items-center justify-center transition-colors">
                 <i className="fa-solid fa-times"></i>
               </button>
             </div>
             
-            <div className="p-6 space-y-5 overflow-y-auto">
-              {/* Toggle entre seleccionar y crear */}
-              <div className="flex gap-2">
+            <div className="p-6 overflow-y-auto">
+              {/* Tabs */}
+              <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
                 <button
-                  type="button"
                   onClick={() => setIsCreatingProduct(false)}
-                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${!isCreatingProduct ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all ${!isCreatingProduct ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  <i className="fa-solid fa-list mr-2"></i>
-                  Seleccionar Existente
+                  Existente
                 </button>
                 <button
-                  type="button"
-                  onClick={handleToggleCreateProduct}
-                  className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${isCreatingProduct ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                  onClick={() => setIsCreatingProduct(true)}
+                  className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all ${isCreatingProduct ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >
-                  <i className="fa-solid fa-plus mr-2"></i>
-                  Crear Nuevo
+                  Nuevo
                 </button>
               </div>
-              
+
+              {/* Content */}
               {!isCreatingProduct ? (
-                /* MODO SELECCIÓN */
-                <>
+                <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Producto</label>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Buscar Producto</label>
                     <div className="relative">
                         <select 
-                        value={selectedProductId || ''} 
-                        onChange={(e) => setSelectedProductId(e.target.value)}
-                        required 
-                        className="w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none appearance-none transition-all"
+                            value={selectedProductId || ''} 
+                            onChange={(e) => setSelectedProductId(e.target.value)}
+                            className="w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none font-medium text-sm"
                         >
-                        <option value="">-- Buscar Producto --</option>
-                        {availableProducts.map(p => (
-                            <option key={p.id_product} value={p.id_product}>
-                            {p.descripcion} ({p.codigo})
-                            </option>
-                        ))}
+                            <option value="">-- Seleccionar --</option>
+                            {availableProducts.map(p => (
+                                <option key={p.id_product} value={p.id_product}>{p.descripcion} ({p.codigo})</option>
+                            ))}
                         </select>
-                        <div className="absolute right-4 top-3.5 text-slate-400 pointer-events-none">
-                            <i className="fa-solid fa-chevron-down text-xs"></i>
-                        </div>
+                        <i className="fa-solid fa-chevron-down absolute right-4 top-4 text-slate-400 text-xs pointer-events-none"></i>
                     </div>
                   </div>
-
-                  {/* Preview del producto seleccionado con imagen */}
-                  {selectedProductId && selectedProductId.length > 0 && (() => {
-                    const selectedProduct = availableProducts.find(p => p.id_product.toString() === selectedProductId);
-                    return selectedProduct ? (
-                      <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                        <div className="flex items-start gap-4">
-                          {selectedProduct.imagen_url && (
-                            <div className="flex-shrink-0">
-                              <img
-                                src={convertGoogleDriveUrl(selectedProduct.imagen_url)}
-                                alt={selectedProduct.descripcion}
-                                className="h-16 w-16 object-cover rounded-lg border border-slate-200"
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement;
-                                  target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2UyZThmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5NGEzYjgiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5TaW4gaW1hZ2VuPC90ZXh0Pjwvc3ZnPg==';
-                                }}
-                              />
-                            </div>
-                          )}
-                          <div className="flex-grow">
-                            <p className="text-sm font-medium text-slate-900">
-                              {selectedProduct.descripcion}
-                            </p>
-                            <p className="text-xs text-slate-600 mt-1">
-                              Código: {selectedProduct.codigo}
-                            </p>
-                            {selectedProduct.precio_unitario && (
-                              <p className="text-xs text-slate-600 mt-1">
-                                Precio: ${parseFloat(String(selectedProduct.precio_unitario).replace(/[^0-9.-]+/g, "")).toFixed(2)}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ) : null;
-                  })()}
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cantidad</label>
-                    <input 
-                      type="number" 
-                      value={itemQuantity} 
-                      onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
-                      min="1" 
-                      required 
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
-                    />
-                  </div>
-                </>
-              ) : (
-                /* MODO CREACIÓN */
-                <>
-                  {/* Image Upload */}
-                  <div className="flex gap-6 items-start">
-                      <div 
-                        className="w-32 h-32 rounded-xl border-2 border-dashed border-slate-300 flex items-center justify-center overflow-hidden bg-slate-50 relative group cursor-pointer hover:border-brand-400 transition-colors flex-shrink-0" 
-                        onClick={() => fileInputRef.current?.click()}
-                      >
-                        {newProduct.imagen_url ? (
-                            <img src={convertGoogleDriveUrl(newProduct.imagen_url)} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                            <div className="text-center p-2">
-                                <i className="fa-solid fa-cloud-arrow-up text-3xl text-slate-300 mb-1"></i>
-                                <p className="text-[11px] text-slate-400 font-medium">Subir foto</p>
-                            </div>
-                        )}
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">
-                            Cambiar
-                        </div>
-                      </div>
-                      <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-                      
-                      <div className="flex-1 space-y-4">
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                                  Código <span className="text-slate-400 font-normal">(Opcional)</span>
-                                </label>
-                                <div className="space-y-2">
-                                  <input 
-                                      name="codigo" 
-                                      value={newProduct.codigo || ''} 
-                                      onChange={handleProductInputChange} 
-                                      className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-mono text-sm" 
-                                      placeholder="Dejar vacío para autogenerar"
-                                  />
-                                  {!newProduct.codigo && (
-                                    <p className="text-xs text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                                      💡 Se generará: <span className="font-mono font-bold text-brand-600">{getNextProductCode()}</span>
-                                    </p>
-                                  )}
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Categoría</label>
-                                <input 
-                                    name="categoria" 
-                                    value={newProduct.categoria || ''} 
-                                    onChange={handleProductInputChange} 
-                                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" 
-                                    placeholder="Ej. Hardware"
-                                />
-                            </div>
-                      </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Descripción <span className="text-red-500">*</span></label>
-                    <textarea 
-                        name="descripcion" 
-                        rows={4} 
-                        required 
-                        value={newProduct.descripcion || ''} 
-                        onChange={handleProductInputChange} 
-                        className="w-full px-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 resize-none"
-                        placeholder="Detalles del producto o servicio..."
-                    ></textarea>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tipo <span className="text-red-500">*</span></label>
-                        <div className="relative">
-                            <select 
-                                name="tipo" 
-                                value={newProduct.tipo || ''} 
-                                onChange={handleProductInputChange} 
-                                required
-                                className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
-                            >
-                                {productTypes.map((pt: any) => <option key={pt.id_product_type} value={pt.type}>{pt.type}</option>)}
-                            </select>
-                            <div className="absolute right-3 top-3 text-slate-400 pointer-events-none text-xs"><i className="fa-solid fa-chevron-down"></i></div>
-                        </div>
-                    </div>
-                    <div className="col-span-2">
-                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Precio Unitario</label>
-                        <div className="relative">
-                            <span className="absolute left-3 top-2.5 text-slate-400">$</span>
-                            <input 
-                                type="number" 
-                                name="precio_unitario" 
-                                step="0.01" 
-                                value={newProduct.precio_unitario || ''} 
-                                onChange={handleProductInputChange} 
-                                className="w-full pl-7 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" 
-                            />
-                        </div>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cantidad a Añadir</label>
-                    <input 
-                      type="number" 
-                      value={itemQuantity} 
-                      onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)}
-                      min="1" 
-                      required 
-                      className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-            
-            <div className="flex justify-end p-6 border-t border-slate-100 bg-slate-50 gap-3">
-              <button 
-                type="button" 
-                onClick={() => setIsProductModalOpen(false)} 
-                className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-white hover:border-slate-400 transition-all"
-              >
-                Cancelar
-              </button>
-              <button 
-                type="button" 
-                onClick={isCreatingProduct ? handleCreateAndAddProduct : handleProductSelection} 
-                disabled={processing || (!isCreatingProduct && !selectedProductId) || (isCreatingProduct && !newProduct.descripcion)}
-                className="px-5 py-2.5 rounded-xl bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg shadow-brand-200 disabled:opacity-70 disabled:shadow-none flex items-center transition-all"
-              >
-                {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-plus mr-2"></i>}
-                {isCreatingProduct ? 'Crear y Añadir' : 'Añadir al Presupuesto'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Header Card */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex-1">
-           <div className="flex items-center gap-3 mb-1">
-             {quote.is_private && (
-                 <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200 flex items-center">
-                     <i className="fa-solid fa-lock mr-1 text-[10px]"></i> Privado
-                 </span>
-             )}
-           </div>
-
-           <div className="ml-8">
-               <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Cotización #{quote.formatted_no_cotizacion}</h1>
-               <p className="text-sm text-slate-500 mt-0.5 font-medium">{quote.nombre_cotizacion}</p>
-           </div>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-3 justify-end">
-           
-           {/* Status Dropdown */}
-           {quoteStatuses.length > 0 && (() => {
-             const currentStatus = quoteStatuses.find(s => s.id_status === quote.id_quote_status);
-             return (
-               <select 
-                 disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                 value={quote.id_quote_status || ''}
-                 onChange={(e) => {
-                   const newStatusId = e.target.value;
-                   if (newStatusId === quote.id_quote_status) return;
-                   const newStatus = quoteStatuses.find(s => s.id_status === newStatusId);
-                   setConfirmState({
-                     isOpen: true,
-                     title: 'Confirmar Cambio de Estado',
-                     message: `¿Estás seguro de cambiar el estado a "${newStatus?.name}"?`,
-                     onConfirm: async () => {
-                       setConfirmState(prev => ({ ...prev, isOpen: false }));
-                       try {
-                         setProcessing(true);
-                         const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/quotes`, {
-                           method: 'POST',
-                           headers: { 'Content-Type': 'application/json' },
-                           body: JSON.stringify({
-                             id_cotizacion: quote.id_cotizacion,
-                             id_quote_status: newStatusId,
-                             id_tenant: user?.id_tenant,
-                             id_user: user?.id_user
-                           })
-                         });
-                         if (response.ok) {
-                           setQuote({ ...quote, id_quote_status: newStatusId });
-                           setToast({ message: 'Estado actualizado correctamente', type: 'success' });
-                           await fetchData();
-                         } else {
-                           throw new Error('Error en la respuesta del servidor');
-                         }
-                       } catch (err) {
-                         setToast({ message: 'Error al actualizar estado', type: 'error' });
-                       } finally {
-                         setProcessing(false);
-                       }
-                     },
-                     onCancel: () => setConfirmState(prev => ({ ...prev, isOpen: false }))
-                   });
-                 }}
-                 className="px-4 py-2.5 rounded-xl border font-medium transition-all outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                 style={{
-                   backgroundColor: `${currentStatus?.color || '#cccccc'}15`,
-                   borderColor: `${currentStatus?.color || '#cccccc'}40`,
-                   color: currentStatus?.color || '#333'
-                 }}
-               >
-                 {quoteStatuses.map(s => (
-                   <option key={s.id_status} value={s.id_status}>{s.name}</option>
-                 ))}
-               </select>
-             );
-           })()}
-
-           
-
-            <div className="h-8 w-px bg-slate-200 mx-1 hidden md:block"></div>
-
-          {(quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
-            <button 
-              onClick={() => setIsShareOpen(true)}
-              className="text-slate-500 hover:text-brand-600 hover:bg-brand-50 p-2.5 rounded-lg transition-all"
-              title="Compartir"
-            >
-              <i className="fa-solid fa-share-nodes text-lg"></i>
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        
-        {/* Left Column: Details & Items */}
-        <div className="xl:col-span-2 space-y-6">
-
-          {/* Commercial Conditions & Details Section */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-              <h3 className="font-bold text-slate-800 flex items-center">
-                <span className="w-2 h-6 bg-emerald-500 rounded-full mr-3"></span>
-                Detalles de la Cotización
-              </h3>
-              {(quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
-                <button 
-                  onClick={() => setIsEditModalOpen(true)}
-                  className="text-xs bg-brand-50 hover:bg-brand-100 text-brand-700 px-3 py-1.5 rounded-lg transition-colors font-medium flex items-center"
-                >
-                  <i className="fa-solid fa-pencil mr-1.5"></i> Editar Todo
-                </button>
-              )}
-            </div>
-            
-            <div className="px-6 py-4 space-y-3">
-              {/* Row 1: Condiciones Comerciales */}
-              <div className="grid grid-cols-4 gap-4 pb-3 border-b border-slate-100">
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tiempo de Entrega</p>
-                  <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.tiempo_entrega || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Garantía</p>
-                  <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.garantia || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Validez Oferta</p>
-                  <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.validez_oferta || '-'}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Condición de Pago</p>
-                  <p className="text-sm font-medium text-slate-800 mt-0.5">{quote.condicion_pago || '-'}</p>
-                </div>
-              </div>
-
-              {/* Row 2: Nota Interna (si existe) */}
-              {quote.nota && (
-                <div className="py-2">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Nota Interna</p>
-                  <p className="text-sm text-slate-700 bg-slate-50 p-2 rounded border border-slate-100">{quote.nota}</p>
-                </div>
-              )}
-
-              {/* Row 3: Mensaje para Cliente (si existe) */}
-              {quote.mensaje && (
-                <div className="py-2">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Mensaje al Cliente</p>
-                  <p className="text-sm text-slate-700 bg-blue-50 p-2 rounded border border-blue-100 whitespace-pre-wrap">{quote.mensaje}</p>
-                </div>
-              )}
-
-              {/* Row 4: Correos CC (si existen) */}
-              {quote.correos_adicionales && (
-                <div className="py-2">
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Copia a</p>
-                  <p className="text-sm text-slate-700">{quote.correos_adicionales}</p>
-                </div>
-              )}
-            </div>
-          </div>
-          
-          {/* Items Section */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-              <h3 className="font-bold text-slate-800 flex items-center">
-                <span className="w-2 h-6 bg-brand-500 rounded-full mr-3"></span>
-                Artículos
-              </h3>
-              {canEditItems && (quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
-                <button 
-                    onClick={handleAddItem} 
-                    className="text-sm bg-brand-50 hover:bg-brand-100 text-brand-700 px-4 py-2 rounded-lg transition-colors font-medium flex items-center"
-                >
-                  <i className="fa-solid fa-plus mr-2"></i> Agregar
-                </button>
-              )}
-            </div>
-            
-            {items.length === 0 ? (
-              <div className="p-12 text-center">
-                  <div className="bg-slate-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-                      <i className="fa-solid fa-basket-shopping text-slate-300 text-2xl"></i>
-                  </div>
-                  <h4 className="text-slate-600 font-medium">Sin artículos aún</h4>
-                  <p className="text-slate-400 text-sm mt-1">Agrega productos para comenzar a armar el presupuesto.</p>
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                    <thead className="text-xs text-slate-500 font-semibold uppercase bg-slate-50 border-b border-slate-100">
-                    <tr>
-                        <th className="px-6 py-4">Descripción</th>
-                        <th className="px-4 py-4 text-right w-24">Cant.</th>
-                        <th className="px-4 py-4 text-right w-32">Precio U.</th>
-                        <th className="px-6 py-4 text-right w-32">Total</th>
-                        <th className="px-4 py-4 text-center w-16"></th>
-                    </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                    {items.map((item, index) => {
-                        const cantidad = parseFloat(item.cantidad as any) || 0;
-                        const precioUnitario = parseFloat((item.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
-                        const subtotal = cantidad * precioUnitario;
-
-                        return (
-                        <tr key={item.id_articulo_cot || item.id_quote_item} className="group hover:bg-slate-50/50 transition-colors">
-                            <td className="px-6 py-4">
-                                <div className="flex items-start">
-                                    <span className="text-slate-300 text-xs font-mono mr-3 mt-1 w-4">{index + 1}</span>
-                                    <div>
-                                        <p className="font-medium text-slate-700 text-sm">{item.descripcion}</p>
-                                        <p className="text-xs text-slate-400 font-mono mt-0.5">{item.codigo || ''}</p>
+                  {selectedProductId && (
+                      <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex gap-4">
+                          {(() => {
+                              const p = availableProducts.find(x => x.id_product === selectedProductId);
+                              if(!p) return null;
+                              return (
+                                <>
+                                    <div className="w-16 h-16 bg-white rounded-lg border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                                        {p.imagen_url ? <img src={convertGoogleDriveUrl(p.imagen_url)} className="w-full h-full object-cover"/> : <i className="fa-solid fa-image text-slate-300"></i>}
                                     </div>
-                                </div>
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                                <input 
-                                    type="number"
-                                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                                    defaultValue={cantidad}
-                                    onBlur={(e) => handleUpdateItem(item.id_articulo_cot || item.id_quote_item || '', parseInt(e.target.value) || 1, precioUnitario)}
-                                    min="1" 
-                                    className="w-full px-2 py-1.5 bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded text-right font-medium text-slate-700 outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                                />
-                            </td>
-                            <td className="px-4 py-4 text-right">
-                                <input 
-                                    type="number"
-                                    disabled={!(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                                    defaultValue={precioUnitario.toFixed(2)}
-                                    onBlur={(e) => handleUpdateItem(item.id_articulo_cot || item.id_quote_item || '', cantidad, parseFloat(e.target.value) || 0)}
-                                    step="0.01"
-                                    className="w-full px-2 py-1.5 bg-transparent border border-transparent hover:border-slate-200 focus:bg-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded text-right font-medium text-slate-700 outline-none transition-all disabled:cursor-not-allowed disabled:opacity-50"
-                                />
-                            </td>
-                            <td className="px-6 py-4 text-right font-bold text-slate-700">
-                                {subtotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </td>
-                            <td className="px-4 py-4 text-center">
-                                {(quote.access_level === 'EDIT' || user?.rol_user === 'admin') && (
-                                  <button 
-                                  onClick={() => handleDeleteItem(item.id_articulo_cot || item.id_quote_item || '')}
-                                  className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                                  title="Eliminar artículo"
-                                  >
-                                  <i className="fa-solid fa-trash-alt"></i>
-                                  </button>
-                                )}
-                            </td>
-                        </tr>
-                        )
-                    })}
-                    <tr className="bg-slate-50/80 border-t-2 border-slate-100">
-                        <td colSpan={3} className="px-6 py-4 text-right font-bold text-slate-600 uppercase text-xs tracking-wider">Total General</td>
-                        <td className="px-6 py-4 text-right font-black text-slate-800 text-xl font-mono">
-                            {quote.total}
-                        </td>
-                        <td></td>
-                    </tr>
-                    </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Historial de PDFs (en lugar de Documentos) */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white">
-              <div className="flex items-center gap-3">
-                <span className="w-2 h-6 bg-indigo-500 rounded-full"></span>
-                <div>
-                  <h3 className="font-bold text-slate-800">Historial de PDFs</h3>
-                  <p className="text-xs text-slate-500">Versiones generadas y quién las creó.</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                {showGenerateBtn && (
-                  <button 
-                    onClick={handleGeneratePDF}
-                    disabled={processing || !(quote.access_level === 'EDIT' || user?.rol_user === 'admin')}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-                    {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-file-pdf"></i>}
-                    Generar PDF v{quote.version + 1}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={fetchData}
-                  className="px-3 py-2 text-sm rounded-lg border border-slate-200 hover:border-indigo-400 hover:text-indigo-600 transition-colors flex items-center gap-2"
-                >
-                  <i className="fa-solid fa-rotate-right"></i>
-                  Actualizar
-                </button>
-              </div>
-            </div>
-
-            <div className="px-6 py-4">
-              {pdfVersions.length === 0 && (
-                <div className="text-sm text-slate-500">Aún no se han generado PDFs para esta cotización.</div>
-              )}
-
-              {pdfVersions.length > 0 && (
-                <div className="divide-y divide-slate-100">
-                  {pdfVersions.map((pdf) => {
-                    // Validar que el PDF tenga datos válidos
-                    if (!pdf.file_url || pdf.version_number === undefined) return null;
-                    
-                    // Validar y formatear la fecha
-                    const fecha = pdf.created_at ? new Date(pdf.created_at) : null;
-                    const fechaValida = fecha && !isNaN(fecha.getTime());
-                    const fechaFormato = fechaValida ? fecha.toLocaleString() : 'Fecha desconocida';
-                    
-                    return (
-                      <div key={pdf.id_version} className="py-3 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                            <i className="fa-solid fa-file-pdf"></i>
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-                              v{pdf.version_number}
-                              <span className="text-xs text-slate-400">{fechaFormato}</span>
-                            </div>
-                            <div className="text-xs text-slate-500 truncate">
-                              Generado por {pdf.generado_por || 'Sistema'}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {pdf.avatar_url && (
-                            <img
-                              src={pdf.avatar_url}
-                              alt={pdf.generado_por}
-                              className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                            />
-                          )}
-                          <a
-                            href={pdf.file_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-3 py-2 text-sm rounded-lg border border-slate-200 hover:border-indigo-500 hover:text-indigo-600 transition-colors flex items-center gap-2"
-                          >
-                            <i className="fa-solid fa-arrow-up-right-from-square"></i>
-                            Abrir
-                          </a>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.preventDefault(); handleSendQuoteClick(pdf.id_version); }}
-                            disabled={processing}
-                            className="px-3 py-2 text-sm rounded-lg border border-emerald-200 text-emerald-700 hover:border-emerald-500 hover:text-emerald-800 transition-colors flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
-                          >
-                            {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>}
-                            Enviar
-                          </button>
-                        </div>
+                                    <div>
+                                        <p className="font-bold text-slate-800 text-sm">{p.descripcion}</p>
+                                        <p className="text-xs text-slate-500 mt-1">Precio Ref: <span className="font-bold text-slate-700">${parseFloat(String(p.precio_unitario).replace(/[^0-9.-]+/g,"")).toFixed(2)}</span></p>
+                                    </div>
+                                </>
+                              );
+                          })()}
                       </div>
-                    );
-                  })}
+                  )}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Cantidad</label>
+                    <input type="number" min="1" value={itemQuantity} onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" />
+                  </div>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Historial de Envíos */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-white">
-              <div className="flex items-center gap-3">
-                <span className="w-2 h-6 bg-emerald-500 rounded-full"></span>
-                <div>
-                  <h3 className="font-bold text-slate-800">Historial de Envíos</h3>
-                  <p className="text-xs text-slate-500">Registro de cotizaciones enviadas por email.</p>
-                </div>
-              </div>
-              <span className="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded-full font-bold">
-                {quote.sent_history?.length || 0}
-              </span>
-            </div>
-
-            <div className="px-6 py-4">
-              {(!quote.sent_history || quote.sent_history.length === 0) && (
-                <div className="text-center py-8">
-                  <i className="fa-solid fa-inbox text-3xl text-slate-200 mb-2 block"></i>
-                  <p className="text-sm text-slate-400">No se han enviado cotizaciones aún.</p>
-                </div>
-              )}
-
-              {quote.sent_history && quote.sent_history.length > 0 && (
-                <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                  {quote.sent_history.map((log, idx) => (
-                    <div key={idx} className="bg-slate-50 p-4 rounded-xl border border-slate-200 hover:border-emerald-200 transition-all">
-                      <div className="flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                          <i className="fa-solid fa-envelope text-sm"></i>
+              ) : (
+                <div className="space-y-4">
+                   <div className="flex gap-4">
+                        <div onClick={() => fileInputRef.current?.click()} className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-white hover:border-brand-400 cursor-pointer flex items-center justify-center relative overflow-hidden shrink-0 transition-all">
+                            {newProduct.imagen_url ? <img src={convertGoogleDriveUrl(newProduct.imagen_url)} className="w-full h-full object-cover"/> : <div className="text-center"><i className="fa-solid fa-camera text-slate-300 mb-1"></i><p className="text-[9px] text-slate-400 font-bold uppercase">Foto</p></div>}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 mb-2">
+                        <input type="file" ref={fileInputRef} onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if(file){
+                                setImageFile(file);
+                                const reader = new FileReader();
+                                reader.onloadend = () => setNewProduct({...newProduct, imagen_url: reader.result});
+                                reader.readAsDataURL(file);
+                            }
+                        }} className="hidden" />
+                        <div className="flex-1 space-y-3">
                             <div>
-                              <p className="font-bold text-slate-800 text-sm">
-                                Versión {log.version_enviada}
-                              </p>
-                              <p className="text-xs text-slate-500 mt-0.5">
-                                {log.sent_at_fmt}
-                              </p>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Código</label>
+                                <input value={newProduct.codigo} onChange={e => setNewProduct({...newProduct, codigo: e.target.value})} placeholder={getNextProductCode()} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono"/>
                             </div>
-                            <span className="text-[10px] uppercase font-bold text-slate-400 whitespace-nowrap">
-                              {log.method === 'EMAIL' ? '📧 Email' : '✉️ Manual'}
-                            </span>
-                          </div>
-                          <div className="space-y-1.5 text-xs text-slate-600">
-                            <div className="flex items-center gap-2">
-                              <i className="fa-solid fa-user text-slate-400 w-4"></i>
-                              <span className="font-medium">{log.sent_by_name}</span>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-400 uppercase">Categoría</label>
+                                <input value={newProduct.categoria} onChange={e => setNewProduct({...newProduct, categoria: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"/>
                             </div>
-                            <div className="flex items-start gap-2">
-                              <i className="fa-solid fa-envelope text-slate-400 w-4 mt-0.5"></i>
-                              <div className="flex-1 min-w-0">
-                                <p className="break-all text-slate-600">{log.sent_to}</p>
-                                {log.sent_cc && <p className="text-slate-500 text-[11px] mt-0.5">CC: {log.sent_cc}</p>}
-                              </div>
-                            </div>
-                            {log.subject && (
-                              <div className="flex items-start gap-2">
-                                <i className="fa-solid fa-heading text-slate-400 w-4 mt-0.5"></i>
-                                <p className="text-slate-700 italic truncate">Asunto: {log.subject}</p>
-                              </div>
-                            )}
-                            {log.email_policy && (
-                              <div className="flex items-center gap-2">
-                                <i className={`${log.email_policy === 'CORPORATE' ? 'fa-solid fa-building' : 'fa-solid fa-user'} text-slate-400 w-4`}></i>
-                                <span className="text-slate-600">
-                                  {log.email_policy === 'CORPORATE' ? '🏢 Email Corporativo' : '👤 Email Personal'}
-                                </span>
-                              </div>
-                            )}
-                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                   </div>
+                   <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Descripción *</label>
+                        <textarea rows={2} value={newProduct.descripcion} onChange={e => setNewProduct({...newProduct, descripcion: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-brand-500 outline-none"></textarea>
+                   </div>
+                   <div className="grid grid-cols-2 gap-4">
+                        <div>
+                             <label className="text-[10px] font-bold text-slate-400 uppercase">Tipo</label>
+                             <select value={newProduct.tipo} onChange={e => setNewProduct({...newProduct, tipo: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">
+                                 {productTypes.map(pt => <option key={pt.id_product_type} value={pt.type}>{pt.type}</option>)}
+                             </select>
+                        </div>
+                        <div>
+                             <label className="text-[10px] font-bold text-slate-400 uppercase">Precio Unitario</label>
+                             <div className="relative">
+                                 <span className="absolute left-3 top-2 text-slate-400">$</span>
+                                 <input type="number" step="0.01" value={newProduct.precio_unitario} onChange={e => setNewProduct({...newProduct, precio_unitario: e.target.value})} className="w-full pl-6 pr-3 py-2 border border-slate-200 rounded-lg text-sm"/>
+                             </div>
+                        </div>
+                   </div>
+                   <div>
+                       <label className="text-[10px] font-bold text-slate-400 uppercase">Cantidad a añadir</label>
+                       <input type="number" min="1" value={itemQuantity} onChange={e => setItemQuantity(parseInt(e.target.value))} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"/>
+                   </div>
                 </div>
               )}
             </div>
-          </div>
 
-        </div>
-
-        {/* Right Column: Meta Info & Decision */}
-        <div className="space-y-6">
-          
-          {/* Decision Card (Only visible if sent) */}
-          {isSent && (
-            <div className="bg-white rounded-2xl shadow-lg border border-purple-100 p-6 relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
-              <h3 className="font-bold text-slate-800 mb-2 flex items-center">
-                <i className="fa-solid fa-gavel text-purple-500 mr-2"></i>
-                Decisión del Cliente
-              </h3>
-              <p className="text-sm text-slate-500 mb-5 leading-relaxed">Registra la respuesta oficial para actualizar el estado del trato automáticamente.</p>
-              
-              <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100">
-                <label className="block text-xs font-bold text-purple-800 uppercase tracking-wider mb-2">Respuesta Actual</label>
-                <select 
-                    value={quote.estado_decision || ''}
-                    onChange={handleDecisionChange}
-                    className="w-full px-4 py-2.5 bg-white border border-purple-200 rounded-lg text-slate-700 font-medium focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none shadow-sm transition-all"
-                >
-                    <option value={UserDecision.PENDING}>⏳ Pendiente de Respuesta</option>
-                    <option value={UserDecision.APPROVED}>✅ APROBADO (Ganado)</option>
-                    <option value={UserDecision.REJECTED}>❌ RECHAZADO (Perdido)</option>
-                    <option value={UserDecision.NEGOCIAR}>💬 En Negociación</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {/* Client & Contact Card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-5 pb-2 border-b border-slate-50">Información del Cliente</h3>
-            
-            <div className="space-y-5">
-              <div className="flex items-start group">
-                <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mr-3 mt-0.5 shrink-0">
-                    <i className="fa-solid fa-building"></i>
-                </div>
-                <div>
-                  <span className="text-xs text-slate-400 font-semibold block uppercase">Empresa</span>
-                  <Link to={`/app/client-companies/${quote.id_client_company}`} className="text-slate-800 font-bold hover:text-blue-600 transition-colors text-base">
-                    {(quote.company_detail as any)?.name || quote.client_company_name || '-'}
-                  </Link>
-                </div>
-              </div>
-
-              <div className="flex items-start group">
-                 <div className="w-10 h-10 rounded-full bg-slate-50 text-slate-500 flex items-center justify-center mr-3 mt-0.5 shrink-0">
-                    <i className="fa-solid fa-user"></i>
-                 </div>
-                 <div>
-                   <span className="text-xs text-slate-400 font-semibold block uppercase">Contacto</span>
-                   <Link to={`/app/client-contacts/${quote.id_contact}`} className="text-slate-700 font-medium hover:text-brand-600 transition-colors">
-                     {quote.contact_detail?.full_name || quote.contact_name || '-'}
-                   </Link>
-                 </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                 <div>
-                    <span className="text-xs text-slate-400 block mb-1">Vendedor</span>
-                    <div className="flex items-center">
-                        <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-xs mr-2">
-                            <i className="fa-solid fa-user-tie"></i>
-                        </div>
-                        <span className="text-slate-700 text-sm font-medium truncate">{quote.owner_detail?.name || quote.owner_name || '-'}</span>
-                    </div>
-                 </div>
-                 <div>
-                  <span className="text-xs text-slate-400 block mb-1">Fecha Emisión</span>
-                  <span className="text-slate-700 text-sm font-medium bg-slate-50 px-2 py-1 rounded border border-slate-100 block text-center">
-                    {quote.fecha_emision_fmt || (quote.fecha_emision ? new Date(quote.fecha_emision).toLocaleDateString() : '')}
-                  </span>
-                 </div>
-                 <div>
-                  <span className="text-xs text-slate-400 block mb-1">Creado</span>
-                  <span className="text-slate-700 text-sm font-medium bg-slate-50 px-2 py-1 rounded border border-slate-100 block text-center">
-                    {quote.created_at_fmt || (quote.created_at ? (new Date(quote.created_at).toLocaleDateString() + ' ' + new Date(quote.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })) : '')}
-                  </span>
-                 </div>
-              </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+               <button onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-600 font-bold text-xs hover:bg-slate-200 transition-colors">Cancelar</button>
+               <button 
+                  onClick={isCreatingProduct ? handleCreateAndAddProduct : handleProductSelection}
+                  disabled={processing || (isCreatingProduct && !newProduct.descripcion) || (!isCreatingProduct && !selectedProductId)}
+                  className="px-6 py-2 rounded-lg bg-brand-600 text-white font-bold text-xs hover:bg-brand-700 shadow-md shadow-brand-200 transition-all disabled:opacity-50"
+               >
+                  {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : (isCreatingProduct ? 'Crear y Añadir' : 'Añadir')}
+               </button>
             </div>
           </div>
-
-          {/* Associated Deal Card */}
-          {quote.id_trato && quote.deal_detail && (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 pb-2 border-b border-slate-50">Contexto</h3>
-              <div className="flex items-center p-3 rounded-xl bg-slate-50 border border-slate-100 hover:border-brand-200 transition-colors">
-                 <div className="w-10 h-10 bg-white rounded-lg shadow-sm flex items-center justify-center text-brand-600 mr-3 text-lg">
-                    <i className="fa-solid fa-handshake"></i>
-                 </div>
-                 <div className="overflow-hidden">
-                    <p className="text-xs text-slate-500 mb-0.5">Trato Asociado</p>
-                    <Link to={`/app/deals/${quote.id_trato}`} className="text-brand-700 font-bold hover:underline truncate block">
-                      {quote.deal_detail.name}
-                    </Link>
-                 </div>
-              </div>
-            </div>
-          )}
-
         </div>
-      </div>
-      
-      {isShareOpen && quote && (
-        <ShareModal 
-          entity="quotes" 
-          id={quote.id_cotizacion} 
-          isOpen={isShareOpen} 
-          onClose={() => setIsShareOpen(false)} 
-          onShared={() => setToast({ message: 'Cotización compartida.', type: 'success' })}
-        />
       )}
-
-      {/* Quote Edit Modal - Use creation-style modal for edit */}
-      {quote && (
-        <QuoteFormModal
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          initialData={quote}
-          onSuccess={(updatedQuote) => {
-            setQuote(updatedQuote);
-            setIsEditModalOpen(false);
-            setToast({ message: 'Cotización actualizada exitosamente.', type: 'success' });
-            fetchData();
-          }}
-        />
-      )}
-
-      {/* Quote Edit Modal - Legacy removed */}
     </div>
   );
 };

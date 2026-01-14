@@ -30,7 +30,7 @@ const ClientContactsList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   // --- ESTADOS DE LA TABLA ---
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'first_name', desc: false }]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'last_name', desc: false }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [grouping, setGrouping] = useState<GroupingState>(() => {
@@ -238,7 +238,7 @@ const ClientContactsList: React.FC = () => {
             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-[10px] border border-slate-200 shadow-sm">
               {getInitials(c.first_name, c.last_name)}
             </div>
-            <span className="font-semibold text-slate-800">{`${c.first_name} ${c.last_name || ''}`}</span>
+            <span className="font-semibold text-slate-800">{`${c.last_name} ${c.first_name || ''}`}</span>
           </div>
         );
       },
