@@ -3,6 +3,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import CollectionModal from '../components/CollectionModal';
+import FinancialFormModal from '../components/FinancialFormModal';
 import { useAuth } from '../contexts/AuthContext';
 import type { FinancialTransaction, ClientCompany, Quote } from '../types';
 
@@ -106,14 +107,6 @@ const FinancialDetail: React.FC = () => {
     setIsEditModalOpen(true);
   };
 
-  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setEditData(prev => {
-      if (!prev) return prev;
-      return { ...prev, [name]: value };
-    });
-  };
-
   const handleStatusChange = async (newStatus: string) => {
     if (!transaction) return;
     setProcessing(true);
@@ -144,15 +137,15 @@ const FinancialDetail: React.FC = () => {
     }
   };
 
-  const handleSaveEdit = async () => {
-    if (!editData || !user) return;
+  const handleSaveEdit = async (data: Partial<FinancialTransaction>) => {
+    if (!data || !user) return;
     setProcessing(true);
     try {
       const payload = {
-        ...editData,
-        id_transaction: editData.id_transaction,
+        ...data,
+        id_transaction: data.id_transaction,
         id_tenant: user.id_tenant,
-        created_by: editData.created_by || user.id_user,
+        created_by: data.created_by || user.id_user,
       };
 
       const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
@@ -163,7 +156,8 @@ const FinancialDetail: React.FC = () => {
 
       if (!response.ok) throw new Error('Error al actualizar la transacción.');
 
-      setTransaction(editData);
+      setTransaction(data as FinancialTransaction);
+      setEditData(data);
       setIsEditModalOpen(false);
       setToast({ message: 'Transacción actualizada correctamente.', type: 'success' });
     } catch (error: any) {
@@ -797,229 +791,15 @@ const FinancialDetail: React.FC = () => {
       )}
 
       {/* Edit Modal */}
-      {isEditModalOpen && editData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 px-6 py-5 border-b border-slate-100 bg-white flex justify-between items-center">
-              <h2 className="text-lg font-bold text-slate-800">Editar Transacción</h2>
-              <button
-                onClick={() => setIsEditModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 transition-colors bg-slate-100 w-8 h-8 rounded-full flex items-center justify-center"
-              >
-                <i className="fa-solid fa-times"></i>
-              </button>
-            </div>
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo de Transacción</label>
-                  <select
-                    name="transaction_type"
-                    value={editData.transaction_type || ''}
-                    onChange={handleEditInputChange}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  >
-                    <option value="VENTA">Venta</option>
-                    <option value="GASTO">Gasto</option>
-                    <option value="OTRO">Otro</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Estado</label>
-                  <select
-                    name="status"
-                    value={editData.status || ''}
-                    onChange={handleEditInputChange}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  >
-                    <option value="PENDIENTE">Pendiente</option>
-                    <option value="PAGADO">Pagado</option>
-                    <option value="VENCIDO">Vencido</option>
-                    <option value="ANULADO">Anulado</option>
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Número de Factura</label>
-                  <input
-                    type="text"
-                    name="invoice_number"
-                    value={editData.invoice_number || ''}
-                    onChange={handleEditInputChange}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descripción</label>
-                  <input
-                    type="text"
-                    name="description"
-                    value={editData.description || ''}
-                    onChange={handleEditInputChange}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Cliente</label>
-                  <select
-                    name="id_client_company"
-                    value={editData.id_client_company || ''}
-                    onChange={handleEditInputChange}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  >
-                    <option value="">Sin cliente</option>
-                    {clientCompanies.map(c => (
-                      <option key={c.id_client_company} value={c.id_client_company}>
-                        {c.name_company}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Cotización Relacionada</label>
-                  <select
-                    name="id_related_quote"
-                    value={editData.id_related_quote || ''}
-                    onChange={handleEditInputChange}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  >
-                    <option value="">Sin cotización</option>
-                    {quotes.map(q => (
-                      <option key={q.id_cotizacion} value={q.id_cotizacion}>
-                        {q.nombre_cotizacion || q.formatted_no_cotizacion || q.no_cotizacion}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Subtotal</label>
-                  <input
-                    type="number"
-                    name="subtotal"
-                    value={editData.subtotal || 0}
-                    onChange={handleEditInputChange}
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">IVA (%)</label>
-                  <input
-                    type="number"
-                    name="tax_amount"
-                    value={editData.tax_amount || 0}
-                    onChange={handleEditInputChange}
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha de Emisión</label>
-                  <input
-                    type="date"
-                    name="invoice_date"
-                    value={editData.invoice_date?.split('T')[0] || ''}
-                    onChange={handleEditInputChange}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha de Vencimiento</label>
-                  <input
-                    type="date"
-                    name="due_date"
-                    value={editData.due_date?.split('T')[0] || ''}
-                    onChange={handleEditInputChange}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Monto Pagado</label>
-                  <input
-                    type="number"
-                    name="paid_amount"
-                    value={editData.paid_amount || 0}
-                    onChange={handleEditInputChange}
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Saldo Pendiente</label>
-                  <input
-                    type="number"
-                    name="balance_due"
-                    value={editData.balance_due || 0}
-                    onChange={handleEditInputChange}
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Días de Crédito</label>
-                  <input
-                    type="number"
-                    name="credit_days"
-                    value={editData.credit_days || 0}
-                    onChange={handleEditInputChange}
-                    min="0"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Valor Retención</label>
-                  <input
-                    type="number"
-                    name="retention_value"
-                    value={editData.retention_value || 0}
-                    onChange={handleEditInputChange}
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name="is_urgent"
-                  checked={editData.is_urgent || false}
-                  onChange={(e) => setEditData(prev => prev ? { ...prev, is_urgent: e.target.checked } : null)}
-                  className="w-4 h-4 text-brand-600 rounded focus:ring-brand-500"
-                />
-                <label className="text-sm font-semibold text-slate-700">Marcar como urgente</label>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 p-6 border-t border-slate-100 bg-slate-50">
-              <button
-                onClick={() => setIsEditModalOpen(false)}
-                disabled={processing}
-                className="px-5 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-white transition-colors disabled:opacity-60"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleSaveEdit}
-                disabled={processing}
-                className="px-5 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg disabled:opacity-60 flex items-center"
-              >
-                {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-save mr-2"></i>}
-                Guardar cambios
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <FinancialFormModal
+        isOpen={isEditModalOpen}
+        initialData={editData}
+        clientCompanies={clientCompanies}
+        quotes={quotes}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleSaveEdit}
+        isProcessing={processing}
+      />
 
       {/* Payment Modal */}
       {isPaymentModalOpen && (

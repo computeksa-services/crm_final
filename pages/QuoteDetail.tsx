@@ -596,6 +596,7 @@ const QuoteDetail: React.FC = () => {
                 body: JSON.stringify({
                 id_cotizacion: quote.id_cotizacion,
                 id_user: user.id_user,
+                id_tenant: user.id_tenant,
                 id_version: idVersion || null, 
                 id_trato: quote.id_trato
                 })
