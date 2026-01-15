@@ -149,7 +149,7 @@ const FinancialDetail: React.FC = () => {
         tax_amount: parseFloat(tx.impuestos || 0),
         retention_value: parseFloat(tx.valor_retencion || 0),
         total_value: parseFloat(tx.total_factura || 0),
-        paid_amount: parseFloat(tx.v_total_abonado || 0),
+        paid_amount: parseFloat(tx.monto_pagado_caja || tx.v_total_abonado || 0),
         balance_due: Math.max(parseFloat(tx.v_saldo_pendiente || 0) - parseFloat(tx.valor_retencion || 0), 0),
         enable_automation: tx.enable_automation === true,
         automation_frequency: tx.automation_frequency,

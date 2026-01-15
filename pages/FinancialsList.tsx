@@ -314,14 +314,14 @@ const FinancialsList: React.FC = () => {
                   cobradoMes: Number(result.kpis.cobrado_periodo || 0)
               });
           }
-          if (result.lista) {
-              setAvailableList(result.lista);
+          if (result.meses_disponibles) {
+              setAvailableList(result.meses_disponibles);
               
               // Si el año seleccionado no existe en la lista, cambiar al primer año disponible
-              const yearExists = result.lista.some((y: any) => y.year === selectedYear);
-              if (!yearExists && result.lista.length > 0) {
-                  const firstYear = result.lista[0].year;
-                  const months = result.lista[0].months_available || [];
+              const yearExists = result.meses_disponibles.some((y: any) => y.year === selectedYear);
+              if (!yearExists && result.meses_disponibles.length > 0) {
+                  const firstYear = result.meses_disponibles[0].year;
+                  const months = result.meses_disponibles[0].months_available || [];
                   const sorted = [...months].sort((a: any, b: any) => b.month - a.month);
                   if (sorted.length > 0) {
                       const firstMonth = sorted[0].month;
@@ -334,7 +334,7 @@ const FinancialsList: React.FC = () => {
               }
           }
           
-          const txList = (result.transactions || []).filter((t: any) => t && Object.keys(t).length > 0);
+          const txList = (result.data || []).filter((t: any) => t && Object.keys(t).length > 0);
           setTransactions(txList.map((t: any) => ({
               ...t,
               id_transaction: t.id_transaction || t.id_transaccion,
@@ -342,6 +342,7 @@ const FinancialsList: React.FC = () => {
               description: t.description || t.descripcion_concepto,
               client_company_name: t.client_company_name || t.nombre_cliente_proveedor,
               status: t.status || t.estado_registro,
+              transaction_type: t.tipo_transaccion,
               total_value: Number(t.total_value || t.total_factura || 0),
               paid_amount: Number(t.paid_amount || t.monto_pagado_caja || 0),
               retention_value: Number(t.retention_value || t.valor_retencion || 0),
