@@ -247,7 +247,7 @@ const FinancialsList: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // Table State
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'issue_date', desc: true }]);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [grouping, setGrouping] = useState<GroupingState>(() => {
@@ -339,11 +339,13 @@ const FinancialsList: React.FC = () => {
               ...t,
               id_transaction: t.id_transaction || t.id_transaccion,
               invoice_number: t.invoice_number || t.numero_factura,
+              description: t.description || t.descripcion_concepto,
               client_company_name: t.client_company_name || t.nombre_cliente_proveedor,
               status: t.status || t.estado_registro,
               total_value: Number(t.total_value || t.total_factura || 0),
               paid_amount: Number(t.paid_amount || t.monto_pagado_caja || 0),
-              balance_due: Number(t.v_saldo_pendiente || t.saldo_pendiente || 0),
+              retention_value: Number(t.retention_value || t.valor_retencion || 0),
+              balance_due: Math.max(Number(t.v_saldo_pendiente || t.saldo_pendiente || 0) - Number(t.valor_retencion || 0), 0),
               issue_date: t.issue_date || t.fecha_emision,
               due_date: t.due_date || t.fecha_vencimiento,
               subtotal: Number(t.subtotal || 0),
@@ -409,10 +411,10 @@ const FinancialsList: React.FC = () => {
     {
         accessorKey: 'invoice_number',
         header: 'Factura',
-        size: 100,
+        size: 300,
         enableColumnFilter: false,
         cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
-            <div className="font-bold text-brand-600 text-xs flex items-center gap-1">
+            <div className="font-bold text-brand-600 text-xs flex items-center gap-1 whitespace-nowrap">
                 {getValue() as string}
                 {row.original.is_urgent && <i className="fa-solid fa-triangle-exclamation text-red-500" title="Urgente"></i>}
             </div>
@@ -421,18 +423,18 @@ const FinancialsList: React.FC = () => {
     {
         accessorKey: 'description',
         header: 'Descripción',
-        size: 200,
+        size: 225,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <div className="text-slate-600 text-xs italic truncate max-w-[200px]">{getValue() as string}</div>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <div className="text-slate-600 text-xs italic line-clamp-2 w-[225px]">{getValue() as string}</div>
     },
     {
         accessorKey: 'client_company_name',
         header: 'Cliente',
-        size: 180,
+        size: 140,
         enableColumnFilter: true,
         cell: ({ row, getValue, column }) => {
             if (row.getIsGrouped()) return grouping.includes(column.id) ? renderGroupCell(row, getValue() as string) : null;
-            return <div className="text-xs font-bold text-slate-700 uppercase">{getValue() as string || 'Sin Cliente'}</div>;
+            return <div className="text-xs font-bold text-slate-700 uppercase w-[140px]">{getValue() as string || 'Sin Cliente'}</div>;
         }
     },
     {
@@ -482,6 +484,17 @@ const FinancialsList: React.FC = () => {
         size: 80,
         enableColumnFilter: false,
         cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono text-slate-500 text-right block">${((row.original.subtotal||0) * (getValue() as number||0)/100).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+    },
+    {
+        accessorKey: 'retention_value',
+        header: 'Retención',
+        size: 100,
+        enableColumnFilter: false,
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
+            (getValue() as number) > 0 
+                ? <span className="text-xs font-mono text-indigo-600 text-right block">${(getValue() as number).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                : <span className="text-xs text-slate-400 text-right block">-</span>
+        )
     },
     {
         accessorKey: 'total_value',
@@ -582,7 +595,7 @@ const FinancialsList: React.FC = () => {
         </div>
 
         {/* CONTROLES EXTRA (Fechas, Toggle, Agrupar) */}
-        <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-2">
+        <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-3">
             
             {/* Selector Año/Mes */}
             {(() => {
@@ -610,10 +623,10 @@ const FinancialsList: React.FC = () => {
                                 setSelectedMonth(month);
                                 setDateRange({ start, end });
                             }}
-                            className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold uppercase text-slate-600 transition-all shadow-sm hover:shadow-md"
+                            className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold uppercase text-slate-600 transition-all shadow-sm hover:shadow-md whitespace-nowrap flex items-center gap-2"
                             title="Ir al mes actual"
                         >
-                            <i className="fa-solid fa-calendar-check mr-1.5"></i>Hoy
+                            <i className="fa-solid fa-calendar-check"></i>Hoy
                         </button>
                     </>;
                 } else {
@@ -624,32 +637,33 @@ const FinancialsList: React.FC = () => {
             {/* Toggle Pendientes */}
             <button 
                 onClick={() => setIncludeOpen(!includeOpen)}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all text-[11px] font-bold uppercase ${includeOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-500'}`}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-[11px] font-bold uppercase whitespace-nowrap ${includeOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-500'}`}
                 title="Marcar esto hará que siempre se vean los pendientes y vencidos primero sin importar el mes o año de selección"
             >
                 <div className={`w-2 h-2 rounded-full ${includeOpen ? 'bg-indigo-500' : 'bg-slate-300'}`}></div>
-                Ver Pendientes Primero
+                Ver Pendientes
             </button>
 
             {/* Agrupar */}
-            <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-1 shadow-sm">
-                <span className="text-[10px] font-black text-slate-400 px-1 uppercase">Agrupar:</span>
-                {[
-                    { id: 'client_company_name', icon: 'fa-building', label: 'Cliente' },
-                    { id: 'status', icon: 'fa-list-check', label: 'Estado' },
-                    { id: 'transaction_type', icon: 'fa-tag', label: 'Tipo' }
-                ].map(opt => (
-                    <button 
-                        key={opt.id} 
-                        onClick={() => setGrouping(prev => prev.includes(opt.id) ? [] : [opt.id])}
-                        className={`w-6 h-6 flex items-center justify-center rounded transition-all ${
-                            grouping.includes(opt.id) ? 'bg-brand-600 text-white' : 'text-slate-400 hover:bg-slate-50'
-                        }`}
-                        title={opt.label}
-                    >
-                        <i className={`fa-solid ${opt.icon} text-[10px]`}></i>
-                    </button>
-                ))}
+            <div className="flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm">
+                <span className="text-[11px] font-black text-slate-400 px-2 uppercase">Agrupar:</span>
+                <div className="flex items-center gap-1 flex-wrap">
+                    {[
+                        { id: 'client_company_name', icon: 'fa-building', label: 'Cliente' },
+                        { id: 'status', icon: 'fa-list-check', label: 'Estado' },
+                        { id: 'transaction_type', icon: 'fa-tag', label: 'Tipo' }
+                    ].map(opt => (
+                        <button 
+                            key={opt.id} 
+                            onClick={() => setGrouping(prev => prev.includes(opt.id) ? [] : [opt.id])}
+                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
+                                grouping.includes(opt.id) ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'
+                            }`}
+                        >
+                            <i className={`fa-solid ${opt.icon} text-[11px]`}></i> {opt.label}
+                        </button>
+                    ))}
+                </div>
             </div>
         </div>
 
@@ -663,8 +677,8 @@ const FinancialsList: React.FC = () => {
       </div>
 
       {/* 3. TABLA */}
-      <div className="flex-1 overflow-auto relative bg-slate-50/10">
-        <table className="w-full border-separate border-spacing-0">
+      <div className="flex-1 overflow-x-auto overflow-y-auto relative bg-slate-50/10">
+        <table className="w-auto min-w-full border-separate border-spacing-0">
           <thead className="sticky top-0 z-40 shadow-sm">
             {table.getHeaderGroups().map(hg => (
               <tr key={hg.id}>

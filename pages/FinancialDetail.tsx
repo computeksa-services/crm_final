@@ -150,7 +150,7 @@ const FinancialDetail: React.FC = () => {
         retention_value: parseFloat(tx.valor_retencion || 0),
         total_value: parseFloat(tx.total_factura || 0),
         paid_amount: parseFloat(tx.v_total_abonado || 0),
-        balance_due: parseFloat(tx.v_saldo_pendiente || 0),
+        balance_due: Math.max(parseFloat(tx.v_saldo_pendiente || 0) - parseFloat(tx.valor_retencion || 0), 0),
         enable_automation: tx.enable_automation === true,
         automation_frequency: tx.automation_frequency,
         automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : [],
@@ -265,28 +265,31 @@ const FinancialDetail: React.FC = () => {
 
       {/* --- HEADER PRINCIPAL --- */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div className="flex-1 min-w-0 space-y-2 w-full">
-                <div className="flex items-center gap-3">
-                    <span className="bg-slate-100 text-slate-500 p-2.5 rounded-xl"><i className="fa-solid fa-file-invoice-dollar text-xl"></i></span>
-                    <h1 className="text-2xl font-bold text-slate-800 tracking-tight leading-tight uppercase">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+            <div className="flex-1 min-w-0 space-y-1 w-full">
+                <div className="flex items-center gap-2">
+                    <h1 className="text-2xl font-bold text-slate-800 tracking-tight leading-tight">
                         Factura #{transaction.invoice_number}
                     </h1>
                 </div>
-                <div className="flex flex-wrap items-center gap-4 text-sm pl-1">
+                <div className="flex flex-wrap items-center gap-3 text-xs pl-0">
                     <Link to={`/app/client-companies/${transaction.id_client_company}`} className="flex items-center gap-2 group px-2 py-1 rounded hover:bg-slate-50 transition-colors">
                         <i className="fa-solid fa-building text-slate-400"></i>
                         <span className="font-semibold text-slate-600 group-hover:text-brand-600 transition-colors uppercase">{transaction.client_company_name}</span>
                     </Link>
-                    <span className="text-slate-300">|</span>
-                    <span className="text-slate-500 italic truncate max-w-md">{transaction.description || 'Sin concepto definido'}</span>
+                    {transaction.description && (
+                        <>
+                            <span className="text-slate-300">|</span>
+                            <span className="text-slate-500 italic truncate max-w-md">{transaction.description}</span>
+                        </>
+                    )}
                 </div>
             </div>
 
-            <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
+            <div className="flex flex-col items-start lg:items-end gap-2 w-full lg:w-auto">
                 <div className="text-left lg:text-right w-full lg:w-auto">
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Saldo por Cobrar</div>
-                    <div className="text-3xl font-mono font-bold text-rose-600 tracking-tight">
+                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-0.5">Saldo por Cobrar</div>
+                    <div className="text-2xl font-mono font-bold text-rose-600 tracking-tight">
                         {formatCurrency(transaction.balance_due)}
                     </div>
                 </div>
@@ -297,17 +300,16 @@ const FinancialDetail: React.FC = () => {
                         onSelect={handleStatusChange} 
                         disabled={processing}
                     />
-                    <button onClick={() => setIsEditModalOpen(true)} className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:bg-brand-50 transition-all shadow-sm">
+                    <button onClick={() => setIsEditModalOpen(true)} className="flex-1 sm:flex-none px-3 py-2 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:bg-brand-50 transition-all shadow-sm">
                         <i className="fa-solid fa-pen"></i> Editar
                     </button>
-                    <button onClick={() => setConfirmState({ isOpen: true, title: '¿Eliminar?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-rose-100 text-rose-600 font-bold text-xs hover:bg-rose-50 transition-all shadow-sm">
+                    <button onClick={() => setConfirmState({ isOpen: true, title: '¿Eliminar?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="flex-1 sm:flex-none px-3 py-2 flex items-center justify-center gap-2 rounded-lg border border-rose-100 text-rose-600 font-bold text-xs hover:bg-rose-50 transition-all shadow-sm">
                         <i className="fa-solid fa-trash"></i>
                     </button>
                 </div>
             </div>
         </div>
       </div>
-
       {/* --- GRID DE CONTENIDO (2/3 y 1/3) --- */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
