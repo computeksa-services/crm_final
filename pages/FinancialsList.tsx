@@ -506,7 +506,7 @@ const FinancialsList: React.FC = () => {
     },
     {
         id: 'payment_status',
-        header: 'Días',
+        header: 'Estado Pago',
         size: 120,
         cell: ({ row }) => {
             if (row.getIsGrouped()) return null;
