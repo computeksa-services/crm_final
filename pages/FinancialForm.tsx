@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { financialService } from '../services/financials.service';
 import Toast from '../components/Toast';
@@ -25,10 +25,20 @@ type FinancialFormData = Partial<FinancialTransaction> & {
 const FinancialForm: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { id } = useParams<{ id?: string }>();
+  
+  // Obtener el ID de los query params
+  const queryParams = new URLSearchParams(location.search);
+  const id = queryParams.get('id');
   const { user } = useAuth();
-  // Modo edición si el id existe y no es la palabra 'new'
-  const isEditMode = !!id && id !== 'new';
+  
+  // Modo edición si el id existe
+  const isEditMode = !!id;
+  
+  // DEBUG
+  console.log('📝 FinancialForm renderizado');
+  console.log('   location.search:', location.search);
+  console.log('   id:', id);
+  console.log('   isEditMode:', isEditMode);
 
   // --- ESTADOS DE DATOS ---
   const [transaction, setTransaction] = useState<FinancialFormData>({});
@@ -60,7 +70,22 @@ const FinancialForm: React.FC = () => {
 
   // --- CARGA DE DATOS ---
   const fetchData = useCallback(async () => {
-    if (!user?.id_tenant || !user?.id_user) return;
+    console.log('🔄 fetchData ejecutándose...');
+    console.log('   location.search:', location.search);
+    
+    if (!user?.id_tenant || !user?.id_user) {
+      console.log('❌ Sin usuario');
+      return;
+    }
+    
+    // Obtener el ID de los query params dentro del callback
+    const queryParams = new URLSearchParams(location.search);
+    const transactionId = queryParams.get('id');
+    const isEditingMode = !!transactionId;
+    
+    console.log('   transactionId:', transactionId);
+    console.log('   isEditingMode:', isEditingMode);
+    
     try {
       const [companiesRes, quotesRes, contactsRes, teamRes] = await Promise.all([
         fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
@@ -82,11 +107,13 @@ const FinancialForm: React.FC = () => {
       })));
 
       // Si es modo edición, cargar los datos de la transacción
-      if (isEditMode && id) {
-        const detailRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${id}`);
+      if (isEditingMode && transactionId) {
+        console.log('🔄 Cargando transacción para editar:', transactionId);
+        const detailRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${transactionId}`);
         if (detailRes.ok) {
           const data = await detailRes.json();
           const tx = Array.isArray(data) ? data[0] : data;
+          console.log('📦 Datos de transacción cargados:', tx);
           if (tx) {
             // Mapear los datos desde el formato de la API al formato del formulario
             const normalized: FinancialFormData = {
@@ -109,10 +136,11 @@ const FinancialForm: React.FC = () => {
               automation_frequency: tx.automation_frequency || 3,
               automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : []
             };
+            console.log('✅ Transacción mapeada:', normalized);
             setTransaction(normalized);
             
-            // Actualizar el breadcrumb con el número de factura
-            navigate(location.pathname, { state: { breadcrumb: normalized.invoice_number }, replace: true });
+            // Actualizar el breadcrumb con el número de factura (preservar los search params)
+            navigate(location.pathname + location.search, { state: { breadcrumb: normalized.invoice_number }, replace: true });
 
             // Cargar recipientes si existen
             if (Array.isArray(tx.automation_recipients)) {
@@ -125,16 +153,21 @@ const FinancialForm: React.FC = () => {
               setSelectedRecipients(recipients);
             }
           }
+        } else {
+          console.error('❌ Error al cargar transacción:', detailRes.status);
+          setToast({ message: 'Error al cargar la transacción.', type: 'error' });
         }
       } else {
+        console.log('➕ Creando nueva transacción');
         setDefaults();
       }
     } catch (error) {
+      console.error('❌ Error en fetchData:', error);
       setToast({ message: 'Error al cargar recursos.', type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [user, isEditMode, id]);
+  }, [user, location.search, navigate]);
 
   const setDefaults = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -196,8 +229,8 @@ const FinancialForm: React.FC = () => {
   };
 
   const handleSave = async () => {
-    if (!transaction.invoice_number?.trim() || !transaction.id_client_company) {
-      setToast({ message: 'Factura y Cliente son obligatorios.', type: 'error' });
+    if (!transaction.invoice_number?.trim() || !transaction.id_client_company || !transaction.description?.trim()) {
+      setToast({ message: 'Factura, Cliente y Descripción son obligatorios.', type: 'error' });
       return;
     }
     setSaving(true);
@@ -272,7 +305,7 @@ const FinancialForm: React.FC = () => {
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Número de Factura *</label>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Número de Factura <span className="text-red-500">*</span></label>
                 <input name="invoice_number" value={transaction.invoice_number || ''} onChange={handleInputChange} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-mono text-lg" placeholder="001-001-000000001" />
               </div>
               <div>
@@ -292,8 +325,8 @@ const FinancialForm: React.FC = () => {
                   </select>
               </div>
               <div className="md:col-span-2">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Descripción / Concepto</label>
-                <textarea name="description" value={transaction.description || ''} onChange={handleInputChange} rows={2} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Detalle de la transacción..." />
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5">Descripción / Concepto <span className="text-red-500">*</span></label>
+                <textarea name="description" value={transaction.description || ''} onChange={handleInputChange} rows={2} required className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500" placeholder="Detalle de la transacción..." />
               </div>
             </div>
           </div>
@@ -330,7 +363,7 @@ const FinancialForm: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i className="fa-solid fa-link text-[10px]"></i> Relaciones</h2>
             <div className="space-y-4">
-                <div><label className="text-xs font-bold text-slate-600 mb-1.5 block">Cliente/Proveedor *</label><select name="id_client_company" value={transaction.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none appearance-none cursor-pointer"><option value="">-- Seleccionar --</option>{clientCompanies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}</select></div>
+                <div><label className="text-xs font-bold text-slate-600 mb-1.5 block">Cliente/Proveedor <span className="text-red-500">*</span></label><select name="id_client_company" value={transaction.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none appearance-none cursor-pointer"><option value="">-- Seleccionar --</option>{clientCompanies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}</select></div>
                 <div><label className="text-xs font-bold text-slate-600 mb-1.5 block">Vincular Cotización</label><select name="id_related_quote" value={transaction.id_related_quote || ''} onChange={handleInputChange} disabled={!transaction.id_client_company} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white disabled:bg-slate-50"><option value="">-- {transaction.id_client_company ? 'Opcional (Ninguna)' : 'Seleccione cliente'} --</option>{filteredQuotes.map(q => <option key={q.id_cotizacion} value={q.id_cotizacion}>{q.formatted_no_cotizacion || q.no_cotizacion}</option>)}</select></div>
             </div>
           </div>

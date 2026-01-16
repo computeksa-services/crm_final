@@ -181,6 +181,16 @@ const QuoteCreate: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
+  // Actualizar breadcrumb cuando se carga la cotización en modo edición
+  useEffect(() => {
+    if (quote?.nombre_cotizacion && location.pathname.includes('/edit')) {
+      navigate(location.pathname + location.search, { 
+        state: { breadcrumb: quote.nombre_cotizacion },
+        replace: true 
+      });
+    }
+  }, [quote?.nombre_cotizacion, location.pathname, navigate]);
+
   // Filtrar contactos al cambiar empresa
   useEffect(() => {
     if (quote?.id_client_company) {
@@ -828,7 +838,7 @@ const QuoteCreate: React.FC = () => {
                         </div>
 
                         {!createNewDeal ? (
-                            (!filteredDeals || filteredDeals.length === 0 || (filteredDeals.length === 1 && filteredDeals[0]?.success === true)) ? (
+                            (!filteredDeals || filteredDeals.length === 0) ? (
                               <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs text-slate-500 text-center">
                                 No hay tratos existentes para esta empresa.
                               </div>

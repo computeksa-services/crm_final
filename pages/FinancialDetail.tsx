@@ -298,10 +298,10 @@ const FinancialDetail: React.FC = () => {
                         onSelect={handleStatusChange} 
                         disabled={processing}
                     />
-                    <button onClick={() => navigate(`/app/financials/form/${transaction.id_transaction}`)} className="flex-1 sm:flex-none px-3 py-2 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:bg-brand-50 transition-all shadow-sm">
+                    <button onClick={() => navigate(`/app/financials/edit?id=${transaction.id_transaction}`)} className="flex-1 sm:flex-none px-3 py-2 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:bg-brand-50 transition-all shadow-sm">
                         <i className="fa-solid fa-pen"></i> Editar
                     </button>
-                    <button onClick={() => setConfirmState({ isOpen: true, title: '¿Eliminar?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="flex-1 sm:flex-none px-3 py-2 flex items-center justify-center gap-2 rounded-lg border border-rose-100 text-rose-600 font-bold text-xs hover:bg-rose-50 transition-all shadow-sm">
+                    <button onClick={() => setConfirmState({ isOpen: true, title: '¿Seguro desea eliminar este registro?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="flex-1 sm:flex-none px-3 py-2 flex items-center justify-center gap-2 rounded-lg border border-rose-100 text-rose-600 font-bold text-xs hover:bg-rose-50 transition-all shadow-sm">
                         <i className="fa-solid fa-trash"></i>
                     </button>
                 </div>
@@ -563,7 +563,6 @@ const FinancialDetail: React.FC = () => {
             automation_frequency: transaction.automation_frequency,
             automation_recipients: transaction.automation_recipients // Pasamos los destinatarios actuales al modal
           }} 
-          preloadedContacts={companyContacts} 
         />
       )}
     </div>

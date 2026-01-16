@@ -4,6 +4,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext'; // Importar
 import { DealFiltersProvider } from './contexts/DealFiltersContext';
 import Layout from './components/Layout';
+import { APP_ROUTES } from './services/routes.config';
 import { googleClientId } from './services/oauthConfig';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
@@ -74,12 +75,14 @@ const App: React.FC = () => {
               <Route path="dashboard" element={<Dashboard />} />
               <Route path="quotes" element={<QuotesList />} />
               <Route path="quotes/new" element={<QuoteCreate />} />
+              <Route path="quotes/edit" element={<QuoteCreate />} />
               <Route path="quotes/:id" element={<QuoteDetail />} />
               <Route path="deals" element={<DealFiltersProvider><DealsList /></DealFiltersProvider>} />
               <Route path="deals/new" element={<DealCreate />} />
               <Route path="deals/:id" element={<DealDetail />} />
               <Route path="financials" element={<FinancialsList />} />
-              <Route path="financials/form/:id" element={<FinancialForm />} />
+              <Route path="financials/new" element={<FinancialForm />} />
+              <Route path="financials/edit" element={<FinancialForm />} />
               <Route path="financials/:id" element={<FinancialDetail />} />
               <Route path="calendar" element={<Calendar />} />
               <Route path="profile" element={<UserProfile />} />

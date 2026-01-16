@@ -1,25 +1,6 @@
 import React from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-
-// Mapeo de rutas a nombres legibles
-const ROUTE_LABELS: { [key: string]: string } = {
-  'app': 'Inicio',
-  'dashboard': 'Dashboard',
-  'calendar': 'Calendario',
-  'quotes': 'Cotizaciones',
-  'deals': 'Tratos',
-  'financials': 'Cartera',
-  'client-companies': 'Empresas',
-  'client-contacts': 'Contactos',
-  'products': 'Productos',
-  'users': 'Usuarios',
-  'settings': 'Ajustes',
-  'profile': 'Mi Perfil',
-  'marketing': 'Marketing',
-  'campaigns': 'Campañas',
-  'lists': 'Listas',
-  'audiences': 'Audiencias',
-};
+import { ROUTE_LABELS } from '../services/routes.config';
 
 // Regex para detectar si es un ID (uuid, slug, etc.)
 const ID_PATTERN = /^[a-z0-9_-]{10,}$/i;
@@ -89,17 +70,43 @@ const Breadcrumb: React.FC = () => {
     // Cartera Financiera
     breadcrumbs.push({ label: 'Cartera Financiera', path: '/app/financials', isActive: false });
     
-    if (segments[1] === 'form' && segments[2]) {
-      // Ruta de formulario: /app/financials/form/:id
+    if (segments[1] === 'new') {
+      // Crear nuevo: /app/financials/new
+      breadcrumbs.push({
+        label: 'Nuevo',
+        path: location.pathname,
+        isActive: true,
+      });
+    } else if (segments[1] === 'edit') {
+      // Editar existente: /app/financials/edit?id=xxx
+      // Mostrar: Cartera Financiera > [Número Factura] > Edición
+      breadcrumbs.push({
+        label: location.state?.breadcrumb || 'Transacción',
+        path: location.pathname,
+        isActive: true,
+      });
+      if (location.state?.breadcrumb) {
+        breadcrumbs.pop(); // Remover el anterior
+        breadcrumbs.push({
+          label: location.state.breadcrumb,
+          path: location.pathname,
+          isActive: false,
+        });
+        breadcrumbs.push({
+          label: 'Edición',
+          path: location.pathname,
+          isActive: true,
+        });
+      }
+    } else if (segments[1] === 'form' && segments[2]) {
+      // Ruta de formulario antigua: /app/financials/form/:id (mantener para compatibilidad)
       if (segments[2] === 'new') {
-        // Crear nuevo
         breadcrumbs.push({
           label: 'Nueva Transacción',
           path: location.pathname,
           isActive: true,
         });
       } else if (ID_PATTERN.test(segments[2])) {
-        // Editar existente - mostrar: Cartera Financiera > [Factura] > Editar
         breadcrumbs.push({
           label: location.state?.breadcrumb || 'Transacción',
           path: `/app/financials/${segments[2]}`,

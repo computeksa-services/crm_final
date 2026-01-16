@@ -2,65 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getImageUrl } from '../utils/imageUtils';
+import { NAV_GROUPS, PAGE_NAMES } from '../services/routes.config';
 
 interface LayoutProps {
   children: React.ReactNode;
   onLogout?: () => void;
 }
-
-// Definición de grupos de navegación para mejor organización
-const NAV_GROUPS = [
-  {
-    title: 'General',
-    items: [
-      { label: 'Dashboard', path: '/app/dashboard', icon: 'fa-chart-pie', roles: ['superadmin', 'admin', 'usuario'] },
-      { label: 'Calendario', path: '/app/calendar', icon: 'fa-calendar-days', roles: ['superadmin', 'admin', 'usuario'] },
-    ]
-  },
-  {
-    title: 'Ventas',
-    items: [
-      { label: 'Cotizaciones', path: '/app/quotes', icon: 'fa-file-invoice-dollar', roles: ['superadmin', 'admin', 'usuario'] },
-      { label: 'Tratos', path: '/app/deals', icon: 'fa-handshake', roles: ['superadmin', 'admin', 'usuario'] },
-    ]
-  },
-  {
-    title: 'Marketing',
-    items: [
-      { label: 'Marketing Center', path: '/app/marketing', icon: 'fa-bullseye', roles: ['superadmin', 'admin', 'usuario'] },
-    ]
-  },
-  {
-    title: 'Directorio',
-    items: [
-      { label: 'Empresas', path: '/app/client-companies', icon: 'fa-building', roles: ['superadmin', 'admin', 'usuario'] },
-      { label: 'Contactos', path: '/app/client-contacts', icon: 'fa-address-book', roles: ['superadmin', 'admin', 'usuario'] },
-    ]
-  },
-  {
-    title: 'Inventario',
-    items: [
-      { label: 'Productos', path: '/app/products', icon: 'fa-box-archive', roles: ['superadmin', 'admin', 'usuario'] },
-    ]
-  }
-];
-
-// Mapeo de rutas a nombres de página legibles
-const PAGE_NAMES: { [key: string]: string } = {
-  'dashboard': 'Dashboard',
-  'quotes': 'Cotizaciones',
-  'deals': 'Tratos',
-  'financials': 'Cartera Financiera',
-  'calendar': 'Calendario',
-  'client-companies': 'Empresas Clientes',
-  'client-contacts': 'Contactos Clientes',
-  'products': 'Productos',
-  'users': 'Usuarios',
-  'settings': 'Ajustes',
-  'companies': 'Tenants',
-  'profile': 'Mi Perfil',
-  'marketing': 'Marketing Center',
-};
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Estado para controlar sidebar en Desktop (contraído/expandido) - con persistencia en localStorage
@@ -364,16 +311,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </button>
               
               {/* Breadcrumb dinámico - mejorado con links */}
-              <div className="hidden sm:flex items-center gap-1 text-xs text-slate-400">
+              <div className="hidden sm:flex items-center gap-2 text-sm">
                 {(() => {
                   const pathSegments = location.pathname.split('/').filter(Boolean);
                   const lastSegment = pathSegments[pathSegments.length - 1] || 'dashboard';
-                  const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'settings', 'calendar', 'dashboard', 'new', 'marketing'];
+                  const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'settings', 'calendar', 'dashboard', 'new', 'edit', 'marketing'];
                   
                   let breadcrumbs: { label: string; path: string; isActive: boolean }[] = [];
                   
+                  // Si es "edit" (e.g., /app/quotes/edit?id=xxx) → mostrar Colección > Nombre > Edición
+                  if (lastSegment === 'edit' && pathSegments.length > 1) {
+                    const collectionKey = pathSegments[pathSegments.length - 2];
+                    const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    const collectionPath = `/app/${collectionKey}`;
+                    
+                    breadcrumbs = [
+                      { label: collectionName, path: collectionPath, isActive: false },
+                      { label: location.state?.breadcrumb || 'Edición', path: location.pathname, isActive: true }
+                    ];
+                  }
                   // Si el último segmento NO está en rutas conocidas, es un ID → mostrar ruta/Detalle
-                  if (!knownRoutes.includes(lastSegment) && pathSegments.length > 1) {
+                  else if (!knownRoutes.includes(lastSegment) && pathSegments.length > 1) {
                     const collectionKey = pathSegments[pathSegments.length - 2];
                     const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                     const collectionPath = `/app/${collectionKey}`;
@@ -383,7 +341,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       { label: location.state?.breadcrumb || 'Detalle', path: location.pathname, isActive: true }
                     ];
                   }
-                  // Si es "new" → mostrar /Nuevo/colección
+                  // Si es "new" → mostrar Colección > Nuevo
                   else if (lastSegment === 'new' && pathSegments.length > 1) {
                     const collectionKey = pathSegments[pathSegments.length - 2];
                     const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
@@ -402,11 +360,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
                   return breadcrumbs.map((crumb, idx) => (
                     <React.Fragment key={crumb.path}>
-                      {idx > 0 && <span className="mx-0.5 text-slate-300">&gt;</span>}
+                      {idx > 0 && (
+                        <span className="text-slate-400 text-base mx-1.5">
+                          <i className="fa-solid fa-chevron-right"></i>
+                        </span>
+                      )}
                       {crumb.isActive ? (
-                        <span className="text-slate-700 font-medium">{crumb.label}</span>
+                        <span className="text-slate-900 font-bold text-base">{crumb.label}</span>
                       ) : (
-                        <Link to={crumb.path} className="text-slate-400 hover:text-brand-600 transition-colors font-medium">
+                        <Link 
+                          to={crumb.path} 
+                          className="text-brand-600 font-semibold text-base px-2 py-1 rounded-md hover:bg-brand-50 hover:text-brand-700 transition-all cursor-pointer duration-200 ease-in-out"
+                        >
                           {crumb.label}
                         </Link>
                       )}

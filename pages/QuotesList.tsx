@@ -445,7 +445,7 @@ const QuotesList: React.FC = () => {
                 <div className="flex items-center justify-end gap-1">
                     {canEdit && (
                         <>
-                            <button onClick={(e) => { e.stopPropagation(); navigate(`/app/quotes/new?id=${q.id_cotizacion}`); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
+                            <button onClick={(e) => { e.stopPropagation(); navigate(`/app/quotes/edit?id=${q.id_cotizacion}`); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
                             <button onClick={(e) => { e.stopPropagation(); setShareQuoteId(q.id_cotizacion); setIsShareOpen(true); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
                         </>
                     )}

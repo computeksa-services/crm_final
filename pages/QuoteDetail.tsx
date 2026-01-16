@@ -699,7 +699,7 @@ const QuoteDetail: React.FC = () => {
                     />
                     {canEdit && (
                         <>
-                            <button onClick={() => navigate(`/app/quotes/new?id=${quote.id_cotizacion}`)} className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:border-brand-200 hover:bg-brand-50 transition-all shadow-sm"><i className="fa-solid fa-pen"></i> Editar</button>
+                            <button onClick={() => navigate(`/app/quotes/edit?id=${quote.id_cotizacion}`)} className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:border-brand-200 hover:bg-brand-50 transition-all shadow-sm"><i className="fa-solid fa-pen"></i> Editar</button>
                             <button onClick={() => setIsShareOpen(true)} className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"><i className="fa-solid fa-share-nodes"></i> Compartir</button>
                         </>
                     )}
