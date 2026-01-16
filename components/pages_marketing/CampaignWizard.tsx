@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { marketingApi } from '../../services/marketingApi';
 import { useAuth } from '../../contexts/AuthContext';
 import { MarketingList } from '../../types';
-import ReactQuill, { Quill } from 'react-quill';
-import 'react-quill/dist/quill.snow.css';
+import JoditEditor from 'jodit-react';
 import Toast from '../Toast';
 
 // --- CONFIGURACIÓN ---
@@ -15,10 +14,14 @@ const STEPS = [
   { id: 4, label: 'Revisión' }
 ];
 
+const MAX_FILE_SIZE_MB = 3;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 interface Attachment {
   name: string;
   size: string;
   type: string;
+  file?: File;
 }
 
 const CampaignWizard: React.FC = () => {
@@ -30,7 +33,7 @@ const CampaignWizard: React.FC = () => {
   const isEditing = !!currentCampaignId;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const quillRef = useRef<ReactQuill | null>(null);
+  const editorRef = useRef<any>(null);
 
   // --- ESTADOS ---
   const [currentStep, setCurrentStep] = useState(1);
@@ -42,6 +45,9 @@ const CampaignWizard: React.FC = () => {
   const [useRichEditor, setUseRichEditor] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   
+  // Estado para controlar si hay cambios pendientes
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
   // Modal States
   const [isTestEmailModalOpen, setIsTestEmailModalOpen] = useState(false);
   const [testEmailAddress, setTestEmailAddress] = useState(user?.email_user || '');
@@ -59,11 +65,52 @@ const CampaignWizard: React.FC = () => {
     senderEmail: user?.email_user || '',
     senderType: 'USER' as 'USER' | 'TENANT',
     selectedLists: [] as string[],
-    htmlContent: '<div style="font-family: sans-serif; padding: 20px;">\n  <h1>Hola %nombre%,</h1>\n  <p>Escribe tu mensaje aquí...</p>\n  <br>\n  <p>Saludos,<br>El equipo</p>\n</div>',
+    htmlContent: '<div style="font-family: Arial, sans-serif; padding: 20px;">\n<h1>Hola {{first_name}},</h1>\n<p>Escribe tu mensaje aquí...</p>\n</div>',
     attachments: [] as Attachment[],
     scheduledAt: null as string | null,
     scheduledTimezone: null as string | null
   });
+
+  // --- CONFIGURACIÓN DE JODIT ---
+  const joditConfig = useMemo(() => ({
+    readonly: false,
+    height: 500,
+    language: 'es',
+    toolbarAdaptive: false,
+    uploader: {
+      insertImageAsBase64URI: true
+    },
+    buttons: [
+      'bold', 'italic', 'underline', 'strikethrough', '|',
+      'fontsize', 'brush', 'paragraph', '|',
+      'ul', 'ol', '|',
+      'image', 'link', 'table', '|',
+      'align', 'undo', 'redo', '|',
+      {
+        name: 'Variables',
+        text: 'Variables',
+        icon: 'plus',
+        tooltip: 'Insertar datos del contacto',
+        list: {
+          '{{first_name}}': 'Nombre',
+          '{{last_name}}': 'Apellido',
+          '{{email}}': 'Email',
+          '{{company_name}}': 'Empresa',
+          '{{position}}': 'Cargo',
+          '{{city}}': 'Ciudad',
+          '{{website}}': 'Sitio Web',
+          '{{unsubscribe_url}}': 'Link Desuscripción'
+        },
+        exec: (editor: any, _this: any, { control }: any) => {
+           const key = control.args?.[0];
+           if (key) editor.s.insertHTML(key);
+        }
+      },
+      '|',
+      'source'
+    ],
+    removeButtons: ['about', 'print', 'file']
+  }), []);
 
   // --- EFECTOS ---
   useEffect(() => {
@@ -74,6 +121,12 @@ const CampaignWizard: React.FC = () => {
   useEffect(() => {
     if (currentCampaignId) loadCampaignData(currentCampaignId);
   }, [currentCampaignId]);
+
+  // --- HELPER PARA ACTUALIZAR FORM Y MARCAR COMO SUCIO ---
+  const updateForm = (updates: Partial<typeof formData>) => {
+    setFormData(prev => ({ ...prev, ...updates }));
+    setHasUnsavedChanges(true);
+  };
 
   // --- CARGAS DE DATOS ---
   const loadLists = async () => {
@@ -125,6 +178,9 @@ const CampaignWizard: React.FC = () => {
         scheduledTimezone: campaign.schedule_timezone || null,
         attachments: Array.isArray(campaign.attachments) ? campaign.attachments : []
       }));
+      
+      // Al cargar datos iniciales, no hay cambios sin guardar
+      setHasUnsavedChanges(false);
     } catch (error) { console.error(error); }
   };
 
@@ -141,19 +197,50 @@ const CampaignWizard: React.FC = () => {
 
   const handleBack = () => setCurrentStep(prev => Math.max(prev - 1, 1));
 
-  // --- FILES & ATTACHMENTS ---
+  // --- FILES & ATTACHMENTS (MEJORADO) ---
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const newFiles = Array.from(e.target.files).map(file => ({
-        name: file.name,
-        size: (file.size / 1024).toFixed(1) + ' KB',
-        type: file.type
-      }));
-      setFormData(prev => ({
-        ...prev,
-        attachments: [...prev.attachments, ...newFiles]
-      }));
+      const filesArray = Array.from(e.target.files);
+      const validFiles: Attachment[] = [];
+      let errorMsg = '';
+
+      filesArray.forEach(file => {
+        if (file.size > MAX_FILE_SIZE_BYTES) {
+            errorMsg = `El archivo "${file.name}" supera el límite de ${MAX_FILE_SIZE_MB}MB.`;
+        } else {
+            validFiles.push({
+                name: file.name,
+                size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
+                type: file.type,
+                file: file
+            });
+        }
+      });
+
+      if (errorMsg) {
+          setToast({ message: errorMsg, type: 'error' });
+      }
+
+      if (validFiles.length > 0) {
+          // Reemplaza o agrega según tu lógica. Aquí agrego.
+          // Si solo permites 1, sería: setFormData... attachments: validFiles
+          // Si permites múltiples: [...prev.attachments, ...validFiles]
+          // Dado que tu backend bloquea si hay > 1, mejor reemplacemos o validemos longitud.
+          
+          if (formData.attachments.length + validFiles.length > 1) {
+             setToast({ message: 'Solo se permite 1 archivo adjunto por campaña.', type: 'error' });
+             return; 
+          }
+
+          setFormData(prev => ({
+            ...prev,
+            attachments: [...prev.attachments, ...validFiles]
+          }));
+          setHasUnsavedChanges(true);
+      }
     }
+    // Limpiamos el input
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const removeAttachment = (index: number) => {
@@ -161,12 +248,13 @@ const CampaignWizard: React.FC = () => {
       ...prev,
       attachments: prev.attachments.filter((_, i) => i !== index)
     }));
+    setHasUnsavedChanges(true);
   };
 
   const handleSenderTypeChange = (type: 'USER' | 'TENANT') => {
     let senderEmail = type === 'USER' ? (user?.email_user || '') : (tenantData?.corporate_email_address || '');
     let senderName = type === 'USER' ? (user?.name_user || '') : (tenantData?.name_tenant || 'Empresa');
-    setFormData(prev => ({ ...prev, senderType: type, senderEmail, senderName }));
+    updateForm({ senderType: type, senderEmail, senderName });
   };
 
   const toggleList = (listId: string) => {
@@ -176,55 +264,102 @@ const CampaignWizard: React.FC = () => {
         const newLists = isSelected 
             ? prev.selectedLists.filter(id => id !== normId)
             : [...prev.selectedLists, normId];
+        setHasUnsavedChanges(true);
         return { ...prev, selectedLists: newLists };
     });
   };
+
+  // --- VALIDACIÓN PARA ENVIAR ---
+  const isValidForSending = useMemo(() => {
+      return (
+          formData.name.trim() !== '' &&
+          formData.subject.trim() !== '' &&
+          formData.selectedLists.length > 0 &&
+          formData.htmlContent.trim() !== '' &&
+          formData.htmlContent !== '<p><br></p>' // Jodit empty state sometimes
+      );
+  }, [formData]);
 
   // --- GUARDADO ---
   const saveCampaign = async (scheduleData?: { at: string, tz: string }, isDraft = false) => {
       if (!user?.id_tenant || !user?.id_user) return;
       if (!formData.name) {
-          setToast({ message: 'Ingresa al menos un nombre para guardar.', type: 'error' });
+          setToast({ message: 'El nombre interno es obligatorio.', type: 'error' });
           return;
       }
 
       try {
         setIsSaving(true);
         const action = currentCampaignId ? 'update' : 'create';
-      
-        const response = await marketingApi.manageCampaign(action, {
-          id_tenant: user.id_tenant,
-          id_user: user.id_user,
-          id_campaign: currentCampaignId || undefined,
-          name: formData.name,
-          subject: formData.subject,
-          preview_text: formData.previewText,
-          html_content: formData.htmlContent,
-          sender_type: formData.senderType,
-          sender_name: formData.senderName,
-          sender_email: formData.senderEmail,
-          target_lists: formData.selectedLists,
-          attachments: formData.attachments,
-          schedule_at: scheduleData ? scheduleData.at : formData.scheduledAt,
-          schedule_timezone: scheduleData ? scheduleData.tz : formData.scheduledTimezone,
-        });
+        console.log(`💾 Guardando... Acción: ${action} | ID Actual: ${currentCampaignId}`);
 
-        if (action === 'create' && response && response.id_campaign) {
-            setCurrentCampaignId(response.id_campaign);
-            window.history.replaceState(null, '', `/app/marketing/campaigns/edit/${response.id_campaign}`);
+        const dataToSend = new FormData();
+        dataToSend.append('action', action);
+        dataToSend.append('id_tenant', user.id_tenant);
+        dataToSend.append('id_user', user.id_user);
+        
+        if (currentCampaignId) {
+            dataToSend.append('id_campaign', currentCampaignId);
         }
 
-        setToast({ message: isDraft ? 'Borrador guardado' : 'Campaña guardada exitosamente', type: 'success' });
+        dataToSend.append('name', formData.name);
+        dataToSend.append('subject', formData.subject);
+        dataToSend.append('preview_text', formData.preview_text || '');
+        dataToSend.append('html_content', formData.htmlContent);
+        dataToSend.append('sender_type', formData.senderType);
+        dataToSend.append('sender_name', formData.senderName);
+        dataToSend.append('sender_email', formData.senderEmail);
+        dataToSend.append('target_lists', JSON.stringify(formData.selectedLists));
+
+        if (scheduleData) {
+            dataToSend.append('schedule_at', scheduleData.at);
+            dataToSend.append('schedule_timezone', scheduleData.tz);
+        } else if (formData.scheduledAt) {
+            dataToSend.append('schedule_at', formData.scheduledAt);
+            if (formData.scheduledTimezone) dataToSend.append('schedule_timezone', formData.scheduledTimezone);
+        }
+
+        if (formData.attachments.length === 0) {
+            dataToSend.append('attachments', '[]'); 
+        } else {
+            formData.attachments.forEach((att) => {
+                if (att.file) {
+                    dataToSend.append('attachments', att.file);
+                } else {
+                    dataToSend.append('existing_attachments', JSON.stringify(att));
+                }
+            });
+        }
+
+        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/manage`, {
+            method: 'POST',
+            body: dataToSend
+        });
+
+        if (!response.ok) throw new Error('Error de conexión con el servidor');
+
+        const rawResponse = await response.json();
+        const responseData = Array.isArray(rawResponse) ? rawResponse[0] : rawResponse;
+        const newId = responseData?.id_campaign;
+
+        if (action === 'create' && newId) {
+            setCurrentCampaignId(newId);
+            window.history.replaceState(null, '', `/app/marketing/campaigns/edit/${newId}`);
+        }
+
+        setToast({ message: isDraft ? 'Borrador guardado correctamente' : 'Campaña guardada', type: 'success' });
+        setHasUnsavedChanges(false); // Reseteamos el indicador de cambios
         
         if (!isDraft) {
             setTimeout(() => navigate('/app/marketing/campaigns'), 1000);
         }
-      } catch (error) {
-        console.error(error);
+
+    } catch (error) {
+        console.error("Error saving campaign:", error);
         setToast({ message: 'Error al guardar.', type: 'error' });
-      } finally {
+    } finally {
         setIsSaving(false);
-      }
+    }
   };
 
   const handleScheduleSave = async () => {
@@ -238,11 +373,38 @@ const CampaignWizard: React.FC = () => {
 
   const handleSendTest = async () => {
       if (!testEmailAddress) return;
+      if (!user?.id_tenant || !user?.id_user) return;
       try {
           setIsSendingTest(true);
-          await new Promise(r => setTimeout(r, 1000)); // Simulación
-          setToast({ message: `Prueba enviada a ${testEmailAddress}`, type: 'success' });
-          setIsTestEmailModalOpen(false);
+          const formDataToSend = new FormData();
+          formDataToSend.append('id_tenant', user.id_tenant);
+          formDataToSend.append('id_user', user.id_user);
+          formDataToSend.append('name', formData.name);
+          formDataToSend.append('subject', formData.subject);
+          formDataToSend.append('preview_text', formData.preview_text);
+          formDataToSend.append('html_content', formData.htmlContent);
+          formDataToSend.append('sender_type', formData.senderType);
+          formDataToSend.append('sender_name', formData.senderName);
+          formDataToSend.append('sender_email', formData.senderEmail);
+          formDataToSend.append('test_email', testEmailAddress);
+          
+          formData.attachments.forEach(att => {
+            if (att.file) {
+                formDataToSend.append('attachments', att.file);
+            }
+          });
+          
+          const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/test`, {
+              method: 'POST',
+              body: formDataToSend
+          });
+
+          if (res.ok) {
+              setToast({ message: `Prueba enviada a ${testEmailAddress}`, type: 'success' });
+              setIsTestEmailModalOpen(false);
+          } else {
+              setToast({ message: 'Error enviando prueba', type: 'error' });
+          }
       } catch (e) {
           setToast({ message: 'Error enviando prueba', type: 'error' });
       } finally {
@@ -279,13 +441,28 @@ const CampaignWizard: React.FC = () => {
                     >
                         Cancelar
                     </button>
+                    
+                    {/* BOTÓN DE GUARDADO INTELIGENTE */}
                     <button 
                         onClick={() => saveCampaign(undefined, true)}
                         disabled={isSaving}
-                        className="text-slate-600 hover:text-brand-600 font-bold text-xs flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-brand-50 border border-slate-200 hover:border-brand-200 transition-all bg-white"
+                        className={`text-xs flex items-center gap-2 px-4 py-2 rounded-lg border transition-all font-bold ${
+                            hasUnsavedChanges 
+                            ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' 
+                            : 'bg-slate-50 text-slate-400 border-slate-200 hover:text-slate-600'
+                        }`}
+                        title={hasUnsavedChanges ? "Tienes cambios sin guardar" : "Todos los cambios guardados"}
                     >
-                        {isSaving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-regular fa-floppy-disk"></i>}
-                        <span className="hidden sm:inline">Guardar Borrador</span>
+                        {isSaving ? (
+                            <i className="fa-solid fa-spinner fa-spin"></i> 
+                        ) : hasUnsavedChanges ? (
+                            <i className="fa-solid fa-floppy-disk"></i> 
+                        ) : (
+                            <i className="fa-solid fa-check"></i>
+                        )}
+                        <span className="hidden sm:inline">
+                            {isSaving ? 'Guardando...' : hasUnsavedChanges ? 'Guardar Cambios' : 'Guardado'}
+                        </span>
                     </button>
                 </div>
             </div>
@@ -331,7 +508,7 @@ const CampaignWizard: React.FC = () => {
                                 className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none transition-all"
                                 placeholder="Ej: Newsletter Octubre"
                                 value={formData.name}
-                                onChange={e => setFormData({...formData, name: e.target.value})}
+                                onChange={e => updateForm({ name: e.target.value })}
                             />
                         </div>
                         <div className="grid md:grid-cols-2 gap-5">
@@ -342,7 +519,7 @@ const CampaignWizard: React.FC = () => {
                                     className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none"
                                     placeholder="¡No te lo pierdas!"
                                     value={formData.subject}
-                                    onChange={e => setFormData({...formData, subject: e.target.value})}
+                                    onChange={e => updateForm({ subject: e.target.value })}
                                 />
                             </div>
                             <div>
@@ -352,7 +529,7 @@ const CampaignWizard: React.FC = () => {
                                     className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none"
                                     placeholder="Texto secundario..."
                                     value={formData.previewText}
-                                    onChange={e => setFormData({...formData, previewText: e.target.value})}
+                                    onChange={e => updateForm({ previewText: e.target.value })}
                                 />
                             </div>
                         </div>
@@ -388,7 +565,7 @@ const CampaignWizard: React.FC = () => {
                         <div className="grid md:grid-cols-2 gap-5">
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Remitente</label>
-                                <input type="text" value={formData.senderName} onChange={e => setFormData({...formData, senderName: e.target.value})} className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-500" />
+                                <input type="text" value={formData.senderName} onChange={e => updateForm({ senderName: e.target.value })} className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-500" />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Remitente</label>
@@ -492,61 +669,58 @@ const CampaignWizard: React.FC = () => {
                     </div>
 
                     {/* Editor & Preview Stack */}
-                    <div className="space-y-8">
+                    <div className="space-y-4">
                         
-                        {/* 1. EDITOR */}
+                        {/* 2. BARRA DE ADJUNTOS (NUEVA UBICACIÓN VISIBLE) */}
+                        {formData.attachments.length > 0 && (
+                            <div className="flex flex-wrap gap-2 animate-fadeIn">
+                                {formData.attachments.map((file, idx) => (
+                                    <div key={idx} className="flex items-center gap-3 bg-blue-50 text-blue-700 px-4 py-2.5 rounded-lg border border-blue-200 shadow-sm transition-all hover:bg-blue-100">
+                                        <div className="flex items-center gap-2">
+                                            <div className="bg-white w-8 h-8 rounded-full flex items-center justify-center text-blue-500 border border-blue-100">
+                                                <i className="fa-solid fa-file-lines"></i>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold leading-tight">{file.name}</p>
+                                                <p className="text-[10px] opacity-70">{file.size}</p>
+                                            </div>
+                                        </div>
+                                        <button 
+                                            onClick={() => removeAttachment(idx)} 
+                                            className="ml-2 w-6 h-6 flex items-center justify-center rounded-full hover:bg-white hover:text-red-500 transition-colors"
+                                            title="Eliminar archivo"
+                                        >
+                                            <i className="fa-solid fa-times"></i>
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* 1. EDITOR JODIT */}
                         <div className="bg-white border border-slate-300 rounded-xl overflow-hidden shadow-sm flex flex-col min-h-[500px]">
                             {useRichEditor ? (
-                                <ReactQuill 
-                                    ref={quillRef} 
-                                    theme="snow" 
-                                    value={formData.htmlContent} 
-                                    onChange={val => setFormData({...formData, htmlContent: val})}
-                                    className="flex-1 flex flex-col [&>.ql-container]:flex-1 [&>.ql-container]:overflow-auto [&>.ql-container]:min-h-[400px] [&>.ql-toolbar]:border-t-0 [&>.ql-toolbar]:border-x-0 [&>.ql-container]:border-0"
-                                    modules={{
-                                        toolbar: [
-                                            [{ header: [1, 2, 3, false] }],
-                                            ['bold', 'italic', 'underline', 'link', 'blockquote'],
-                                            [{ list: 'ordered' }, { list: 'bullet' }],
-                                            ['image', 'code-block'],
-                                            [{ align: [] }, { color: [] }],
-                                            ['clean']
-                                        ]
-                                    }}
+                                <JoditEditor
+                                    ref={editorRef}
+                                    value={formData.htmlContent}
+                                    config={joditConfig}
+                                    onBlur={newContent => {
+                                        if(newContent !== formData.htmlContent) updateForm({ htmlContent: newContent });
+                                    }} 
                                 />
                             ) : (
                                 <textarea 
-                                    className="flex-1 w-full p-6 bg-slate-50 text-slate-800 font-mono text-sm resize-none outline-none min-h-[500px]"
+                                    className="flex-1 w-full p-6 bg-slate-900 text-emerald-400 font-mono text-sm resize-none outline-none min-h-[500px]"
                                     value={formData.htmlContent}
-                                    onChange={e => setFormData({...formData, htmlContent: e.target.value})}
+                                    onChange={e => updateForm({ htmlContent: e.target.value })}
                                     spellCheck={false}
                                     placeholder="Escribe tu código HTML aquí..."
                                 />
                             )}
                         </div>
 
-                        {/* Attachments List (Si hay archivos) */}
-                        {formData.attachments.length > 0 && (
-                            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                                <p className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">
-                                    <i className="fa-solid fa-paperclip"></i> Archivos Adjuntos ({formData.attachments.length})
-                                </p>
-                                <div className="flex flex-wrap gap-2">
-                                    {formData.attachments.map((file, idx) => (
-                                        <div key={idx} className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
-                                            <span className="text-sm text-slate-700 font-medium">{file.name}</span>
-                                            <span className="text-xs text-slate-400">({file.size})</span>
-                                            <button onClick={() => removeAttachment(idx)} className="text-slate-400 hover:text-red-500 ml-2 transition-colors">
-                                                <i className="fa-solid fa-times"></i>
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 2. VISTA PREVIA (PC MODE) */}
-                        <div className="space-y-2">
+                        {/* 3. VISTA PREVIA (PC MODE) */}
+                        <div className="space-y-2 mt-4">
                             <div className="flex items-center gap-2 px-2">
                                 <i className="fa-solid fa-desktop text-slate-400"></i>
                                 <span className="text-xs font-bold text-slate-500 uppercase">Vista Previa (Escritorio)</span>
@@ -623,6 +797,20 @@ const CampaignWizard: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 border-t pt-4 mt-2">
+                                <span className="text-slate-500 font-medium">Adjuntos</span>
+                                <div className="col-span-2">
+                                    {formData.attachments.length > 0 ? (
+                                        <div className="flex items-center gap-2 text-slate-700">
+                                            <i className="fa-solid fa-paperclip text-slate-400"></i>
+                                            <span className="font-bold">{formData.attachments[0].name}</span>
+                                            <span className="text-xs text-slate-400">({formData.attachments[0].size})</span>
+                                        </div>
+                                    ) : (
+                                        <span className="text-slate-400 italic">Sin archivos adjuntos</span>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -653,16 +841,23 @@ const CampaignWizard: React.FC = () => {
                 <div className="flex gap-3">
                     <button 
                         onClick={() => setIsScheduleModalOpen(true)} 
-                        className="px-5 py-2.5 bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 rounded-lg font-bold text-sm transition-all"
+                        disabled={!isValidForSending}
+                        className="px-5 py-2.5 bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 rounded-lg font-bold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <i className="fa-regular fa-clock mr-2"></i> Programar
                     </button>
                     <button 
                         onClick={() => saveCampaign()} 
-                        disabled={isSaving} 
-                        className="px-8 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-sm shadow-lg hover:shadow-emerald-200 transition-all flex items-center gap-2"
+                        disabled={isSaving || !isValidForSending} 
+                        className={`px-8 py-2.5 text-white rounded-lg font-bold text-sm shadow-lg transition-all flex items-center gap-2 ${
+                            !isValidForSending 
+                            ? 'bg-slate-300 cursor-not-allowed shadow-none' 
+                            : 'bg-emerald-600 hover:bg-emerald-700 hover:shadow-emerald-200'
+                        }`}
+                        title={!isValidForSending ? 'Completa todos los campos obligatorios para enviar' : ''}
                     >
-                        {isSaving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>} Finalizar
+                        {isSaving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>} 
+                        Enviar Ahora
                     </button>
                 </div>
             )}
