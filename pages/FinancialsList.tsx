@@ -537,7 +537,7 @@ const FinancialsList: React.FC = () => {
             return (
                 <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {tx.status === 'VENCIDO' && <button onClick={(e) => { e.stopPropagation(); setCollectionData(tx); }} className="w-7 h-7 flex items-center justify-center text-orange-500 hover:bg-orange-50 rounded transition-colors" title="Cobranza"><i className="fa-solid fa-bell text-[10px]"></i></button>}
-                    <button onClick={(e) => { e.stopPropagation(); navigate(`/app/financials/${tx.id_transaction}`); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
+                    <button onClick={(e) => { e.stopPropagation(); navigate(`/app/financials/form/${tx.id_transaction}`); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
                     <button onClick={(e) => { e.stopPropagation(); setDeleteId(tx.id_transaction); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-trash text-[10px]"></i></button>
                 </div>
             );
@@ -670,7 +670,7 @@ const FinancialsList: React.FC = () => {
 
         {/* BOTÓN NUEVA */}
         <button 
-          onClick={() => navigate('/app/financials/new')} 
+          onClick={() => navigate('/app/financials/form/new')} 
           className="order-1 lg:order-3 w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center justify-center gap-2"
         >
             <i className="fa-solid fa-plus"></i> Nueva

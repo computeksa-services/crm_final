@@ -85,6 +85,40 @@ const Breadcrumb: React.FC = () => {
         isActive: true,
       });
     }
+  } else if (segments[0] === 'financials') {
+    // Cartera Financiera
+    breadcrumbs.push({ label: 'Cartera Financiera', path: '/app/financials', isActive: false });
+    
+    if (segments[1] === 'form' && segments[2]) {
+      // Ruta de formulario: /app/financials/form/:id
+      if (segments[2] === 'new') {
+        // Crear nuevo
+        breadcrumbs.push({
+          label: 'Nueva Transacción',
+          path: location.pathname,
+          isActive: true,
+        });
+      } else if (ID_PATTERN.test(segments[2])) {
+        // Editar existente - mostrar: Cartera Financiera > [Factura] > Editar
+        breadcrumbs.push({
+          label: location.state?.breadcrumb || 'Transacción',
+          path: `/app/financials/${segments[2]}`,
+          isActive: false,
+        });
+        breadcrumbs.push({
+          label: 'Editar',
+          path: location.pathname,
+          isActive: true,
+        });
+      }
+    } else if (ID_PATTERN.test(segments[1])) {
+      // Detalle de transacción: /app/financials/:id
+      breadcrumbs.push({
+        label: location.state?.breadcrumb || 'Detalle Transacción',
+        path: location.pathname,
+        isActive: true,
+      });
+    }
   } else {
     // Otros módulos
     let path = '/app';
@@ -105,14 +139,14 @@ const Breadcrumb: React.FC = () => {
   if (breadcrumbs.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 bg-white border-b border-slate-200 mb-4 rounded-lg shadow-sm">
+    <div className="flex items-center gap-3 px-6 py-5 bg-white border-b border-slate-200 mb-4 rounded-lg shadow-sm">
       {/* Botón Atrás */}
       <button
         onClick={() => navigate(-1)}
-        className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+        className="flex items-center justify-center w-10 h-10 rounded-lg text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-colors flex-shrink-0"
         title="Atrás"
       >
-        <i className="fa-solid fa-chevron-left text-sm"></i>
+        <i className="fa-solid fa-chevron-left text-lg"></i>
       </button>
 
       {/* Breadcrumb Items */}
@@ -120,16 +154,16 @@ const Breadcrumb: React.FC = () => {
         {breadcrumbs.map((crumb, index) => (
           <React.Fragment key={crumb.path}>
             {index > 0 && (
-              <span className="text-slate-300 text-xs">/</span>
+              <span className="text-slate-300 text-base flex-shrink-0">/</span>
             )}
             {crumb.isActive ? (
-              <span className="text-slate-700 font-semibold text-sm truncate">
+              <span className="text-slate-800 font-bold text-lg truncate">
                 {crumb.label}
               </span>
             ) : (
               <Link
                 to={crumb.path}
-                className="text-slate-500 hover:text-brand-600 text-sm font-medium truncate transition-colors"
+                className="text-slate-600 hover:text-brand-600 text-lg font-semibold truncate transition-colors"
               >
                 {crumb.label}
               </Link>

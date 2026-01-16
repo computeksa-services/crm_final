@@ -3,7 +3,6 @@ import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import CollectionModal from '../components/CollectionModal';
-import FinancialFormModal from '../components/FinancialFormModal';
 import { useAuth } from '../contexts/AuthContext';
 import type { FinancialTransaction, ClientCompany, Quote } from '../types';
 
@@ -104,7 +103,6 @@ const FinancialDetail: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
@@ -300,7 +298,7 @@ const FinancialDetail: React.FC = () => {
                         onSelect={handleStatusChange} 
                         disabled={processing}
                     />
-                    <button onClick={() => setIsEditModalOpen(true)} className="flex-1 sm:flex-none px-3 py-2 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:bg-brand-50 transition-all shadow-sm">
+                    <button onClick={() => navigate(`/app/financials/form/${transaction.id_transaction}`)} className="flex-1 sm:flex-none px-3 py-2 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:bg-brand-50 transition-all shadow-sm">
                         <i className="fa-solid fa-pen"></i> Editar
                     </button>
                     <button onClick={() => setConfirmState({ isOpen: true, title: '¿Eliminar?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="flex-1 sm:flex-none px-3 py-2 flex items-center justify-center gap-2 rounded-lg border border-rose-100 text-rose-600 font-bold text-xs hover:bg-rose-50 transition-all shadow-sm">
@@ -523,7 +521,6 @@ const FinancialDetail: React.FC = () => {
       </div>
 
       {/* --- MODALES --- */}
-      <FinancialFormModal isOpen={isEditModalOpen} initialData={transaction} clientCompanies={clientCompanies} quotes={quotes} onClose={() => setIsEditModalOpen(false)} onSave={async () => { fetchData(); setIsEditModalOpen(false); }} isProcessing={processing} />
       
       {isPaymentModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">

@@ -25,7 +25,7 @@ import ProductsList from './pages/ProductsList';
 import SettingsPage from './pages/SettingsPage';
 import QuoteCreate from './pages/QuoteCreate'; // RUTA CORREGIDA
 import FinancialsList from './pages/FinancialsList';
-import FinancialCreate from './pages/FinancialCreate';
+import FinancialForm from './pages/FinancialForm';
 import FinancialDetail from './pages/FinancialDetail';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import MarketingCenter from './pages/MarketingCenter';
@@ -79,7 +79,7 @@ const App: React.FC = () => {
               <Route path="deals/new" element={<DealCreate />} />
               <Route path="deals/:id" element={<DealDetail />} />
               <Route path="financials" element={<FinancialsList />} />
-              <Route path="financials/new" element={<FinancialCreate />} />
+              <Route path="financials/form/:id" element={<FinancialForm />} />
               <Route path="financials/:id" element={<FinancialDetail />} />
               <Route path="calendar" element={<Calendar />} />
               <Route path="profile" element={<UserProfile />} />
