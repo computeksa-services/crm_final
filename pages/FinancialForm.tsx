@@ -6,8 +6,10 @@ import Toast from '../components/Toast';
 import type { ClientCompany, FinancialTransaction, Quote } from '../types';
 
 // --- HELPERS ---
-const formatCurrency = (val: number) => 
-  val.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+const formatCurrency = (val: number | string) => {
+  const num = Number(val) || 0;
+  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+};
 
 type SelectedRecipient = {
   email: string;
@@ -16,10 +18,16 @@ type SelectedRecipient = {
   id: string | null;
 };
 
-type FinancialFormData = Partial<FinancialTransaction> & {
+// Modificamos el tipo para permitir strings en los inputs numéricos durante la edición
+type FinancialFormData = Partial<Omit<FinancialTransaction, 'subtotal' | 'tax_amount' | 'total_value' | 'retention_value' | 'credit_days' | 'automation_frequency'>> & {
+    subtotal?: number | string;
+    tax_amount?: number | string;
+    total_value?: number | string;
+    retention_value?: number | string;
+    credit_days?: number | string;
     enable_automation?: boolean;
-    automation_frequency?: number;
-    status?: 'PENDIENTE' | 'PAGADO' | 'VENCIDO' | 'ANULADO';
+    automation_frequency?: number | string;
+    status?: 'PENDIENTE' | 'PAGADO' | 'ANULADO';
 };
 
 const FinancialForm: React.FC = () => {
@@ -33,12 +41,6 @@ const FinancialForm: React.FC = () => {
   
   // Modo edición si el id existe
   const isEditMode = !!id;
-  
-  // DEBUG
-  console.log('📝 FinancialForm renderizado');
-  console.log('   location.search:', location.search);
-  console.log('   id:', id);
-  console.log('   isEditMode:', isEditMode);
 
   // --- ESTADOS DE DATOS ---
   const [transaction, setTransaction] = useState<FinancialFormData>({});
@@ -68,23 +70,25 @@ const FinancialForm: React.FC = () => {
     );
   }, [transaction.id_client_company, allCompanyContacts]);
 
+  // --- LÓGICA DE CÁLCULO ---
+  // Calcula el total visualmente basado en el estado actual de los inputs
+  const calculatedTotal = useMemo(() => {
+    const sub = parseFloat(String(transaction.subtotal)) || 0;
+    const tax = parseFloat(String(transaction.tax_amount)) || 0;
+    const ret = parseFloat(String(transaction.retention_value)) || 0;
+    
+    // Fórmula: (Subtotal + Impuestos) - Retención
+    const total = (sub + (sub * (tax / 100))) - ret;
+    return total > 0 ? total : 0;
+  }, [transaction.subtotal, transaction.tax_amount, transaction.retention_value]);
+
   // --- CARGA DE DATOS ---
   const fetchData = useCallback(async () => {
-    console.log('🔄 fetchData ejecutándose...');
-    console.log('   location.search:', location.search);
+    if (!user?.id_tenant || !user?.id_user) return;
     
-    if (!user?.id_tenant || !user?.id_user) {
-      console.log('❌ Sin usuario');
-      return;
-    }
-    
-    // Obtener el ID de los query params dentro del callback
     const queryParams = new URLSearchParams(location.search);
     const transactionId = queryParams.get('id');
     const isEditingMode = !!transactionId;
-    
-    console.log('   transactionId:', transactionId);
-    console.log('   isEditingMode:', isEditingMode);
     
     try {
       const [companiesRes, quotesRes, contactsRes, teamRes] = await Promise.all([
@@ -108,14 +112,14 @@ const FinancialForm: React.FC = () => {
 
       // Si es modo edición, cargar los datos de la transacción
       if (isEditingMode && transactionId) {
-        console.log('🔄 Cargando transacción para editar:', transactionId);
         const detailRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${transactionId}`);
         if (detailRes.ok) {
           const data = await detailRes.json();
           const tx = Array.isArray(data) ? data[0] : data;
-          console.log('📦 Datos de transacción cargados:', tx);
+          
           if (tx) {
             // Mapear los datos desde el formato de la API al formato del formulario
+            // NOTA: Convertimos los números a String para que funcionen bien en los inputs de texto
             const normalized: FinancialFormData = {
               id_transaction: tx.id_transaccion || tx.id_transaction,
               invoice_number: tx.numero_factura || tx.invoice_number,
@@ -125,24 +129,28 @@ const FinancialForm: React.FC = () => {
               issue_date: tx.v_input_fecha_emision || tx.issue_date || tx.fecha_emision?.split('T')[0],
               due_date: tx.v_input_fecha_vencimiento || tx.due_date || tx.fecha_vencimiento?.split('T')[0],
               id_client_company: tx.id_empresa_cliente || tx.id_client_company,
-              subtotal: parseFloat(tx.subtotal || 0),
-              tax_amount: parseFloat(tx.impuestos || 0),
-              total_value: parseFloat(tx.total_factura || tx.total_value || 0),
-              retention_value: parseFloat(tx.valor_retencion || 0),
+              
+              // Valores convertidos a string o vacíos si son 0/null para evitar "0" en el input
+              subtotal: tx.subtotal ? String(tx.subtotal) : '',
+              tax_amount: tx.impuestos !== undefined ? String(tx.impuestos) : '',
+              total_value: tx.total_factura || tx.total_value || 0, // Este es solo referencia inicial
+              retention_value: tx.valor_retencion ? String(tx.valor_retencion) : '',
+              credit_days: tx.dias_credito ? String(tx.dias_credito) : '',
+              
               retention_number: tx.retention_number,
               is_urgent: tx.es_urgente || tx.is_urgent,
               notes: tx.notas_internas || tx.notes,
               enable_automation: tx.enable_automation === true,
-              automation_frequency: tx.automation_frequency || 3,
+              automation_frequency: tx.automation_frequency ? String(tx.automation_frequency) : '3',
               automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : []
             };
-            console.log('✅ Transacción mapeada:', normalized);
+            
             setTransaction(normalized);
             
-            // Actualizar el breadcrumb con el número de factura (preservar los search params)
+            // Actualizar el breadcrumb
             navigate(location.pathname + location.search, { state: { breadcrumb: normalized.invoice_number }, replace: true });
 
-            // Cargar recipientes si existen
+            // Cargar recipientes
             if (Array.isArray(tx.automation_recipients)) {
               const recipients: SelectedRecipient[] = tx.automation_recipients.map((r: any) => ({
                 email: r.email,
@@ -154,15 +162,12 @@ const FinancialForm: React.FC = () => {
             }
           }
         } else {
-          console.error('❌ Error al cargar transacción:', detailRes.status);
           setToast({ message: 'Error al cargar la transacción.', type: 'error' });
         }
       } else {
-        console.log('➕ Creando nueva transacción');
         setDefaults();
       }
     } catch (error) {
-      console.error('❌ Error en fetchData:', error);
       setToast({ message: 'Error al cargar recursos.', type: 'error' });
     } finally {
       setLoading(false);
@@ -176,13 +181,13 @@ const FinancialForm: React.FC = () => {
       status: 'PENDIENTE',
       issue_date: today,
       due_date: today,
-      credit_days: 0,
-      subtotal: 0,
-      tax_amount: 15,
+      credit_days: '', // Vacío para permitir placeholder
+      subtotal: '',
+      tax_amount: '15',
       total_value: 0,
       enable_automation: false,
-      automation_frequency: 3,
-      retention_value: 0
+      automation_frequency: '3',
+      retention_value: ''
     });
   };
 
@@ -193,24 +198,51 @@ const FinancialForm: React.FC = () => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
 
+    // 1. Checkbox
+    if (type === 'checkbox') {
+        setTransaction(prev => ({ ...prev, [name]: checked }));
+        return;
+    }
+
+    // 2. Inputs Numéricos (tratados como texto para mejor UX)
+    const numericFields = ['subtotal', 'tax_amount', 'retention_value', 'credit_days', 'automation_frequency'];
+    
+    if (numericFields.includes(name)) {
+        // Validar que sea número válido o vacío (Regex: dígitos, opcionalmente un punto, más dígitos)
+        if (value !== '' && !/^\d*\.?\d*$/.test(value)) return;
+
+        setTransaction(prev => {
+            const updated = { ...prev, [name]: value };
+
+            // Cálculo de fechas solo si cambia credit_days
+            if (name === 'credit_days') {
+                const days = parseInt(value || '0', 10);
+                const date = new Date(prev.issue_date || new Date());
+                date.setDate(date.getDate() + days);
+                updated.due_date = date.toISOString().split('T')[0];
+            }
+            return updated;
+        });
+        return;
+    }
+
+    // 3. Fechas
+    if (name === 'issue_date') {
+        setTransaction(prev => {
+            const updated = { ...prev, issue_date: value };
+            const days = parseInt(String(prev.credit_days || 0), 10);
+            const date = new Date(value);
+            date.setDate(date.getDate() + days);
+            updated.due_date = date.toISOString().split('T')[0];
+            return updated;
+        });
+        return;
+    }
+
+    // 4. Textos normales
     setTransaction(prev => {
-      const updated: any = { ...prev, [name]: type === 'checkbox' ? checked : value };
-
-      if (name === 'subtotal' || name === 'tax_amount') {
-        const sub = parseFloat(name === 'subtotal' ? value : (prev.subtotal || 0) as any);
-        const tax = parseFloat(name === 'tax_amount' ? value : (prev.tax_amount || 0) as any);
-        updated.total_value = sub + (sub * (tax / 100));
-      }
-
-      if (name === 'issue_date' || name === 'credit_days') {
-        const date = new Date(name === 'issue_date' ? value : (prev.issue_date || ''));
-        const days = parseInt(name === 'credit_days' ? value : (prev.credit_days || 0) as any);
-        date.setDate(date.getDate() + days);
-        updated.due_date = date.toISOString().split('T')[0];
-      }
-
+      const updated: any = { ...prev, [name]: value };
       if (name === 'id_client_company') updated.id_related_quote = '';
-
       return updated;
     });
   };
@@ -235,8 +267,22 @@ const FinancialForm: React.FC = () => {
     }
     setSaving(true);
     try {
+      // Convertir strings a números antes de enviar
+      const finalSubtotal = parseFloat(String(transaction.subtotal)) || 0;
+      const finalTax = parseFloat(String(transaction.tax_amount)) || 0;
+      const finalRetention = parseFloat(String(transaction.retention_value)) || 0;
+      
+      // Calcular total final para el backend
+      const finalTotal = (finalSubtotal + (finalSubtotal * (finalTax / 100))) - finalRetention;
+
       const payload = {
         ...transaction,
+        subtotal: finalSubtotal,
+        tax_amount: finalTax,
+        retention_value: finalRetention,
+        total_value: finalTotal, // Asegurar que el backend reciba el cálculo correcto
+        credit_days: parseInt(String(transaction.credit_days)) || 0,
+        automation_frequency: parseInt(String(transaction.automation_frequency)) || 3,
         id_tenant: user?.id_tenant,
         id_user: user?.id_user,
         automation_recipients: transaction.enable_automation ? selectedRecipients : []
@@ -245,12 +291,10 @@ const FinancialForm: React.FC = () => {
       let res;
       if (isEditMode) {
         // Actualizar - usar financialService.update()
-        console.log('Editando con payload:', payload);
         await financialService.update(payload);
-        res = { ok: true }; // Asumir que financialService.update lanza error si falla
+        res = { ok: true }; 
       } else {
         // Crear nuevo
-        console.log('Creando con payload:', payload);
         res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -258,7 +302,7 @@ const FinancialForm: React.FC = () => {
         });
       }
 
-      if (!res.ok) throw new Error('Error en respuesta del servidor');
+      if (res && !res.ok) throw new Error('Error en respuesta del servidor');
       setToast({ message: isEditMode ? 'Registro actualizado.' : 'Registro creado.', type: 'success' });
       setTimeout(() => navigate('/app/financials'), 1000);
     } catch (error) {
@@ -267,7 +311,14 @@ const FinancialForm: React.FC = () => {
     } finally {
       setSaving(false);
     }
-  };;
+  };
+
+  // Etiqueta dinámica para el total
+  const getActionLabel = () => {
+    if (transaction.transaction_type === 'VENTA') return 'A Cobrar';
+    if (transaction.transaction_type === 'COMPRA' || transaction.transaction_type === 'GASTO') return 'A Pagar';
+    return 'Total';
+  };
 
   if (loading) return <div className="p-20 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500"></i></div>;
 
@@ -309,10 +360,11 @@ const FinancialForm: React.FC = () => {
                 <input name="invoice_number" value={transaction.invoice_number || ''} onChange={handleInputChange} className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none font-mono text-lg" placeholder="001-001-000000001" />
               </div>
               <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-widest">Tipo</label>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1.5 tracking-widest">Categoría</label>
                   <select name="transaction_type" value={transaction.transaction_type} onChange={handleInputChange} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white">
-                      <option value="VENTA">Ingreso (Venta)</option>
-                      <option value="GASTO">Egreso (Gasto)</option>
+                      <option value="VENTA">Venta (Ingreso)</option>
+                      <option value="COMPRA">Compra (Egreso)</option>
+                      <option value="OTROS">Otros</option>
                   </select>
               </div>
               <div>
@@ -320,7 +372,6 @@ const FinancialForm: React.FC = () => {
                   <select name="status" value={transaction.status} onChange={handleInputChange} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white">
                       <option value="PENDIENTE">Pendiente</option>
                       <option value="PAGADO">Pagado</option>
-                      <option value="VENCIDO">Vencido</option>
                       <option value="ANULADO">Anulado</option>
                   </select>
               </div>
@@ -340,17 +391,54 @@ const FinancialForm: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
               <div className="space-y-4 border-r border-slate-100 pr-4">
                   <div><label className="text-xs font-bold text-slate-600 mb-1 block">Emisión</label><input type="date" name="issue_date" value={transaction.issue_date || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" /></div>
-                  <div><label className="text-xs font-bold text-slate-600 mb-1 block">Días Crédito</label><input type="number" name="credit_days" value={transaction.credit_days || 0} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" /></div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-600 mb-1 block">Días Crédito</label>
+                    <input 
+                      type="text" 
+                      inputMode="numeric"
+                      name="credit_days" 
+                      value={transaction.credit_days} 
+                      onChange={handleInputChange} 
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-brand-500" 
+                      placeholder="0"
+                    />
+                  </div>
                   <div><label className="text-xs font-bold text-slate-400 uppercase block tracking-tighter">Vencimiento Calculado</label><input type="date" value={transaction.due_date || ''} readOnly className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-400" /></div>
               </div>
               <div className="md:col-span-2 space-y-4">
                   <div className="grid grid-cols-2 gap-4">
-                    <div><label className="text-xs font-bold text-slate-600 mb-1 block">Subtotal</label><input type="number" name="subtotal" value={transaction.subtotal || 0} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold" /></div>
-                    <div><label className="text-xs font-bold text-slate-600 mb-1 block">IVA (%)</label><input type="number" name="tax_amount" value={transaction.tax_amount || 0} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" /></div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-600 mb-1 block">Subtotal ($)</label>
+                        <input 
+                            type="text"
+                            inputMode="decimal"
+                            name="subtotal" 
+                            value={transaction.subtotal} 
+                            onChange={handleInputChange} 
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold outline-none focus:ring-2 focus:ring-brand-200"
+                            placeholder="0.00" 
+                        />
+                    </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-600 mb-1 block">IVA (%)</label>
+                        <input 
+                            type="text" 
+                            inputMode="decimal"
+                            name="tax_amount" 
+                            value={transaction.tax_amount} 
+                            onChange={handleInputChange} 
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-brand-500"
+                            placeholder="0" 
+                        />
+                    </div>
                   </div>
                   <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
-                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Total a Pagar / Cobrar</label>
-                    <p className="text-4xl font-black text-slate-800 font-mono tracking-tighter">{formatCurrency(transaction.total_value || 0)}</p>
+                    <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
+                        {getActionLabel()} (Menos Retención)
+                    </label>
+                    <p className="text-4xl font-black text-slate-800 font-mono tracking-tighter">
+                        {formatCurrency(calculatedTotal)}
+                    </p>
                   </div>
               </div>
             </div>
@@ -373,7 +461,19 @@ const FinancialForm: React.FC = () => {
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i className="fa-solid fa-file-invoice-dollar text-[10px]"></i> Retenciones</h2>
             <div className="space-y-3">
                 <div><label className="text-xs font-bold text-slate-600 mb-1.5 block">Nro. Comprobante</label><input name="retention_number" value={transaction.retention_number || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" placeholder="Ej: 001-001-..." /></div>
-                <div><label className="text-xs font-bold text-slate-600 mb-1.5 block">Valor Retenido</label><input type="number" name="retention_value" value={transaction.retention_value || 0} onChange={handleInputChange} step="0.01" className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-brand-600" /></div>
+                <div>
+                    <label className="text-xs font-bold text-slate-600 mb-1.5 block">Valor Retenido ($)</label>
+                    <input 
+                        type="text" 
+                        inputMode="decimal"
+                        name="retention_value" 
+                        value={transaction.retention_value} 
+                        onChange={handleInputChange} 
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm font-bold text-rose-600 outline-none focus:border-rose-500" 
+                        placeholder="0.00"
+                    />
+                     <p className="text-[10px] text-slate-400 mt-1">* Se restará del total a {transaction.transaction_type === 'VENTA' ? 'cobrar' : 'pagar'}.</p>
+                </div>
             </div>
           </div>
 
@@ -384,7 +484,7 @@ const FinancialForm: React.FC = () => {
 
             {transaction.enable_automation && (
               <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                <div className="text-[11px] text-indigo-700 bg-white p-2.5 rounded border border-indigo-100 flex items-center gap-2"><span>Cada</span><input type="number" name="automation_frequency" value={transaction.automation_frequency} onChange={handleInputChange} className="w-10 text-center font-bold bg-transparent border-b border-indigo-300 outline-none" /><span>días.</span></div>
+                <div className="text-[11px] text-indigo-700 bg-white p-2.5 rounded border border-indigo-100 flex items-center gap-2"><span>Cada</span><input type="text" inputMode="numeric" name="automation_frequency" value={transaction.automation_frequency} onChange={handleInputChange} className="w-10 text-center font-bold bg-transparent border-b border-indigo-300 outline-none" placeholder="3" /><span>días.</span></div>
                 
                 <div className="space-y-4">
                   <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Destinatarios de Alertas</p>

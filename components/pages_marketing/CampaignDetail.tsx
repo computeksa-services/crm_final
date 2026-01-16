@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { MarketingCampaign } from '../../types';
@@ -7,16 +7,36 @@ import { useAuth } from '../../contexts/AuthContext';
 import ConfirmModal from '../ConfirmModal';
 import Toast from '../Toast';
 
+// Tipos adicionales para la nueva data
+interface AudienceMember {
+  id_contact: string;
+  name: string;
+  email: string;
+  status: 'PENDING' | 'QUEUED' | 'SENT' | 'FAILED' | 'BOUNCED';
+  opened: boolean;
+  sent_at: string | null;
+}
+
+interface CampaignDetailData extends MarketingCampaign {
+  audience_detail?: AudienceMember[];
+  processed_count?: number;
+  remaining_count?: number;
+  open_rate?: number;
+}
+
 const CampaignDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
   
-  const [campaign, setCampaign] = useState<MarketingCampaign | null>(null);
+  const [campaign, setCampaign] = useState<CampaignDetailData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'STATS' | 'PREVIEW'>('STATS');
+  const [activeTab, setActiveTab] = useState<'STATS' | 'AUDIENCE' | 'PREVIEW'>('STATS');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
+  // Estado para búsqueda en tabla de audiencia
+  const [audienceSearch, setAudienceSearch] = useState('');
+
   const [confirmState, setConfirmState] = useState({ 
     isOpen: false, 
     title: '', 
@@ -28,19 +48,26 @@ const CampaignDetail: React.FC = () => {
 
   useEffect(() => {
     loadCampaignDetail();
-  }, [id]);
+    // Polling inteligente: solo si está enviando
+    const interval = setInterval(() => {
+        if (campaign?.status === 'SENDING' || campaign?.status === 'PROCESSING') {
+            loadCampaignDetail(true); // Silent reload
+        }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [id, campaign?.status]);
 
-  const loadCampaignDetail = async () => {
+  const loadCampaignDetail = async (silent = false) => {
     if (!id) return;
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       const data = await marketingApi.getCampaignDetail(id);
       setCampaign(data);
     } catch (error) {
       console.error('Error al cargar detalle:', error);
-      setToast({ message: 'Error al cargar la campaña', type: 'error' });
+      if (!silent) setToast({ message: 'Error al cargar la campaña', type: 'error' });
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -53,24 +80,19 @@ const CampaignDetail: React.FC = () => {
     return isNaN(n) ? 0 : n;
   };
 
-  // --- LOGICA DE PROGRESO ---
-  const progress = (() => {
-    if (!campaign) return 0;
-    const p = toNumber(campaign.progress_percentage);
-    if (p > 0) return Math.max(0, Math.min(100, p));
-    const total = toNumber(campaign.total_target);
-    const sent = toNumber(campaign.sent_count);
-    const failed = toNumber(campaign.failed_count);
-    const processed = sent + failed;
-    return total > 0 ? Math.round((processed / total) * 100) : 0;
-  })();
+  // Filtro de Audiencia
+  const filteredAudience = useMemo(() => {
+      if (!campaign?.audience_detail) return [];
+      return campaign.audience_detail.filter(m => 
+          m.name.toLowerCase().includes(audienceSearch.toLowerCase()) ||
+          m.email.toLowerCase().includes(audienceSearch.toLowerCase())
+      );
+  }, [campaign?.audience_detail, audienceSearch]);
 
   // --- ACCIONES ---
-
   const handleAction = (actionType: 'delete' | 'launch' | 'pause' | 'resume') => {
     if (!campaign || !user?.id_tenant || !user?.id_user) return;
 
-    // Validación específica para Lanzar
     if (actionType === 'launch') {
         const totalAudience = toNumber(campaign.total_target);
         if (totalAudience <= 0) {
@@ -156,14 +178,13 @@ const CampaignDetail: React.FC = () => {
     const audienceSize = toNumber(campaign.total_target);
     const hasAudience = audienceSize > 0;
 
-    // 1. DRAFT -> Botón Lanzar
     if (status === 'DRAFT') {
         return (
             <button 
                 onClick={() => handleAction('launch')}
                 className={`px-5 py-2.5 rounded-lg font-bold shadow-sm flex items-center gap-2 transition-all ${
                     hasAudience 
-                    ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-200' 
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200' 
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                 }`}
                 title={hasAudience ? 'Iniciar envío masivo' : 'Agrega listas con contactos para enviar'}
@@ -174,7 +195,6 @@ const CampaignDetail: React.FC = () => {
         );
     }
 
-    // 2. SENDING -> Botón Pausar
     if (status === 'SENDING' || status === 'PROCESSING') {
         return (
             <button 
@@ -187,12 +207,11 @@ const CampaignDetail: React.FC = () => {
         );
     }
 
-    // 3. PAUSED -> Botón Reanudar
     if (status === 'PAUSED') {
         return (
             <button 
                 onClick={() => handleAction('resume')}
-                className="px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold shadow-sm shadow-green-200 transition-all flex items-center gap-2"
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-sm shadow-emerald-200 transition-all flex items-center gap-2"
             >
                 <i className="fa-solid fa-play"></i>
                 Reanudar Envío
@@ -200,8 +219,14 @@ const CampaignDetail: React.FC = () => {
         );
     }
 
-    // 4. COMPLETED / FAILED -> No botón principal (o tal vez duplicar)
     return null;
+  };
+
+  const renderStatusBadge = (member: AudienceMember) => {
+      if (member.opened) return <span className="px-2 py-0.5 rounded bg-green-100 text-green-700 text-[10px] font-bold border border-green-200">ABIERTO</span>;
+      if (member.status === 'SENT') return <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-600 text-[10px] font-bold border border-blue-100">ENVIADO</span>;
+      if (member.status === 'FAILED' || member.status === 'BOUNCED') return <span className="px-2 py-0.5 rounded bg-red-50 text-red-600 text-[10px] font-bold border border-red-100">ERROR</span>;
+      return <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold border border-slate-200">PENDIENTE</span>;
   };
 
   if (isLoading) {
@@ -217,7 +242,7 @@ const CampaignDetail: React.FC = () => {
     return <div className="p-8 text-center text-slate-500">Campaña no encontrada</div>;
   }
 
-  // Mock data para el gráfico (se podría conectar a datos reales si el backend los provee por hora)
+  // Datos para el gráfico (mockup o real si tienes datos por hora)
   const chartData = [
     { time: '00:00', opens: 0 }, { time: '04:00', opens: 0 },
     { time: '08:00', opens: Math.floor(toNumber(campaign.open_count) * 0.2) },
@@ -227,53 +252,46 @@ const CampaignDetail: React.FC = () => {
   ];
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 animate-fadeIn">
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-         {/* Info Izquierda */}
          <div className="flex-1">
             <div className="flex items-center gap-3 mb-2">
-                <h2 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tight">{campaign.name}</h2>
-                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide border ${
+                {/* Nombre más pequeño (text-xl o 2xl en lugar de 3xl) */}
+                <h2 className="text-xl md:text-2xl font-bold text-slate-800 tracking-tight">{campaign.name}</h2>
+                <span className={`px-3 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide border ${
                     normalizeStatus(campaign.status) === 'SENT' || normalizeStatus(campaign.status) === 'COMPLETED' ? 'bg-green-100 text-green-700 border-green-200' : 
                     normalizeStatus(campaign.status) === 'DRAFT' ? 'bg-slate-100 text-slate-600 border-slate-200' : 
                     normalizeStatus(campaign.status) === 'PAUSED' ? 'bg-amber-100 text-amber-700 border-amber-200' :
                     normalizeStatus(campaign.status) === 'SENDING' ? 'bg-blue-100 text-blue-700 border-blue-200 animate-pulse' :
                     'bg-red-100 text-red-600 border-red-200'
                 }`}>
-                    {normalizeStatus(campaign.status) === 'SENDING' ? 'Enviando...' : normalizeStatus(campaign.status)}
+                    {normalizeStatus(campaign.status) === 'SENDING' ? 'Enviando' : normalizeStatus(campaign.status)}
                 </span>
             </div>
             
-            <p className="text-slate-500 text-sm mb-3">
+            <p className="text-slate-500 text-sm mb-3 line-clamp-1">
                 <span className="font-semibold text-slate-700">Asunto:</span> {campaign.subject}
             </p>
 
             <div className="flex items-center gap-4 text-xs text-slate-500">
                 <div className="flex items-center gap-2">
-                    {campaign.avatar_url ? (
-                        <img src={campaign.avatar_url} alt="User" className="w-5 h-5 rounded-full" />
-                    ) : (
-                        <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[10px]">
-                            {(campaign.created_by_name || 'U').charAt(0)}
-                        </div>
-                    )}
+                    <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[10px] text-slate-600 border border-white shadow-sm">
+                        {(campaign.created_by_name || 'U').charAt(0)}
+                    </div>
                     <span>{campaign.created_by_name || 'Desconocido'}</span>
                 </div>
                 <span>•</span>
-                <span>Creado: {new Date(campaign.created_at).toLocaleDateString()}</span>
+                <span>{new Date(campaign.created_at).toLocaleDateString()}</span>
             </div>
          </div>
 
-         {/* Acciones Derecha */}
-         <div className="flex flex-wrap items-center gap-3">
-            {/* Botón Principal (Lanzar/Pausar/Reanudar) */}
+         <div className="flex flex-wrap items-center gap-2">
             {renderMainActionButton()}
 
-            {/* Botones Secundarios */}
             <Link 
                 to={`/app/marketing/campaigns/edit/${id}`}
-                className="px-4 py-2.5 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium transition-colors flex items-center gap-2"
+                className="px-3 py-2 bg-white border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 font-medium text-sm transition-colors flex items-center gap-2 shadow-sm"
             >
                 <i className="fa-regular fa-pen-to-square"></i> <span className="hidden sm:inline">Editar</span>
             </Link>
@@ -281,7 +299,8 @@ const CampaignDetail: React.FC = () => {
             {(normalizeStatus(campaign.status) === 'DRAFT' || normalizeStatus(campaign.status) === 'COMPLETED' || normalizeStatus(campaign.status) === 'FAILED') && (
                 <button 
                     onClick={() => handleAction('delete')}
-                    className="px-4 py-2.5 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-medium transition-colors flex items-center gap-2"
+                    className="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-medium text-sm transition-colors shadow-sm"
+                    title="Eliminar campaña"
                 >
                     <i className="fa-regular fa-trash-can"></i>
                 </button>
@@ -289,110 +308,123 @@ const CampaignDetail: React.FC = () => {
          </div>
       </div>
 
-      {/* Progress Bar (Solo si no es Draft) */}
-      {normalizeStatus(campaign.status) !== 'DRAFT' && (
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-              <div className="flex justify-between text-xs font-bold text-slate-600 mb-2">
-                  <span>Progreso del envío</span>
-                  <span>{progress}% ({toNumber(campaign.sent_count) + toNumber(campaign.failed_count)} / {campaign.total_target})</span>
-              </div>
-              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full transition-all duration-1000 ${
-                        normalizeStatus(campaign.status) === 'PAUSED' ? 'bg-amber-400 striped-bar' : 
-                        progress === 100 ? 'bg-green-500' : 'bg-blue-500'
-                    }`} 
-                    style={{ width: `${progress}%` }} 
-                  />
-              </div>
-          </div>
-      )}
+      {/* Stats Overview Grid - 5 Cards en fila para XL */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        
+        {/* Card 1: Progreso (Integrado aquí) */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between relative overflow-hidden">
+           <div className="flex justify-between items-start z-10 relative">
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Estado / Progreso</p>
+               <i className={`fa-solid ${normalizeStatus(campaign.status) === 'COMPLETED' ? 'fa-check-circle text-green-400' : 'fa-spinner fa-spin text-blue-400'}`}></i>
+           </div>
+           <div className="mt-2 z-10 relative">
+                <p className="text-2xl font-bold text-slate-800">{toNumber(campaign.progress_percentage)}%</p>
+                
+                {/* Mini Barra dentro del Card */}
+                <div className="h-1.5 w-full bg-slate-100 rounded-full mt-2 overflow-hidden">
+                    <div 
+                        className={`h-full rounded-full transition-all duration-1000 ${normalizeStatus(campaign.status) === 'PAUSED' ? 'bg-amber-400' : 'bg-blue-500'}`} 
+                        style={{ width: `${toNumber(campaign.progress_percentage)}%` }} 
+                    />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">{toNumber(campaign.processed_count)} / {toNumber(campaign.total_target)} procesados</p>
+           </div>
+        </div>
 
-      {/* Stats Overview Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Total Enviados</p>
+        {/* Card 2: Audiencia */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+           <div className="flex justify-between items-start">
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Audiencia Total</p>
+               <i className="fa-solid fa-users text-slate-300"></i>
+           </div>
            <div className="mt-2">
-                <p className="text-2xl font-bold text-slate-800">{toNumber(campaign.sent_count || campaign.processed_count).toLocaleString()}</p>
-                <p className="text-xs text-green-600 font-bold mt-1">
-                    {(() => {
-                        const sent = toNumber(campaign.sent_count || campaign.processed_count);
-                        const total = toNumber(campaign.total_target);
-                        return total > 0 ? ((sent / total) * 100).toFixed(1) : '0.0';
-                    })()}% del objetivo
-                </p>
+                <p className="text-2xl font-bold text-slate-800">{toNumber(campaign.total_target).toLocaleString()}</p>
+                <p className="text-xs text-slate-500 mt-1">Contactos únicos</p>
            </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Aperturas Únicas</p>
+
+        {/* Card 3: Aperturas */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+           <div className="flex justify-between items-start">
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Tasa de Apertura</p>
+               <i className="fa-regular fa-envelope-open text-brand-300"></i>
+           </div>
            <div className="mt-2">
-                <p className="text-2xl font-bold text-brand-600">{toNumber(campaign.open_count).toLocaleString()}</p>
+                <p className="text-2xl font-bold text-brand-600">{toNumber(campaign.open_rate).toFixed(1)}%</p>
                 <p className="text-xs text-slate-500 mt-1">
-                    <span className="font-bold text-slate-700">{campaign.open_rate ? toNumber(campaign.open_rate).toFixed(1) : '0.0'}%</span> Tasa de apertura
+                    <span className="font-bold text-slate-700">{toNumber(campaign.open_count)}</span> leídos
                 </p>
            </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Clics Únicos</p>
+
+        {/* Card 4: Clics */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+           <div className="flex justify-between items-start">
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Clics en Enlaces</p>
+               <i className="fa-solid fa-arrow-pointer text-blue-300"></i>
+           </div>
            <div className="mt-2">
                 <p className="text-2xl font-bold text-blue-500">{toNumber(campaign.click_count).toLocaleString()}</p>
-                <p className="text-xs text-slate-500 mt-1">
-                    <span className="font-bold text-slate-700">{(() => {
-                        const sent = toNumber(campaign.sent_count);
-                        const clicked = toNumber(campaign.click_count);
-                        return sent > 0 ? ((clicked / sent) * 100).toFixed(1) : '0.0';
-                    })()}%</span> CTR
-                </p>
+                <p className="text-xs text-slate-500 mt-1">Interacciones</p>
            </div>
         </div>
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-           <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Rebotes / Fallos</p>
+
+        {/* Card 5: Pendientes */}
+        <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
+           <div className="flex justify-between items-start">
+               <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Pendientes</p>
+               <i className="fa-regular fa-clock text-amber-300"></i>
+           </div>
            <div className="mt-2">
-                <p className="text-2xl font-bold text-red-500">{toNumber(campaign.failed_count).toLocaleString()}</p>
-                <p className="text-xs text-slate-500 mt-1">
-                    <span className="font-bold text-slate-700">{(() => {
-                        const sent = toNumber(campaign.sent_count) + toNumber(campaign.failed_count);
-                        const failed = toNumber(campaign.failed_count);
-                        return sent > 0 ? ((failed / sent) * 100).toFixed(1) : '0.0';
-                    })()}%</span> Tasa de rebote
-                </p>
+                <p className="text-2xl font-bold text-amber-500">{toNumber(campaign.remaining_count).toLocaleString()}</p>
+                <p className="text-xs text-slate-500 mt-1">En cola de envío</p>
            </div>
         </div>
       </div>
 
       {/* Tabs & Content */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[500px]">
         <div className="border-b border-slate-200 bg-slate-50/50">
-          <div className="flex gap-1 px-4 pt-2">
+          <div className="flex gap-1 px-4 pt-2 overflow-x-auto">
             <button
               onClick={() => setActiveTab('STATS')}
-              className={`px-4 py-3 font-bold text-sm transition-colors border-b-2 ${
+              className={`px-4 py-3 font-bold text-sm transition-colors border-b-2 whitespace-nowrap ${
                 activeTab === 'STATS'
                   ? 'text-brand-600 border-brand-600 bg-white rounded-t-lg'
                   : 'text-slate-500 border-transparent hover:text-slate-700'
               }`}
             >
-              <i className="fa-solid fa-chart-line mr-2"></i> Resultados
+              <i className="fa-solid fa-chart-pie mr-2"></i> Reporte
+            </button>
+            <button
+              onClick={() => setActiveTab('AUDIENCE')}
+              className={`px-4 py-3 font-bold text-sm transition-colors border-b-2 whitespace-nowrap ${
+                activeTab === 'AUDIENCE'
+                  ? 'text-brand-600 border-brand-600 bg-white rounded-t-lg'
+                  : 'text-slate-500 border-transparent hover:text-slate-700'
+              }`}
+            >
+              <i className="fa-solid fa-users-viewfinder mr-2"></i> Audiencia ({filteredAudience.length})
             </button>
             <button
               onClick={() => setActiveTab('PREVIEW')}
-              className={`px-4 py-3 font-bold text-sm transition-colors border-b-2 ${
+              className={`px-4 py-3 font-bold text-sm transition-colors border-b-2 whitespace-nowrap ${
                 activeTab === 'PREVIEW'
                   ? 'text-brand-600 border-brand-600 bg-white rounded-t-lg'
                   : 'text-slate-500 border-transparent hover:text-slate-700'
               }`}
             >
-              <i className="fa-regular fa-eye mr-2"></i> Diseño
+              <i className="fa-regular fa-eye mr-2"></i> Vista Previa
             </button>
           </div>
         </div>
 
-        <div className="p-6">
-          {activeTab === 'STATS' ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="p-0">
+          {activeTab === 'STATS' && (
+            <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Gráfico */}
                 <div className="lg:col-span-2">
-                  <h3 className="font-bold text-slate-800 mb-6 text-sm uppercase tracking-wide">Actividad de Aperturas</h3>
+                  <h3 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wide">Rendimiento</h3>
                   <div className="h-72 w-full bg-slate-50 rounded-lg border border-slate-100 p-4">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartData}>
@@ -414,28 +446,28 @@ const CampaignDetail: React.FC = () => {
 
                 {/* Detalles Técnicos */}
                 <div className="space-y-6">
-                  <div>
+                  <div className="bg-slate-50 p-5 rounded-xl border border-slate-100">
                     <h3 className="font-bold text-slate-800 mb-4 text-sm uppercase tracking-wide">Configuración</h3>
                     <div className="space-y-3 text-sm">
-                      <div className="flex justify-between border-b border-slate-100 pb-2">
+                      <div className="flex justify-between border-b border-slate-200 pb-2">
                         <span className="text-slate-500">Programado:</span>
-                        <span className="font-bold text-slate-700">{campaign.scheduled_at_local ? new Date(campaign.scheduled_at_local).toLocaleString() : 'Inmediato'}</span>
+                        <span className="font-bold text-slate-700">{campaign.scheduled_at ? new Date(campaign.scheduled_at).toLocaleString() : 'Envío Inmediato'}</span>
                       </div>
-                      <div className="flex justify-between border-b border-slate-100 pb-2">
-                        <span className="text-slate-500">Enviado:</span>
-                        <span className="font-bold text-slate-700">{campaign.sent_at ? new Date(campaign.sent_at).toLocaleString() : '-'}</span>
+                      <div className="flex justify-between border-b border-slate-200 pb-2">
+                        <span className="text-slate-500">Última Act.:</span>
+                        <span className="font-bold text-slate-700">{campaign.updated_at ? new Date(campaign.updated_at).toLocaleString() : '-'}</span>
                       </div>
-                      <div className="flex flex-col border-b border-slate-100 pb-2">
+                      <div className="flex flex-col border-b border-slate-200 pb-2">
                         <span className="text-slate-500 mb-1">Remitente:</span>
                         <span className="font-bold text-slate-800 truncate">{campaign.sender_name}</span>
                         <span className="text-xs text-slate-400 truncate">{campaign.sender_email}</span>
                       </div>
                       <div className="pt-2">
-                        <span className="text-slate-500 block mb-2">Audiencias:</span>
+                        <span className="text-slate-500 block mb-2">Listas de Destino:</span>
                         <div className="flex flex-wrap gap-2">
                           {campaign.target_lists_display ? (
                             campaign.target_lists_display.split(',').map((list, i) => (
-                                <span key={i} className="px-2 py-1 bg-blue-50 text-blue-700 border border-blue-100 rounded text-xs font-semibold">
+                                <span key={i} className="px-2 py-1 bg-white text-slate-600 border border-slate-200 rounded text-xs font-semibold shadow-sm">
                                 {list.trim()}
                                 </span>
                             ))
@@ -448,10 +480,84 @@ const CampaignDetail: React.FC = () => {
                   </div>
                 </div>
             </div>
-          ) : (
-            // Preview Tab
-            <div className="max-w-3xl mx-auto space-y-4">
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm space-y-2">
+          )}
+
+          {activeTab === 'AUDIENCE' && (
+            <div className="flex flex-col h-full min-h-[500px]">
+                {/* Toolbar */}
+                <div className="p-4 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between gap-4">
+                    <div className="relative flex-1 max-w-md">
+                        <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <input 
+                            type="text" 
+                            placeholder="Buscar por nombre o email..." 
+                            className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                            value={audienceSearch}
+                            onChange={(e) => setAudienceSearch(e.target.value)}
+                        />
+                    </div>
+                    <div className="text-xs text-slate-500 font-medium">
+                        Mostrando {filteredAudience.length} destinatarios
+                    </div>
+                </div>
+
+                {/* Table */}
+                <div className="flex-1 overflow-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-50 sticky top-0 z-10 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                            <tr>
+                                <th className="px-6 py-3 border-b border-slate-200">Destinatario</th>
+                                <th className="px-6 py-3 border-b border-slate-200">Estado</th>
+                                <th className="px-6 py-3 border-b border-slate-200">Enviado</th>
+                                <th className="px-6 py-3 border-b border-slate-200 text-right">Interacción</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                            {filteredAudience.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="px-6 py-12 text-center text-slate-400">
+                                        <i className="fa-solid fa-user-slash text-3xl mb-2"></i>
+                                        <p>No se encontraron destinatarios.</p>
+                                    </td>
+                                </tr>
+                            ) : (
+                                filteredAudience.map((member) => (
+                                    <tr key={member.id_contact} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-6 py-3">
+                                            <div>
+                                                <p className="font-bold text-slate-800 text-sm">{member.name}</p>
+                                                <p className="text-xs text-slate-500">{member.email}</p>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-3">
+                                            {renderStatusBadge(member)}
+                                        </td>
+                                        <td className="px-6 py-3 text-sm text-slate-600">
+                                            {member.sent_at ? new Date(member.sent_at).toLocaleString() : '-'}
+                                        </td>
+                                        <td className="px-6 py-3 text-right">
+                                            {member.opened ? (
+                                                <span className="text-green-600 text-xs font-bold flex items-center justify-end gap-1">
+                                                    <i className="fa-solid fa-envelope-open"></i> Leído
+                                                </span>
+                                            ) : (
+                                                <span className="text-slate-400 text-xs flex items-center justify-end gap-1">
+                                                    <i className="fa-solid fa-envelope"></i> Sin abrir
+                                                </span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+          )}
+
+          {activeTab === 'PREVIEW' && (
+            <div className="p-8 max-w-4xl mx-auto space-y-4">
+              <div className="bg-white border border-slate-200 rounded-lg p-4 text-sm space-y-2 shadow-sm">
                   <div className="flex gap-2">
                       <span className="text-slate-500 font-medium w-16 text-right">De:</span>
                       <span className="text-slate-800 font-bold">{campaign.sender_name} &lt;{campaign.sender_email}&gt;</span>
@@ -460,25 +566,32 @@ const CampaignDetail: React.FC = () => {
                       <span className="text-slate-500 font-medium w-16 text-right">Asunto:</span>
                       <span className="text-slate-800 font-bold">{campaign.subject}</span>
                   </div>
+                  {campaign.preview_text && (
+                      <div className="flex gap-2">
+                          <span className="text-slate-500 font-medium w-16 text-right">Preheader:</span>
+                          <span className="text-slate-600 italic">{campaign.preview_text}</span>
+                      </div>
+                  )}
               </div>
               
-              <div className="border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-                <div className="bg-slate-100 px-4 py-2 border-b border-slate-200 flex gap-1.5">
-                    <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
-                    <div className="w-2.5 h-2.5 rounded-full bg-amber-400"></div>
-                    <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
+              <div className="border border-slate-300 rounded-xl overflow-hidden shadow-lg">
+                <div className="bg-slate-100 px-4 py-2 border-b border-slate-300 flex gap-1.5 items-center">
+                    <div className="w-2.5 h-2.5 rounded-full bg-red-400 border border-red-500"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-500"></div>
+                    <div className="w-2.5 h-2.5 rounded-full bg-green-400 border border-green-500"></div>
+                    <div className="ml-4 bg-white px-3 py-0.5 rounded text-[10px] text-slate-400 border flex-1 text-center font-mono">Vista Previa HTML</div>
                 </div>
-                <div className="bg-white p-8 min-h-[500px]">
+                <div className="bg-white min-h-[600px]">
                     {campaign.html_content ? (
                     <iframe 
                         title="preview"
                         srcDoc={campaign.html_content}
-                        className="w-full h-[600px] border-none"
+                        className="w-full h-[700px] border-none"
                     />
                     ) : (
-                    <div className="text-center text-slate-400 py-12">
-                        <i className="fa-regular fa-file-lines text-4xl mb-2"></i>
-                        <p>Sin contenido</p>
+                    <div className="text-center text-slate-400 py-20">
+                        <i className="fa-regular fa-file-lines text-4xl mb-4 opacity-50"></i>
+                        <p>Sin contenido HTML disponible</p>
                     </div>
                     )}
                 </div>

@@ -18,7 +18,7 @@ type SelectedRecipient = {
 type FinancialCreateForm = Partial<FinancialTransaction> & {
     enable_automation?: boolean;
     automation_frequency?: number;
-    status?: 'PENDIENTE' | 'PAGADO' | 'VENCIDO' | 'ANULADO';
+    status?: 'PENDIENTE' | 'PAGADO' | 'ANULADO';
 };
 
 const FinancialCreate: React.FC = () => {
@@ -212,6 +212,7 @@ const FinancialCreate: React.FC = () => {
                   <select name="transaction_type" value={transaction.transaction_type} onChange={handleInputChange} className="w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm bg-white">
                       <option value="VENTA">Ingreso (Venta)</option>
                       <option value="GASTO">Egreso (Gasto)</option>
+                      <option value="OTRO">Otro (Gasto)</option>
                   </select>
               </div>
               <div>

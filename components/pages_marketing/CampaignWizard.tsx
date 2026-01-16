@@ -281,6 +281,7 @@ const CampaignWizard: React.FC = () => {
   }, [formData]);
 
   // --- GUARDADO ---
+// --- GUARDADO Y ENVÍO ---
   const saveCampaign = async (scheduleData?: { at: string, tz: string }, isDraft = false) => {
       if (!user?.id_tenant || !user?.id_user) return;
       if (!formData.name) {
@@ -290,11 +291,15 @@ const CampaignWizard: React.FC = () => {
 
       try {
         setIsSaving(true);
-        const action = currentCampaignId ? 'update' : 'create';
-        console.log(`💾 Guardando... Acción: ${action} | ID Actual: ${currentCampaignId}`);
+
+        // --- PASO 1: GUARDAR DATOS (Create / Update) ---
+        // Primero aseguramos que el contenido, adjuntos y listas estén guardados en la BD
+        const saveAction = currentCampaignId ? 'update' : 'create';
+        
+        console.log(`💾 Paso 1: Guardando datos... (${saveAction})`);
 
         const dataToSend = new FormData();
-        dataToSend.append('action', action);
+        dataToSend.append('action', saveAction);
         dataToSend.append('id_tenant', user.id_tenant);
         dataToSend.append('id_user', user.id_user);
         
@@ -302,6 +307,7 @@ const CampaignWizard: React.FC = () => {
             dataToSend.append('id_campaign', currentCampaignId);
         }
 
+        // Datos del formulario
         dataToSend.append('name', formData.name);
         dataToSend.append('subject', formData.subject);
         dataToSend.append('preview_text', formData.preview_text || '');
@@ -311,6 +317,7 @@ const CampaignWizard: React.FC = () => {
         dataToSend.append('sender_email', formData.senderEmail);
         dataToSend.append('target_lists', JSON.stringify(formData.selectedLists));
 
+        // Programación (Si aplica)
         if (scheduleData) {
             dataToSend.append('schedule_at', scheduleData.at);
             dataToSend.append('schedule_timezone', scheduleData.tz);
@@ -319,6 +326,7 @@ const CampaignWizard: React.FC = () => {
             if (formData.scheduledTimezone) dataToSend.append('schedule_timezone', formData.scheduledTimezone);
         }
 
+        // Adjuntos
         if (formData.attachments.length === 0) {
             dataToSend.append('attachments', '[]'); 
         } else {
@@ -331,32 +339,61 @@ const CampaignWizard: React.FC = () => {
             });
         }
 
-        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/manage`, {
+        // Ejecutar guardado
+        const saveResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/manage`, {
             method: 'POST',
             body: dataToSend
         });
 
-        if (!response.ok) throw new Error('Error de conexión con el servidor');
+        if (!saveResponse.ok) throw new Error('Error al guardar la campaña');
 
-        const rawResponse = await response.json();
-        const responseData = Array.isArray(rawResponse) ? rawResponse[0] : rawResponse;
-        const newId = responseData?.id_campaign;
+        const rawSaveResponse = await saveResponse.json();
+        const savedData = Array.isArray(rawSaveResponse) ? rawSaveResponse[0] : rawSaveResponse;
+        
+        // Obtenemos el ID final (ya sea el que teníamos o uno nuevo si se creó)
+        const finalCampaignId = savedData?.id_campaign || currentCampaignId;
 
-        if (action === 'create' && newId) {
-            setCurrentCampaignId(newId);
-            window.history.replaceState(null, '', `/app/marketing/campaigns/edit/${newId}`);
+        // Actualizamos estado local si era nuevo
+        if (saveAction === 'create' && finalCampaignId) {
+            setCurrentCampaignId(finalCampaignId);
+            window.history.replaceState(null, '', `/app/marketing/campaigns/edit/${finalCampaignId}`);
         }
 
-        setToast({ message: isDraft ? 'Borrador guardado correctamente' : 'Campaña guardada', type: 'success' });
-        setHasUnsavedChanges(false); // Reseteamos el indicador de cambios
+        // --- PASO 2: DISPARAR ENVÍO (Si corresponde) ---
+        // Si NO es borrador Y NO es programado (es decir, es "Enviar Ahora")
+        if (!isDraft && !scheduleData && !formData.scheduledAt) {
+            
+            console.log(`🚀 Paso 2: Lanzando campaña... (${finalCampaignId})`);
+            
+            const sendData = new FormData();
+            sendData.append('action', 'send'); // <--- Acción específica para activar el envío
+            sendData.append('id_campaign', finalCampaignId);
+            sendData.append('id_tenant', user.id_tenant);
+            sendData.append('id_user', user.id_user);
+
+            const sendResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/manage`, {
+                method: 'POST',
+                body: sendData
+            });
+
+            if (!sendResponse.ok) throw new Error('Se guardó, pero falló al iniciar el envío.');
+            
+            setToast({ message: '¡Campaña lanzada con éxito!', type: 'success' });
+        } else {
+            // Mensaje solo de guardado
+            setToast({ message: isDraft ? 'Borrador guardado' : 'Campaña programada/guardada', type: 'success' });
+        }
+
+        setHasUnsavedChanges(false);
         
+        // Salir si no es borrador
         if (!isDraft) {
-            setTimeout(() => navigate('/app/marketing/campaigns'), 1000);
+            setTimeout(() => navigate('/app/marketing/campaigns'), 1500);
         }
 
     } catch (error) {
-        console.error("Error saving campaign:", error);
-        setToast({ message: 'Error al guardar.', type: 'error' });
+        console.error("Error en el proceso:", error);
+        setToast({ message: 'Error al procesar la solicitud.', type: 'error' });
     } finally {
         setIsSaving(false);
     }
