@@ -33,17 +33,16 @@ const LandingPage: React.FC = () => {
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
           <div className="flex items-center space-x-3">
-            <img src="/logo.png" alt="COMPUTEKSA 360" className="h-10 w-auto" />
+            <img src="/logo.png" alt="CRM COMPUTEKSA" className="h-10 w-auto" />
             <div>
-              <div className="text-sm font-bold text-slate-900">COMPUTEKSA 360</div>
-              <div className="text-xs text-slate-500">CRM & Soluciones Empresariales</div>
+              <div className="text-sm font-bold text-slate-900">CRM COMPUTEKSA</div>
+              <div className="text-xs text-slate-500">Gestión Integral de Negocios B2B</div>
             </div>
           </div>
           <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-600">
             <a href="#plataforma" className="hover:text-brand-600 transition-colors">Plataforma</a>
             <a href="#caracteristicas" className="hover:text-brand-600 transition-colors">Características</a>
             <a href="#casos-uso" className="hover:text-brand-600 transition-colors">Casos de Uso</a>
-            <a href="#precios" className="hover:text-brand-600 transition-colors">Precios</a>
           </div>
           <div className="flex items-center space-x-4">
             <Link to="/login" className="text-sm font-medium text-slate-600 hover:text-brand-600 transition-colors">
@@ -62,24 +61,24 @@ const LandingPage: React.FC = () => {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
               <span className="inline-block py-2 px-4 rounded-full bg-brand-500/20 text-brand-300 text-xs font-bold uppercase tracking-wider mb-6 border border-brand-500/30">
-                🚀 Solución Empresarial 2026
+                🚀 CRM con Calendarios Integrados
               </span>
               <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
-                COMPUTEKSA 360
+                CRM COMPUTEKSA
               </h1>
               <h2 className="text-2xl lg:text-3xl font-bold text-brand-300 mb-8">
-                Tu Ecosistema Completo de Gestión Empresarial
+                CRM Potente con Integraciones a Calendarios Google y Microsoft
               </h2>
               <p className="text-xl text-slate-300 mb-10 leading-relaxed max-w-xl">
                 Gestiona clientes, cotizaciones, tratos, facturación y más desde una sola plataforma. 
-                Diseñado para empresas B2B que desean escalar sin complicaciones.
+                Con conexión integrada a calendarios de Google y Microsoft para sincronizar reuniones y eventos automáticamente.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <Link to="/login" className="px-8 py-4 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-lg transition-all shadow-xl hover:shadow-2xl flex items-center justify-center">
                   Acceder al CRM <i className="fa-solid fa-arrow-right ml-2"></i>
                 </Link>
-                <a href="#contratar" className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white border border-white/30 rounded-xl font-bold text-lg transition-all">
-                  Ver Planes
+                <a href="#contacto" className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white border border-white/30 rounded-xl font-bold text-lg transition-all">
+                  Contactar Ventas
                 </a>
               </div>
 
@@ -134,15 +133,15 @@ const LandingPage: React.FC = () => {
         <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-purple-600 opacity-10 blur-3xl rounded-full"></div>
       </header>
 
-      {/* COMPUTEKSA 360 - Qué es? */}
+      {/* CRM COMPUTEKSA - Qué es? */}
       <section id="plataforma" className="py-20 bg-slate-50">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
-            <span className="inline-block text-sm font-bold text-brand-600 uppercase tracking-wider mb-4">Sobre COMPUTEKSA 360</span>
-            <h2 className="text-4xl font-bold text-slate-900 mb-6">Un Ecosistema Integral para tu Negocio</h2>
+            <span className="inline-block text-sm font-bold text-brand-600 uppercase tracking-wider mb-4">Sobre CRM COMPUTEKSA</span>
+            <h2 className="text-4xl font-bold text-slate-900 mb-6">Tu CRM Completo con Integraciones de Calendarios</h2>
             <p className="text-xl text-slate-600 max-w-3xl mx-auto">
-              COMPUTEKSA 360 es una plataforma de soluciones empresariales diseñada para digitalizar y automatizar 
-              todos los procesos clave de tu empresa. El CRM es solo el principio.
+              CRM COMPUTEKSA es una plataforma integral diseñada para digitalizar y automatizar 
+              todos los procesos clave de tu empresa. Incluye integraciones nativas con Google Calendar y Microsoft 365 para sincronizar automáticamente reuniones y eventos.
             </p>
           </div>
 
@@ -176,7 +175,7 @@ const LandingPage: React.FC = () => {
               <div className="w-16 h-16 bg-brand-600 rounded-2xl flex items-center justify-center mb-6">
                 <i className="fa-solid fa-rocket text-white text-2xl"></i>
               </div>
-              <h3 className="text-2xl font-bold text-slate-900 mb-4">Próximo: COMPUTEKSA 360 Suite</h3>
+              <h3 className="text-2xl font-bold text-slate-900 mb-4">CRM COMPUTEKSA: Tu Solución Integral</h3>
               <p className="text-slate-600 mb-6 leading-relaxed">
                 Expandimos constantemente nuestro ecosistema con nuevas soluciones empresariales integradas para 
                 automatizar todos tus procesos.
@@ -229,7 +228,89 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Casos de Uso */}
+      {/* Integraciones de Calendarios */}
+      <section className="py-20 bg-gradient-to-r from-blue-50 to-purple-50">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-slate-900 mb-4">Integraciones Nativas de Calendarios</h2>
+            <p className="text-xl text-slate-600 max-w-3xl mx-auto">CRM COMPUTEKSA se conecta directamente con Google Calendar y Microsoft 365 para sincronizar automáticamente tus reuniones, eventos y tareas.</p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-12">
+            {/* Google Calendar */}
+            <div className="bg-white rounded-2xl p-10 border border-slate-200 shadow-lg hover:shadow-xl transition-shadow">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center">
+                  <i className="fa-brands fa-google text-2xl text-blue-600"></i>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900">Google Calendar</h3>
+                  <p className="text-slate-500 text-sm">Sincronización en tiempo real</p>
+                </div>
+              </div>
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3">
+                  <i className="fa-solid fa-check text-green-600 mt-1 flex-shrink-0"></i>
+                  <span className="text-slate-600">Importa automáticamente reuniones y eventos</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <i className="fa-solid fa-check text-green-600 mt-1 flex-shrink-0"></i>
+                  <span className="text-slate-600">Crea eventos directamente desde el CRM</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <i className="fa-solid fa-check text-green-600 mt-1 flex-shrink-0"></i>
+                  <span className="text-slate-600">Visualiza disponibilidad de tu equipo</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Microsoft 365 */}
+            <div className="bg-white rounded-2xl p-10 border border-slate-200 shadow-lg hover:shadow-xl transition-shadow">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-blue-100 rounded-2xl flex items-center justify-center">
+                  <i className="fa-brands fa-microsoft text-2xl text-blue-600"></i>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-slate-900">Microsoft 365</h3>
+                  <p className="text-slate-500 text-sm">Outlook & Exchange</p>
+                </div>
+              </div>
+              <ul className="space-y-3">
+                <li className="flex items-start gap-3">
+                  <i className="fa-solid fa-check text-green-600 mt-1 flex-shrink-0"></i>
+                  <span className="text-slate-600">Sincroniza con Outlook Calendar</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <i className="fa-solid fa-check text-green-600 mt-1 flex-shrink-0"></i>
+                  <span className="text-slate-600">Integración con Exchange Online</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <i className="fa-solid fa-check text-green-600 mt-1 flex-shrink-0"></i>
+                  <span className="text-slate-600">Acceso a disponibilidad de recursos</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-12 bg-white rounded-2xl p-8 border border-slate-200 text-center">
+            <h4 className="text-xl font-bold text-slate-900 mb-3">Beneficios de las Integraciones</h4>
+            <div className="grid md:grid-cols-3 gap-6">
+              <div>
+                <i className="fa-solid fa-clock text-3xl text-brand-600 mb-3"></i>
+                <p className="text-slate-600">Sincronización automática en tiempo real</p>
+              </div>
+              <div>
+                <i className="fa-solid fa-shield text-3xl text-brand-600 mb-3"></i>
+                <p className="text-slate-600">Seguridad de datos empresarial</p>
+              </div>
+              <div>
+                <i className="fa-solid fa-link text-3xl text-brand-600 mb-3"></i>
+                <p className="text-slate-600">Sin duplicación de información</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
       <section id="casos-uso" className="py-20 bg-slate-900 text-white">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
@@ -267,97 +348,81 @@ const LandingPage: React.FC = () => {
         </div>
       </section>
 
-      {/* Pricing */}
-      <section id="precios" className="py-20 bg-white">
+      {/* Centro de Marketing */}
+      <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-6">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-slate-900 mb-4">Planes de Suscripción</h2>
-            <p className="text-xl text-slate-600">Transparente, sin sorpresas. Elige el plan que mejor se ajuste a tu negocio.</p>
+            <h2 className="text-4xl font-bold text-slate-900 mb-4">Centro de Marketing Integrado</h2>
+            <p className="text-xl text-slate-600 max-w-3xl mx-auto">Gestiona tu estrategia de marketing desde un mismo lugar. Crea campañas, gestiona listas de contactos y automatiza el envío de correos.</p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
             {[
               {
-                nombre: 'Startup',
-                precio: '$99',
-                periodo: 'mes',
-                desc: 'Perfecto para iniciar',
-                features: [
-                  'Hasta 5 usuarios',
-                  '1 empresa (tenant)',
-                  'Gestión de clientes',
-                  'Cotizaciones básicas',
-                  'Dashboard simple',
-                  'Soporte por email'
-                ],
-                cta: 'Comenzar Ahora',
-                highlight: false
+                icon: 'fa-envelope-circle-check',
+                title: 'Campañas Email',
+                desc: 'Crea y envía campañas de correo profesionales con plantillas personalizables.'
               },
               {
-                nombre: 'Profesional',
-                precio: '$299',
-                periodo: 'mes',
-                desc: 'Lo más popular',
-                features: [
-                  'Hasta 20 usuarios',
-                  'Múltiples empresas',
-                  'Gestión completa de tratos',
-                  'Cotizaciones avanzadas',
-                  'Reportes detallados',
-                  'Automatización n8n',
-                  'Soporte prioritario'
-                ],
-                cta: 'Contratar Ahora',
-                highlight: true
+                icon: 'fa-users-viewfinder',
+                title: 'Gestión de Leads',
+                desc: 'Captura, segmenta y organiza tus prospectos en listas inteligentes.'
               },
               {
-                nombre: 'Empresarial',
-                precio: 'Personalizado',
-                periodo: '',
-                desc: 'Para grandes operaciones',
-                features: [
-                  'Usuarios ilimitados',
-                  'Empresas ilimitadas',
-                  'API personalizada',
-                  'Integraciones custom',
-                  'Dedicado support 24/7',
-                  'SLA garantizado',
-                  'Consultoría incluida'
-                ],
-                cta: 'Contactar Ventas',
-                highlight: false
-              }
-            ].map((plan, i) => (
-              <div key={i} className={`rounded-2xl p-8 border transition-all ${
-                plan.highlight 
-                  ? 'bg-gradient-to-b from-brand-600 to-brand-700 text-white border-brand-600 shadow-2xl scale-105' 
-                  : 'bg-white border-slate-200 text-slate-900 hover:shadow-lg'
-              }`}>
-                <h3 className={`text-2xl font-bold mb-2 ${plan.highlight ? 'text-white' : ''}`}>{plan.nombre}</h3>
-                <p className={`mb-6 ${plan.highlight ? 'text-brand-100' : 'text-slate-600'}`}>{plan.desc}</p>
-                <div className="mb-8">
-                  <span className={`text-5xl font-extrabold ${plan.highlight ? 'text-white' : 'text-slate-900'}`}>
-                    {plan.precio}
-                  </span>
-                  {plan.periodo && <span className={plan.highlight ? 'text-brand-100' : 'text-slate-600'}> / {plan.periodo}</span>}
+                icon: 'fa-newspaper',
+                title: 'Boletines',
+                desc: 'Envía boletines informativos automatizados a tus suscriptores.'
+              },
+              {
+                icon: 'fa-list-check',
+                title: 'Listas de Difusión',
+                desc: 'Crea listas dinámicas y estáticas para segmentar tu audiencia.'
+              },
+            ].map((feature, i) => (
+              <div key={i} className="bg-gradient-to-br from-brand-50 to-slate-50 p-6 rounded-xl border border-brand-200 hover:border-brand-400 hover:shadow-lg transition-all">
+                <div className="w-12 h-12 bg-brand-600 rounded-lg flex items-center justify-center text-white text-xl mb-4">
+                  <i className={`fa-solid ${feature.icon}`}></i>
                 </div>
-                <button className={`w-full py-3 rounded-lg font-bold mb-8 transition-all ${
-                  plan.highlight
-                    ? 'bg-white text-brand-600 hover:bg-slate-100'
-                    : 'bg-brand-600 text-white hover:bg-brand-700'
-                }`}>
-                  {plan.cta}
-                </button>
-                <ul className="space-y-4">
-                  {plan.features.map((feature, j) => (
-                    <li key={j} className="flex items-start">
-                      <i className={`fa-solid fa-check mt-1 mr-3 flex-shrink-0 ${plan.highlight ? 'text-brand-200' : 'text-brand-600'}`}></i>
-                      <span>{feature}</span>
-                    </li>
-                  ))}
-                </ul>
+                <h3 className="text-lg font-bold text-slate-900 mb-2">{feature.title}</h3>
+                <p className="text-slate-600 text-sm">{feature.desc}</p>
               </div>
             ))}
+          </div>
+
+          <div className="bg-gradient-to-r from-brand-600 to-brand-700 rounded-2xl p-12 text-white text-center">
+            <h3 className="text-3xl font-bold mb-4">Automatiza tu Marketing y Aumenta tu ROI</h3>
+            <p className="text-xl text-brand-100 mb-8 max-w-2xl mx-auto">
+              Todas las herramientas de marketing que necesitas integradas en tu CRM. Sin aplicaciones externas, sin datos duplicados.
+            </p>
+            <a href="/app/marketing" className="inline-flex items-center gap-2 px-8 py-4 bg-white text-brand-600 rounded-lg font-bold hover:bg-brand-50 transition-all shadow-xl">
+              <i className="fa-solid fa-rocket"></i>
+              Conocer Centro de Marketing
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* Contactar con Ventas / Agendar Demo */}
+      <section id="contacto" className="py-20 bg-slate-50">
+        <div className="max-w-5xl mx-auto px-6">
+          <div className="text-center mb-12">
+            <h2 className="text-4xl font-bold text-slate-900 mb-6">¿Interesado en CRM COMPUTEKSA?</h2>
+            <p className="text-xl text-slate-600 mb-4">Contáctanos para conocer un plan personalizado que se ajuste a las necesidades de tu negocio.</p>
+            <p className="text-lg text-slate-500">O agendar una demo directamente:</p>
+          </div>
+          
+          <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-slate-200">
+            {/* Google Calendar Appointment Scheduling begin */}
+            <iframe src="https://calendar.google.com/calendar/appointments/schedules/AcZssZ3lPjQaOsUZyzaDeDFfrxMciicxVxt7ztEK9I46f4cDr7vOK6q99ffeaZCeCXo-BxBprKFc6eUi?gv=true" style={{border: 0}} width="100%" height="600" frameBorder="0"></iframe>
+            {/* end Google Calendar Appointment Scheduling */}
+          </div>
+
+          <div className="mt-8 text-center">
+            <p className="text-slate-600">O contáctanos directamente:</p>
+            <a href="mailto:soporte@computeksa.com" className="inline-flex items-center gap-2 mt-4 px-6 py-3 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 transition-all">
+              <i className="fa-solid fa-envelope text-lg"></i>
+              soporte@computeksa.com
+            </a>
           </div>
         </div>
       </section>
@@ -393,8 +458,8 @@ const LandingPage: React.FC = () => {
           <div className="grid md:grid-cols-4 gap-12 mb-12">
             <div>
               <div className="flex items-center space-x-2 mb-4">
-                <img src="/logo.png" alt="COMPUTEKSA 360" className="h-8 w-auto" />
-                <span className="font-bold text-white">COMPUTEKSA 360</span>
+                <img src="/logo.png" alt="CRM COMPUTEKSA" className="h-8 w-auto" />
+                <span className="font-bold text-white">CRM COMPUTEKSA</span>
               </div>
               <p className="text-sm">Tu ecosistema completo de gestión empresarial.</p>
             </div>
@@ -417,8 +482,8 @@ const LandingPage: React.FC = () => {
             <div>
               <h4 className="font-bold text-white mb-4">Legal</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="#" className="hover:text-brand-400">Términos de Servicio</a></li>
-                <li><a href="#" className="hover:text-brand-400">Política de Privacidad</a></li>
+                <li><Link to="/terms" className="hover:text-brand-400">Términos de Servicio</Link></li>
+                <li><Link to="/privacy" className="hover:text-brand-400">Política de Privacidad</Link></li>
               </ul>
             </div>
           </div>

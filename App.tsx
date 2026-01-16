@@ -8,6 +8,8 @@ import { APP_ROUTES } from './services/routes.config';
 import { googleClientId } from './services/oauthConfig';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
+import TermsOfService from './pages/TermsOfService';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 import Dashboard from './pages/Dashboard';
 import QuotesList from './pages/QuotesList';
 import QuoteDetail from './pages/QuoteDetail';
@@ -68,6 +70,8 @@ const App: React.FC = () => {
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/terms" element={<TermsOfService />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/app" element={<ProtectedRoute />}>
               {/* Todas las rutas anidadas usarán Layout y estarán protegidas */}
