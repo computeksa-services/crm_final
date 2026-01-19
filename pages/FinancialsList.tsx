@@ -299,6 +299,8 @@ const FinancialsList: React.FC = () => {
   }, []);
 
   // --- DATA LOADING ---
+  const didInitRef = useRef(false);
+  
   const loadData = useCallback(async () => {
       if (!user?.id_tenant) return;
       setLoading(true);
@@ -316,22 +318,6 @@ const FinancialsList: React.FC = () => {
           }
           if (result.meses_disponibles) {
               setAvailableList(result.meses_disponibles);
-              
-              // Si el año seleccionado no existe en la lista, cambiar al primer año disponible
-              const yearExists = result.meses_disponibles.some((y: any) => y.year === selectedYear);
-              if (!yearExists && result.meses_disponibles.length > 0) {
-                  const firstYear = result.meses_disponibles[0].year;
-                  const months = result.meses_disponibles[0].months_available || [];
-                  const sorted = [...months].sort((a: any, b: any) => b.month - a.month);
-                  if (sorted.length > 0) {
-                      const firstMonth = sorted[0].month;
-                      const start = new Date(firstYear, firstMonth-1, 1).toISOString().split('T')[0];
-                      const end = new Date(firstYear, firstMonth, 0).toISOString().split('T')[0];
-                      setSelectedYear(firstYear);
-                      setSelectedMonth(firstMonth);
-                      setDateRange({ start, end });
-                  }
-              }
           }
           
           const txList = (result.data || []).filter((t: any) => t && Object.keys(t).length > 0);
@@ -357,7 +343,84 @@ const FinancialsList: React.FC = () => {
       } catch (e) { console.error(e); setToast({ message: 'Error de conexión', type: 'error' }); } finally { setLoading(false); }
   }, [user, dateRange, includeOpen]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  // Carga inicial - solo una vez
+  useEffect(() => { 
+    if (didInitRef.current) return;
+    didInitRef.current = true;
+    
+    const fetchInitial = async () => {
+      if (!user?.id_tenant) return;
+      setLoading(true);
+      try {
+        const data = await financialService.getAll(user.id_tenant, { ...dateRange, include_open: includeOpen });
+        const result = Array.isArray(data) ? data[0] : data;
+
+        if (result.kpis) {
+          setKpiSummary({
+            ventasMes: Number(result.kpis.ventas_periodo || 0),
+            porCobrarTotal: Number(result.kpis.por_cobrar_total || 0),
+            vencidoTotal: Number(result.kpis.vencido_total || 0),
+            cobradoMes: Number(result.kpis.cobrado_periodo || 0)
+          });
+        }
+        if (result.meses_disponibles) {
+          setAvailableList(result.meses_disponibles);
+        }
+        
+        const txList = (result.data || []).filter((t: any) => t && Object.keys(t).length > 0);
+        setTransactions(txList.map((t: any) => ({
+          ...t,
+          id_transaction: t.id_transaction || t.id_transaccion,
+          invoice_number: t.invoice_number || t.numero_factura,
+          description: t.description || t.descripcion_concepto,
+          client_company_name: t.client_company_name || t.nombre_cliente_proveedor,
+          status: t.status || t.estado_registro,
+          transaction_type: t.tipo_transaccion,
+          total_value: Number(t.total_value || t.total_factura || 0),
+          paid_amount: Number(t.paid_amount || t.monto_pagado_caja || 0),
+          retention_value: Number(t.retention_value || t.valor_retencion || 0),
+          balance_due: Math.max(Number(t.v_saldo_pendiente || t.saldo_pendiente || 0) - Number(t.valor_retencion || 0), 0),
+          issue_date: t.issue_date || t.fecha_emision,
+          due_date: t.due_date || t.fecha_vencimiento,
+          subtotal: Number(t.subtotal || 0),
+          tax_amount: Number(t.tax_amount || t.impuestos || 0),
+          payment_status_code: t.v_codigo_estado,
+          payment_status_label: t.v_etiqueta_estado
+        })));
+      } catch (e) { 
+        console.error(e); 
+        setToast({ message: 'Error de conexión', type: 'error' }); 
+      } finally { 
+        setLoading(false); 
+      }
+    };
+    
+    fetchInitial();
+  }, [user?.id_tenant]);
+
+  // Recargar solo cuando el usuario cambia los filtros MANUALMENTE (después de la carga inicial)
+  useEffect(() => {
+    if (!didInitRef.current) return;
+    loadData();
+  }, [dateRange, includeOpen, loadData]);
+
+  // Actualizar selectedYear y selectedMonth cuando lleguen los datos disponibles (sin disparar nuevo fetch)
+  useEffect(() => {
+    if (!didInitRef.current || availableList.length === 0) return;
+    
+    const yearExists = availableList.some((y: any) => y.year === selectedYear);
+    if (!yearExists) {
+      // Solo actualizar el estado sin disparar loadData (disponibleList ya tiene los meses)
+      const firstYear = availableList[0].year;
+      const months = availableList[0].months_available || [];
+      const sorted = [...months].sort((a: any, b: any) => b.month - a.month);
+      if (sorted.length > 0) {
+        const firstMonth = sorted[0].month;
+        setSelectedYear(firstYear);
+        setSelectedMonth(firstMonth);
+      }
+    }
+  }, [availableList, selectedYear]);
 
   // --- ACTIONS ---
   const handleStatusChange = async (tx: FinancialTransaction, newStatus: string) => {

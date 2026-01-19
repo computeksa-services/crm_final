@@ -13,6 +13,7 @@
     "@react-oauth/google": "^0.12.2",
     "@tanstack/react-table": "^8.21.3",
     "google-auth-library": "^10.5.0",
+    "jodit-react": "^5.2.38",
     "jsonwebtoken": "^9.0.3",
     "jwks-rsa": "^3.2.1",
     "leaflet": "^1.9.4",

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, 
@@ -82,8 +82,12 @@ const Dashboard: React.FC = () => {
   };
 
   // --- CARGA DE DATOS REALES ---
+  const didInitRef = useRef(false);
+  
   useEffect(() => {
     if (!user?.id_user || !user?.id_tenant) return;
+    if (didInitRef.current) return;
+    didInitRef.current = true;
 
     const fetchDashboardData = async () => {
       setLoading(true);
@@ -91,13 +95,11 @@ const Dashboard: React.FC = () => {
         const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/crm/dashboard`;
 
         const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id_tenant: user.id_tenant,
-            id_user: user.id_user,
-            rol_user: user.rol_user || 'usuario'
-          }),
+          method: 'GET',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('appToken')}`
+          }
         });
 
         if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);

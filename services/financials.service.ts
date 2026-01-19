@@ -3,13 +3,11 @@ import { apiFetch } from './apiClient';
 const API_URL = import.meta.env.VITE_WEBHOOK_URL;
 
 export const financialService = {
-  // CORRECCIÓN AQUÍ: Mapear 'start' -> 'start_date' y 'end' -> 'end_date'
+  // Método GET con query params (Gateway extrae id_tenant/id_user del token)
   getAll: async (tenantId: string, params: { start?: string; end?: string; include_open?: boolean }) => {
     const query = new URLSearchParams({
-      id_tenant: tenantId,
       start_date: params.start || '',
       end_date: params.end || '',
-      // Enviamos el estado del toggle
       include_open: String(params.include_open || false) 
     }).toString();
     
