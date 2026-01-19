@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { User, Tenant } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
+import { apiFetch } from '../services/apiClient';
 
 const UsersList: React.FC = () => {
   const { user } = useAuth();
@@ -40,7 +41,7 @@ const UsersList: React.FC = () => {
     const userId = user.id_user;
 
     try {
-      const usersRes = await fetch(`https://service.computeksa.com/webhook/api/users?id_tenant=${tenantId}&id_user=${userId}`);
+      const usersRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${tenantId}&id_user=${userId}`);
       
       const parseResponse = async (res: Response) => {
         if (!res.ok) {
@@ -57,10 +58,10 @@ const UsersList: React.FC = () => {
 
       let fetchedTenants: Tenant[] = [];
       if (user.rol_user === 'superadmin') {
-        const tenantsRes = await fetch(`https://service.computeksa.com/webhook/api/tenants?id_user=${userId}`);
+        const tenantsRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants?id_user=${userId}`);
         fetchedTenants = await parseResponse(tenantsRes);
       } else if (user.id_tenant) {
-        const tenantDetailRes = await fetch(`https://service.computeksa.com/webhook/api/tenants/detail?id_tenant=${user.id_tenant}`);
+        const tenantDetailRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/detail?id_tenant=${user.id_tenant}`);
         const tenantDetailData = await parseResponse(tenantDetailRes);
         if (tenantDetailData) {
           fetchedTenants = Array.isArray(tenantDetailData) ? tenantDetailData : [tenantDetailData];
@@ -131,7 +132,7 @@ const UsersList: React.FC = () => {
         if (!user?.id_tenant) return;
         setSubmitting(true);
         try {
-          const response = await fetch(`https://service.computeksa.com/webhook/api/users/delete`, {
+          const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_user: id, id_tenant: user.id_tenant, id_current_user: user.id_user }),
@@ -178,10 +179,10 @@ const UsersList: React.FC = () => {
     
     try {
       const url = isEditMode 
-        ? `https://service.computeksa.com/webhook/api/users/update` 
-        : `https://service.computeksa.com/webhook/api/users`;
+        ? `${import.meta.env.VITE_WEBHOOK_URL}/api/users/update` 
+        : `${import.meta.env.VITE_WEBHOOK_URL}/api/users`;
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(cleanedPayload),

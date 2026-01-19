@@ -4,6 +4,7 @@ import { DealInterest } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import IconPicker from '../components/IconPicker';
+import { apiFetch } from '../services/apiClient';
 
 // Paleta de colores moderna y profesional para CRM
 const PRESET_COLORS = [
@@ -43,7 +44,7 @@ const SettingsDealInterests: React.FC = () => {
     if (!user?.id_tenant) return;
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${user.id_tenant}`);
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${user.id_tenant}`);
       if (!response.ok) {
         if(response.status === 404) setInterests([]);
         else throw new Error('Failed to fetch deal interests');
@@ -145,7 +146,7 @@ const SettingsDealInterests: React.FC = () => {
         : `${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests`;
 
     try {
-      const response = await fetch(url, { 
+      const response = await apiFetch(url, { 
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify(payload) 
@@ -168,7 +169,7 @@ const SettingsDealInterests: React.FC = () => {
       message: '¿Estás seguro? Esto podría afectar a tratos existentes.',
       onConfirm: async () => {
         try {
-          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests/delete`, {
+          const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_interest: id, id_tenant: user?.id_tenant }),

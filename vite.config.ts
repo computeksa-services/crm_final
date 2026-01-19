@@ -8,9 +8,14 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
+    hmr: {
+      host: 'localhost',
+      port: 3000,
+      protocol: 'ws'
+    },
     proxy: {
       '/api': {
-        target: 'https://service.computeksa.com/webhook',
+        target: `${process.env.VITE_WEBHOOK_URL || 'https://gateway.computeksa.com'}/webhook`,
         changeOrigin: true,
         secure: true,
         rewrite: (path) => path.replace(/^\/api/, '/api'),

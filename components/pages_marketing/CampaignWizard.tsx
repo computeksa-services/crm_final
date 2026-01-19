@@ -6,6 +6,8 @@ import { MarketingList } from '../../types';
 import ReactQuill, { Quill } from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import Toast from '../Toast';
+import { apiFetch } from '../../services/apiClient';
+import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
 
 // --- CONFIGURACIÓN ---
 const STEPS = [
@@ -89,7 +91,7 @@ const CampaignWizard: React.FC = () => {
   const loadTenantData = async () => {
     if (!user?.id_tenant) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/detail?id_tenant=${user.id_tenant}`);
+      const res = await apiFetch(buildUrl(GATEWAY_CONFIG.API.TENANTS.DETAIL, { id_tenant: user.id_tenant }));
       if (res.ok) {
         const data = await res.json();
         const tenant = Array.isArray(data) ? data[0] : data;

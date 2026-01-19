@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Quote, ClientCompany, ClientContact } from '../types';
 import Toast from './Toast';
 import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../services/apiClient';
 import CompanyFormModal from './CompanyFormModal';
 import ContactFormModal from './ContactFormModal';
 
@@ -151,7 +152,7 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
         return;
       }
 
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

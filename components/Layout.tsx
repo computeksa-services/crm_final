@@ -3,6 +3,8 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getImageUrl } from '../utils/imageUtils';
 import { NAV_GROUPS, PAGE_NAMES } from '../services/routes.config';
+import { apiFetch } from '../services/apiClient';
+import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -55,7 +57,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
     const fetchTenantName = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/detail?id_tenant=${user.id_tenant}`);
+        const response = await apiFetch(buildUrl(GATEWAY_CONFIG.API.TENANTS.DETAIL, { id_tenant: user.id_tenant }));
         if (response.ok) {
           const data = await response.json();
           const name = Array.isArray(data) ? data[0]?.name_tenant : data.name_tenant;

@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { authService } from '../services/authService';
+import { apiFetch } from '../services/apiClient';
+import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
 
 const AuthCallbackPage: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { login } = useAuth();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
@@ -12,76 +14,17 @@ const AuthCallbackPage: React.FC = () => {
   useEffect(() => {
     const handleCallback = async () => {
       try {
-        const code = searchParams.get('code');
-        const state = searchParams.get('state');
-        const errorParam = searchParams.get('error');
-
-        if (errorParam) {
-          throw new Error(`Error del servidor: ${errorParam}`);
-        }
-
-        if (!code) {
-          throw new Error('No se recibió el código de autorización');
-        }
-
-        console.log('🔐 OAuth callback recibido:', { code, state });
-
-        // Enviar el code al backend
-        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/auth/callback`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, state }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.text();
-          throw new Error(`Error del servidor (${response.status}): ${errorData || 'No autorizado'}`);
-        }
-
-        const data = await response.json();
-        console.log('✅ Respuesta COMPLETA del backend:', data);
-
-        // Validar que sea un array y tenga datos
-        if (!Array.isArray(data) || data.length === 0) {
-          throw new Error('El backend no devolvió datos válidos');
-        }
-
-        // --- CORRECCIÓN AQUÍ ---
-        const authData = data[0]; // El objeto que contiene { token, user }
+        // Nota: El flujo de login ahora es directo desde LoginPage
+        // Este archivo se puede usar para validaciones futuras
+        // Por ahora, simplemente redirigir al dashboard si ya hay token
         
-        // 1. Extraemos el TOKEN y el USUARIO por separado
-        const token = authData.token;
-        const userData = authData.user;
-
-        if (!token) throw new Error('El servidor no devolvió el token de sesión');
-        if (!userData) throw new Error('El servidor no devolvió los datos del usuario');
-
-        console.log('🔑 Token a guardar:', token);
-        console.log('👤 Usuario a guardar:', userData);
-
-        // 2. Persistir el nombre del tenant en localStorage (para mostrarlo de inmediato)
-        try {
-          if (userData?.id_tenant) {
-            const tRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/detail?id_tenant=${userData.id_tenant}`);
-            if (tRes.ok) {
-              const tData = await tRes.json();
-              const tName = Array.isArray(tData) ? tData[0]?.name_tenant : tData?.name_tenant;
-              if (tName) localStorage.setItem('tenant-name', tName);
-            }
-          }
-        } catch (e) {
-          console.warn('No se pudo obtener name_tenant en login:', e);
-        }
-
-        // 3. Llamamos a login con AMBOS argumentos
-        // login(token: string, user: User)
-        login(token, userData);
-
-        console.log('✅ Login completado. Redirigiendo...');
-        
-        setTimeout(() => {
+        const token = authService.getToken();
+        if (token) {
           navigate('/app/dashboard');
-        }, 100);
+        } else {
+          // Si no hay token, volver al login
+          navigate('/login');
+        }
 
       } catch (err: any) {
         console.error('❌ Error en callback:', err);
@@ -91,7 +34,7 @@ const AuthCallbackPage: React.FC = () => {
     };
 
     handleCallback();
-  }, [searchParams, login, navigate]);
+  }, [login, navigate]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
@@ -110,15 +53,36 @@ const AuthCallbackPage: React.FC = () => {
           <div className="animate-fade-in">
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
               <i className="fa-solid fa-circle-exclamation text-red-600 text-3xl block mb-2"></i>
-              <p className="text-red-800 font-semibold">Error de autenticación</p>
+              <p className="text-red-800 font-semibold">Acceso Denegado</p>
               <p className="text-red-700 text-sm mt-2">{error}</p>
+              <p className="text-red-600 text-xs mt-3">
+                Si crees que esto es un error, contacta al administrador.
+              </p>
             </div>
-            <button
-              onClick={() => navigate('/login')}
-              className="w-full py-2 px-4 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-semibold transition"
-            >
-              Volver al login
-            </button>
+            <div className="space-y-2">
+              <button
+                onClick={() => {
+                  // Forzar logout completo
+                  authService.removeToken();
+                  localStorage.clear();
+                  navigate('/login');
+                }}
+                className="w-full py-2 px-4 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-semibold transition"
+              >
+                Volver al login
+              </button>
+              <button
+                onClick={() => {
+                  // Limpiar completamente y permitir probar con otra cuenta
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  window.location.href = '/login';
+                }}
+                className="w-full py-2 px-4 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg font-semibold transition"
+              >
+                Probar con otra cuenta
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Toast from '../components/Toast';
+import { apiFetch } from '../services/apiClient';
 import type { ClientCompany, FinancialTransaction, Quote } from '../types';
 
 // --- HELPERS ---
@@ -58,10 +59,10 @@ const FinancialCreate: React.FC = () => {
     if (!user?.id_tenant || !user?.id_user) return;
     try {
       const [companiesRes, quotesRes, contactsRes, teamRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}`)
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}`)
       ]);
 
       const parse = async (r: Response) => (r.ok ? await r.json() : []);
@@ -156,7 +157,7 @@ const FinancialCreate: React.FC = () => {
         created_by: user?.id_user,
         automation_recipients: transaction.enable_automation ? selectedRecipients : []
       };
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials`, {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

@@ -4,6 +4,7 @@ import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import CollectionModal from '../components/CollectionModal';
 import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../services/apiClient';
 import type { FinancialTransaction, ClientCompany, Quote } from '../types';
 
 // --- HELPERS ---
@@ -114,9 +115,9 @@ const FinancialDetail: React.FC = () => {
     setLoading(true);
     try {
       const [txResponse, companiesRes, quotesRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${id}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${id}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
       ]);
 
       if (companiesRes.ok) setClientCompanies(await companiesRes.json());
@@ -161,7 +162,7 @@ const FinancialDetail: React.FC = () => {
       navigate(location.pathname, { state: { breadcrumb: normalizedTx.invoice_number }, replace: true });
 
       if (normalizedTx.id_client_company) {
-        const cRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies_contacts/detail?id_client_company=${normalizedTx.id_client_company}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        const cRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies_contacts/detail?id_client_company=${normalizedTx.id_client_company}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
         if (cRes.ok) setCompanyContacts(await cRes.json());
       }
     } catch (error) {
@@ -178,7 +179,7 @@ const FinancialDetail: React.FC = () => {
     if (!transaction) return;
     setProcessing(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...transaction, status: newStatus, id_tenant: user?.id_tenant, id_user: user?.id_user })
@@ -197,7 +198,7 @@ const FinancialDetail: React.FC = () => {
     try {
       const newPaid = (parseFloat(transaction.paid_amount as any) || 0) + paymentAmount;
       const newBalance = Math.max((parseFloat(transaction.balance_due as any) || 0) - paymentAmount, 0);
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...transaction, paid_amount: newPaid, balance_due: newBalance, id_tenant: user?.id_tenant })
@@ -212,7 +213,7 @@ const FinancialDetail: React.FC = () => {
   const handleDelete = async () => {
     try {
       setProcessing(true);
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/delete`, {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_transaction: transaction?.id_transaction })
@@ -227,7 +228,7 @@ const FinancialDetail: React.FC = () => {
     if (!transaction?.id_transaction || !user) return;
     setProcessing(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/notify-overdue`, {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/notify-overdue`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

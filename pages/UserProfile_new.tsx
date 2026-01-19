@@ -6,6 +6,8 @@ import { User, Tenant } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import { getImageUrl } from '../utils/imageUtils';
+import { apiFetch } from '../services/apiClient';
+import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
 
 const UserProfile: React.FC = () => {
   const { user } = useAuth(); // Obtener usuario del contexto
@@ -38,7 +40,7 @@ const UserProfile: React.FC = () => {
     if (!user?.id_tenant) return;
     setTenantLoading(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/detail?id_tenant=${user.id_tenant}`);
+      const res = await apiFetch(buildUrl(GATEWAY_CONFIG.API.TENANTS.DETAIL, { id_tenant: user.id_tenant }));
       if (res.ok) {
         const data = await res.json();
         const t: any = Array.isArray(data) ? data[0] : data;
@@ -138,12 +140,17 @@ const UserProfile: React.FC = () => {
   const saveCorporativeEmail = async (code: string, provider: 'google' | 'microsoft') => {
     if (!user?.id_tenant || !user?.id_user) return;
     try {
-      const form = new FormData();
-      form.append('id_tenant', user.id_tenant);
-      form.append('id_user', user.id_user);
-      form.append('code', code);
-      form.append('provider', provider);
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/email/corporative`, { method: 'POST', body: form });
+      // ✅ CORRECCIÓN: Enviar JSON en lugar de FormData
+      const jsonPayload = {
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+        code,
+        provider
+      };
+      const res = await apiFetch(GATEWAY_CONFIG.API.TENANTS.EMAIL_SETTINGS, { 
+        method: 'POST', 
+        body: JSON.stringify(jsonPayload)  // ✅ JSON, no FormData
+      });
       if (!res.ok) throw new Error('No se pudo guardar configuración');
       const data = await res.json();
       setCorporativeEmail(data?.corporate_email_address || '');
@@ -163,10 +170,15 @@ const UserProfile: React.FC = () => {
     if (!user?.id_tenant || !user?.id_user) return;
     setCorporativeDeleting(true);
     try {
-      const form = new FormData();
-      form.append('id_tenant', user.id_tenant);
-      form.append('id_user', user.id_user);
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/email/corporative/delete`, { method: 'POST', body: form });
+      // ✅ CORRECCIÓN: Enviar JSON en lugar de FormData
+      const jsonPayload = {
+        id_tenant: user.id_tenant,
+        id_user: user.id_user
+      };
+      const res = await apiFetch(GATEWAY_CONFIG.API.TENANTS.EMAIL_DELETE, { 
+        method: 'POST', 
+        body: JSON.stringify(jsonPayload)  // ✅ JSON, no FormData
+      });
       if (!res.ok) throw new Error('No se pudo eliminar configuración');
       setCorporativeEmail('');
       setCorporativeSetup(false);

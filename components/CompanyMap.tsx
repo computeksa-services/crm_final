@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { apiFetch } from '../services/apiClient';
 
 // Fix para los iconos de Leaflet
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -73,7 +74,7 @@ const CompanyMap: React.FC<CompanyMapProps> = ({ address, city, country, company
         // Intentar cada query en orden
         for (const query of queries) {
           try {
-            const response = await fetch(
+            const response = await apiFetch(
               `https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=1&timeout=5`,
               { 
                 headers: { 

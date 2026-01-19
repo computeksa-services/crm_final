@@ -5,6 +5,7 @@ import { ClientCompany } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import CompanyFormModal from '../components/CompanyFormModal';
+import { apiFetch } from '../services/apiClient';
 import {
   useReactTable,
   getCoreRowModel,
@@ -61,7 +62,7 @@ const ClientCompaniesList: React.FC = () => {
     if (!user?.id_tenant || !user?.id_user) return;
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies`);
 
       const parseResponse = async (res: Response) => {
         if (!res.ok) return [];
@@ -157,7 +158,7 @@ const ClientCompaniesList: React.FC = () => {
       isDestructive: true,
       onConfirm: async () => {
         try {
-          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/delete`, {
+          const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 

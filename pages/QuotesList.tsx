@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Quote, ClientCompany, ClientContact, QuoteStatus } from '../types';
+import { apiFetch } from '../services/apiClient';
 import Toast from '../components/Toast';
 import ShareModal from '../components/ShareModal';
 import ConfirmModal from '../components/ConfirmModal';
@@ -114,6 +115,7 @@ const QuotesList: React.FC = () => {
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]);
+  const [metadata, setMetadata] = useState<{ statuses: QuoteStatus[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   // --- TABLE STATE ---
@@ -142,37 +144,47 @@ const QuotesList: React.FC = () => {
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title: string; message: string; isDestructive?: boolean; onConfirm?: () => void }>({ isOpen: false, title: '', message: '' });
 
   // --- FETCH DATA ---
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
     if (!user?.id_tenant || !user?.id_user) return;
-    setLoading(true);
-    const tenantId = user.id_tenant;
-    const userId = user.id_user;
+    
+    const fetchData = async () => {
+      setLoading(true);
 
-    try {
-      const [quotesRes, companiesRes, contactsRes, statusesRes] = await Promise.all([
-        fetch(`https://service.computeksa.com/webhook/api/quotes?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`https://service.computeksa.com/webhook/api/clients/companies?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`https://service.computeksa.com/webhook/api/clients/contacts?id_tenant=${tenantId}&id_user=${userId}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`)
-      ]);
-      
-      const parse = async (res: Response) => { const t = await res.text(); return t ? JSON.parse(t) : []; };
-      
-      if (!quotesRes.ok && quotesRes.status !== 404) throw new Error('Error al cargar cotizaciones');
-      
-      setQuotes(await parse(quotesRes));
-      setCompanies(await parse(companiesRes));
-      setContacts(await parse(contactsRes));
-      setQuoteStatuses(await parse(statusesRes));
+      try {
+        const [quotesRes, companiesRes, contactsRes] = await Promise.all([
+          apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`),
+          apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies`),
+          apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts`)
+        ]);
+        
+        const parse = async (res: Response) => { const t = await res.text(); return t ? JSON.parse(t) : []; };
+        
+        if (!quotesRes.ok && quotesRes.status !== 404) throw new Error('Error al cargar cotizaciones');
+        
+        const quotesData = await parse(quotesRes);
+        
+        // Extraer respuesta maestra: { quotes: [...], metadata: { statuses: [...] } }
+        if (quotesData && quotesData.quotes && quotesData.metadata) {
+          setQuotes(quotesData.quotes);
+          setMetadata(quotesData.metadata);
+          setQuoteStatuses(quotesData.metadata.statuses || []);
+        } else if (Array.isArray(quotesData)) {
+          // Fallback si es array directo
+          setQuotes(quotesData);
+        }
+        
+        setCompanies(await parse(companiesRes));
+        setContacts(await parse(contactsRes));
 
-    } catch (e) {
-      setToast({ message: 'Error al cargar datos.', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
+      } catch (e) {
+        setToast({ message: 'Error al cargar datos.', type: 'error' });
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [user?.id_tenant, user?.id_user]);
 
   // Guardar estado de agrupación en localStorage
   useEffect(() => {
@@ -193,7 +205,7 @@ const QuotesList: React.FC = () => {
     quotes.forEach(quote => {
         let val = (quote as any)[columnId];
         if (columnId === 'id_quote_status') {
-            const status = quoteStatuses.find(s => s.id_status === val);
+            const status = (metadata?.statuses || quoteStatuses).find(s => s.id_status === val);
             val = status ? status.name : 'Desconocido';
         }
         if (!val) val = '(Vacío)';
@@ -219,7 +231,7 @@ const QuotesList: React.FC = () => {
     
     const isStatusChange = updates.id_quote_status && updates.id_quote_status !== quote.id_quote_status;
     const targetStatus = isStatusChange
-      ? quoteStatuses.find((s) => s.id_status === updates.id_quote_status)
+      ? (metadata?.statuses || quoteStatuses).find((s) => s.id_status === updates.id_quote_status)
       : undefined;
 
     const runUpdate = async () => {
@@ -232,7 +244,7 @@ const QuotesList: React.FC = () => {
               
           const endpoint = updates.id_quote_status ? '/api/status/quotes' : '/api/quotes/update';
           
-          const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}${endpoint}`, {
+          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}${endpoint}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),
@@ -271,7 +283,7 @@ const QuotesList: React.FC = () => {
       isDestructive: true,
       onConfirm: async () => {
         try {
-            await fetch('https://service.computeksa.com/webhook/api/quotes/delete', {
+            await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/webhook/api/quotes/delete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id_cotizacion: id, id_tenant: user?.id_tenant, id_user: user?.id_user }),
@@ -306,7 +318,7 @@ const QuotesList: React.FC = () => {
     setSubmitting(true);
     try {
         const payload = { ...editingQuote, id_tenant: user.id_tenant, id_user: user.id_user, is_private: !!editingQuote.is_private };
-        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
+        const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -333,7 +345,7 @@ const QuotesList: React.FC = () => {
             // CORRECCIÓN: Renderizar cabecera de grupo solo si estamos agrupando por estado
             if (row.getIsGrouped()) {
                 if (grouping.includes(column.id)) {
-                    const status = quoteStatuses.find(s => s.id_status === getValue());
+                    const status = (metadata?.statuses || quoteStatuses).find(s => s.id_status === getValue());
                     return renderGroupCell(row, status?.name || 'Desconocido');
                 }
                 return null;
@@ -341,14 +353,14 @@ const QuotesList: React.FC = () => {
             return (
                 <InlineBadgeSelector 
                     valueId={getValue() as number}
-                    items={quoteStatuses.map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon }))}
-                    onSelect={(id) => handleInlineUpdate(row.original, { id_quote_status: Number(id) })}
+                    items={(metadata?.statuses || quoteStatuses).map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon }))}
+                    onSelect={(id) => handleInlineUpdate(row.original, { id_quote_status: String(id) })}
                     disabled={!(row.original.access_level === 'EDIT' || user?.rol_user === 'admin')}
                 />
             );
         },
         filterFn: (row, id, filterValue: string[]) => {
-             const status = quoteStatuses.find(s => s.id_status === row.getValue(id));
+             const status = (metadata?.statuses || quoteStatuses).find(s => s.id_status === row.getValue(id));
              const statusName = status ? status.name : 'Desconocido';
              return filterValue.length === 0 || filterValue.includes(statusName);
         }
@@ -456,7 +468,7 @@ const QuotesList: React.FC = () => {
             );
         }
     }
-  ], [quoteStatuses, grouping]);
+  ], [quoteStatuses, grouping, metadata]);
 
   const table = useReactTable({
     data: quotes,
@@ -560,8 +572,8 @@ const QuotesList: React.FC = () => {
                           {isDate ? (
                             <div className="px-4 space-y-3">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Rango de fechas</span>
-                                <input type="date" className="w-full text-xs border rounded p-1" onChange={e => header.column.setFilterValue(old => ({ ...old as any, start: e.target.value }))} />
-                                <input type="date" className="w-full text-xs border rounded p-1" onChange={e => header.column.setFilterValue(old => ({ ...old as any, end: e.target.value }))} />
+                                <input type="date" className="w-full text-xs border rounded p-1" onChange={e => header.column.setFilterValue((old: any) => ({ ...old as any, start: e.target.value }))} />
+                                <input type="date" className="w-full text-xs border rounded p-1" onChange={e => header.column.setFilterValue((old: any) => ({ ...old as any, end: e.target.value }))} />
                             </div>
                           ) : (
                             <div className="max-h-60 overflow-y-auto px-1">
@@ -648,7 +660,7 @@ const QuotesList: React.FC = () => {
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Estado</label>
                     <select name="id_quote_status" required value={editingQuote.id_quote_status || ''} onChange={handleInputChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 outline-none">
                     <option value="">-- Estado --</option>
-                    {quoteStatuses.map(s => <option key={s.id_status} value={s.id_status}>{s.name}</option>)}
+                    {(metadata?.statuses || quoteStatuses).map(s => <option key={s.id_status} value={s.id_status}>{s.name}</option>)}
                     </select>
                  </div>
                  <div>
@@ -705,7 +717,7 @@ const QuotesList: React.FC = () => {
         </div>
       )}
 
-      {confirmState.isOpen && <ConfirmModal {...confirmState} onClose={() => setConfirmState(p => ({...p, isOpen: false}))} />}
+      {confirmState.isOpen && <ConfirmModal {...confirmState} onConfirm={confirmState.onConfirm || (() => {})} onClose={() => setConfirmState(p => ({...p, isOpen: false}))} />}
       {isShareOpen && shareQuoteId && <ShareModal entity="quotes" id={shareQuoteId} isOpen={isShareOpen} onClose={() => { setIsShareOpen(false); setShareQuoteId(null); }} onShared={() => setToast({ message: 'Compartido.', type: 'success' })} />}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>

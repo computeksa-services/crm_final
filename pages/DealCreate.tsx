@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Deal, ClientCompany, ClientContact, CustomStatus, User, DealChannel } from '../types';
+import { apiFetch } from '../services/apiClient';
 import Toast from '../components/Toast';
 import CompanyFormModal from '../components/CompanyFormModal';
 import ContactFormModal from '../components/ContactFormModal';
@@ -75,7 +76,7 @@ const DealCreate: React.FC = () => {
 
       const responses = await Promise.all(
         endpoints.map(endpoint => 
-          fetch(`${import.meta.env.VITE_WEBHOOK_URL}${endpoint.url}?id_tenant=${id_tenant}&id_user=${id_user}`)
+          apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}${endpoint.url}?id_tenant=${id_tenant}&id_user=${id_user}`)
         )
       );
 
@@ -196,7 +197,7 @@ const DealCreate: React.FC = () => {
     setProcessing(true);
     try {
       const payload = { ...deal, created_at: new Date().toISOString() };
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`, { 
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify(payload) 

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../services/apiClient';
 import Toast from './Toast';
 import ConfirmModal from '../components/ConfirmModal';
 
@@ -40,7 +41,7 @@ const DealShareList: React.FC<DealShareListProps> = ({ id_trato, refreshTrigger 
 
       setLoading(true);
       try {
-        const response = await fetch(
+        const response = await apiFetch(
           `${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share?id_trato=${id_trato}&id_tenant=${user.id_tenant}`,
           { method: 'GET', headers: { 'Content-Type': 'application/json' } }
         );
@@ -69,7 +70,7 @@ const DealShareList: React.FC<DealShareListProps> = ({ id_trato, refreshTrigger 
     setProcessing(id_user_target); // Bloquear UI para este usuario
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share/update`, {
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -106,7 +107,7 @@ const DealShareList: React.FC<DealShareListProps> = ({ id_trato, refreshTrigger 
       onConfirm: async () => {
         setProcessing(id_user_to_delete);
         try {
-          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share/delete`, {
+          const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

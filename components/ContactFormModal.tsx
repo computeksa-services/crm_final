@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ClientContact, ClientCompany } from '../types';
 import Toast from './Toast';
 import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../services/apiClient';
 
 interface ContactFormModalProps {
   isOpen: boolean;
@@ -73,7 +74,7 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
     didRequestCompaniesRef.current = true;
     try {
       setLoadingCompanies(true);
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       if (!res.ok) throw new Error('Error al cargar empresas');
       const text = await res.text();
       const data = text ? JSON.parse(text) : [];
@@ -132,7 +133,7 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
       const endpoint = mode === 'edit' ? 'update' : '';
       const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/${endpoint}`;
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

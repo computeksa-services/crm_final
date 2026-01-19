@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Product, ProductType } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
+import { apiFetch } from '../services/apiClient';
 
 const ProductsList: React.FC = () => {
   const { user } = useAuth();
@@ -46,12 +47,11 @@ const ProductsList: React.FC = () => {
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant) return;
     setLoading(true);
-    const tenantId = user.id_tenant;
 
     try {
       const [productsRes, typesRes] = await Promise.all([
-        fetch(`https://service.computeksa.com/webhook/api/products?id_tenant=${tenantId}`),
-        fetch(`https://service.computeksa.com/webhook/api/products_type?id_tenant=${tenantId}`)
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type`)
       ]);
 
       const parseResponse = async (res: Response) => {
@@ -162,7 +162,7 @@ const ProductsList: React.FC = () => {
       isDestructive: true,
       onConfirm: async () => {
         try {
-          const response = await fetch('https://service.computeksa.com/webhook/api/products/delete', {
+          const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id })
@@ -193,8 +193,8 @@ const ProductsList: React.FC = () => {
     
     try {
       const url = isEditMode 
-        ? 'https://service.computeksa.com/webhook/api/products/update' 
-        : 'https://service.computeksa.com/webhook/api/products';
+        ? `${import.meta.env.VITE_WEBHOOK_URL}/api/products/update` 
+        : `${import.meta.env.VITE_WEBHOOK_URL}/api/products`;
 
       // Crear FormData para enviar producto e imagen por separado
       const formData = new FormData();
@@ -216,7 +216,7 @@ const ProductsList: React.FC = () => {
         formData.append('imagen', imageFile);
       }
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: 'POST',
         body: formData,
         // NO incluir Content-Type header - el navegador lo establecerá automáticamente con multipart/form-data

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
+import { authService } from '../services/authService';
 
 interface AuthContextType {
   user: User | null;
@@ -21,23 +22,31 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // 1. Cargar sesión al iniciar la app
     console.log("🔄 AuthContext: Cargando sesión desde localStorage...");
     
-    const storedToken = localStorage.getItem('token');
+    // Primero intentar cargar el appToken del nuevo sistema
+    const appToken = authService.getToken();
     const storedUser = localStorage.getItem('user');
 
-    console.log("   Token encontrado:", storedToken ? "✓" : "✗");
+    // También verificamos el token legacy por compatibilidad
+    const legacyToken = localStorage.getItem('token');
+
+    console.log("   appToken encontrado:", appToken ? "✓" : "✗");
+    console.log("   Token legacy encontrado:", legacyToken ? "✓" : "✗");
     console.log("   Usuario encontrado:", storedUser ? "✓" : "✗");
 
-    if (storedToken && storedUser) {
+    const finalToken = appToken || legacyToken;
+
+    if (finalToken && storedUser) {
       try {
         const parsedUser = JSON.parse(storedUser);
         console.log("   Usuario parseado:", parsedUser);
         console.log("   Rol del usuario:", parsedUser?.rol_user);
         
-        setToken(storedToken);
+        setToken(finalToken);
         setUser(parsedUser);
         console.log("✅ Sesión restaurada correctamente");
       } catch (e) {
         console.error("🔴 Error al leer usuario del storage", e);
+        authService.removeToken();
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
@@ -51,6 +60,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     console.log("🟢 AuthContext.login ejecutándose");
     console.log("   Token recibido:", newToken ? "Sí (Oculto)" : "No");
     console.log("   Usuario recibido:", JSON.stringify(newUser, null, 2));
+    console.log("   ID Tenant del usuario:", newUser?.id_tenant);
+    console.log("   Email del usuario:", newUser?.email_user);
     console.log("   Rol del usuario:", newUser?.rol_user);
     console.log("   Avatar URL:", newUser?.avatar_url);
 
@@ -60,22 +71,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return; // Detenemos el login si el usuario no es un objeto
     }
 
+    // Validar que el usuario tenga los campos esenciales
+    // Estos campos vienen mapeados desde la respuesta del Gateway
+    // Gateway: id, tenantId, name, email, role, avatar
+    // Mapeados a: id_user, id_tenant, name_user, email_user, rol_user, avatar_url
+    if (!newUser.id_user || !newUser.id_tenant) {
+        console.error("🔴 ERROR: Usuario sin id_user o id_tenant:", newUser);
+        return;
+    }
+
     // 1. Actualizar Estado
     setToken(newToken);
     setUser(newUser);
 
     // 2. Persistir en LocalStorage
-    localStorage.setItem('token', newToken);
+    // El usuario fue mapeado desde la respuesta del Gateway
+    authService.saveToken(newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
     
+    // También guardamos en el formato legacy por compatibilidad temporal
+    localStorage.setItem('token', newToken);
+    
     console.log("✅ Sesión guardada en localStorage");
-    console.log("   localStorage.token:", localStorage.getItem('token') ? "✓" : "✗");
+    console.log("   ✓ appToken guardado");
+    console.log("   ✓ Usuario guardado con id_tenant:", newUser.id_tenant);
+    console.log("   ✓ Estructura mapeada desde Gateway:");
+    console.log("     - id_user (Gateway.id)");
+    console.log("     - id_tenant (Gateway.tenantId)");
+    console.log("     - name_user (Gateway.name)");
+    console.log("     - email_user (Gateway.email)");
+    console.log("     - rol_user (Gateway.role)");
+    console.log("     - avatar_url (Gateway.avatar)");
+    console.log("   localStorage.appToken:", authService.getToken() ? "✓" : "✗");
     console.log("   localStorage.user:", localStorage.getItem('user') ? "✓" : "✗");
   };
 
   const logout = () => {
     setToken(null);
     setUser(null);
+    authService.removeToken();
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/login';

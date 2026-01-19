@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { ProductType } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
+import { apiFetch } from '../services/apiClient';
 
 const SettingsProductTypes: React.FC = () => {
   const { user } = useAuth();
@@ -23,7 +24,7 @@ const SettingsProductTypes: React.FC = () => {
     if (!user?.id_tenant) return;
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`);
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`);
       if (!response.ok) {
         if(response.status === 404) {
           setProductTypes([]);
@@ -71,7 +72,7 @@ const SettingsProductTypes: React.FC = () => {
         : `${import.meta.env.VITE_WEBHOOK_URL}/api/products_type`;
 
     try {
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -95,7 +96,7 @@ const SettingsProductTypes: React.FC = () => {
       message: '¿Estás seguro? Eliminar este tipo podría afectar a productos existentes.',
       onConfirm: async () => {
         try {
-          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type/delete`, {
+          const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_product_type: id, id_tenant: user?.id_tenant }),

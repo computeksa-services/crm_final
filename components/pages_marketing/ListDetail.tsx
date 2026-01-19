@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { marketingApi } from '../../services/marketingApi';
 import { MarketingList, ListMember } from '../../types';
+import { apiFetch } from '../../services/apiClient';
 import AudienceMembersModal from '../marketing_center/audiences/AudienceMembersModal';
 import ConfirmModal from '../ConfirmModal';
 
@@ -151,7 +152,7 @@ const ListDetail: React.FC = () => {
     console.log('💾 Enviando actualización de lista:', { id_list: id, id_user: user.id_user, id_tenant: user.id_tenant, ...editForm });
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/lists/update`, {
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/lists/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

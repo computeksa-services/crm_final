@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { financialService } from '../services/financials.service';
 import Toast from '../components/Toast';
+import { apiFetch } from '../services/apiClient';
 import type { ClientCompany, FinancialTransaction, Quote } from '../types';
 
 // --- HELPERS ---
@@ -88,10 +89,10 @@ const FinancialForm: React.FC = () => {
     
     try {
       const [companiesRes, quotesRes, contactsRes, teamRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}`)
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}`)
       ]);
 
       const parse = async (r: Response) => (r.ok ? await r.json() : []);
@@ -109,7 +110,7 @@ const FinancialForm: React.FC = () => {
       // Si es modo edición, cargar los datos de la transacción
       if (isEditingMode && transactionId) {
         console.log('🔄 Cargando transacción para editar:', transactionId);
-        const detailRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${transactionId}`);
+        const detailRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${transactionId}`);
         if (detailRes.ok) {
           const data = await detailRes.json();
           const tx = Array.isArray(data) ? data[0] : data;
@@ -251,7 +252,7 @@ const FinancialForm: React.FC = () => {
       } else {
         // Crear nuevo
         console.log('Creando con payload:', payload);
-        res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials`, {
+        res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

@@ -4,6 +4,8 @@ import { Tenant } from '../types'; // Updated Type
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import { getImageUrl } from '../utils/imageUtils';
+import { apiFetch } from '../services/apiClient';
+import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
 
 const CompaniesList: React.FC = () => {
   const { user } = useAuth(); // Usar para validación de rol
@@ -44,7 +46,7 @@ const CompaniesList: React.FC = () => {
     const userId = user.id_user;
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants?id_user=${userId}`);
+      const response = await apiFetch(buildUrl(GATEWAY_CONFIG.API.TENANTS.LIST, { id_user: userId }));
       if (!response.ok) {
         if (response.status === 404) setTenants([]);
         else throw new Error('Error al cargar tenants');
@@ -91,10 +93,9 @@ const CompaniesList: React.FC = () => {
         const original = [...tenants];
         setTenants(prev => prev.filter(t => t.id_tenant !== id));
         try {
-          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/delete`, {
+          const response = await apiFetch(GATEWAY_CONFIG.API.TENANTS.DELETE, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: id })
+            body: JSON.stringify({ id_tenant: id })
           });
           if (!response.ok) throw new Error('Error al eliminar tenant');
           setToast({ message: 'Tenant eliminado.', type: 'success' });
@@ -131,25 +132,52 @@ const CompaniesList: React.FC = () => {
     setSubmitting(true);
     
     try {
-      const buildFormData = (data: Partial<Tenant>, file?: File | null) => {
-        const formData = new FormData();
-        if (data.id_tenant) formData.append('id', data.id_tenant);
-        if (data.ruc) formData.append('ruc', data.ruc);
-        if (data.name_tenant) formData.append('name_tenant', data.name_tenant);
-        if (data.country) formData.append('country', data.country);
-        if (data.city) formData.append('city', data.city);
-        if (data.address) formData.append('address', data.address);
-        if (data.website) formData.append('website', data.website);
-        if (file) formData.append('logo', file);
-        return formData;
-      };
-
+      // ✅ CORRECCIÓN: Enviar estructura correcta esperada por Gateway
+      // El Gateway espera: id_tenant, name_tenant, country, city, address, website, ruc
+      // NOTA: Si hay logo, usar FormData. Si no, usar JSON directamente
+      
       if (isEditMode && editingTenant.id_tenant) {
-        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/update`, {
-          method: 'POST',
-          body: buildFormData(editingTenant, logoFile)
-        });
-        if (!response.ok) throw new Error('Error al actualizar tenant');
+        let response;
+        
+        if (logoFile) {
+          // Si hay archivo de logo, usar FormData
+          const formData = new FormData();
+          formData.append('id_tenant', editingTenant.id_tenant);
+          formData.append('ruc', editingTenant.ruc || '');
+          formData.append('name_tenant', editingTenant.name_tenant || '');
+          formData.append('country', editingTenant.country || '');
+          formData.append('city', editingTenant.city || '');
+          formData.append('address', editingTenant.address || '');
+          formData.append('website', editingTenant.website || '');
+          formData.append('logo', logoFile);
+          
+          response = await apiFetch(GATEWAY_CONFIG.API.TENANTS.UPDATE, {
+            method: 'POST',
+            body: formData  // ✅ FormData con multipart/form-data
+          });
+        } else {
+          // Si NO hay logo, enviar JSON limpio
+          const jsonPayload = {
+            id_tenant: editingTenant.id_tenant,
+            ruc: editingTenant.ruc || undefined,
+            name_tenant: editingTenant.name_tenant || undefined,
+            country: editingTenant.country || undefined,
+            city: editingTenant.city || undefined,
+            address: editingTenant.address || undefined,
+            website: editingTenant.website || undefined,
+            logo_url: editingTenant.logo_url || undefined
+          };
+          
+          response = await apiFetch(GATEWAY_CONFIG.API.TENANTS.UPDATE, {
+            method: 'POST',
+            body: JSON.stringify(jsonPayload)  // ✅ JSON con application/json
+          });
+        }
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Error al actualizar tenant (${response.status}): ${errorText}`);
+        }
         const apiResponse = await response.json();
         const logoToUse = apiResponse.logo_url || logoPreview || editingTenant.logo_url;
 
@@ -157,11 +185,44 @@ const CompaniesList: React.FC = () => {
         setTenants(prev => prev.map(t => t.id_tenant === updated.id_tenant ? updated : t));
         setToast({ message: 'Tenant actualizado.', type: 'success' });
       } else {
-        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/add`, {
-          method: 'POST',
-          body: buildFormData(editingTenant, logoFile)
-        });
-        if (!response.ok) throw new Error('Error al crear tenant');
+        let response;
+        
+        if (logoFile) {
+          // Si hay archivo de logo, usar FormData
+          const formData = new FormData();
+          formData.append('ruc', editingTenant.ruc || '');
+          formData.append('name_tenant', editingTenant.name_tenant || '');
+          formData.append('country', editingTenant.country || '');
+          formData.append('city', editingTenant.city || '');
+          formData.append('address', editingTenant.address || '');
+          formData.append('website', editingTenant.website || '');
+          formData.append('logo', logoFile);
+          
+          response = await apiFetch(GATEWAY_CONFIG.API.TENANTS.CREATE, {
+            method: 'POST',
+            body: formData
+          });
+        } else {
+          // Si NO hay logo, enviar JSON limpio
+          const jsonPayload = {
+            ruc: editingTenant.ruc || undefined,
+            name_tenant: editingTenant.name_tenant || undefined,
+            country: editingTenant.country || undefined,
+            city: editingTenant.city || undefined,
+            address: editingTenant.address || undefined,
+            website: editingTenant.website || undefined
+          };
+          
+          response = await apiFetch(GATEWAY_CONFIG.API.TENANTS.CREATE, {
+            method: 'POST',
+            body: JSON.stringify(jsonPayload)
+          });
+        }
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Error al crear tenant (${response.status}): ${errorText}`);
+        }
         const apiResponse = await response.json();
         const logoToUse = apiResponse.logo_url || logoPreview || editingTenant.logo_url;
 
@@ -170,10 +231,13 @@ const CompaniesList: React.FC = () => {
         setToast({ message: 'Tenant creado.', type: 'success' });
         setIsModalOpen(false);
       }
-    } catch (error) {
-      setToast({ message: 'Error al guardar.', type: 'error' });
+    } catch (error: any) {
+      console.error('❌ Error en operación de tenant:', error);
+      setToast({ message: error.message || 'Error al guardar.', type: 'error' });
     } finally {
       setSubmitting(false);
+      // Cerrar modal de confirmación después de completar la operación
+      setConfirmState({ ...confirmState, isOpen: false });
     }
   };
 

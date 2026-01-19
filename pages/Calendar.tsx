@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CalendarEvent, ClientCompany, ClientContact, User, Deal, Quote } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../services/apiClient';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -144,12 +145,12 @@ const Calendar: React.FC = () => {
       
       // Cargar datos de BD sin sincronización (muy rápido)
       const [eventsResponse, clientsResponse, contactsResponse, usersResponse, dealsResponse, quotesResponse] = await Promise.all([
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
       ]);
       
       // Procesar datos de BD
@@ -241,7 +242,7 @@ const Calendar: React.FC = () => {
     try {
       console.log('🔄 Iniciando sincronización en segundo plano...');
       
-      const syncResponse = await fetch(
+      const syncResponse = await apiFetch(
         `${import.meta.env.VITE_WEBHOOK_URL}/api/calendar/sync?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&id_user=${user.id_user}&id_tenant=${user.id_tenant}`,
         {
           method: 'GET',
@@ -255,7 +256,7 @@ const Calendar: React.FC = () => {
         console.log('✅ Sincronización completada');
         
         // Volver a obtener eventos actualizados después de sincronizar
-        const eventsResponseUpdated = await fetch(
+        const eventsResponseUpdated = await apiFetch(
           `${import.meta.env.VITE_WEBHOOK_URL}/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&id_user=${user.id_user}&id_tenant=${user.id_tenant}`
         );
         
@@ -356,7 +357,7 @@ const Calendar: React.FC = () => {
     setIsDetailModalOpen(true);
     
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${import.meta.env.VITE_WEBHOOK_URL}/api/events/detail?id_event=${eventId}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`
       );
       
@@ -614,7 +615,7 @@ const Calendar: React.FC = () => {
 
       console.log('Creating event:', payload);
 
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events`, {
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -665,7 +666,7 @@ const Calendar: React.FC = () => {
 
       console.log('Updating event:', payload);
 
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/update`, {
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -722,7 +723,7 @@ const Calendar: React.FC = () => {
 
     setDeleting(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/delete`, {
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

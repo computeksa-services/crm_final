@@ -1,4 +1,5 @@
 import { Quote, QuoteItem, UserDecision, CalendarEvent, User, Tenant, ClientCompany, ClientContact, Deal, DealPermission, Product, CustomStatus } from '../types';
+import { apiFetch as apiClientFetch } from './apiClient';
 
 const USE_REAL_API = true; // Cambiar a true cuando configures n8n
 const N8N_BASE_URL = import.meta.env.VITE_WEBHOOK_URL; 
@@ -127,12 +128,12 @@ let quoteItems: QuoteItem[] = [];
 
 const apiFetch = async (endpoint: string, method: string = 'GET', body?: any) => {
   const fullUrl = `${N8N_BASE_URL}${endpoint}`;
-  console.log(`Intentando conectar a: ${method} ${fullUrl}`); // <-- AÑADIDO PARA DEPURAR
+  console.log(`Intentando conectar a: ${method} ${fullUrl}`);
+  
   try {
-    const headers = { 'Content-Type': 'application/json' };
-    const response = await fetch(fullUrl, {
+    // Usar apiClientFetch que incluye automáticamente el token de autorización
+    const response = await apiClientFetch(fullUrl, {
       method,
-      headers,
       body: body ? JSON.stringify(body) : undefined,
     });
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Quote, QuoteItem, UserDecision, Product, QuoteStatus, PdfVersion, ProductType } from '../types';
+import { apiFetch } from '../services/apiClient';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import ShareModal from '../components/ShareModal';
@@ -154,7 +155,7 @@ const QuoteDetail: React.FC = () => {
     if (!id || !user?.id_tenant || !user?.id_user) return;
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/detail?id_cotizacion=${id}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/detail?id_cotizacion=${id}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       
       if (!response.ok) {
         if (response.status === 404) setQuote(null);
@@ -225,7 +226,7 @@ const QuoteDetail: React.FC = () => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
         setProcessing(true);
         try {
-          const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/quotes`, {
+          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/quotes`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -273,7 +274,7 @@ const QuoteDetail: React.FC = () => {
     formData.append('id_user', user.id_user);
 
     try {
-        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/upload-manual`, {
+        const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/upload-manual`, {
             method: 'POST',
             body: formData
         });
@@ -302,7 +303,7 @@ const QuoteDetail: React.FC = () => {
             setConfirmState(prev => ({ ...prev, isOpen: false }));
             setProcessing(true);
             try {
-                const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/manual/delete`, {
+                const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/manual/delete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -346,7 +347,7 @@ const QuoteDetail: React.FC = () => {
     formData.append('id_user', user.id_user);
 
     try {
-        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/attachments/add`, {
+        const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/attachments/add`, {
             method: 'POST',
             body: formData
         });
@@ -374,7 +375,7 @@ const QuoteDetail: React.FC = () => {
             setConfirmState(prev => ({ ...prev, isOpen: false }));
             setDeletingAttachmentUrl(fileUrl);
             try {
-                const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/attachments/remove`, {
+                const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/attachments/remove`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -402,8 +403,8 @@ const QuoteDetail: React.FC = () => {
     setProcessing(true);
     try {
       const [pRes, tRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`)
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`)
       ]);
       
       if (pRes.ok) setAvailableProducts(JSON.parse(await pRes.text()) || []);
@@ -429,7 +430,7 @@ const QuoteDetail: React.FC = () => {
     const precio = parseFloat((prod.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
     
     try {
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products-selected`, {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products-selected`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -465,10 +466,10 @@ const QuoteDetail: React.FC = () => {
       formData.append('imagen_subida', String(!!imageFile));
       if (imageFile) formData.append('imagen', imageFile);
 
-      const createRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products`, { method: 'POST', body: formData });
+      const createRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products`, { method: 'POST', body: formData });
       if (!createRes.ok) throw new Error('Error al crear producto');
 
-      const pRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products?id_tenant=${user.id_tenant}`);
+      const pRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products?id_tenant=${user.id_tenant}`);
       const products = await pRes.json();
       const created = products.find((p: any) => p.descripcion === newProduct.descripcion);
       
@@ -476,7 +477,7 @@ const QuoteDetail: React.FC = () => {
         setAvailableProducts(products);
         setSelectedProductId(created.id_product);
         const precio = parseFloat(newProduct.precio_unitario) || 0;
-        await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products-selected`, {
+        await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products-selected`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -505,7 +506,7 @@ const QuoteDetail: React.FC = () => {
     if (!quote || !user) return;
     setProcessing(true);
     try {
-      await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quote-items/update`, {
+      await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quote-items/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -536,7 +537,7 @@ const QuoteDetail: React.FC = () => {
         if (!quote || !user) return;
         setProcessing(true);
         try {
-          await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quote-items/delete`, {
+          await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quote-items/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_articulo_cot: idItem, id_tenant: user.id_tenant, id_user: user.id_user })
@@ -558,7 +559,7 @@ const QuoteDetail: React.FC = () => {
     if (!quote || !user) return;
     setProcessing(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/generate-pdf`, {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/generate-pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_cotizacion: quote.id_cotizacion, id_tenant: user.id_tenant, id_user: user.id_user })
@@ -590,7 +591,7 @@ const QuoteDetail: React.FC = () => {
             setConfirmState(prev => ({...prev, isOpen: false}));
             setProcessing(true);
             try {
-            const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/send`, {
+            const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/send`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -617,7 +618,7 @@ const QuoteDetail: React.FC = () => {
     if(!quote || !user) return;
     const newDecision = e.target.value as UserDecision;
     try {
-      await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/decision`, {
+      await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/decision`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

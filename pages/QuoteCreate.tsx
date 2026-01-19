@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Quote, ClientCompany, ClientContact, QuoteStatus, Deal, UserDecision, CustomStatus, DealChannel } from '../types';
+import { apiFetch } from '../services/apiClient';
 import Toast from '../components/Toast';
 import CompanyFormModal from '../components/CompanyFormModal';
 import ContactFormModal from '../components/ContactFormModal';
@@ -68,7 +69,7 @@ const QuoteCreate: React.FC = () => {
       ];
 
       const responses = await Promise.all(
-        endpoints.map(ep => fetch(`https://service.computeksa.com/webhook/api/${ep}`))
+        endpoints.map(ep => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/webhook/api/${ep}`))
       );
 
       const data = await Promise.all(responses.map(async (res, index) => {
@@ -105,7 +106,7 @@ const QuoteCreate: React.FC = () => {
       // Si hay id de cotización, cargar datos para edición
       if (quoteId) {
         // Obtener datos de la cotización
-        const quoteRes = await fetch(`https://service.computeksa.com/webhook/api/quotes/detail?id_cotizacion=${quoteId}&id_tenant=${tenantId}&id_user=${userId}`);
+        const quoteRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/webhook/api/quotes/detail?id_cotizacion=${quoteId}&id_tenant=${tenantId}&id_user=${userId}`);
         if (!quoteRes.ok) throw new Error('No se pudo cargar la cotización');
         const quoteText = await quoteRes.text();
         const quoteData = quoteText ? JSON.parse(quoteText) : null;
@@ -214,7 +215,7 @@ const QuoteCreate: React.FC = () => {
           id_client_company: quote.id_client_company
         }).toString();
         console.log('Llamando a /api/deals/by_company con GET y params:', params);
-        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/by_company?${params}`);
+        const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/by_company?${params}`);
         console.log('Respuesta de /api/deals/by_company:', res);
         if (!res.ok) throw new Error('No se pudieron cargar los tratos de la empresa');
         const data = await res.json();
@@ -391,7 +392,7 @@ const QuoteCreate: React.FC = () => {
           valor_trato: undefined 
         };
 
-        const dealRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`, {
+        const dealRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(dealPayload),
@@ -432,14 +433,14 @@ const QuoteCreate: React.FC = () => {
       let res;
       if (quoteId) {
         // Modo edición: actualizar cotización existente
-        res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
+        res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ ...quotePayload, id_cotizacion: quoteId }),
         });
       } else {
         // Modo creación: crear nueva cotización
-        res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`, {
+        res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(quotePayload),

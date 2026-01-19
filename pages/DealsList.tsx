@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useDealFilters } from '../contexts/DealFiltersContext';
 import { Deal, ClientCompany, DealInterest } from '../types';
+import { apiFetch } from '../services/apiClient';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import ShareModal from '../components/ShareModal';
@@ -159,7 +160,7 @@ const DealsList: React.FC = () => {
     if (!user?.id_tenant || !user?.id_user) return;
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`);
       if (!response.ok) throw new Error('No se pudo cargar tratos');
 
       const text = await response.text();
@@ -298,7 +299,7 @@ const DealsList: React.FC = () => {
         id_tenant: user?.id_tenant,
         id_user: user?.id_user
       };
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/${isEditMode ? 'update' : ''}`, {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/${isEditMode ? 'update' : ''}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -325,14 +326,14 @@ const DealsList: React.FC = () => {
             id_tenant: user.id_tenant,
             id_user: user.id_user,
           };
-          const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
+          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
           if (!res.ok) throw new Error('No se pudo actualizar el estado del trato');
         } else {
-          await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update`, {
+          await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...deal, ...updates, id_tenant: user.id_tenant, id_user: user.id_user }),
@@ -370,7 +371,7 @@ const DealsList: React.FC = () => {
     setConfirmState({
       isOpen: true, title: 'Eliminar Trato', message: '¿Estás seguro? Esta acción es irreversible.', isDestructive: true,
       onConfirm: async () => {
-        await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/delete`, {
+        await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/delete`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id_trato: id, id_tenant: user?.id_tenant, id_user: user?.id_user })

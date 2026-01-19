@@ -4,6 +4,7 @@ import { DealChannel } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import IconPicker from '../components/IconPicker';
+import { apiFetch } from '../services/apiClient';
 
 const PRESET_COLORS = [
   '#6366f1',
@@ -35,7 +36,7 @@ const SettingsDealChannels: React.FC = () => {
     if (!user?.id_tenant) return;
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel?id_tenant=${user.id_tenant}`);
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel?id_tenant=${user.id_tenant}`);
       if (!response.ok) {
         if (response.status === 404) setChannels([]);
         else throw new Error('Failed to fetch channels');
@@ -77,7 +78,7 @@ const SettingsDealChannels: React.FC = () => {
       await Promise.all(
         channels.map((item, index) => {
           const payload = { ...item, status_order: index + 1, id_tenant: user.id_tenant };
-          return fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel/update`, {
+          return apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel/update`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -132,7 +133,7 @@ const SettingsDealChannels: React.FC = () => {
       ? `${import.meta.env.VITE_WEBHOOK_URL}/api/channel/update`
       : `${import.meta.env.VITE_WEBHOOK_URL}/api/channel`;
     try {
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -153,7 +154,7 @@ const SettingsDealChannels: React.FC = () => {
       message: '¿Estás seguro? Los tratos asociados podrían quedar huérfanos.',
       onConfirm: async () => {
         try {
-          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel/delete`, {
+          const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_channel: id, id_tenant: user?.id_tenant }),

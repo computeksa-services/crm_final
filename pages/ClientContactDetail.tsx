@@ -2,8 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ClientContact, ClientCompany } from '../types';
-import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
+import Toast from '../components/Toast';import { apiFetch } from '../services/apiClient';import ConfirmModal from '../components/ConfirmModal';
 
 const ClientContactDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -39,7 +38,7 @@ const ClientContactDetail: React.FC = () => {
 
     try {
       // 1. Obtener Contacto
-      const contactResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/detail?id_contact=${id}&id_tenant=${tenantId}&id_user=${userId}`);
+      const contactResponse = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/detail?id_contact=${id}&id_tenant=${tenantId}&id_user=${userId}`);
       if (!contactResponse.ok) {
         if (contactResponse.status === 404) {
           setContact(null);
@@ -59,7 +58,10 @@ const ClientContactDetail: React.FC = () => {
 
       // Update breadcrumb with contact name
       if (foundContact) {
-        navigate(location.pathname, { state: { breadcrumb: foundContact.full_name || foundContact.email }, replace: true });
+        const contactName = foundContact.first_name && foundContact.last_name 
+          ? `${foundContact.first_name} ${foundContact.last_name}`
+          : foundContact.first_name || foundContact.email;
+        navigate(location.pathname, { state: { breadcrumb: contactName }, replace: true });
       }
 
       if (!foundContact) {
@@ -69,7 +71,7 @@ const ClientContactDetail: React.FC = () => {
 
       // 2. Obtener Empresa (si existe)
       if (foundContact.id_client_company) {
-        const companyResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/detail?id_client_company=${foundContact.id_client_company}&id_tenant=${tenantId}&id_user=${userId}`);
+        const companyResponse = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/detail?id_client_company=${foundContact.id_client_company}&id_tenant=${tenantId}&id_user=${userId}`);
         if (companyResponse.ok) {
           const companyText = await companyResponse.text();
           let parsed: any = null;
@@ -100,7 +102,7 @@ const ClientContactDetail: React.FC = () => {
   const openShareModal = async () => {
     if (!user?.id_tenant) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       if (!res.ok) throw new Error('Error cargando usuarios');
       const data = await res.json();
       const activos = Array.isArray(data)
@@ -133,7 +135,7 @@ const ClientContactDetail: React.FC = () => {
     setShareSubmitting(true);
     try {
       const requests = shareTargets.map(target =>
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/contacts/share`, {
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/contacts/share`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { marketingApi } from '../../../services/marketingApi';
+import { apiFetch } from '../../../services/apiClient';
 import ConfirmModal from '../../ConfirmModal';
 
 // Definición de tipos
@@ -84,7 +85,7 @@ useEffect(() => {
 
   const fetchCompanies = async () => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/tools/companies?id_tenant=${tenantId}`);
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/tools/companies?id_tenant=${tenantId}`);
       if (response.ok) {
         const data = await response.json();
         setCompanies(Array.isArray(data) ? data : []);

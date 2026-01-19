@@ -1,3 +1,5 @@
+import { apiFetch } from './apiClient';
+
 const API_URL = import.meta.env.VITE_WEBHOOK_URL;
 
 export const financialService = {
@@ -11,19 +13,19 @@ export const financialService = {
       include_open: String(params.include_open || false) 
     }).toString();
     
-    const res = await fetch(`${API_URL}/api/financials?${query}`);
+    const res = await apiFetch(`${API_URL}/api/financials?${query}`);
     if (!res.ok) throw new Error('Error al cargar transacciones');
     return res.json();
  },
 
   getById: async (transactionId: string, tenantId: string) => {
-    const res = await fetch(`${API_URL}/api/financial/detail?id_transaction=${transactionId}&id_tenant=${tenantId}`);
+    const res = await apiFetch(`${API_URL}/api/financial/detail?id_transaction=${transactionId}&id_tenant=${tenantId}`);
     if (!res.ok) throw new Error('Error al cargar detalle');
     return res.json();
   },
 
   create: async (payload: any) => {
-    const res = await fetch(`${API_URL}/api/financials`, {
+    const res = await apiFetch(`${API_URL}/api/financials`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -33,7 +35,7 @@ export const financialService = {
   },
 
   update: async (payload: any) => {
-    const res = await fetch(`${API_URL}/api/financials/update`, {
+    const res = await apiFetch(`${API_URL}/api/financials/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -43,7 +45,7 @@ export const financialService = {
   },
 
   delete: async (transactionId: string, tenantId: string, userId: string) => {
-    const res = await fetch(`${API_URL}/api/financial/delete`, {
+    const res = await apiFetch(`${API_URL}/api/financial/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id_transaction: transactionId, id_tenant: tenantId, id_user: userId })
@@ -55,7 +57,7 @@ export const financialService = {
   
 
   notifyOverdue: async (payload: any) => {
-    const res = await fetch(`${API_URL}/api/financials/notify-overdue`, {
+    const res = await apiFetch(`${API_URL}/api/financials/notify-overdue`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

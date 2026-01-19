@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ClientCompany } from '../types';
 import Toast from './Toast';
 import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../services/apiClient';
 
 interface CompanyFormModalProps {
   isOpen: boolean;
@@ -48,7 +49,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
     const loadCountries = async () => {
       if (!user?.id_tenant || !user?.id_user) return;
       try {
-        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
         if (response.ok) {
           const data = await response.json();
           setCountries(Array.isArray(data) ? data : []);
@@ -65,7 +66,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
     const loadCompanyTypes = async () => {
       if (!user?.id_tenant || !user?.id_user) return;
       try {
-        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
         if (response.ok) {
           const data = await response.json();
           setCompanyTypes(Array.isArray(data) ? data : []);
@@ -233,7 +234,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         ...(mode === 'create' ? { created_by: user.id_user } : {}),
       };
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

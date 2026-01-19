@@ -6,6 +6,7 @@ import { ClientCompany, ClientContact } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import CompanyMap from '../components/CompanyMap';
+import { apiFetch } from '../services/apiClient';
 
 const ClientCompanyDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -67,7 +68,7 @@ const ClientCompanyDetail: React.FC = () => {
 
     try {
       // Obtener Empresa con todos sus datos (incluyendo contactos)
-      const companyResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/detail?id_client_company=${id}&id_tenant=${tenantId}&id_user=${userId}`);
+      const companyResponse = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/detail?id_client_company=${id}&id_tenant=${tenantId}&id_user=${userId}`);
       if (!companyResponse.ok) throw new Error(`Error al cargar empresa.`);
       
       const companyText = await companyResponse.text();
@@ -112,7 +113,7 @@ const ClientCompanyDetail: React.FC = () => {
     const loadCountries = async () => {
       if (!user?.id_tenant || !user?.id_user) return;
       try {
-        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
         if (response.ok) {
           const data = await response.json();
           setCountries(Array.isArray(data) ? data : []);
@@ -129,7 +130,7 @@ const ClientCompanyDetail: React.FC = () => {
     const loadCompanyTypes = async () => {
       if (!user?.id_tenant || !user?.id_user) return;
       try {
-        const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
         if (response.ok) {
           const data = await response.json();
           setCompanyTypes(Array.isArray(data) ? data : []);
@@ -246,7 +247,7 @@ const ClientCompanyDetail: React.FC = () => {
         id_tenant: user.id_tenant,
         id_user: user.id_user,
       };
-      const resp = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const resp = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (!resp.ok) throw new Error('Update failed');
       setToast({ message: 'Empresa actualizada con éxito.', type: 'success' });
       setIsCompanyModalOpen(false);
@@ -288,7 +289,7 @@ const ClientCompanyDetail: React.FC = () => {
         if (!user?.id_tenant) return;
         setSubmitting(true);
         try {
-          await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/delete`, {
+          await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_contact: contact.id_contact, id_tenant: user.id_tenant, id_user: user.id_user }),
@@ -314,7 +315,7 @@ const ClientCompanyDetail: React.FC = () => {
       const url = isEditMode && payload.id_contact
         ? `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/update`
         : `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts`;
-      await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       setToast({ message: isEditMode ? 'Contacto actualizado.' : 'Contacto creado.', type: 'success' });
       setIsModalOpen(false);
       await fetchData(); 
@@ -334,7 +335,7 @@ const ClientCompanyDetail: React.FC = () => {
   const openShareModal = async () => {
     if (!user?.id_tenant) return;
     try {
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       if (!res.ok) throw new Error('Error');
       const data = await res.json();
       const activos = Array.isArray(data)

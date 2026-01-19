@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Deal, Quote, DealStatus } from '../types';
+import { apiFetch } from '../services/apiClient';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import ShareModal from '../components/ShareModal';
@@ -112,7 +113,7 @@ const DealDetail: React.FC = () => {
     const userId = user.id_user;
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${id}&id_tenant=${tenantId}&id_user=${userId}`);
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${id}&id_tenant=${tenantId}&id_user=${userId}`);
       if (!res.ok) throw new Error('Error de red');
       
       const text = await res.text();
@@ -237,7 +238,7 @@ const DealDetail: React.FC = () => {
         setConfirmState(prev => ({...prev, isOpen: false}));
         setProcessing(true);
         try {
-          const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
+          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

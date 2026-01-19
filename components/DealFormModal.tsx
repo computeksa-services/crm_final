@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Deal, ClientCompany, ClientContact, DealStatus, InterestStatus } from '../types';
 import Toast from './Toast';
 import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../services/apiClient';
 import CompanyFormModal from './CompanyFormModal';
 import ContactFormModal from './ContactFormModal';
 
@@ -153,7 +154,7 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
         id_user: user.id_user,
       };
       
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

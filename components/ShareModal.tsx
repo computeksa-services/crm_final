@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../services/apiClient';
 
 type PermissionLevel = 'VIEW' | 'EDIT';
 
@@ -23,7 +24,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ entity, id, isOpen, onClose, on
     const loadUsers = async () => {
       if (!isOpen || !user?.id_tenant || !user?.id_user) return;
       try {
-        const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
         const text = await res.text();
         const data = text ? JSON.parse(text) : [];
         // Filtrar: no mostrar al propio usuario ni los excluidos
@@ -60,7 +61,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ entity, id, isOpen, onClose, on
           ? { id_tenant: user.id_tenant, id_trato: id, id_user_target: targetUserId, permission_level: level }
           : { id_tenant: user.id_tenant, id_cotizacion: id, id_user_target: targetUserId, permission_level: level };
         
-        return fetch(url, {
+        return apiFetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),

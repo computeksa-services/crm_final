@@ -10,7 +10,9 @@ const LoginPage: React.FC = () => {
   
   // Si el usuario ya está logueado, redirigir a dashboard
   useEffect(() => {
+    console.log('📊 LoginPage useEffect - Estado:', { loading, userExists: !!user });
     if (!loading && user) {
+      console.log('✅ Usuario autenticado, redirigiendo a dashboard');
       navigate('/app/dashboard', { replace: true });
     }
   }, [user, loading, navigate]);
@@ -19,73 +21,121 @@ const LoginPage: React.FC = () => {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  // --- 1. COMUNICACIÓN CON EL BACKEND (N8N) ---
-  const sendCodeToBackend = async (code: string, provider: 'google' | 'microsoft', msRedirectUri?: string) => {
+  // Enviar el authorization code al Gateway para que lo intercambie por tokens
+  const sendCodeToGateway = async (code: string, provider: 'google' | 'microsoft') => {
     try {
       setError('');
-      // URL de tu Webhook en n8n
-      const endpoint = `${import.meta.env.VITE_WEBHOOK_URL}/api/auth/callback`; 
       
-      // Determinamos el redirect_uri correcto según el proveedor
-      // Google (Popup) requiere la palabra clave 'postmessage'
-      // Microsoft (Popup) requiere la URL exacta donde aterrizó el popup
-      const finalRedirectUri = provider === 'google' ? 'postmessage' : msRedirectUri;
-
-      const response = await fetch(endpoint, {
+      // Enviar el authorization code al Gateway
+      // URL: ${VITE_WEBHOOK_URL}/auth/login (sin /api)
+      const loginUrl = `${import.meta.env.VITE_WEBHOOK_URL}/auth/login`;
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          code,
-          provider,
-          redirect_uri: finalRedirectUri 
+          code: code,           // Authorization code (para Google)
+          provider: provider    // 'google' o 'microsoft'
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Error en el servidor al validar sesión.');
+        throw new Error(errorData.message || 'Acceso denegado por el servidor.');
       }
 
-      const data = await response.json();
-      const authData = Array.isArray(data) ? data[0] : data;
+      const responseData = await response.json();
+      console.log('✅ Respuesta del Gateway:', responseData);
 
-      console.log("📦 Datos recibidos de n8n:", authData);
-      
-      // Validamos que la respuesta tenga lo necesario
-      if (data.token && data.user) {
-        login(data.token, data.user);
-        navigate('/app/dashboard');
-      } else if (data.error) {
-         throw new Error(data.message || 'Error de autenticación.');
-      } else {
-        throw new Error('Respuesta inválida del servidor.');
+      // El Gateway devuelve un array con la estructura:
+      // [
+      //   {
+      //     "token": "appToken",
+      //     "user": {
+      //       "id_user": "user_id",
+      //       "id_tenant": "tenant_id",
+      //       "name_user": "User Name",
+      //       "email_user": "user@example.com",
+      //       "rol_user": "admin",
+      //       "avatar_url": "https://...",
+      //       "status_user": "Activo",
+      //       "googleConnected": true
+      //     }
+      //   }
+      // ]
+
+      // Extraer el primer elemento si es un array, o usar directamente si es objeto
+      const data = Array.isArray(responseData) ? responseData[0] : responseData;
+
+      if (!data || !data.token) {
+        throw new Error('El Gateway no devolvió un token válido.');
       }
+
+      // ✅ El usuario ya viene en el formato correcto desde el Gateway
+      // Gateway devuelve: id_user, id_tenant, name_user, email_user, rol_user, avatar_url, status_user, googleConnected
+      // App usa exactamente lo mismo
+      const userData = data.user || {};
+
+      // Asegurar que todos los campos necesarios estén presentes
+      const completeUserData = {
+        id_user: userData.id_user,
+        id_tenant: userData.id_tenant,
+        name_user: userData.name_user,
+        email_user: userData.email_user,
+        rol_user: userData.rol_user,
+        avatar_url: userData.avatar_url,
+        status_user: userData.status_user || 'Activo',
+        googleConnected: userData.googleConnected || false,
+        outlookConnected: userData.outlookConnected || false,
+        phone_user: userData.phone_user || '',
+        job_title: userData.job_title || '',
+      };
+
+      console.log('👤 Datos del usuario:', {
+        id_user: completeUserData.id_user,
+        id_tenant: completeUserData.id_tenant,
+        name_user: completeUserData.name_user,
+        email_user: completeUserData.email_user,
+        rol_user: completeUserData.rol_user,
+      });
+
+      // Guardar el appToken y el usuario
+      // El useEffect del componente detectará el cambio en 'user' y navegará automáticamente
+      console.log('🔐 Llamando a login() con completeUserData:', completeUserData);
+      login(data.token, completeUserData);
+      console.log('✅ login() ejecutado. Esperando que el useEffect detecte el cambio en user...');
 
     } catch (err: any) {
-      console.error("Login Error:", err);
+      console.error('❌ Error al intercambiar token:', err);
       setError(err.message || 'No se pudo iniciar sesión.');
     } finally {
       setLoadingProvider(null);
     }
   };
 
-  // --- 2. CONFIGURACIÓN GOOGLE ---
+  // --- CONFIGURACIÓN GOOGLE: Obtener authorization code ---
   const googleLogin = useGoogleLogin({
-    onSuccess: (codeResponse) => {
+    onSuccess: (tokenResponse: any) => {
       setLoadingProvider('google');
-      console.log("Google Code Recibido");
-      sendCodeToBackend(codeResponse.code, 'google');
+      console.log('🔐 Google authorization code recibido');
+      // tokenResponse.code contiene el authorization code en flujo auth-code
+      const code = tokenResponse.code;
+      if (!code) {
+        setError('No se recibió el código de autorización de Google.');
+        setLoadingProvider(null);
+        return;
+      }
+      sendCodeToGateway(code, 'google');
     },
     onError: () => {
       setError('Falló la conexión con Google.');
       setLoadingProvider(null);
     },
-    flow: 'auth-code',
-    // Scopes para Calendario y Gmail (además de los básicos)
+    flow: 'auth-code', // Authorization Code Flow para obtener el code (no id_token)
+    // Scopes para Calendario, Gmail y acceso offline para refresh_token
     scope: "openid profile email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify"
   });
 
-  // --- 3. CONFIGURACIÓN MICROSOFT (POPUP MANUAL) ---
+  // --- CONFIGURACIÓN MICROSOFT (POPUP MANUAL) ---
   const handleMicrosoftLogin = () => {
     if (!microsoftClientId) {
         setError('Falta configurar el Cliente de Microsoft.');
@@ -97,10 +147,11 @@ const LoginPage: React.FC = () => {
 
     // Scopes de Microsoft
     const scopes = "openid profile email offline_access User.Read Mail.Send";
-    // Usamos el origen actual (localhost:5173) como redirect para el popup
+    // Usamos el origen actual como redirect para el popup
     const currentOrigin = window.location.origin; 
     
-    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${microsoftClientId}&response_type=code&redirect_uri=${encodeURIComponent(currentOrigin)}&response_mode=query&scope=${encodeURIComponent(scopes)}`;
+    // Cambiar a response_type=id_token para obtener el token directamente
+    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${microsoftClientId}&response_type=id_token&redirect_uri=${encodeURIComponent(currentOrigin)}&response_mode=fragment&scope=${encodeURIComponent(scopes)}&nonce=${Math.random()}`;
     
     // Centrar Popup
     const width = 500; const height = 600;
@@ -116,18 +167,22 @@ const LoginPage: React.FC = () => {
     // Vigilar el Popup
     const interval = setInterval(() => {
         try {
-            // Si el popup regresó a nuestro dominio (misma URL que currentOrigin)
+            // Si el popup regresó a nuestro dominio
             if (popup?.location.href.indexOf(currentOrigin) === 0) {
-                const urlParams = new URLSearchParams(popup.location.search);
-                const code = urlParams.get('code');
-                const err = urlParams.get('error');
+                // Obtener el hash (fragment) que contiene el id_token
+                const hash = popup.location.hash.substring(1);
+                const params = new URLSearchParams(hash);
+                const idToken = params.get('id_token');
+                const err = params.get('error');
                 
                 popup.close();
                 clearInterval(interval);
 
-                if (code) {
-                    // Enviamos a n8n el código y la URL exacta usada
-                    sendCodeToBackend(code, 'microsoft', currentOrigin);
+                if (idToken) {
+                    // Enviar el authorization code al Gateway
+                    // Nota: Para Microsoft también usamos el id_token como identificador
+                    // El backend sabrá cómo procesarlo según el provider
+                    sendCodeToGateway(idToken, 'microsoft');
                 } else {
                     setError('Microsoft: ' + (err || 'Cancelado por el usuario'));
                     setLoadingProvider(null);

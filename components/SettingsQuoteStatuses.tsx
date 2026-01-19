@@ -4,6 +4,7 @@ import { QuoteStatus } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import IconPicker from '../components/IconPicker';
+import { apiFetch } from '../services/apiClient';
 
 // Paleta de colores estándar
 const PRESET_COLORS = [
@@ -43,7 +44,7 @@ const SettingsQuoteStatuses: React.FC = () => {
     if (!user?.id_tenant) return;
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${user.id_tenant}`);
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${user.id_tenant}`);
       if (!response.ok) {
         if(response.status === 404) setStatuses([]);
         else throw new Error('Failed to fetch quote statuses');
@@ -151,7 +152,7 @@ const SettingsQuoteStatuses: React.FC = () => {
         : `${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes`;
 
     try {
-      const response = await fetch(url, { 
+      const response = await apiFetch(url, { 
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify(payload) 
@@ -174,7 +175,7 @@ const SettingsQuoteStatuses: React.FC = () => {
       message: '¿Estás seguro? Las cotizaciones en este estado podrían quedar sin clasificar.',
       onConfirm: async () => {
         try {
-          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes/delete`, {
+          const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_status: id, id_tenant: user?.id_tenant }),
@@ -217,7 +218,7 @@ const SettingsQuoteStatuses: React.FC = () => {
     const updatedStatus = { ...draggedStatus, status_category: category, id_tenant: user?.id_tenant };
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes/update`, {
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedStatus)

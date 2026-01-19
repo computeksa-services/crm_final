@@ -4,6 +4,7 @@ import { DealStatus } from '../types'; // Asegúrate de agregar notify_client?: 
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import IconPicker from '../components/IconPicker';
+import { apiFetch } from '../services/apiClient';
 
 // Paleta de colores estándar
 const PRESET_COLORS = [
@@ -48,7 +49,7 @@ const SettingsDealStatuses: React.FC = () => {
     if (!user?.id_tenant) return;
     setLoading(true);
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}`);
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}`);
       if (!response.ok) {
         if(response.status === 404) setStatuses([]);
         else throw new Error('Failed to fetch deal statuses');
@@ -102,7 +103,7 @@ const SettingsDealStatuses: React.FC = () => {
       const updatePromises = statuses.map((item, index) => {
         const newOrder = index + 1;
         const payload = { ...item, status_order: newOrder, id_tenant: user.id_tenant };
-        return fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals/update`, {
+        return apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals/update`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -157,7 +158,7 @@ const SettingsDealStatuses: React.FC = () => {
         : `${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals`;
 
     try {
-      const response = await fetch(url, { 
+      const response = await apiFetch(url, { 
           method: 'POST', 
           headers: { 'Content-Type': 'application/json' }, 
           body: JSON.stringify(payload) 
@@ -180,7 +181,7 @@ const SettingsDealStatuses: React.FC = () => {
       message: '¿Estás seguro? Los tratos en este estado podrían quedar huérfanos.',
       onConfirm: async () => {
         try {
-          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals/delete`, {
+          const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_status: id, id_tenant: user?.id_tenant }),
@@ -220,7 +221,7 @@ const SettingsDealStatuses: React.FC = () => {
     const updatedStatus = { ...draggedStatus, status_category: category, id_tenant: user?.id_tenant };
     
     try {
-      const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals/update`, {
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedStatus)

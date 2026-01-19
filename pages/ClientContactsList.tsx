@@ -5,6 +5,7 @@ import { ClientContact } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import ContactFormModal from '../components/ContactFormModal';
+import { apiFetch } from '../services/apiClient';
 import {
   useReactTable,
   getCoreRowModel,
@@ -27,10 +28,11 @@ const ClientContactsList: React.FC = () => {
   
   // --- ESTADOS DE DATOS ---
   const [contacts, setContacts] = useState<ClientContact[]>([]);
+  const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
   
   // --- ESTADOS DE LA TABLA ---
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'last_name', desc: false }]);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [grouping, setGrouping] = useState<GroupingState>(() => {
@@ -60,23 +62,44 @@ const ClientContactsList: React.FC = () => {
     if (!user?.id_tenant || !user?.id_user) return;
     setLoading(true);
     try {
-      const contactsRes = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      const page = pagination.pageIndex + 1;
+      const limit = pagination.pageSize;
+      const contactsRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?page=${page}&limit=${limit}`);
 
       const parseResponse = async (res: Response) => {
-        if (!res.ok) return [];
+        if (!res.ok) return { data: [], totalPages: 1 };
         const text = await res.text();
-        if (!text) return [];
-        const data = JSON.parse(text);
-        return Array.isArray(data) ? data.filter(item => item && item.id_contact) : [];
+        if (!text) return { data: [], totalPages: 1 };
+        const response = JSON.parse(text);
+        
+        // Manejar estructura: { data: [...], pagination: { total, totalPages, ... } }
+        if (response && response.data && response.pagination) {
+          const contacts = Array.isArray(response.data) 
+            ? response.data.filter(item => item && item.id_contact) 
+            : [];
+          return { data: contacts, totalPages: response.pagination.totalPages || 1 };
+        }
+        
+        // Fallback para estructura antigua (array directo)
+        if (Array.isArray(response)) {
+          return { 
+            data: response.filter(item => item && item.id_contact),
+            totalPages: 1
+          };
+        }
+        
+        return { data: [], totalPages: 1 };
       };
 
-      setContacts(await parseResponse(contactsRes));
+      const result = await parseResponse(contactsRes);
+      setContacts(result.data);
+      setTotalPages(result.totalPages);
     } catch (e) {
       setToast({ message: 'Error al cargar los datos.', type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, pagination]);
 
   const didInitRef = useRef(false);
   useEffect(() => {
@@ -84,6 +107,13 @@ const ClientContactsList: React.FC = () => {
     didInitRef.current = true;
     fetchData();
   }, [fetchData]);
+
+  // Ejecutar fetchData cuando cambie la paginación
+  useEffect(() => {
+    if (didInitRef.current) {
+      fetchData();
+    }
+  }, [pagination, fetchData]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -140,7 +170,7 @@ const ClientContactsList: React.FC = () => {
       isDestructive: true,
       onConfirm: async () => {
         try {
-          const response = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/delete`, {
+          const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
@@ -308,6 +338,8 @@ const ClientContactsList: React.FC = () => {
     onGroupingChange: setGrouping,
     onExpandedChange: setExpanded,
     onPaginationChange: setPagination,
+    manualPagination: true,
+    rowCount: totalPages * pagination.pageSize,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -518,7 +550,7 @@ const ClientContactsList: React.FC = () => {
       {/* Footer / Paginación */}
       <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
           <div className="flex items-center gap-4">
-            <span>{contacts.length} registros</span>
+            <span>{contacts.length} contactos en esta página</span>
             {columnFilters.length > 0 && (
                 <button onClick={() => setColumnFilters([])} className="text-red-500 hover:text-red-700 font-black flex items-center gap-1 transition-colors">
                     <i className="fa-solid fa-filter-circle-xmark text-xs"></i> Limpiar Filtros
@@ -528,7 +560,7 @@ const ClientContactsList: React.FC = () => {
           <div className="flex items-center gap-2">
             <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-left"></i></button>
             <span className="bg-white px-3 py-1 border border-slate-200 rounded shadow-sm text-brand-600 font-black tracking-normal">
-              {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+              {table.getState().pagination.pageIndex + 1} / {totalPages}
             </span>
             <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-right"></i></button>
           </div>
