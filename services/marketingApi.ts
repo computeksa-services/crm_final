@@ -1,8 +1,12 @@
 import { MarketingList, ListMember, MarketingCampaign } from '../types';
 import { apiFetch } from './apiClient';
 
-// URL base de tus Webhooks de n8n
-const API_BASE = import.meta.env.VITE_WEBHOOK_URL || 'http://localhost:3000';
+// URL base desde variables de entorno - REQUERIDO
+if (!import.meta.env.VITE_WEBHOOK_URL) {
+  throw new Error('❌ VITE_WEBHOOK_URL no está configurada en las variables de entorno. Por favor, configúrala antes de ejecutar la aplicación.');
+}
+
+const API_BASE = import.meta.env.VITE_WEBHOOK_URL;
 
 /**
  * Función de ayuda para normalizar respuestas de n8n

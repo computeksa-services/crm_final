@@ -1,7 +1,11 @@
 import { GATEWAY_CONFIG } from './gatewayConfig';
 
-// Exportar URL base para compatibilidad
-export const GATEWAY_URL = import.meta.env.VITE_WEBHOOK_URL || 'https://gateway.computeksa.com';
+// Exportar URL base para compatibilidad - Requiere VITE_WEBHOOK_URL en variables de entorno
+if (!import.meta.env.VITE_WEBHOOK_URL) {
+  throw new Error('❌ VITE_WEBHOOK_URL no está configurada en las variables de entorno. Por favor, configúrala antes de ejecutar la aplicación.');
+}
+
+export const GATEWAY_URL = import.meta.env.VITE_WEBHOOK_URL;
 
 interface LoginResponse {
   token: string;

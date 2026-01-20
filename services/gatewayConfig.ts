@@ -12,8 +12,12 @@
  * Las URLs se construyen dinámicamente basadas en VITE_WEBHOOK_URL
  */
 
-// URL base desde variables de entorno
-const BASE_URL = import.meta.env.VITE_WEBHOOK_URL || 'https://gateway.computeksa.com';
+// URL base desde variables de entorno - REQUERIDO, no usar fallback
+if (!import.meta.env.VITE_WEBHOOK_URL) {
+  throw new Error('❌ VITE_WEBHOOK_URL no está configurada en las variables de entorno. Por favor, configúrala antes de ejecutar la aplicación.');
+}
+
+const BASE_URL = import.meta.env.VITE_WEBHOOK_URL;
 
 /**
  * Helper para construir URLs completas
