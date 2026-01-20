@@ -46,14 +46,34 @@ type SalesHistory = {
 };
 
 type DashboardResponse = {
-  perfil: string;
-  resumen_financiero: FinancialSummary;
-  pipeline_ventas: PipelineStage[];
-  ventas_por_empresa: SalesByCompany[];
-  historial_ventas: SalesHistory[];
-  kpi_conversion: number;
-  cotizaciones_recientes: QuoteSummary[];
-  agenda_hoy: CalendarEvent[];
+    perfil: string;
+    resumen_financiero: FinancialSummary;
+    pipeline_ventas: PipelineStage[];
+    ventas_por_empresa: SalesByCompany[];
+    historial_ventas: SalesHistory[];
+    kpi_conversion: number;
+    cotizaciones_recientes: QuoteSummary[];
+    agenda_hoy: CalendarEvent[];
+    crecimiento?: {
+        total_empresas: number;
+        total_contactos: number;
+    };
+    ranking_vendedores?: Array<{
+        nombre: string;
+        avatar_url: string;
+        cerrados: number;
+        monto: number;
+    }>;
+    top_productos?: Array<{
+        producto: string;
+        cantidad: number;
+        total_ventas: number;
+    }>;
+    marketing?: {
+        campanas: number;
+        aperturas: number;
+        clics: number;
+    };
 };
 
 const DEFAULT_FINANCIAL: FinancialSummary = {
@@ -67,15 +87,18 @@ const Dashboard: React.FC = () => {
   const { user } = useAuth();
 
   // --- ESTADOS ---
-  const [financial, setFinancial] = useState<FinancialSummary>(DEFAULT_FINANCIAL);
-  const [pipeline, setPipeline] = useState<PipelineStage[]>([]);
-  const [salesByCompany, setSalesByCompany] = useState<SalesByCompany[]>([]);
-  const [salesHistory, setSalesHistory] = useState<SalesHistory[]>([]);
-  const [recentQuotes, setRecentQuotes] = useState<QuoteSummary[]>([]);
-  const [todayEvents, setTodayEvents] = useState<CalendarEvent[]>([]);
-  const [conversionRate, setConversionRate] = useState<number>(0);
-  
-  const [loading, setLoading] = useState(false);
+    const [financial, setFinancial] = useState<FinancialSummary>(DEFAULT_FINANCIAL);
+    const [pipeline, setPipeline] = useState<PipelineStage[]>([]);
+    const [salesByCompany, setSalesByCompany] = useState<SalesByCompany[]>([]);
+    const [salesHistory, setSalesHistory] = useState<SalesHistory[]>([]);
+    const [recentQuotes, setRecentQuotes] = useState<QuoteSummary[]>([]);
+    const [todayEvents, setTodayEvents] = useState<CalendarEvent[]>([]);
+    const [conversionRate, setConversionRate] = useState<number>(0);
+    const [growth, setGrowth] = useState<{ total_empresas: number; total_contactos: number }>({ total_empresas: 0, total_contactos: 0 });
+    const [ranking, setRanking] = useState<Array<{ nombre: string; avatar_url: string; cerrados: number; monto: number }>>([]);
+    const [topProducts, setTopProducts] = useState<Array<{ producto: string; cantidad: number; total_ventas: number }>>([]);
+    const [marketingData, setMarketingData] = useState<{ campanas: number; aperturas: number; clics: number }>({ campanas: 0, aperturas: 0, clics: 0 });
+    const [loading, setLoading] = useState(false);
 
   // --- HELPER: FORMATEO #0001 ---
   const formatQuoteNumber = (num: number) => {
@@ -130,6 +153,10 @@ const Dashboard: React.FC = () => {
           setRecentQuotes(Array.isArray(finalData.cotizaciones_recientes) ? finalData.cotizaciones_recientes : []);
           setTodayEvents(Array.isArray(finalData.agenda_hoy) ? finalData.agenda_hoy : []);
           setConversionRate(Number(finalData.kpi_conversion) || 0);
+          setGrowth(finalData.crecimiento || { total_empresas: 0, total_contactos: 0 });
+          setRanking(Array.isArray(finalData.ranking_vendedores) ? finalData.ranking_vendedores : []);
+          setTopProducts(Array.isArray(finalData.top_productos) ? finalData.top_productos : []);
+          setMarketingData(finalData.marketing || { campanas: 0, aperturas: 0, clics: 0 });
         }
 
             } catch (err) {
@@ -182,19 +209,33 @@ const Dashboard: React.FC = () => {
         <>
             {/* 1. TARJETAS FINANCIERAS */}
             {metricCards.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                {metricCards.map((stat, idx) => (
-                    <div key={idx} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center hover:shadow-md transition-shadow cursor-default">
-                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stat.bg} ${stat.color} mr-4`}>
-                        <i className={`fa-solid ${stat.icon} text-xl`}></i>
-                    </div>
-                    <div>
-                        <p className="text-sm text-slate-500 font-medium">{stat.label}</p>
-                        <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
-                    </div>
-                    </div>
-                ))}
-                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                    {/* Tarjetas financieras */}
+                                    {metricCards.map((stat, idx) => (
+                                        <div key={idx} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center hover:shadow-md transition-shadow cursor-default">
+                                            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stat.bg} ${stat.color} mr-4`}>
+                                                <i className={`fa-solid ${stat.icon} text-xl`}></i>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm text-slate-500 font-medium">{stat.label}</p>
+                                                <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {/* Métricas de Red */}
+                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center items-start hover:shadow-md transition-shadow cursor-default">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <i className="fa-solid fa-network-wired text-xl text-cyan-600"></i>
+                                            <span className="text-sm text-slate-500 font-medium">Empresas Totales</span>
+                                        </div>
+                                        <p className="text-2xl font-bold text-slate-800 mb-4">{growth.total_empresas || 0}</p>
+                                        <div className="flex items-center gap-3">
+                                            <i className="fa-solid fa-address-book text-xl text-fuchsia-600"></i>
+                                            <span className="text-sm text-slate-500 font-medium">Contactos en Base</span>
+                                        </div>
+                                        <p className="text-2xl font-bold text-slate-800">{growth.total_contactos || 0}</p>
+                                    </div>
+                                </div>
             )}
 
             {/* 2. GRÁFICOS */}
@@ -275,6 +316,74 @@ const Dashboard: React.FC = () => {
                 </div>
             )}
 
+            {/* 2.5. KPIs DE MARKETING */}
+            {!financial.hidden && (marketingData.campanas > 0 || marketingData.aperturas > 0 || marketingData.clics > 0) && (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+                    <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <i className="fa-solid fa-bullhorn text-pink-500"></i> Efectividad de Marketing
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-purple-100 text-purple-600">
+                                <i className="fa-solid fa-rectangle-ad text-xl"></i>
+                            </div>
+                            <div>
+                                <p className="text-sm text-slate-500 font-medium">Campañas Activas</p>
+                                <p className="text-2xl font-bold text-slate-800">{marketingData.campanas || 0}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-blue-100 text-blue-600">
+                                <i className="fa-solid fa-envelope-open text-xl"></i>
+                            </div>
+                            <div>
+                                <p className="text-sm text-slate-500 font-medium">Aperturas</p>
+                                <p className="text-2xl font-bold text-slate-800">{marketingData.aperturas || 0}</p>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-green-100 text-green-600">
+                                <i className="fa-solid fa-mouse-pointer text-xl"></i>
+                            </div>
+                            <div>
+                                <p className="text-sm text-slate-500 font-medium">Clics (CTR)</p>
+                                <p className="text-2xl font-bold text-slate-800">{marketingData.clics || 0}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 2.6. TOP PRODUCTOS */}
+            {!financial.hidden && topProducts.length > 0 && (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
+                    <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <i className="fa-solid fa-star text-yellow-500"></i> Top Productos (Best Sellers)
+                    </h2>
+                    <div style={{ height: `${Math.max(topProducts.length * 60, 300)}px` }} className="w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={topProducts} layout="vertical" margin={{ top: 10, right: 40, left: 20, bottom: 10 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
+                                <XAxis type="number" hide />
+                                <YAxis 
+                                    type="category" 
+                                    dataKey="producto" 
+                                    width={250}
+                                    tick={{fontSize: 12, fill: '#64748b'}}
+                                    interval={0}
+                                />
+                                <Tooltip 
+                                    cursor={{fill: '#fef3c7'}}
+                                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Ventas']}
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                />
+                                <Bar dataKey="total_ventas" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={30} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            )}
+
             {/* 3. PIPELINE Y LISTAS */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 
@@ -316,6 +425,36 @@ const Dashboard: React.FC = () => {
 
                 {/* Columna Derecha */}
                 <div className="space-y-6">
+                    {/* Leaderboard Equipo */}
+                    {ranking.length > 0 && (
+                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                <i className="fa-solid fa-trophy text-yellow-500"></i> Leaderboard Equipo
+                            </h2>
+                            <ul className="space-y-4">
+                                {ranking.map((vendedor, i) => (
+                                    <li key={i} className="flex items-center gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                                        <div className="relative">
+                                            <img 
+                                                src={vendedor.avatar_url || 'https://via.placeholder.com/40'} 
+                                                alt={vendedor.nombre} 
+                                                className="w-10 h-10 rounded-full object-cover border-2 border-yellow-300" 
+                                            />
+                                            {i === 0 && <span className="absolute -top-1 -right-1 text-yellow-500 text-xs"><i className="fa-solid fa-crown"></i></span>}
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="font-bold text-slate-800 text-sm">{vendedor.nombre}</p>
+                                            <span className="text-xs text-slate-500">Cerrados: {vendedor.cerrados}</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="font-bold text-yellow-600 text-lg">${Number(vendedor.monto || 0).toLocaleString('es-EC')}</span>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
                     {/* Agenda */}
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">

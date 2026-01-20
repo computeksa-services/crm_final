@@ -101,6 +101,11 @@ const Calendar: React.FC = () => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedEventDetail, setSelectedEventDetail] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  
+  // RSVP State
+  const [showRSVPConfirm, setShowRSVPConfirm] = useState(false);
+  const [rsvpAction, setRSVPAction] = useState<'accepted' | 'declined' | 'tentative' | null>(null);
+  const [submittingRSVP, setSubmittingRSVP] = useState(false);
 
   const getDateRange = () => {
     let startDate: Date;
@@ -440,14 +445,17 @@ const Calendar: React.FC = () => {
     setIsEditing(false);
     setEditingEventId(null);
     
-    const now = clickedDate ? new Date(clickedDate) : new Date();
+    // Si viene un evento de click (MouseEvent), ignoramos y usamos la fecha actual
+    const now = clickedDate instanceof Date ? new Date(clickedDate) : new Date();
     
     // Si se proporcionó una hora específica, usarla
     if (clickedHour !== undefined) {
       now.setHours(clickedHour, 0, 0, 0);
     }
     
-    const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000);
+    // Si se abre desde un slot mantenemos 1h, si es desde el botón superior damos 2h por defecto
+    const durationMinutes = clickedHour !== undefined ? 60 : 120;
+    const endDate = new Date(now.getTime() + durationMinutes * 60 * 1000);
     
     // Formatear para datetime-local usando hora local del sistema
     const formatForInput = (d: Date) => {
@@ -463,7 +471,7 @@ const Calendar: React.FC = () => {
       title: '',
       description: '',
       start: formatForInput(now),
-      end: formatForInput(oneHourLater),
+      end: formatForInput(endDate),
       is_all_day: false,
       location: '',
       generate_meeting: false,
@@ -509,7 +517,10 @@ const Calendar: React.FC = () => {
       const suggestions: Attendee[] = [];
       
       // Primero todos los usuarios del tenant
-      users.slice(0, 5).forEach(u => {
+      users
+        .filter(u => u.id_user !== user?.id_user)
+        .slice(0, 5)
+        .forEach(u => {
         suggestions.push({
           email: u.email_user,
           name: u.name_user,
@@ -554,8 +565,10 @@ const Calendar: React.FC = () => {
     // Buscar en usuarios
     users
       .filter(u => 
-        u.email_user.toLowerCase().includes(search) || 
-        u.name_user.toLowerCase().includes(search)
+        u.id_user !== user?.id_user && (
+          u.email_user.toLowerCase().includes(search) || 
+          u.name_user.toLowerCase().includes(search)
+        )
       )
       .slice(0, 5)
       .forEach(u => {
@@ -751,6 +764,50 @@ const Calendar: React.FC = () => {
       alert(error instanceof Error ? error.message : "Error al actualizar el evento");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleRSVPEvent = async () => {
+    const event = selectedEventDetail?.[0];
+    if (!event || !rsvpAction) {
+      alert('No se pudo procesar la respuesta');
+      return;
+    }
+
+    const id_event = event.id || event.id_event;
+    if (!id_event) {
+      alert('El evento no tiene un identificador válido');
+      return;
+    }
+
+    setSubmittingRSVP(true);
+    try {
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/confirm`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_event,
+          id_user: user?.id_user,
+          id_tenant: user?.id_tenant,
+          response: rsvpAction
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Error al responder la invitación');
+      }
+
+      // Actualizar el evento localmente
+      await fetchData();
+      await fetchEventDetail(id_event);
+      setShowRSVPConfirm(false);
+      setRSVPAction(null);
+    } catch (error) {
+      console.error('Error responding to event', error);
+      alert(error instanceof Error ? error.message : 'Error al responder la invitación');
+    } finally {
+      setSubmittingRSVP(false);
     }
   };
 
@@ -981,7 +1038,7 @@ const Calendar: React.FC = () => {
           </div>
           
           <button 
-            onClick={handleOpenModal}
+            onClick={() => handleOpenModal()}
             className="bg-brand-600 hover:bg-brand-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium shadow-sm flex-1 sm:flex-initial"
           >
             <i className="fa-solid fa-plus sm:mr-2"></i> <span className="hidden sm:inline">Nuevo Evento</span><span className="sm:hidden">Nuevo</span>
@@ -1465,62 +1522,66 @@ const Calendar: React.FC = () => {
                 )}
                 
                 {/* Search Input */}
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={dealSearchInput}
-                    onChange={(e) => {
-                      setDealSearchInput(e.target.value);
-                      setShowDealSuggestions(true);
-                    }}
-                    onFocus={() => setShowDealSuggestions(true)}
-                    placeholder="Buscar trato por nombre o empresa..."
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
-                  />
-                  
-                  {/* Suggestions Dropdown */}
-                  {showDealSuggestions && dealSearchInput && (
-                    <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
-                      {deals
-                        .filter(d => 
-                          d.nombre_trato?.toLowerCase().includes(dealSearchInput.toLowerCase()) ||
-                          d.client_company_name?.toLowerCase().includes(dealSearchInput.toLowerCase())
-                        )
-                        .slice(0, 50)
-                        .map(deal => (
-                          <button
-                            key={deal.id_trato}
-                            type="button"
-                            onClick={() => {
-                              setSelectedDeal(deal);
-                              setFormData(prev => ({ ...prev, id_trato: deal.id_trato }));
-                              setDealSearchInput('');
-                              setShowDealSuggestions(false);
-                              handleDealChange(deal.id_trato);
-                            }}
-                            className="w-full px-4 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors"
-                          >
-                            <div className="font-medium text-sm text-slate-800">{deal.nombre_trato}</div>
-                            {deal.client_company_name && (
-                              <div className="text-xs text-slate-500 mt-0.5">{deal.client_company_name}</div>
-                            )}
-                            {deal.estado_nombre && (
-                              <div className="text-xs text-slate-400 mt-0.5">Estado: {deal.estado_nombre}</div>
-                            )}
-                          </button>
-                        ))
-                      }
-                      {deals.filter(d => 
-                        d.nombre_trato?.toLowerCase().includes(dealSearchInput.toLowerCase()) ||
-                        d.client_company_name?.toLowerCase().includes(dealSearchInput.toLowerCase())
-                      ).length === 0 && (
-                        <div className="px-4 py-3 text-sm text-slate-500 text-center">
-                          No se encontraron tratos
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+                {!selectedDeal && (
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={dealSearchInput}
+                      onChange={(e) => {
+                        setDealSearchInput(e.target.value);
+                        setShowDealSuggestions(true);
+                      }}
+                      onFocus={() => setShowDealSuggestions(true)}
+                      placeholder="Buscar trato por nombre o empresa..."
+                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                    />
+                    
+                    {/* Suggestions Dropdown */}
+                    {showDealSuggestions && (
+                      <div className="absolute z-50 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                        {(() => {
+                          const filteredDeals = deals
+                            .filter(d => 
+                              d.nombre_trato?.toLowerCase().includes(dealSearchInput.toLowerCase()) ||
+                              d.client_company_name?.toLowerCase().includes(dealSearchInput.toLowerCase())
+                            )
+                            .slice(0, 50);
+
+                          if (filteredDeals.length === 0) {
+                            return (
+                              <div className="px-4 py-3 text-sm text-slate-500 text-center">
+                                No se encontraron tratos
+                              </div>
+                            );
+                          }
+
+                          return filteredDeals.map(deal => (
+                            <button
+                              key={deal.id_trato}
+                              type="button"
+                              onClick={() => {
+                                setSelectedDeal(deal);
+                                setFormData(prev => ({ ...prev, id_trato: deal.id_trato }));
+                                setDealSearchInput('');
+                                setShowDealSuggestions(false);
+                                handleDealChange(deal.id_trato);
+                              }}
+                              className="w-full px-4 py-3 text-left hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors"
+                            >
+                              <div className="font-medium text-sm text-slate-800">{deal.nombre_trato}</div>
+                              {deal.client_company_name && (
+                                <div className="text-xs text-slate-500 mt-0.5">{deal.client_company_name}</div>
+                              )}
+                              {deal.estado_nombre && (
+                                <div className="text-xs text-slate-400 mt-0.5">Estado: {deal.estado_nombre}</div>
+                              )}
+                            </button>
+                          ));
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                )}
                 
                 {deals && deals.length > 0 && !selectedDeal && (
                   <p className="text-xs text-slate-500 mt-1">
@@ -1557,7 +1618,7 @@ const Calendar: React.FC = () => {
                   
                   {/* Sugerencias */}
                   {showAttendeeSuggestions && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+                    <div className="attendee-search-container absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
                       {/* Si hay una empresa seleccionada, mostrar sus contactos primero */}
                       {formData.id_client_company && !attendeeInput && (
                         <>
@@ -1924,29 +1985,76 @@ const Calendar: React.FC = () => {
             )}
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-slate-100 flex justify-between items-center bg-slate-50">
-              <div className="flex space-x-2">
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50">
+              {(() => {
+                const event = selectedEventDetail?.[0];
+                const currentUserAttendee = event?.attendees?.find((att: any) => att.email === user?.email_user);
+                const isInvited = currentUserAttendee && !currentUserAttendee.is_organizer;
+                const needsResponse = isInvited && currentUserAttendee?.status === 'needs_action';
+
+                if (needsResponse) {
+                  return (
+                    <>
+                      <div className="mb-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <p className="text-sm text-yellow-800 font-medium flex items-center">
+                          <i className="fa-solid fa-clock mr-2"></i>
+                          Has sido invitado a este evento. ¿Cómo deseas responder?
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        <button 
+                          onClick={() => { setRSVPAction('accepted'); setShowRSVPConfirm(true); }}
+                          className="flex-1 min-w-[120px] px-4 py-2.5 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center justify-center"
+                        >
+                          <i className="fa-solid fa-check mr-2"></i>
+                          Aceptar
+                        </button>
+                        <button 
+                          onClick={() => { setRSVPAction('tentative'); setShowRSVPConfirm(true); }}
+                          className="flex-1 min-w-[120px] px-4 py-2.5 text-sm font-medium text-slate-700 bg-yellow-100 hover:bg-yellow-200 rounded-lg transition-colors flex items-center justify-center border border-yellow-300"
+                        >
+                          <i className="fa-solid fa-question mr-2"></i>
+                          Tal vez
+                        </button>
+                        <button 
+                          onClick={() => { setRSVPAction('declined'); setShowRSVPConfirm(true); }}
+                          className="flex-1 min-w-[120px] px-4 py-2.5 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center justify-center"
+                        >
+                          <i className="fa-solid fa-times mr-2"></i>
+                          Rechazar
+                        </button>
+                      </div>
+                    </>
+                  );
+                }
+
+                return null;
+              })()}
+              
+              <div className="flex justify-between items-center">
+                <div className="flex space-x-2">
+                  <button 
+                    onClick={() => selectedEventDetail?.[0] && handleOpenEditModal(selectedEventDetail[0])}
+                    className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors flex items-center"
+                  >
+                    <i className="fa-solid fa-edit mr-2"></i>
+                    Editar
+                  </button>
+                  <button 
+                    onClick={() => setShowDeleteConfirm(true)}
+                    className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center border border-red-200"
+                  >
+                    <i className="fa-solid fa-trash mr-2"></i>
+                    Eliminar
+                  </button>
+                </div>
                 <button 
-                  onClick={() => selectedEventDetail?.[0] && handleOpenEditModal(selectedEventDetail[0])}
-                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors flex items-center"
+                  onClick={() => setIsDetailModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
                 >
-                  <i className="fa-solid fa-edit mr-2"></i>
-                  Editar
-                </button>
-                <button 
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors flex items-center border border-red-200"
-                >
-                  <i className="fa-solid fa-trash mr-2"></i>
-                  Eliminar
+                  Cerrar
                 </button>
               </div>
-              <button 
-                onClick={() => setIsDetailModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
-              >
-                Cerrar
-              </button>
             </div>
           </div>
         </div>
@@ -1986,6 +2094,67 @@ const Calendar: React.FC = () => {
                   <>
                     <i className="fa-solid fa-trash mr-2"></i>
                     Eliminar
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- RSVP CONFIRMATION MODAL --- */}
+      {showRSVPConfirm && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center" style={{ backgroundColor: rsvpAction === 'accepted' ? '#f0fdf4' : rsvpAction === 'declined' ? '#fef2f2' : '#fefce8' }}>
+              <i className={`fa-solid mr-2 text-lg ${
+                rsvpAction === 'accepted' ? 'fa-check-circle text-green-600' :
+                rsvpAction === 'declined' ? 'fa-times-circle text-red-600' :
+                'fa-question-circle text-yellow-600'
+              }`}></i>
+              <h2 className="text-lg font-bold text-slate-800">Confirmar respuesta</h2>
+            </div>
+            <div className="p-6 space-y-3 text-sm text-slate-700">
+              <p className="font-medium">
+                {rsvpAction === 'accepted' && '¿Confirmas que asistirás a este evento?'}
+                {rsvpAction === 'declined' && '¿Confirmas que NO asistirás a este evento?'}
+                {rsvpAction === 'tentative' && '¿Confirmas que tu asistencia es tentativa?'}
+              </p>
+              <p className="text-slate-500">
+                El organizador recibirá una notificación con tu respuesta.
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-3 justify-end bg-slate-50">
+              <button
+                onClick={() => { setShowRSVPConfirm(false); setRSVPAction(null); }}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                disabled={submittingRSVP}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleRSVPEvent}
+                disabled={submittingRSVP}
+                className={`px-4 py-2 text-sm font-medium rounded-lg flex items-center ${
+                  submittingRSVP ? 'bg-slate-100 text-slate-400 cursor-not-allowed' :
+                  rsvpAction === 'accepted' ? 'bg-green-600 hover:bg-green-700 text-white' :
+                  rsvpAction === 'declined' ? 'bg-red-600 hover:bg-red-700 text-white' :
+                  'bg-yellow-500 hover:bg-yellow-600 text-white'
+                }`}
+              >
+                {submittingRSVP ? (
+                  <>
+                    <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <i className={`fa-solid mr-2 ${
+                      rsvpAction === 'accepted' ? 'fa-check' :
+                      rsvpAction === 'declined' ? 'fa-times' :
+                      'fa-question'
+                    }`}></i>
+                    Confirmar
                   </>
                 )}
               </button>
