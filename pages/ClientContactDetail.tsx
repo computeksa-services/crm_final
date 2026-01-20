@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ClientContact, ClientCompany } from '../types';
-import Toast from '../components/Toast';import { apiFetch } from '../services/apiClient';import ConfirmModal from '../components/ConfirmModal';
+import Toast from '../components/Toast';import { apiFetch } from '../services/apiClient';import ConfirmModal from '../components/ConfirmModal';import ContactFormModal from '../components/ContactFormModal';
 
 const ClientContactDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -22,6 +22,9 @@ const ClientContactDetail: React.FC = () => {
   const [shareTargets, setShareTargets] = useState<string[]>([]);
   const [sharePermission, setSharePermission] = useState<'VIEW' | 'EDIT'>('VIEW');
   const [shareSubmitting, setShareSubmitting] = useState(false);
+
+  // Editar contacto
+  const [showEditContact, setShowEditContact] = useState(false);
 
   // Permisos
   const isOwnerContact = contact?.created_by === user?.id_user;
@@ -156,6 +159,12 @@ const ClientContactDetail: React.FC = () => {
     }
   };
 
+  const handleEditSuccess = async () => {
+    await fetchData();
+    setShowEditContact(false);
+    setToast({ message: 'Contacto actualizado.', type: 'success' });
+  };
+
   // --- RENDER ---
   if (loading) return (
     <div className="flex h-64 items-center justify-center">
@@ -201,19 +210,29 @@ const ClientContactDetail: React.FC = () => {
                     )}
                 </div>
             </div>
-            
-            <button
-                onClick={openShareModal}
-                disabled={!canShare}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                    canShare 
-                    ? 'bg-white border border-slate-200 text-slate-700 hover:border-brand-300 hover:text-brand-600 shadow-sm' 
-                    : 'bg-slate-50 text-slate-400 cursor-not-allowed border border-slate-100'
-                }`}
-            >
-                <i className="fa-solid fa-share-nodes"></i>
-                Compartir
-            </button>
+            <div className="flex items-center gap-2">
+              {contactAccess === 'EDIT' && (
+                <button
+                  onClick={() => setShowEditContact(true)}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-white border border-slate-200 text-slate-700 hover:border-brand-300 hover:text-brand-600 shadow-sm"
+                >
+                  <i className="fa-solid fa-pen-to-square"></i>
+                  Editar
+                </button>
+              )}
+              <button
+                  onClick={openShareModal}
+                  disabled={!canShare}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      canShare 
+                      ? 'bg-white border border-slate-200 text-slate-700 hover:border-brand-300 hover:text-brand-600 shadow-sm' 
+                      : 'bg-slate-50 text-slate-400 cursor-not-allowed border border-slate-100'
+                  }`}
+              >
+                  <i className="fa-solid fa-share-nodes"></i>
+                  Compartir
+              </button>
+            </div>
         </div>
       </div>
 
@@ -277,6 +296,18 @@ const ClientContactDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* EDIT CONTACT MODAL */}
+      {showEditContact && contact && (
+        <ContactFormModal
+          isOpen={showEditContact}
+          onClose={() => setShowEditContact(false)}
+          mode="edit"
+          initialData={contact}
+          preselectedCompanyId={contact.id_client_company || ''}
+          onSuccess={handleEditSuccess}
+        />
+      )}
 
       {/* SHARE MODAL MEJORADO (Estilo Lista Checkbox) */}
       {shareModalOpen && (

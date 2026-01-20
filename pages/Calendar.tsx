@@ -782,13 +782,11 @@ const Calendar: React.FC = () => {
 
     setSubmittingRSVP(true);
     try {
-      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/confirm`, {
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/respond`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id_event,
-          id_user: user?.id_user,
-          id_tenant: user?.id_tenant,
+          id_evento: id_event,
           response: rsvpAction
         })
       });
@@ -1953,6 +1951,11 @@ const Calendar: React.FC = () => {
                                     <div className="flex-1">
                                       <div className="font-medium text-slate-800 flex items-center gap-2">
                                         {attendee.name || attendee.email}
+                                        {attendee.is_me && (
+                                          <span className="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded font-semibold">
+                                            Tú
+                                          </span>
+                                        )}
                                         {attendee.is_organizer && (
                                           <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
                                             Organizador
@@ -1988,9 +1991,8 @@ const Calendar: React.FC = () => {
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50">
               {(() => {
                 const event = selectedEventDetail?.[0];
-                const currentUserAttendee = event?.attendees?.find((att: any) => att.email === user?.email_user);
-                const isInvited = currentUserAttendee && !currentUserAttendee.is_organizer;
-                const needsResponse = isInvited && currentUserAttendee?.status === 'needs_action';
+                const myStatus = event?.my_response_status;
+                const needsResponse = myStatus === 'needsAction';
 
                 if (needsResponse) {
                   return (
@@ -2026,6 +2028,27 @@ const Calendar: React.FC = () => {
                       </div>
                     </>
                   );
+                }
+
+                // Mostrar estado actual si ya respondió
+                if (myStatus && myStatus !== 'needsAction') {
+                  const statusConfig = {
+                    'accepted': { icon: 'check-circle', color: 'text-green-700', bg: 'bg-green-50', border: 'border-green-200', label: 'Has aceptado este evento' },
+                    'declined': { icon: 'times-circle', color: 'text-red-700', bg: 'bg-red-50', border: 'border-red-200', label: 'Has rechazado este evento' },
+                    'tentative': { icon: 'question-circle', color: 'text-yellow-700', bg: 'bg-yellow-50', border: 'border-yellow-200', label: 'Tu asistencia es tentativa' }
+                  };
+                  const config = statusConfig[myStatus as keyof typeof statusConfig];
+                  
+                  if (config) {
+                    return (
+                      <div className={`mb-3 p-3 ${config.bg} border ${config.border} rounded-lg`}>
+                        <p className={`text-sm ${config.color} font-medium flex items-center`}>
+                          <i className={`fa-solid fa-${config.icon} mr-2`}></i>
+                          {config.label}
+                        </p>
+                      </div>
+                    );
+                  }
                 }
 
                 return null;
