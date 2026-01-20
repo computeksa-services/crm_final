@@ -368,9 +368,8 @@ const ClientCompanyDetail: React.FC = () => {
     setShareSubmitting(true);
     try {
       const requests = shareTargets.map(target =>
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/companies/share`, {
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/companies/share`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id_client_company: company.id_client_company,
             id_user_target: target,

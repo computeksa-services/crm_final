@@ -375,10 +375,10 @@ const Campaigns: React.FC = () => {
       }
     },
     {
-        accessorKey: 'created_at', // Default sorting key
-        id: 'date_display',
+        id: 'created_at',
         header: 'Programación',
         size: 140,
+        accessorFn: (row) => row.sent_at || row.scheduled_at_local || row.scheduled_at || row.created_at,
         cell: ({ row }) => {
             const c = row.original;
             // Prioridad: Fecha Enviado > Fecha Programada Local > Fecha Programada UTC
@@ -647,24 +647,26 @@ const Campaigns: React.FC = () => {
         </table>
       </div>
 
-      {/* FOOTER */}
-      <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
-         <div className="flex items-center gap-4">
-            <span>{data.length} REGISTROS</span>
-            {columnFilters.length > 0 && (
-                <button onClick={() => setColumnFilters([])} className="text-red-500 hover:text-red-700 font-black flex items-center gap-1">
-                    <i className="fa-solid fa-filter-circle-xmark"></i> Limpiar
-                </button>
-            )}
-         </div>
-         <div className="flex items-center gap-2">
-            <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="p-1 hover:text-brand-600 disabled:opacity-20"><i className="fa-solid fa-chevron-left"></i></button>
-            <span className="bg-white px-3 py-1 border border-slate-200 rounded shadow-sm text-brand-600 font-black tracking-normal">
-              {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
-            </span>
-            <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 hover:text-brand-600 disabled:opacity-20"><i className="fa-solid fa-chevron-right"></i></button>
-         </div>
-      </div>
+      {/* FOOTER - Solo mostrar si hay datos */}
+      {data.length > 0 && (
+        <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
+           <div className="flex items-center gap-4">
+              <span>{data.length} REGISTROS</span>
+              {columnFilters.length > 0 && (
+                  <button onClick={() => setColumnFilters([])} className="text-red-500 hover:text-red-700 font-black flex items-center gap-1">
+                      <i className="fa-solid fa-filter-circle-xmark"></i> Limpiar
+                  </button>
+              )}
+           </div>
+           <div className="flex items-center gap-2">
+              <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="p-1 hover:text-brand-600 disabled:opacity-20"><i className="fa-solid fa-chevron-left"></i></button>
+              <span className="bg-white px-3 py-1 border border-slate-200 rounded shadow-sm text-brand-600 font-black tracking-normal">
+                {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+              </span>
+              <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 hover:text-brand-600 disabled:opacity-20"><i className="fa-solid fa-chevron-right"></i></button>
+           </div>
+        </div>
+      )}
 
       {/* MODALS */}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}

@@ -69,7 +69,7 @@ const QuoteCreate: React.FC = () => {
       ];
 
       const responses = await Promise.all(
-        endpoints.map(ep => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/webhook/api/${ep}`))
+        endpoints.map(ep => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/${ep}`))
       );
 
       const data = await Promise.all(responses.map(async (res, index) => {
@@ -106,7 +106,7 @@ const QuoteCreate: React.FC = () => {
       // Si hay id de cotización, cargar datos para edición
       if (quoteId) {
         // Obtener datos de la cotización
-        const quoteRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/webhook/api/quotes/detail?id_cotizacion=${quoteId}&id_tenant=${tenantId}&id_user=${userId}`);
+        const quoteRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/detail?id_cotizacion=${quoteId}&id_tenant=${tenantId}&id_user=${userId}`);
         if (!quoteRes.ok) throw new Error('No se pudo cargar la cotización');
         const quoteText = await quoteRes.text();
         const quoteData = quoteText ? JSON.parse(quoteText) : null;

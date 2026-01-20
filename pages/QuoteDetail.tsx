@@ -407,15 +407,48 @@ const QuoteDetail: React.FC = () => {
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`)
       ]);
       
-      if (pRes.ok) setAvailableProducts(JSON.parse(await pRes.text()) || []);
-      if (tRes.ok) setProductTypes(JSON.parse(await tRes.text()) || []);
+      // Parsear respuestas validando que no estén vacías
+      let products = [];
+      let types = [];
+      
+      if (pRes.ok) {
+        const pText = await pRes.text();
+        if (pText && pText.trim() !== '' && pText !== 'null') {
+          try {
+            products = JSON.parse(pText) || [];
+          } catch (e) {
+            console.error('Error parsing products:', e);
+          }
+        }
+      }
+      
+      if (tRes.ok) {
+        const tText = await tRes.text();
+        if (tText && tText.trim() !== '' && tText !== 'null') {
+          try {
+            types = JSON.parse(tText) || [];
+          } catch (e) {
+            console.error('Error parsing product types:', e);
+          }
+        }
+      }
+      
+      setAvailableProducts(Array.isArray(products) ? products : []);
+      setProductTypes(Array.isArray(types) ? types : []);
       
       setIsCreatingProduct(false);
       setSelectedProductId(null);
       setItemQuantity(1);
       setIsProductModalOpen(true);
-    } catch {
-      setToast({ message: 'Error al cargar productos.', type: 'error' });
+    } catch (err) {
+      console.error('Error al cargar productos:', err);
+      // Abrir el modal de todos modos, aunque haya error
+      setAvailableProducts([]);
+      setProductTypes([]);
+      setIsCreatingProduct(false);
+      setSelectedProductId(null);
+      setItemQuantity(1);
+      setIsProductModalOpen(true);
     } finally {
       setProcessing(false);
     }
@@ -1202,7 +1235,7 @@ const QuoteDetail: React.FC = () => {
                      <div className="space-y-4">
                          <div className="flex gap-4"><div onClick={() => fileInputRef.current?.click()} className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-white hover:border-brand-400 cursor-pointer flex items-center justify-center relative overflow-hidden shrink-0 transition-all">{newProduct.imagen_url ? <img src={convertGoogleDriveUrl(newProduct.imagen_url)} className="w-full h-full object-cover"/> : <div className="text-center"><i className="fa-solid fa-camera text-slate-300 mb-1"></i><p className="text-[9px] text-slate-400 font-bold uppercase">Foto</p></div>}</div><input type="file" ref={fileInputRef} onChange={(e) => { const file = e.target.files?.[0]; if(file){ setImageFile(file); const reader = new FileReader(); reader.onloadend = () => setNewProduct({...newProduct, imagen_url: reader.result}); reader.readAsDataURL(file); } }} className="hidden" /><div className="flex-1 space-y-3"><div><label className="text-[10px] font-bold text-slate-400 uppercase">Código</label><input value={newProduct.codigo} onChange={e => setNewProduct({...newProduct, codigo: e.target.value})} placeholder={getNextProductCode()} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono"/></div><div><label className="text-[10px] font-bold text-slate-400 uppercase">Categoría</label><input value={newProduct.categoria} onChange={e => setNewProduct({...newProduct, categoria: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"/></div></div></div>
                          <div><label className="text-[10px] font-bold text-slate-400 uppercase">Descripción *</label><textarea rows={2} value={newProduct.descripcion} onChange={e => setNewProduct({...newProduct, descripcion: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-brand-500 outline-none"></textarea></div>
-                         <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase">Tipo</label><select value={newProduct.tipo} onChange={e => setNewProduct({...newProduct, tipo: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white">{productTypes.map(pt => <option key={pt.id_product_type} value={pt.type}>{pt.type}</option>)}</select></div><div><label className="text-[10px] font-bold text-slate-400 uppercase">Precio Unitario</label><div className="relative"><span className="absolute left-3 top-2 text-slate-400">$</span><input type="number" step="0.01" value={newProduct.precio_unitario} onChange={e => setNewProduct({...newProduct, precio_unitario: e.target.value})} className="w-full pl-6 pr-3 py-2 border border-slate-200 rounded-lg text-sm"/></div></div></div>
+                         <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase">Tipo</label><select value={newProduct.tipo} onChange={e => setNewProduct({...newProduct, tipo: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"><option value="">-- Seleccionar --</option>{productTypes.map(pt => <option key={pt.id_product_type} value={pt.type}>{pt.type}</option>)}</select></div><div><label className="text-[10px] font-bold text-slate-400 uppercase">Precio Unitario</label><div className="relative"><span className="absolute left-3 top-2 text-slate-400">$</span><input type="number" step="0.01" value={newProduct.precio_unitario} onChange={e => setNewProduct({...newProduct, precio_unitario: e.target.value})} className="w-full pl-6 pr-3 py-2 border border-slate-200 rounded-lg text-sm"/></div></div></div>
                          <div><label className="text-[10px] font-bold text-slate-400 uppercase">Cantidad a añadir</label><input type="number" min="1" value={itemQuantity} onChange={e => setItemQuantity(parseInt(e.target.value))} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"/></div>
                      </div>
                 )}

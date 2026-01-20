@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ClientCompany } from '../types';
 import Toast from './Toast';
@@ -27,11 +27,12 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
   const { user } = useAuth();
   const [countries, setCountries] = useState<{id: string; name: string}[]>([]);
   const [companyTypes, setCompanyTypes] = useState<{id_company_types: string; name: string}[]>([]);
+  const lastLoadedIdRef = useRef<string | undefined>(undefined);
   const [formData, setFormData] = useState<Partial<ClientCompany>>({
     id_type: 'RUC',
     id_number: '',
     name_company: '',
-    id_country: 'EC',
+    id_country: 'Ecuador',
     city: '',
     address: '',
     id_company_type: '',
@@ -78,31 +79,46 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
     loadCompanyTypes();
   }, [user]);
 
-  // Inicializar formulario SOLO cuando el modal se abre
+  // Inicializar formulario cuando el modal se abre con nuevos datos
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      lastLoadedIdRef.current = undefined;
+      return;
+    }
 
-    if (mode === 'edit' && initialData) {
-      setFormData({
+    // Solo cargar si es una nueva empresa o diferente a la última cargada
+    const currentId = initialData?.id_client_company;
+    if (mode === 'edit' && initialData && lastLoadedIdRef.current !== currentId) {
+      console.log('🔄 Cargando datos de empresa para edición:', initialData);
+      lastLoadedIdRef.current = currentId;
+      
+      const newFormData = {
         id_client_company: initialData.id_client_company,
         id_type: initialData.id_type || 'RUC',
         id_number: initialData.id_number || '',
         name_company: initialData.name_company || '',
-        id_country: initialData.id_country || 'EC',
+        id_country: (initialData as any).country_name || initialData.id_country || 'Ecuador',
         city: initialData.city || '',
         address: initialData.address || '',
-        id_company_type: (initialData as any).id_company_type || (initialData as any).id_company_types || '',
-        id_label: initialData.id_label || initialData.label_name || '',
+        id_company_type: (initialData as any).company_type_name || (initialData as any).id_company_type || '',
+        id_label: (initialData as any).label_name || initialData.id_label || '',
         email_company: initialData.email_company || '',
         phone_company: initialData.phone_company || '',
         website: initialData.website || '',
+      };
+      console.log('✅ Valores cargados:', {
+        country: newFormData.id_country,
+        company_type: newFormData.id_company_type,
+        label: newFormData.id_label
       });
+      setFormData(newFormData);
     } else if (mode === 'create') {
+      lastLoadedIdRef.current = undefined;
       setFormData({
         id_type: 'RUC',
         id_number: '',
         name_company: '',
-        id_country: 'EC',
+        id_country: 'Ecuador',
         city: '',
         address: '',
         id_company_type: '',
@@ -112,7 +128,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         website: '',
       });
     }
-  }, [isOpen]); // SOLO depende de isOpen
+  }, [isOpen, mode, initialData?.id_client_company]); // Usar solo el id como dependencia
 
   // Validación de cédula ecuatoriana
   const validateCedula = (cedula: string): boolean => {
@@ -353,7 +369,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
               >
                 <option value="">Seleccionar país</option>
                 {countries.map(country => (
-                  <option key={country.id} value={country.id}>{country.name}</option>
+                  <option key={country.id} value={country.name}>{country.name}</option>
                 ))}
               </select>
             </div>
@@ -403,7 +419,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
               >
                 <option value="">Seleccionar tipo</option>
                 {companyTypes.map(type => (
-                  <option key={type.id_company_types} value={type.id_company_types}>{type.name}</option>
+                  <option key={type.id_company_types} value={type.name}>{type.name}</option>
                 ))}
               </select>
             </div>
@@ -418,7 +434,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
                 onChange={handleInputChange}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
               >
-                <option value="">Seleccionar etiqueta</option>
+                <option key="empty-label" value="">Seleccionar etiqueta</option>
                 {COMPANY_LABELS.map(label => (
                   <option key={label} value={label}>{label}</option>
                 ))}

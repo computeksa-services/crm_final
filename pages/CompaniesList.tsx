@@ -136,13 +136,17 @@ const CompaniesList: React.FC = () => {
       // El Gateway espera: id_tenant, name_tenant, country, city, address, website, ruc
       // NOTA: Si hay logo, usar FormData. Si no, usar JSON directamente
       
-      if (isEditMode && editingTenant.id_tenant) {
+      if (isEditMode) {
+        if (!editingTenant.id_tenant) {
+          setToast({ message: 'Falta id_tenant para actualizar.', type: 'error' });
+          return;
+        }
         let response;
         
         if (logoFile) {
           // Si hay archivo de logo, usar FormData
           const formData = new FormData();
-          formData.append('id_tenant', editingTenant.id_tenant);
+          formData.append('id_tenant', editingTenant.id_tenant || '');
           formData.append('ruc', editingTenant.ruc || '');
           formData.append('name_tenant', editingTenant.name_tenant || '');
           formData.append('country', editingTenant.country || '');

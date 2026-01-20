@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../services/apiClient';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, 
   AreaChart, Area 
@@ -94,17 +95,25 @@ const Dashboard: React.FC = () => {
       try {
         const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/crm/dashboard`;
 
-        const res = await fetch(url, {
-          method: 'GET',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('appToken')}`
-          }
+        const res = await apiFetch(url, {
+          method: 'POST',
+          body: JSON.stringify({
+            id_tenant: user?.id_tenant,
+            id_user: user?.id_user
+          })
         });
 
-        if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok) {
+          const body = await res.text().catch(() => '');
+          throw new Error(`HTTP ${res.status} ${res.statusText} at ${url} | ${body.slice(0, 180)}`);
+        }
+        if (!contentType.includes('application/json')) {
+          const body = await res.text().catch(() => '');
+          throw new Error(`Respuesta no JSON (${contentType}) desde ${url}. Inicio: ${body.slice(0, 180)}`);
+        }
 
-        const jsonRaw = await res.json();
+                const jsonRaw = await res.json();
         
         let finalData: DashboardResponse | null = null;
         if (Array.isArray(jsonRaw) && jsonRaw.length > 0) {
@@ -123,8 +132,8 @@ const Dashboard: React.FC = () => {
           setConversionRate(Number(finalData.kpi_conversion) || 0);
         }
 
-      } catch (err) {
-        console.error('❌ Error dashboard:', err);
+            } catch (err) {
+                console.error('❌ Error dashboard:', err);
       } finally {
         setLoading(false);
       }

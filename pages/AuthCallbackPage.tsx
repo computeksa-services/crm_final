@@ -5,6 +5,9 @@ import { authService } from '../services/authService';
 import { apiFetch } from '../services/apiClient';
 import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
 
+// Guard global para evitar doble procesamiento del callback
+let isProcessingGlobal = false;
+
 const AuthCallbackPage: React.FC = () => {
   const navigate = useNavigate();
   const { login } = useAuth();
@@ -13,6 +16,8 @@ const AuthCallbackPage: React.FC = () => {
 
   useEffect(() => {
     const handleCallback = async () => {
+      if (isProcessingGlobal) return;
+      isProcessingGlobal = true;
       try {
         // Nota: El flujo de login ahora es directo desde LoginPage
         // Este archivo se puede usar para validaciones futuras
@@ -31,6 +36,8 @@ const AuthCallbackPage: React.FC = () => {
         setError(err.message || 'Error al procesar la autenticación');
         setLoading(false);
       }
+      // Liberar el lock después de completar el flujo
+      isProcessingGlobal = false;
     };
 
     handleCallback();

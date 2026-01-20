@@ -73,10 +73,10 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
     try {
       setLoadingData(true);
       const [companiesRes, contactsRes, dealStatusesRes, interestStatusesRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
       ]);
       const parseList = async (res: Response) => {
         if (!res.ok) return [];

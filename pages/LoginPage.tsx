@@ -25,16 +25,19 @@ const LoginPage: React.FC = () => {
   const sendCodeToGateway = async (code: string, provider: 'google' | 'microsoft') => {
     try {
       setError('');
+      console.log('🔐 Enviando código OAuth al Gateway...', { provider });
       
-      // Enviar el authorization code al Gateway
-      // URL: ${VITE_WEBHOOK_URL}/auth/login (sin /api)
+      // Intercambio de Token: POST ${VITE_WEBHOOK_URL}/auth/login
+      // El Gateway devuelve: { token: "appToken", user: {...} }
       const loginUrl = `${import.meta.env.VITE_WEBHOOK_URL}/auth/login`;
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          code: code,           // Authorization code (para Google)
-          provider: provider    // 'google' o 'microsoft'
+          code: code,                    // Código OAuth de Google/Microsoft
+          provider: provider,            // 'google' o 'microsoft'
+          app_id: 'crm',                 // Identificador de la aplicación
+          redirect_uri: oauthRedirectUri // URL de callback registrada
         }),
       });
 
@@ -46,63 +49,26 @@ const LoginPage: React.FC = () => {
       const responseData = await response.json();
       console.log('✅ Respuesta del Gateway:', responseData);
 
-      // El Gateway devuelve un array con la estructura:
-      // [
-      //   {
-      //     "token": "appToken",
-      //     "user": {
-      //       "id_user": "user_id",
-      //       "id_tenant": "tenant_id",
-      //       "name_user": "User Name",
-      //       "email_user": "user@example.com",
-      //       "rol_user": "admin",
-      //       "avatar_url": "https://...",
-      //       "status_user": "Activo",
-      //       "googleConnected": true
-      //     }
-      //   }
-      // ]
-
-      // Extraer el primer elemento si es un array, o usar directamente si es objeto
-      const data = Array.isArray(responseData) ? responseData[0] : responseData;
-
-      if (!data || !data.token) {
+      // El Gateway devuelve: { token: "appToken", user: {...} }
+      // El objeto user contiene los datos mapeados a la estructura del CRM
+      if (!responseData || !responseData.token) {
         throw new Error('El Gateway no devolvió un token válido.');
       }
 
-      // ✅ El usuario ya viene en el formato correcto desde el Gateway
-      // Gateway devuelve: id_user, id_tenant, name_user, email_user, rol_user, avatar_url, status_user, googleConnected
-      // App usa exactamente lo mismo
-      const userData = data.user || {};
+      const { token: appToken, user: userData } = responseData;
+      console.log('✅ Token recibido del Gateway');
+      console.log('✅ Datos del usuario:', userData);
 
-      // Asegurar que todos los campos necesarios estén presentes
-      const completeUserData = {
-        id_user: userData.id_user,
-        id_tenant: userData.id_tenant,
-        name_user: userData.name_user,
-        email_user: userData.email_user,
-        rol_user: userData.rol_user,
-        avatar_url: userData.avatar_url,
-        status_user: userData.status_user || 'Activo',
-        googleConnected: userData.googleConnected || false,
-        outlookConnected: userData.outlookConnected || false,
-        phone_user: userData.phone_user || '',
-        job_title: userData.job_title || '',
-      };
+      // Validar que el usuario tenga los campos esenciales
+      if (!userData || !userData.id_user || !userData.id_tenant) {
+        throw new Error('Los datos del usuario son incompletos.');
+      }
 
-      console.log('👤 Datos del usuario:', {
-        id_user: completeUserData.id_user,
-        id_tenant: completeUserData.id_tenant,
-        name_user: completeUserData.name_user,
-        email_user: completeUserData.email_user,
-        rol_user: completeUserData.rol_user,
-      });
-
-      // Guardar el appToken y el usuario
+      // Guardar el appToken y el usuario en el contexto
       // El useEffect del componente detectará el cambio en 'user' y navegará automáticamente
-      console.log('🔐 Llamando a login() con completeUserData:', completeUserData);
-      login(data.token, completeUserData);
-      console.log('✅ login() ejecutado. Esperando que el useEffect detecte el cambio en user...');
+      console.log('🔐 Guardando sesión con appToken...');
+      login(appToken, userData);
+      console.log('✅ Sesión guardada. Redirigiendo al dashboard...');
 
     } catch (err: any) {
       console.error('❌ Error al intercambiar token:', err);
@@ -142,16 +108,20 @@ const LoginPage: React.FC = () => {
         return;
     }
 
+    if (!oauthRedirectUri) {
+        setError('Falta configurar VITE_REDIRECT_URI en las variables de entorno.');
+        return;
+    }
+
     setError('');
     setLoadingProvider('microsoft');
 
     // Scopes de Microsoft
     const scopes = "openid profile email offline_access User.Read Mail.Send";
-    // Usamos el origen actual como redirect para el popup
-    const currentOrigin = window.location.origin; 
     
-    // Cambiar a response_type=id_token para obtener el token directamente
-    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${microsoftClientId}&response_type=id_token&redirect_uri=${encodeURIComponent(currentOrigin)}&response_mode=fragment&scope=${encodeURIComponent(scopes)}&nonce=${Math.random()}`;
+    // IMPORTANTE: Usar response_type=code para obtener authorization code (no id_token)
+    // Y usar oauthRedirectUri de las variables de entorno
+    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${microsoftClientId}&response_type=code&redirect_uri=${encodeURIComponent(oauthRedirectUri)}&response_mode=query&scope=${encodeURIComponent(scopes)}&prompt=select_account&state=${Math.random()}`;
     
     // Centrar Popup
     const width = 500; const height = 600;
@@ -167,22 +137,19 @@ const LoginPage: React.FC = () => {
     // Vigilar el Popup
     const interval = setInterval(() => {
         try {
-            // Si el popup regresó a nuestro dominio
-            if (popup?.location.href.indexOf(currentOrigin) === 0) {
-                // Obtener el hash (fragment) que contiene el id_token
-                const hash = popup.location.hash.substring(1);
-                const params = new URLSearchParams(hash);
-                const idToken = params.get('id_token');
-                const err = params.get('error');
+            // Si el popup regresó a nuestro dominio (verificar que la URL comience con oauthRedirectUri)
+            if (popup?.location.href.indexOf(oauthRedirectUri) === 0) {
+                // Obtener el query string que contiene el code
+                const searchParams = new URLSearchParams(popup.location.search);
+                const code = searchParams.get('code');
+                const err = searchParams.get('error');
                 
                 popup.close();
                 clearInterval(interval);
 
-                if (idToken) {
+                if (code) {
                     // Enviar el authorization code al Gateway
-                    // Nota: Para Microsoft también usamos el id_token como identificador
-                    // El backend sabrá cómo procesarlo según el provider
-                    sendCodeToGateway(idToken, 'microsoft');
+                    sendCodeToGateway(code, 'microsoft');
                 } else {
                     setError('Microsoft: ' + (err || 'Cancelado por el usuario'));
                     setLoadingProvider(null);

@@ -98,7 +98,7 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
 
       const responses = await Promise.all(
         endpoints.map(endpoint => 
-          fetch(`${import.meta.env.VITE_WEBHOOK_URL}${endpoint.url}?id_tenant=${id_tenant}&id_user=${id_user}`)
+          apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}${endpoint.url}?id_tenant=${id_tenant}&id_user=${id_user}`)
         )
       );
 

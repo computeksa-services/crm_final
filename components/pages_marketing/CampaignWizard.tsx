@@ -342,7 +342,7 @@ const CampaignWizard: React.FC = () => {
         }
 
         // Ejecutar guardado
-        const saveResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/manage`, {
+        const saveResponse = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/manage`, {
             method: 'POST',
             body: dataToSend
         });
@@ -373,7 +373,7 @@ const CampaignWizard: React.FC = () => {
             sendData.append('id_tenant', user.id_tenant);
             sendData.append('id_user', user.id_user);
 
-            const sendResponse = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/manage`, {
+            const sendResponse = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/manage`, {
                 method: 'POST',
                 body: sendData
             });
@@ -433,7 +433,7 @@ const CampaignWizard: React.FC = () => {
             }
           });
           
-          const res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/test`, {
+          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/campaigns/test`, {
               method: 'POST',
               body: formDataToSend
           });

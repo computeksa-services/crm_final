@@ -175,6 +175,8 @@ const SettingsDealStatuses: React.FC = () => {
   };
 
   const handleDelete = (id: string) => {
+    const closeConfirm = () => setConfirmState(prev => ({ ...prev, isOpen: false }));
+
     setConfirmState({
       isOpen: true,
       title: 'Eliminar Estado',
@@ -191,6 +193,8 @@ const SettingsDealStatuses: React.FC = () => {
           fetchData();
         } catch (error) {
           setToast({ message: (error as Error).message, type: 'error' });
+        } finally {
+          closeConfirm();
         }
       }
     });

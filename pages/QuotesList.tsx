@@ -144,47 +144,57 @@ const QuotesList: React.FC = () => {
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title: string; message: string; isDestructive?: boolean; onConfirm?: () => void }>({ isOpen: false, title: '', message: '' });
 
   // --- FETCH DATA ---
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
     
-    const fetchData = async () => {
-      setLoading(true);
+    setLoading(true);
 
-      try {
-        const [quotesRes, companiesRes, contactsRes] = await Promise.all([
-          apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`),
-          apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies`),
-          apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts`)
-        ]);
-        
-        const parse = async (res: Response) => { const t = await res.text(); return t ? JSON.parse(t) : []; };
-        
-        if (!quotesRes.ok && quotesRes.status !== 404) throw new Error('Error al cargar cotizaciones');
-        
-        const quotesData = await parse(quotesRes);
-        
-        // Extraer respuesta maestra: { quotes: [...], metadata: { statuses: [...] } }
-        if (quotesData && quotesData.quotes && quotesData.metadata) {
-          setQuotes(quotesData.quotes);
-          setMetadata(quotesData.metadata);
-          setQuoteStatuses(quotesData.metadata.statuses || []);
-        } else if (Array.isArray(quotesData)) {
-          // Fallback si es array directo
-          setQuotes(quotesData);
-        }
-        
-        setCompanies(await parse(companiesRes));
-        setContacts(await parse(contactsRes));
-
-      } catch (e) {
-        setToast({ message: 'Error al cargar datos.', type: 'error' });
-      } finally {
-        setLoading(false);
+    try {
+      const [quotesRes, companiesRes, contactsRes, statusesRes] = await Promise.all([
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes`)
+      ]);
+      
+      const parse = async (res: Response) => { const t = await res.text(); return t ? JSON.parse(t) : []; };
+      
+      if (!quotesRes.ok && quotesRes.status !== 404) throw new Error('Error al cargar cotizaciones');
+      
+      const quotesData = await parse(quotesRes);
+      const statusesData = await parse(statusesRes);
+      
+      // Extraer respuesta maestra: { quotes: [...], metadata: { statuses: [...] } }
+      if (quotesData && quotesData.quotes && quotesData.metadata) {
+        setQuotes(quotesData.quotes);
+        setMetadata(quotesData.metadata);
+        setQuoteStatuses(quotesData.metadata.statuses || []);
+      } else if (Array.isArray(quotesData)) {
+        // Fallback si es array directo
+        setQuotes(quotesData);
       }
-    };
-    
+      
+      // Cargar estados desde el endpoint dedicado
+      if (Array.isArray(statusesData) && statusesData.length > 0) {
+        setQuoteStatuses(statusesData);
+        if (!metadata) {
+          setMetadata({ statuses: statusesData });
+        }
+      }
+      
+      setCompanies(await parse(companiesRes));
+      setContacts(await parse(contactsRes));
+
+    } catch (e) {
+      setToast({ message: 'Error al cargar datos.', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.id_tenant, user?.id_user, metadata]);
+
+  useEffect(() => {
     fetchData();
-  }, [user?.id_tenant, user?.id_user]);
+  }, [fetchData]);
 
   // Guardar estado de agrupación en localStorage
   useEffect(() => {
@@ -283,7 +293,7 @@ const QuotesList: React.FC = () => {
       isDestructive: true,
       onConfirm: async () => {
         try {
-            await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/webhook/api/quotes/delete`, {
+            await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/delete`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id_cotizacion: id, id_tenant: user?.id_tenant, id_user: user?.id_user }),
@@ -426,6 +436,7 @@ const QuotesList: React.FC = () => {
       size: 120,
       filterFn: dateRangeFilter,
       cell: ({ row }) => {
+        if (row.getIsGrouped()) return null;
         const fecha = row.original.fecha_emision_fmt || row.original.fecha_emision;
         return <span className="text-xs text-slate-500">{fecha}</span>;
       }
@@ -435,6 +446,7 @@ const QuotesList: React.FC = () => {
       header: 'Creado',
       size: 140,
       cell: ({ row }) => {
+        if (row.getIsGrouped()) return null;
         // Preferir el campo formateado si existe, si no, formatear localmente
         let fecha = row.original.created_at_fmt;
         if (!fecha && row.original.created_at) {

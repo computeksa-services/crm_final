@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { apiFetch } from '../services/apiClient';
 
 // --- TIPOS ---
 type ContactOption = {
@@ -71,7 +72,7 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
 
       // 1. CARGAR USUARIOS INTERNOS (EQUIPO)
       setLoadingUsers(true);
-      fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${tenantId}&id_user=${userId}`)
+      apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${tenantId}&id_user=${userId}`)
         .then(r => r.ok ? r.json() : [])
         .then(data => {
             const cleanUsers = (Array.isArray(data) ? data : []).map((u: any) => ({

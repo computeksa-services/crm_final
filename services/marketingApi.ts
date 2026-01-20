@@ -1,4 +1,5 @@
 import { MarketingList, ListMember, MarketingCampaign } from '../types';
+import { apiFetch } from './apiClient';
 
 // URL base de tus Webhooks de n8n
 const API_BASE = import.meta.env.VITE_WEBHOOK_URL || 'http://localhost:3000';
@@ -37,7 +38,7 @@ export const marketingApi = {
   async getLists(id_tenant: string, id_user: string): Promise<MarketingList[]> {
     try {
       // Query Params coinciden con BD: id_tenant, id_user
-      const response = await fetch(`${API_BASE}/api/marketing/lists?id_tenant=${id_tenant}&id_user=${id_user}`);
+      const response = await apiFetch(`${API_BASE}/api/marketing/lists?id_tenant=${id_tenant}&id_user=${id_user}`);
       const data = await parseResponse(response);
       if (!Array.isArray(data)) return [];
       // Normalizamos id_list/list_id para que el frontend siempre tenga ambos
@@ -67,7 +68,7 @@ export const marketingApi = {
     }
   ): Promise<MarketingList> {
     try {
-      const response = await fetch(`${API_BASE}/api/marketing/lists`, {
+      const response = await apiFetch(`${API_BASE}/api/marketing/lists`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -98,7 +99,7 @@ export const marketingApi = {
     payload: { name?: string; description?: string; visibility?: string; type?: string }
   ): Promise<MarketingList> {
     try {
-      const response = await fetch(`${API_BASE}/api/marketing/lists`, {
+      const response = await apiFetch(`${API_BASE}/api/marketing/lists`, {
         method: 'PUT', // Asegúrate de configurar PUT en n8n
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -121,7 +122,7 @@ export const marketingApi = {
    */
   async deleteList(id_list: string, id_tenant: string, id_user: string): Promise<void> {
     try {
-      await fetch(`${API_BASE}/api/marketing/lists/delete`, {
+      await apiFetch(`${API_BASE}/api/marketing/lists/delete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_list, id_tenant, id_user }),
@@ -137,7 +138,7 @@ export const marketingApi = {
    */
   async getListDetail(id_list: string, id_user: string, id_tenant: string): Promise<MarketingList> {
     try {
-      const response = await fetch(`${API_BASE}/api/marketing/lists/detail?id_list=${id_list}&id_user=${id_user}&id_tenant=${id_tenant}`);
+      const response = await apiFetch(`${API_BASE}/api/marketing/lists/detail?id_list=${id_list}&id_user=${id_user}&id_tenant=${id_tenant}`);
       const data = await parseResponse(response);
       return Array.isArray(data) ? data[0] : data;
     } catch (error) {
@@ -156,7 +157,7 @@ export const marketingApi = {
   async getListMembers(id_list: string, id_user: string): Promise<ListMember[]> {
     try {
       // Enviamos id_user para aplicar filtros de seguridad (company_permissions / contact_permissions)
-      const response = await fetch(`${API_BASE}/api/marketing/lists/members?id_list=${id_list}&id_user=${id_user}`);
+      const response = await apiFetch(`${API_BASE}/api/marketing/lists/members?id_list=${id_list}&id_user=${id_user}`);
       const data = await parseResponse(response);
       if (!Array.isArray(data)) return [];
 
@@ -201,7 +202,7 @@ export const marketingApi = {
 
       console.log('📤 Enviando payload a manageListMembers:', payload);
 
-      const response = await fetch(`${API_BASE}/api/marketing/lists/members`, {
+      const response = await apiFetch(`${API_BASE}/api/marketing/lists/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -236,7 +237,7 @@ export const marketingApi = {
         location: filters.location || ''
       });
 
-      const response = await fetch(`${API_BASE}/api/marketing/contacts/search?${params.toString()}`);
+      const response = await apiFetch(`${API_BASE}/api/marketing/contacts/search?${params.toString()}`);
       const data = await parseResponse(response);
       return Array.isArray(data) ? data : [];
     } catch (error) {
@@ -254,9 +255,11 @@ export const marketingApi = {
    */
   async getCampaigns(id_tenant: string, id_user: string): Promise<MarketingCampaign[]> {
     try {
-      const response = await fetch(`${API_BASE}/api/marketing/campaigns?id_tenant=${encodeURIComponent(id_tenant)}&id_user=${encodeURIComponent(id_user)}`);
+      const response = await apiFetch(`${API_BASE}/api/marketing/campaigns?id_tenant=${encodeURIComponent(id_tenant)}&id_user=${encodeURIComponent(id_user)}`);
       const data = await parseResponse(response);
-      return Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) return [];
+      // Filtrar respuestas vacías: {success: true} sin campos de campaña
+      return data.filter(item => item.id_campaign || item.name || item.id);
     } catch (error) {
       console.error('❌ Error getCampaigns:', error);
       throw error;
@@ -268,7 +271,7 @@ export const marketingApi = {
    */
   async getCampaignDetail(id_campaign: string): Promise<MarketingCampaign> {
     try {
-      const response = await fetch(`${API_BASE}/api/marketing/campaigns/detail?id_campaign=${id_campaign}`);
+      const response = await apiFetch(`${API_BASE}/api/marketing/campaigns/detail?id_campaign=${id_campaign}`);
       const data = await parseResponse(response);
       return Array.isArray(data) ? data[0] : data;
     } catch (error) {
@@ -300,7 +303,7 @@ export const marketingApi = {
     }
   ): Promise<MarketingCampaign | void> {
     try {
-      const response = await fetch(`${API_BASE}/api/marketing/campaigns/manage`, {
+      const response = await apiFetch(`${API_BASE}/api/marketing/campaigns/manage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, ...payload }),
@@ -323,7 +326,7 @@ export const marketingApi = {
     id_user: string
   ): Promise<MarketingCampaign> {
     try {
-      const response = await fetch(`${API_BASE}/api/marketing/campaigns/manage`, {
+      const response = await apiFetch(`${API_BASE}/api/marketing/campaigns/manage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'duplicate', id_campaign, id_tenant, id_user }),
@@ -353,7 +356,7 @@ export const marketingApi = {
     }
   ): Promise<MarketingCampaign> {
     try {
-      const response = await fetch(`${API_BASE}/api/marketing/campaigns/save`, {
+      const response = await apiFetch(`${API_BASE}/api/marketing/campaigns/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -376,7 +379,7 @@ export const marketingApi = {
   async deleteCampaign(id_campaign: string, id_user: string): Promise<void> {
     try {
       // Usamos POST para delete si así lo configuraste, o DELETE
-      await fetch(`${API_BASE}/api/marketing/campaigns/delete`, {
+      await apiFetch(`${API_BASE}/api/marketing/campaigns/delete`, {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_campaign, id_user }),
@@ -392,7 +395,7 @@ export const marketingApi = {
    */
   async launchCampaign(id_campaign: string, id_user: string): Promise<void> {
     try {
-      await fetch(`${API_BASE}/api/marketing/campaigns/send`, {
+      await apiFetch(`${API_BASE}/api/marketing/campaigns/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_campaign, id_user }),
@@ -415,7 +418,7 @@ export const marketingApi = {
   }): Promise<void> {
     const { id_campaign, id_tenant, id_user, action } = payload;
     try {
-      const response = await fetch(`${API_BASE}/api/marketing/campaigns/manage`, {
+      const response = await apiFetch(`${API_BASE}/api/marketing/campaigns/manage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id_campaign, id_tenant, id_user, action }),

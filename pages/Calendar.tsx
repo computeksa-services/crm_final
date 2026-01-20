@@ -145,7 +145,7 @@ const Calendar: React.FC = () => {
       
       // Cargar datos de BD sin sincronización (muy rápido)
       const [eventsResponse, clientsResponse, contactsResponse, usersResponse, dealsResponse, quotesResponse] = await Promise.all([
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}`),
@@ -257,7 +257,7 @@ const Calendar: React.FC = () => {
         
         // Volver a obtener eventos actualizados después de sincronizar
         const eventsResponseUpdated = await apiFetch(
-          `${import.meta.env.VITE_WEBHOOK_URL}/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&id_user=${user.id_user}&id_tenant=${user.id_tenant}`
+          `${import.meta.env.VITE_WEBHOOK_URL}/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
         );
         
         if (eventsResponseUpdated.ok) {
@@ -358,7 +358,7 @@ const Calendar: React.FC = () => {
     
     try {
       const response = await apiFetch(
-        `${import.meta.env.VITE_WEBHOOK_URL}/api/events/detail?id_event=${eventId}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`
+        `${import.meta.env.VITE_WEBHOOK_URL}/api/events/detail?id_event=${eventId}`
       );
       
       if (!response.ok) {

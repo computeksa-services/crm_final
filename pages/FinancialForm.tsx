@@ -298,9 +298,8 @@ const FinancialForm: React.FC = () => {
       } else {
         // Crear nuevo
         console.log('Creando con payload:', payload);
-        res = await fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials`, {
+        res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
       }

@@ -223,9 +223,8 @@ const DealCreate: React.FC = () => {
 
       if (selectedUserIds.length > 0) {
         await Promise.all(selectedUserIds.map(uid => 
-          fetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share`, {
+          apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               id_tenant: user?.id_tenant,
               id_trato: newId,

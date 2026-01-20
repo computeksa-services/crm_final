@@ -63,8 +63,19 @@ const ProductsList: React.FC = () => {
         return text ? JSON.parse(text) : [];
       };
 
-      setProducts(await parseResponse(productsRes));
-      setProductTypes(await parseResponse(typesRes));
+      const parsedProducts = await parseResponse(productsRes);
+      const parsedTypes = await parseResponse(typesRes);
+      
+      // Asegurar que los tipos tengan id_product_type
+      const validTypes = Array.isArray(parsedTypes) 
+        ? parsedTypes.map((pt, index) => ({
+            ...pt,
+            id_product_type: pt.id_product_type || `type_${index}`
+          }))
+        : [];
+      
+      setProducts(parsedProducts);
+      setProductTypes(validTypes);
 
     } catch (e: any) {
       console.error("Error fetching data:", e);
@@ -271,14 +282,14 @@ const ProductsList: React.FC = () => {
         );
     }
 
-    if (products.length === 0) {
+    if (products.length === 0 && !loading) {
         return (
             <div className="p-16 text-center flex flex-col items-center">
                 <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
                     <i className="fa-solid fa-boxes-stacked text-3xl text-slate-300"></i>
                 </div>
                 <h3 className="text-lg font-bold text-slate-700">Catálogo vacío</h3>
-                <p className="text-slate-500 max-w-sm mt-1 mb-6">Agrega tus productos o servicios para empezar a cotizar.</p>
+                <p className="text-slate-500 max-w-sm mt-1 mb-6">No hay productos registrados. Agrega tus productos o servicios para empezar a cotizar.</p>
                 <button onClick={handleAddNew} className="bg-brand-600 text-white px-5 py-2.5 rounded-xl shadow-md hover:bg-brand-700 transition-all">
                     Crear Primer Artículo
                 </button>
@@ -468,8 +479,10 @@ const ProductsList: React.FC = () => {
                 onChange={(e) => setTypeFilter(e.target.value)}
                 className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg bg-white text-slate-600 text-sm focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
             >
-                <option value="">Todos los Tipos</option>
-                {productTypes.map(pt => <option key={pt.id_product_type} value={pt.type}>{pt.type}</option>)}
+                <option key="all-types" value="">Todos los Tipos</option>
+                {Array.isArray(productTypes) && productTypes.map((pt, idx) => (
+                  <option key={pt.id_product_type || `pt-${idx}`} value={pt.type}>{pt.type}</option>
+                ))}
             </select>
             <div className="absolute right-3 top-2.5 text-slate-400 pointer-events-none text-xs">
                 <i className="fa-solid fa-chevron-down"></i>
@@ -572,7 +585,10 @@ const ProductsList: React.FC = () => {
                             required
                             className="w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-brand-500 appearance-none"
                         >
-                            {productTypes.map(pt => <option key={pt.id_product_type} value={pt.type}>{pt.type}</option>)}
+                            <option key="empty-type" value="">Seleccionar tipo</option>
+                            {Array.isArray(productTypes) && productTypes.map((pt, idx) => (
+                              <option key={pt.id_product_type || `modal-pt-${idx}`} value={pt.type}>{pt.type}</option>
+                            ))}
                         </select>
                         <div className="absolute right-3 top-3 text-slate-400 pointer-events-none text-xs"><i className="fa-solid fa-chevron-down"></i></div>
                     </div>
