@@ -31,7 +31,7 @@ const CampaignDetail: React.FC = () => {
   
   const [campaign, setCampaign] = useState<CampaignDetailData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'STATS' | 'AUDIENCE' | 'PREVIEW'>('STATS');
+  const [activeTab, setActiveTab] = useState<'STATS' | 'AUDIENCE' | 'PREVIEW'>('AUDIENCE');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
   // Estado para búsqueda en tabla de audiencia
@@ -387,16 +387,6 @@ const CampaignDetail: React.FC = () => {
         <div className="border-b border-slate-200 bg-slate-50/50">
           <div className="flex gap-1 px-4 pt-2 overflow-x-auto">
             <button
-              onClick={() => setActiveTab('STATS')}
-              className={`px-4 py-3 font-bold text-sm transition-colors border-b-2 whitespace-nowrap ${
-                activeTab === 'STATS'
-                  ? 'text-brand-600 border-brand-600 bg-white rounded-t-lg'
-                  : 'text-slate-500 border-transparent hover:text-slate-700'
-              }`}
-            >
-              <i className="fa-solid fa-chart-pie mr-2"></i> Reporte
-            </button>
-            <button
               onClick={() => setActiveTab('AUDIENCE')}
               className={`px-4 py-3 font-bold text-sm transition-colors border-b-2 whitespace-nowrap ${
                 activeTab === 'AUDIENCE'
@@ -415,6 +405,16 @@ const CampaignDetail: React.FC = () => {
               }`}
             >
               <i className="fa-regular fa-eye mr-2"></i> Vista Previa
+            </button>
+            <button
+              onClick={() => setActiveTab('STATS')}
+              className={`px-4 py-3 font-bold text-sm transition-colors border-b-2 whitespace-nowrap ${
+                activeTab === 'STATS'
+                  ? 'text-brand-600 border-brand-600 bg-white rounded-t-lg'
+                  : 'text-slate-500 border-transparent hover:text-slate-700'
+              }`}
+            >
+              <i className="fa-solid fa-chart-pie mr-2"></i> Reporte
             </button>
           </div>
         </div>

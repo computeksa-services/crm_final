@@ -46,6 +46,19 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     localStorage.setItem('sidebar-desktop-open', JSON.stringify(isDesktopSidebarOpen));
   }, [isDesktopSidebarOpen]);
 
+  // Cerrar sidebar móvil cuando se cambia a desktop (rotación de dispositivo)
+  useEffect(() => {
+    const handleResize = () => {
+      // Si la pantalla es >= 768px (breakpoint md de Tailwind) y el sidebar móvil está abierto, cerrarlo
+      if (window.innerWidth >= 768 && isMobileSidebarOpen) {
+        setIsMobileSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isMobileSidebarOpen]);
+
   const didFetchTenantRef = React.useRef<string | null>(null);
   useEffect(() => {
     if (!user?.id_tenant) {
@@ -154,7 +167,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* --- MOBILE OVERLAY (Solo visible en móvil cuando el menú está abierto) --- */}
       {isMobileSidebarOpen && (
         <div 
-          className="fixed inset-0 z-40 bg-slate-900/50 backdrop-blur-sm md:hidden transition-opacity"
+          className="fixed inset-0 z-[45] bg-slate-900/50 backdrop-blur-sm md:hidden transition-opacity"
           onClick={() => setIsMobileSidebarOpen(false)}
         ></div>
       )}
@@ -202,8 +215,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <NavLinkItem 
                     key={item.path} 
                     item={item} 
-                    isCollapsed={!isDesktopSidebarOpen}
-
+                    isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false}
                   />
                 ))}
               </div>
@@ -217,11 +229,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </h3>
                  {!isDesktopSidebarOpen && <div className="h-px bg-slate-800 mx-2 my-1 md:block hidden"></div>}
                 
-                <NavLinkItem item={{ label: 'Ajustes', path: '/app/settings', icon: 'fa-sliders', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
-                <NavLinkItem item={{ label: 'Usuarios', path: '/app/users', icon: 'fa-users-cog', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
-                <NavLinkItem item={{ label: 'Cartera', path: '/app/financials', icon: 'fa-wallet', roles: ['admin', 'superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
+                <NavLinkItem item={{ label: 'Ajustes', path: '/app/settings', icon: 'fa-sliders', roles: ['admin', 'superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
+                <NavLinkItem item={{ label: 'Usuarios', path: '/app/users', icon: 'fa-users-cog', roles: ['admin', 'superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
+                <NavLinkItem item={{ label: 'Cartera', path: '/app/financials', icon: 'fa-wallet', roles: ['admin', 'superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
                 {userRole === 'superadmin' && (
-                  <NavLinkItem item={{ label: 'Tenants', path: '/app/companies', icon: 'fa-server', roles: ['superadmin'] }} isCollapsed={!isDesktopSidebarOpen} />
+                  <NavLinkItem item={{ label: 'Tenants', path: '/app/companies', icon: 'fa-server', roles: ['superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
                 )}
               </div>
             )}
@@ -384,14 +396,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
           
           <div className="flex items-center space-x-4 md:space-x-6">
-             {/* Notificaciones (Visual dummy) */}
-             <button className="relative text-slate-400 hover:text-slate-600 transition-colors">
-                <i className="fa-regular fa-bell text-lg"></i>
-                <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-             </button>
-
-             <div className="h-6 w-px bg-slate-200"></div>
-
              {/* Tenant Info visible junto al avatar */}
              {tenantName && (
                <div className="flex flex-col items-end">

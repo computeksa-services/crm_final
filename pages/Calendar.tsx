@@ -15,7 +15,8 @@ interface Attendee {
 
 const Calendar: React.FC = () => {
   const { user } = useAuth();
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]); // Events for calendar view
+  const [upcomingEventsData, setUpcomingEventsData] = useState<CalendarEvent[]>([]); // Events for upcoming panel (next 7 days)
   const [clients, setClients] = useState<ClientCompany[]>([]);
   const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -128,6 +129,32 @@ const Calendar: React.FC = () => {
     }
 
     return { start: startDate.toISOString(), end: endDate.toISOString() };
+  };
+
+  // Fetch upcoming events (next 7 days from now) - independent of calendar view
+  const fetchUpcomingEvents = async () => {
+    if (!user?.id_tenant || !user?.id_user) return;
+    
+    const now = new Date();
+    const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const start = now.toISOString();
+    const end = sevenDaysLater.toISOString();
+    
+    try {
+      const upcomingResponse = await apiFetch(
+        `${import.meta.env.VITE_WEBHOOK_URL}/api/events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`
+      );
+      
+      if (upcomingResponse.ok) {
+        const upcomingText = await upcomingResponse.text();
+        if (upcomingText.trim()) {
+          const upcomingData = JSON.parse(upcomingText);
+          setUpcomingEventsData(upcomingData);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching upcoming events:', error);
+    }
   };
 
   const fetchData = async () => {
@@ -280,6 +307,7 @@ const Calendar: React.FC = () => {
 
   useEffect(() => {
     fetchData();
+    fetchUpcomingEvents(); // Separate fetch for upcoming events panel
   }, [currentDate, viewMode, user]);
 
   // Cerrar sugerencias de deals al hacer clic fuera
@@ -338,15 +366,40 @@ const Calendar: React.FC = () => {
   // Obtener eventos próximos (siguientes 7 días)
   const getUpcomingEvents = () => {
     const now = new Date();
-    const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+    const dayAfterTomorrow = new Date(today.getTime() + 2 * 24 * 60 * 60 * 1000);
+    const endOfWeek = new Date(today);
+    endOfWeek.setDate(today.getDate() + (7 - today.getDay())); // Domingo
+    const endOfNextWeek = new Date(endOfWeek.getTime() + 7 * 24 * 60 * 60 * 1000);
     
-    return events
-      .filter(e => {
-        const eventStart = new Date(e.start);
-        return eventStart >= now && eventStart <= sevenDaysLater;
-      })
-      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
-      .slice(0, 5);
+    const sortedEvents = upcomingEventsData
+      .filter(e => new Date(e.start) >= now)
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+    
+    const grouped = {
+      today: [] as CalendarEvent[],
+      tomorrow: [] as CalendarEvent[],
+      thisWeek: [] as CalendarEvent[],
+      nextWeek: [] as CalendarEvent[]
+    };
+    
+    sortedEvents.forEach(event => {
+      const eventDate = new Date(event.start);
+      const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+      
+      if (eventDay.getTime() === today.getTime()) {
+        grouped.today.push(event);
+      } else if (eventDay.getTime() === tomorrow.getTime()) {
+        grouped.tomorrow.push(event);
+      } else if (eventDate <= endOfWeek) {
+        grouped.thisWeek.push(event);
+      } else if (eventDate <= endOfNextWeek) {
+        grouped.nextWeek.push(event);
+      }
+    });
+    
+    return grouped;
   };
 
   // --- EVENT DETAIL ---
@@ -860,12 +913,12 @@ const Calendar: React.FC = () => {
   return (
     <div className="h-full flex flex-col relative">
       {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center space-x-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-800">Calendario</h1>
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Calendario</h1>
             {isSyncing && (
-              <span className="text-xs text-slate-500 flex items-center gap-1.5 bg-slate-100 px-2.5 py-1 rounded-full animate-pulse">
+              <span className="text-xs text-slate-500 flex items-center gap-1.5 bg-slate-100 px-2 sm:px-2.5 py-1 rounded-full animate-pulse">
                 <i className="fa-solid fa-arrows-rotate fa-spin text-brand-600"></i>
                 Sincronizando...
               </span>
@@ -874,30 +927,30 @@ const Calendar: React.FC = () => {
           
           <button 
             onClick={goToToday}
-            className="px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-300"
+            className="px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-300"
           >
             Hoy
           </button>
           
           <div className="flex items-center bg-white rounded-lg shadow-sm border border-slate-200">
-            <button onClick={() => navigate('prev')} className="p-2 hover:bg-slate-100 rounded-l text-slate-500">
-               <i className="fa-solid fa-chevron-left"></i>
+            <button onClick={() => navigate('prev')} className="p-1.5 sm:p-2 hover:bg-slate-100 rounded-l text-slate-500">
+               <i className="fa-solid fa-chevron-left text-sm"></i>
             </button>
-            <span className="px-4 text-center font-semibold text-slate-700 capitalize min-w-[200px]">
+            <span className="px-2 sm:px-4 text-center font-semibold text-slate-700 capitalize text-xs sm:text-sm min-w-[140px] sm:min-w-[200px]">
               {getDateRangeLabel()}
             </span>
-            <button onClick={() => navigate('next')} className="p-2 hover:bg-slate-100 rounded-r text-slate-500">
+            <button onClick={() => navigate('next')} className="p-1.5 sm:p-2 hover:bg-slate-100 rounded-r text-slate-500">
                <i className="fa-solid fa-chevron-right"></i>
             </button>
           </div>
         </div>
         
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {/* Selector de Vista */}
-          <div className="flex bg-white rounded-lg shadow-sm border border-slate-200 p-1">
+          <div className="flex bg-white rounded-lg shadow-sm border border-slate-200 p-0.5 sm:p-1">
             <button
               onClick={() => setViewMode('day')}
-              className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+              className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded transition-colors ${
                 viewMode === 'day' 
                   ? 'bg-brand-600 text-white' 
                   : 'text-slate-600 hover:bg-slate-100'
@@ -907,7 +960,7 @@ const Calendar: React.FC = () => {
             </button>
             <button
               onClick={() => setViewMode('week')}
-              className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+              className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded transition-colors ${
                 viewMode === 'week' 
                   ? 'bg-brand-600 text-white' 
                   : 'text-slate-600 hover:bg-slate-100'
@@ -917,7 +970,7 @@ const Calendar: React.FC = () => {
             </button>
             <button
               onClick={() => setViewMode('month')}
-              className={`px-3 py-1.5 text-sm font-medium rounded transition-colors ${
+              className={`px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm font-medium rounded transition-colors ${
                 viewMode === 'month' 
                   ? 'bg-brand-600 text-white' 
                   : 'text-slate-600 hover:bg-slate-100'
@@ -929,10 +982,144 @@ const Calendar: React.FC = () => {
           
           <button 
             onClick={handleOpenModal}
-            className="bg-brand-600 hover:bg-brand-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm"
+            className="bg-brand-600 hover:bg-brand-700 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium shadow-sm flex-1 sm:flex-initial"
           >
-            <i className="fa-solid fa-plus mr-2"></i> Nuevo Evento
+            <i className="fa-solid fa-plus sm:mr-2"></i> <span className="hidden sm:inline">Nuevo Evento</span><span className="sm:hidden">Nuevo</span>
           </button>
+        </div>
+      </div>
+
+      {/* Próximos Eventos - Mobile Only (shown above calendar on mobile) */}
+      <div className="lg:hidden bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4 max-h-80 overflow-hidden flex flex-col">
+        <h3 className="text-base font-bold text-slate-800 mb-3 flex items-center">
+          <i className="fa-solid fa-clock mr-2 text-brand-600"></i>
+          Próximos Eventos (7 días)
+        </h3>
+        
+        <div className="flex-1 overflow-y-auto space-y-3">
+          {upcomingEvents.today.length === 0 && upcomingEvents.tomorrow.length === 0 && 
+           upcomingEvents.thisWeek.length === 0 && upcomingEvents.nextWeek.length === 0 ? (
+            <div className="text-center text-slate-400 py-4">
+              <i className="fa-solid fa-calendar-xmark text-2xl mb-1"></i>
+              <p className="text-xs">No hay eventos próximos</p>
+            </div>
+          ) : (
+            <>
+              {/* Hoy */}
+              {upcomingEvents.today.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold text-slate-600 uppercase mb-2 px-1">Hoy</h4>
+                  <div className="space-y-2">
+                    {upcomingEvents.today.map(event => {
+                      const startDate = new Date(event.start);
+                      const timeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+                      return (
+                        <div 
+                          key={event.id}
+                          onClick={() => handleEventClick(event.id)}
+                          className="p-2.5 rounded-lg border-l-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                          style={{ borderColor: event.color || '#6366f1' }}
+                        >
+                          <div className="flex items-start justify-between mb-0.5">
+                            <h4 className="font-semibold text-sm text-slate-800 flex-1">{event.title}</h4>
+                            <span className="text-xs font-bold ml-2" style={{ color: event.color || '#6366f1' }}>{timeStr}</span>
+                          </div>
+                          {event.description && (
+                            <p className="text-xs text-slate-500 line-clamp-1">{event.description}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Mañana */}
+              {upcomingEvents.tomorrow.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold text-slate-600 uppercase mb-2 px-1">Mañana</h4>
+                  <div className="space-y-2">
+                    {upcomingEvents.tomorrow.map(event => {
+                      const startDate = new Date(event.start);
+                      const timeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+                      return (
+                        <div 
+                          key={event.id}
+                          onClick={() => handleEventClick(event.id)}
+                          className="p-2.5 rounded-lg border-l-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                          style={{ borderColor: event.color || '#6366f1' }}
+                        >
+                          <div className="flex items-start justify-between mb-0.5">
+                            <h4 className="font-semibold text-sm text-slate-800 flex-1">{event.title}</h4>
+                            <span className="text-xs font-bold ml-2" style={{ color: event.color || '#6366f1' }}>{timeStr}</span>
+                          </div>
+                          {event.description && (
+                            <p className="text-xs text-slate-500 line-clamp-1">{event.description}</p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Esta Semana */}
+              {upcomingEvents.thisWeek.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold text-slate-600 uppercase mb-2 px-1">Esta Semana</h4>
+                  <div className="space-y-2">
+                    {upcomingEvents.thisWeek.map(event => {
+                      const startDate = new Date(event.start);
+                      const dateLabel = startDate.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' });
+                      const timeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+                      return (
+                        <div 
+                          key={event.id}
+                          onClick={() => handleEventClick(event.id)}
+                          className="p-2.5 rounded-lg border-l-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                          style={{ borderColor: event.color || '#6366f1' }}
+                        >
+                          <div className="flex items-start justify-between mb-0.5">
+                            <span className="text-xs font-semibold text-slate-500 uppercase">{dateLabel}</span>
+                            <span className="text-xs font-bold" style={{ color: event.color || '#6366f1' }}>{timeStr}</span>
+                          </div>
+                          <h4 className="font-semibold text-sm text-slate-800">{event.title}</h4>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Próxima Semana */}
+              {upcomingEvents.nextWeek.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold text-slate-600 uppercase mb-2 px-1">Próxima Semana</h4>
+                  <div className="space-y-2">
+                    {upcomingEvents.nextWeek.map(event => {
+                      const startDate = new Date(event.start);
+                      const dateLabel = startDate.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+                      const timeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+                      return (
+                        <div 
+                          key={event.id}
+                          onClick={() => handleEventClick(event.id)}
+                          className="p-2.5 rounded-lg border-l-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                          style={{ borderColor: event.color || '#6366f1' }}
+                        >
+                          <div className="flex items-start justify-between mb-0.5">
+                            <span className="text-xs font-semibold text-slate-500 uppercase">{dateLabel}</span>
+                            <span className="text-xs font-bold" style={{ color: event.color || '#6366f1' }}>{timeStr}</span>
+                          </div>
+                          <h4 className="font-semibold text-sm text-slate-800">{event.title}</h4>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
@@ -951,61 +1138,160 @@ const Calendar: React.FC = () => {
           )}
         </div>
 
-        {/* Panel Lateral - Eventos Próximos */}
-        <div className="w-80 bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col max-h-full">
+        {/* Panel Lateral - Eventos Próximos (hidden on mobile) */}
+        <div className="hidden lg:flex w-80 bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex-col max-h-full">
           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center">
             <i className="fa-solid fa-clock mr-2 text-brand-600"></i>
-            Próximos Eventos
+            Próximos Eventos (7 días)
           </h3>
           
           <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-            {upcomingEvents.length === 0 ? (
+            {upcomingEvents.today.length === 0 && upcomingEvents.tomorrow.length === 0 && 
+             upcomingEvents.thisWeek.length === 0 && upcomingEvents.nextWeek.length === 0 ? (
               <div className="text-center text-slate-400 py-8">
                 <i className="fa-solid fa-calendar-xmark text-3xl mb-2"></i>
                 <p className="text-sm">No hay eventos próximos</p>
               </div>
             ) : (
-              upcomingEvents.map(event => {
-                const startDate = new Date(event.start);
-                const isToday = startDate.toDateString() === new Date().toDateString();
-                const isTomorrow = startDate.toDateString() === new Date(Date.now() + 86400000).toDateString();
-                
-                let dateLabel = startDate.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
-                if (isToday) dateLabel = 'Hoy';
-                if (isTomorrow) dateLabel = 'Mañana';
-                
-                const timeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
-                
-                return (
-                  <div 
-                    key={event.id}
-                    onClick={() => handleEventClick(event.id)}
-                    className="p-3 rounded-lg border-l-4 hover:bg-slate-50 cursor-pointer transition-colors"
-                    style={{ borderColor: event.color || '#6366f1' }}
-                  >
-                    <div className="flex items-start justify-between mb-1">
-                      <span className="text-xs font-semibold text-slate-500 uppercase">{dateLabel}</span>
-                      <span className="text-xs font-bold" style={{ color: event.color || '#6366f1' }}>{timeStr}</span>
+              <>
+                {/* Hoy */}
+                {upcomingEvents.today.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-600 uppercase mb-2 px-1">Hoy</h4>
+                    <div className="space-y-2">
+                      {upcomingEvents.today.map(event => {
+                        const startDate = new Date(event.start);
+                        const timeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+                        return (
+                          <div 
+                            key={event.id}
+                            onClick={() => handleEventClick(event.id)}
+                            className="p-3 rounded-lg border-l-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                            style={{ borderColor: event.color || '#6366f1' }}
+                          >
+                            <div className="flex items-start justify-between mb-1">
+                              <h4 className="font-semibold text-sm text-slate-800 flex-1">{event.title}</h4>
+                              <span className="text-xs font-bold ml-2" style={{ color: event.color || '#6366f1' }}>{timeStr}</span>
+                            </div>
+                            {event.description && (
+                              <p className="text-xs text-slate-500 line-clamp-2">{event.description}</p>
+                            )}
+                            {event.meeting_url && (
+                              <div className="mt-2 flex items-center text-xs text-brand-600">
+                                <i className="fa-solid fa-video mr-1"></i>
+                                <span>Reunión virtual</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                    <h4 className="font-semibold text-sm text-slate-800 mb-1">{event.title}</h4>
-                    {event.description && (
-                      <p className="text-xs text-slate-500 line-clamp-2">{event.description}</p>
-                    )}
-                    {event.meeting_url && (
-                      <div className="mt-2 flex items-center text-xs text-brand-600">
-                        <i className="fa-solid fa-video mr-1"></i>
-                        <span>Reunión virtual</span>
-                      </div>
-                    )}
-                    {event.attendees && event.attendees.length > 0 && (
-                      <div className="mt-2 flex items-center text-xs text-slate-500">
-                        <i className="fa-solid fa-users mr-1"></i>
-                        <span>{event.attendees.length} participante{event.attendees.length > 1 ? 's' : ''}</span>
-                      </div>
-                    )}
                   </div>
-                );
-              })
+                )}
+
+                {/* Mañana */}
+                {upcomingEvents.tomorrow.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-600 uppercase mb-2 px-1">Mañana</h4>
+                    <div className="space-y-2">
+                      {upcomingEvents.tomorrow.map(event => {
+                        const startDate = new Date(event.start);
+                        const timeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+                        return (
+                          <div 
+                            key={event.id}
+                            onClick={() => handleEventClick(event.id)}
+                            className="p-3 rounded-lg border-l-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                            style={{ borderColor: event.color || '#6366f1' }}
+                          >
+                            <div className="flex items-start justify-between mb-1">
+                              <h4 className="font-semibold text-sm text-slate-800 flex-1">{event.title}</h4>
+                              <span className="text-xs font-bold ml-2" style={{ color: event.color || '#6366f1' }}>{timeStr}</span>
+                            </div>
+                            {event.description && (
+                              <p className="text-xs text-slate-500 line-clamp-2">{event.description}</p>
+                            )}
+                            {event.meeting_url && (
+                              <div className="mt-2 flex items-center text-xs text-brand-600">
+                                <i className="fa-solid fa-video mr-1"></i>
+                                <span>Reunión virtual</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Esta Semana */}
+                {upcomingEvents.thisWeek.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-600 uppercase mb-2 px-1">Esta Semana</h4>
+                    <div className="space-y-2">
+                      {upcomingEvents.thisWeek.map(event => {
+                        const startDate = new Date(event.start);
+                        const dateLabel = startDate.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric' });
+                        const timeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+                        return (
+                          <div 
+                            key={event.id}
+                            onClick={() => handleEventClick(event.id)}
+                            className="p-3 rounded-lg border-l-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                            style={{ borderColor: event.color || '#6366f1' }}
+                          >
+                            <div className="flex items-start justify-between mb-1">
+                              <span className="text-xs font-semibold text-slate-500 uppercase">{dateLabel}</span>
+                              <span className="text-xs font-bold" style={{ color: event.color || '#6366f1' }}>{timeStr}</span>
+                            </div>
+                            <h4 className="font-semibold text-sm text-slate-800 mb-1">{event.title}</h4>
+                            {event.description && (
+                              <p className="text-xs text-slate-500 line-clamp-2">{event.description}</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Próxima Semana */}
+                {upcomingEvents.nextWeek.length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-600 uppercase mb-2 px-1">Próxima Semana</h4>
+                    <div className="space-y-2">
+                      {upcomingEvents.nextWeek.map(event => {
+                        const startDate = new Date(event.start);
+                        const dateLabel = startDate.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' });
+                        const timeStr = `${startDate.getHours().toString().padStart(2, '0')}:${startDate.getMinutes().toString().padStart(2, '0')}`;
+                        return (
+                          <div 
+                            key={event.id}
+                            onClick={() => handleEventClick(event.id)}
+                            className="p-3 rounded-lg border-l-4 hover:bg-slate-50 cursor-pointer transition-colors"
+                            style={{ borderColor: event.color || '#6366f1' }}
+                          >
+                            <div className="flex items-start justify-between mb-1">
+                              <span className="text-xs font-semibold text-slate-500 uppercase">{dateLabel}</span>
+                              <span className="text-xs font-bold" style={{ color: event.color || '#6366f1' }}>{timeStr}</span>
+                            </div>
+                            <h4 className="font-semibold text-sm text-slate-800 mb-1">{event.title}</h4>
+                            {event.description && (
+                              <p className="text-xs text-slate-500 line-clamp-2">{event.description}</p>
+                            )}
+                            {event.attendees && event.attendees.length > 0 && (
+                              <div className="mt-2 flex items-center text-xs text-slate-500">
+                                <i className="fa-solid fa-users mr-1"></i>
+                                <span>{event.attendees.length} participante{event.attendees.length > 1 ? 's' : ''}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

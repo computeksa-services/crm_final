@@ -176,6 +176,7 @@ const SettingsDealInterests: React.FC = () => {
           });
           if (!response.ok) throw new Error('Error al eliminar');
           setToast({ message: 'Interés eliminado.', type: 'success' });
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
           fetchData();
         } catch (error) {
           setToast({ message: (error as Error).message, type: 'error' });

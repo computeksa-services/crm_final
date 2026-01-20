@@ -244,7 +244,7 @@ const UserProfile: React.FC = () => {
                 </div>
                 
                 <h2 className="text-lg font-bold text-slate-800 mt-3">{profileData.name_user}</h2>
-                <p className="text-sm text-brand-600 font-medium">{profileData.job_title || 'Sin Cargo Definido'}</p>
+                <p className="text-sm text-brand-600 font-medium capitalize">{profileData.rol_user || 'Usuario'}</p>
                 
                 <div className="mt-4 flex justify-center gap-2">
                     <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs rounded-full font-medium border border-slate-200 flex items-center">

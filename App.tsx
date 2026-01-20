@@ -40,7 +40,6 @@ import MarketingCampaignDetail from './components/pages_marketing/CampaignDetail
 import MarketingCampaignWizard from './components/pages_marketing/CampaignWizard';
 import MarketingLists from './components/pages_marketing/Lists';
 import MarketingListDetail from './components/pages_marketing/ListDetail';
-import MarketingIntegrations from './components/pages_marketing/Integrations';
 
 // Componente para proteger rutas
 const ProtectedRoute = () => {
@@ -109,7 +108,6 @@ const App: React.FC = () => {
                 <Route path="campaigns/:id" element={<MarketingCampaignDetail />} />
                 <Route path="lists" element={<MarketingLists />} />
                 <Route path="lists/:id" element={<MarketingListDetail />} />
-                <Route path="integrations" element={<MarketingIntegrations />} />
               </Route>
             </Route>
           </Routes>

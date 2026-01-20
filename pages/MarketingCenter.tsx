@@ -109,13 +109,6 @@ const MarketingCenter: React.FC = () => {
               >
                 <i className="fa-solid fa-users mr-2"></i> Listas
               </NavLink>
-              
-              <NavLink
-                to="/app/marketing/integrations"
-                className={({ isActive }) => getNavLinkClass(isActive)}
-              >
-                <i className="fa-solid fa-plug mr-2"></i> Integraciones
-              </NavLink>
             </div>
 
           </div>

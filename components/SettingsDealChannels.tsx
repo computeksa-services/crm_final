@@ -161,6 +161,7 @@ const SettingsDealChannels: React.FC = () => {
           });
           if (!response.ok) throw new Error('Error al eliminar');
           setToast({ message: 'Canal eliminado.', type: 'success' });
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
           fetchData();
         } catch (error) {
           setToast({ message: (error as Error).message, type: 'error' });

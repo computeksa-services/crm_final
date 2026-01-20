@@ -103,6 +103,7 @@ const SettingsProductTypes: React.FC = () => {
           });
           if (!response.ok) throw new Error('Error al eliminar el tipo');
           setToast({ message: 'Tipo eliminado con éxito.', type: 'success' });
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
           fetchData();
         } catch (error) {
           setToast({ message: (error as Error).message, type: 'error' });

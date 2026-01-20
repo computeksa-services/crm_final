@@ -41,6 +41,7 @@ const ClientCompaniesList: React.FC = () => {
   });
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
+  const [columnSizing, setColumnSizing] = useState({});
 
   // --- ESTADOS DE UI ---
   const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
@@ -270,16 +271,18 @@ const ClientCompaniesList: React.FC = () => {
     {
       accessorKey: 'name_company',
       header: 'Empresa',
-      size: 220,
+      size: 420,
+      minSize: 340,
+      maxSize: 580,
       enableColumnFilter: false,
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) return null;
         return (
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-[10px] border border-indigo-100 shadow-sm">
+          <div className="flex items-start gap-3 py-1">
+            <div className="w-8 h-8 flex-shrink-0 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-[10px] border border-indigo-100 shadow-sm">
               {getInitials(getValue() as string)}
             </div>
-            <span className="font-bold text-slate-800 text-sm tracking-tight">{getValue() as string}</span>
+            <span className="font-bold text-slate-800 text-sm tracking-tight break-words">{getValue() as string}</span>
           </div>
         );
       },
@@ -321,7 +324,7 @@ const ClientCompaniesList: React.FC = () => {
           return null;
         }
         return (
-          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100 uppercase">
+          <span className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100 uppercase whitespace-nowrap">
             {getValue() as string || '-'}
           </span>
         );
@@ -338,10 +341,10 @@ const ClientCompaniesList: React.FC = () => {
         if (row.getIsGrouped()) return null;
         const labelName = getValue() as string;
         const labelColor = row.original.label_color;
-        if (!labelName) return <span className="text-slate-400 text-sm">-</span>;
+        if (!labelName) return <span className="text-slate-400 text-sm py-1">-</span>;
         return (
           <span 
-            className="px-2 py-1 rounded-full text-xs font-bold border" 
+            className="inline-block px-2.5 py-1 rounded-full text-xs font-bold border whitespace-nowrap" 
             style={{ 
               backgroundColor: labelColor ? `${labelColor}15` : '#f1f5f9',
               color: labelColor || '#64748b',
@@ -358,19 +361,19 @@ const ClientCompaniesList: React.FC = () => {
     {
       accessorKey: 'created_by_name',
       header: 'Creado',
-      size: 140,
+      size: 200,
       enableColumnFilter: false,
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) return null;
         const avatar = row.original.created_by_avatar;
         const name = getValue() as string || 'Desconocido';
         return (
-          <div className="flex items-center gap-2">
+          <div className="flex items-start gap-2 py-1">
             {avatar ? (
-              <img src={avatar} alt={name} className="w-6 h-6 rounded-full border border-slate-200" />
+              <img src={avatar} alt={name} className="w-8 h-8 flex-shrink-0 rounded-full border border-slate-200 object-cover" />
             ) : (
-              <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 border border-slate-200">
-                {name.charAt(0)}
+              <div className="w-8 h-8 flex-shrink-0 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 border border-slate-200 font-bold">
+                {getInitials(name)}
               </div>
             )}
             <span className="text-sm text-slate-600 font-medium">{name}</span>
@@ -410,19 +413,25 @@ const ClientCompaniesList: React.FC = () => {
   const table = useReactTable({
     data: companies,
     columns,
-    state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination },
+    state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination, columnSizing },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     onGroupingChange: setGrouping,
     onExpandedChange: setExpanded,
     onPaginationChange: setPagination,
+    onColumnSizingChange: setColumnSizing,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getGroupedRowModel: getGroupedRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
+    columnSizingInfo: {
+      isResizingColumn: false,
+    },
+    enableColumnResizing: true,
+    layoutMode: 'fixed',
   });
 
   return (
@@ -510,7 +519,7 @@ const ClientCompaniesList: React.FC = () => {
         </div>
       ) : (
       <div className="flex-1 overflow-auto relative bg-slate-50/10">
-        <table className="w-full border-separate border-spacing-0">
+        <table className="border-separate border-spacing-0" style={{ width: `${table.getTotalSize()}px`, minWidth: '100%' }}>
           <thead className="sticky top-0 z-40 shadow-sm">
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>

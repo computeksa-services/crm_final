@@ -41,6 +41,7 @@ const ClientContactsList: React.FC = () => {
   }); 
   const [expanded, setExpanded] = useState<ExpandedState>({});
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
+  const [columnSizing, setColumnSizing] = useState({});
 
   // --- ESTADOS DE UI ---
   const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
@@ -224,9 +225,31 @@ const ClientContactsList: React.FC = () => {
   // --- COLUMNAS ---
   const columns = useMemo<ColumnDef<ClientContact>[]>(() => [
     {
+      accessorKey: 'first_name',
+      header: 'Contacto',
+      size: 420,
+      minSize: 340,
+      maxSize: 580,
+      enableColumnFilter: false,
+      cell: ({ row }) => {
+        if (row.getIsGrouped()) return null;
+        const c = row.original;
+        return (
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-[10px] border border-slate-200 shadow-sm">
+              {getInitials(c.first_name, c.last_name)}
+            </div>
+            <span className="font-semibold text-slate-800">{`${c.last_name} ${c.first_name || ''}`}</span>
+          </div>
+        );
+      },
+    },
+    {
       accessorKey: 'id_client_company',
       header: 'Empresa',
-      size: 220,
+      size: 420,
+      minSize: 340,
+      maxSize: 580,
       enableColumnFilter: true,
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) {
@@ -247,36 +270,23 @@ const ClientContactsList: React.FC = () => {
           );
         }
         return (
-          <span className="px-2 py-0.5 rounded bg-blue-50 text-blue-700 text-[11px] font-bold border border-blue-100 uppercase">
-            {((row.original as any).name_company) || 'SIN EMPRESA'}
-          </span>
+          <div className="flex items-start gap-3 py-1">
+            <div className="w-8 h-8 flex-shrink-0 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-[10px] border border-indigo-100 shadow-sm">
+              {((row.original as any).name_company || 'SIN EMPRESA').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '?'}
+            </div>
+            <span className="font-bold text-slate-800 text-sm tracking-tight break-words">
+              {((row.original as any).name_company) || 'SIN EMPRESA'}
+            </span>
+          </div>
         );
       },
       filterFn: (row, id, filterValue: string[]) => 
         filterValue.length === 0 || filterValue.includes(((row.original as any).name_company) || 'SIN EMPRESA')
     },
     {
-      accessorKey: 'first_name',
-      header: 'Contacto',
-      size: 250,
-      enableColumnFilter: false,
-      cell: ({ row }) => {
-        if (row.getIsGrouped()) return null;
-        const c = row.original;
-        return (
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-[10px] border border-slate-200 shadow-sm">
-              {getInitials(c.first_name, c.last_name)}
-            </div>
-            <span className="font-semibold text-slate-800">{`${c.last_name} ${c.first_name || ''}`}</span>
-          </div>
-        );
-      },
-    },
-    {
       accessorKey: 'position',
       header: 'Cargo',
-      size: 180,
+      size: 250,
       enableColumnFilter: true,
       cell: ({ row, getValue }) => 
         row.getIsGrouped() ? null : <span className="text-slate-500 text-[13px]">{getValue() as string || '-'}</span>,
@@ -331,13 +341,14 @@ const ClientContactsList: React.FC = () => {
   const table = useReactTable({
     data: contacts,
     columns,
-    state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination },
+    state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination, columnSizing },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     onGroupingChange: setGrouping,
     onExpandedChange: setExpanded,
     onPaginationChange: setPagination,
+    onColumnSizingChange: setColumnSizing,
     manualPagination: true,
     rowCount: totalPages * pagination.pageSize,
     getCoreRowModel: getCoreRowModel(),
@@ -346,6 +357,8 @@ const ClientContactsList: React.FC = () => {
     getPaginationRowModel: getPaginationRowModel(),
     getGroupedRowModel: getGroupedRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
+    enableColumnResizing: true,
+    layoutMode: 'fixed',
   });
 
   return (
@@ -394,7 +407,7 @@ const ClientContactsList: React.FC = () => {
 
       {/* Área de la Tabla */}
       <div className="flex-1 overflow-auto relative bg-slate-50/10">
-        <table className="w-full border-separate border-spacing-0">
+        <table className="border-separate border-spacing-0" style={{ width: `${table.getTotalSize()}px`, minWidth: '100%' }}>
           <thead className="sticky top-0 z-40 shadow-sm">
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
