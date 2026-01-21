@@ -229,24 +229,31 @@ const UserProfile: React.FC = () => {
         {/* Left Column: Identity Card */}
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative">
-             <div className="h-24 bg-gradient-to-r from-slate-800 to-slate-900"></div>
-             <div className="px-6 pb-6 text-center -mt-12">
+             <div className="h-24 bg-gradient-to-r from-slate-800 to-slate-900 relative">
+                <div className="absolute top-3 right-3">
+                  <span className="px-2.5 py-1 bg-white/20 text-white text-xs rounded-full font-semibold uppercase tracking-wide border border-white/30 backdrop-blur-sm">
+                    {profileData.rol_user}
+                  </span>
+                </div>
+             </div>
+             <div className="px-6 pb-6 text-center -mt-16">
                 <div className="relative inline-block">
                     <img 
                         src={getImageUrl(profileData.avatar_url) || `https://ui-avatars.com/api/?name=${profileData.name_user}&background=random`} 
                         alt="Profile" 
-                        className="w-24 h-24 rounded-full border-4 border-white shadow-md object-cover bg-white"
+                        className="w-32 h-32 rounded-full border-4 border-white shadow-md object-cover bg-white"
                         referrerPolicy="no-referrer"
                         onError={(e) => {
                           console.error('❌ Error cargando avatar en perfil:', profileData.avatar_url);
                           e.currentTarget.src = `https://ui-avatars.com/api/?name=${profileData.name_user}&background=random`;
                         }}
                     />
-                    <div className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full" title="Activo"></div>
+                    <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-500 border-2 border-white rounded-full" title="Activo"></div>
                 </div>
                 
-                <h2 className="text-lg font-bold text-slate-800 mt-3">{profileData.name_user}</h2>
-                <p className="text-sm text-brand-600 font-medium">{profileData.job_title || 'Sin Cargo Definido'}</p>
+                <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide mt-5">{profileData.name_tenant || 'Tenant'}</p>
+                <h2 className="text-lg font-bold text-slate-800 mt-1">{profileData.name_user}</h2>
+                <p className="text-sm text-brand-600 font-medium">{profileData.job_title || '—'}</p>
                 
                 <div className="mt-4 flex justify-center gap-2">
                     <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs rounded-full font-medium border border-slate-200 flex items-center">
@@ -258,28 +265,7 @@ const UserProfile: React.FC = () => {
              </div>
           </div>
 
-          {/* Quick Stats (Opcional - Decorativo) */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Detalles de Cuenta</h3>
-              <div className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                      <span className="text-slate-500">Rol</span>
-                      <span className="font-medium text-slate-800 capitalize">{profileData.rol_user}</span>
-                  </div>
-                  <div className="flex justify-between">
-                      <span className="text-slate-500">Estado</span>
-                      <span className="text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded text-xs">Activo</span>
-                  </div>
-                  <div className="flex justify-between">
-                      <span className="text-slate-500">Miembro desde</span>
-                      <span className="font-medium text-slate-800">Dic 2024</span>
-                  </div>
-                  <div className="pt-2 mt-2 border-t border-slate-100">
-                      <span className="text-slate-500 block mb-1 text-xs">ID de Organización (Tenant)</span>
-                      <span className="font-mono text-xs text-slate-400 bg-slate-50 p-1.5 rounded block break-all">{profileData.id_tenant}</span>
-                  </div>
-              </div>
-          </div>
+
         </div>
 
         {/* Right Column: Settings */}
@@ -292,7 +278,7 @@ const UserProfile: React.FC = () => {
                   <i className="fa-solid fa-building"></i>
                 </div>
                 <div>
-                  <h3 className="font-bold text-slate-800 text-lg">Correo Corporativo del Tenant</h3>
+                  <h3 className="font-bold text-slate-800 text-lg">Correo Corporativo de {profileData?.name_tenant || 'Tenant'}</h3>
                   <p className="text-sm text-slate-500">Configura un correo corporativo para notificaciones.</p>
                 </div>
               </div>

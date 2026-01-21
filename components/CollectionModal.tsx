@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
 
@@ -44,6 +44,7 @@ export type Recipient = {
 
 const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSend, transactionData }) => {
   const { user } = useAuth();
+  const hasPreselectRef = useRef(false);
   
   // Estados
   const [contacts, setContacts] = useState<ContactOption[]>([]);
@@ -67,8 +68,8 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
       const userId = user.id_user;
       const companyId = transactionData.id_client_company;
 
-      console.log("🟢 Abriendo Modal Cobranza");
-      console.log("   Empresa ID:", companyId);
+
+
 
       // 1. CARGAR USUARIOS INTERNOS (EQUIPO)
       setLoadingUsers(true);
@@ -91,16 +92,15 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
           setLoadingContacts(true);
           // Llamada a la API de contactos filtrando por la empresa
           const urlContacts = `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies_contacts/detail?id_tenant=${tenantId}&id_user=${userId}&id_client_company=${companyId}`;
-          console.log("   Llamando API Contactos:", urlContacts);
 
-          fetch(urlContacts)
+
+          apiFetch(urlContacts)
             .then(r => {
                 if (!r.ok) throw new Error("Error API Contactos");
-                return r.text();
+                return r.json();
             })
-            .then(text => {
-                const data = text ? JSON.parse(text) : [];
-                console.log("   Contactos recibidos:", data);
+            .then(data => {
+
                 
                 const cleanContacts = (Array.isArray(data) ? data : []).map((c: any) => ({
                     id_contact: c.id_contact,
@@ -115,15 +115,33 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
 
                 // Lógica de preselección (si no hay nada seleccionado aún)
                 if (selectedRecipients.length === 0 && !transactionData.automation_recipients) {
+                    const recipientsToSelect = [];
+                    
+                    // 1. Preseleccionar el usuario actual (quien abre el modal)
+                    if (user?.email_user && user?.name_user) {
+                        recipientsToSelect.push({
+                            email: user.email_user,
+                            name: user.name_user,
+                            type: 'team' as const,
+                            id: user.id_user
+                        });
+                    }
+                    
+                    // 2. Preseleccionar el contacto principal de la empresa
                     if (cleanContacts.length > 0) {
-                        // Seleccionar el principal o el primero
                         const main = cleanContacts.find((c: ContactOption) => c.is_main) || cleanContacts[0];
-                        toggleRecipient({
+                        recipientsToSelect.push({
                             email: main.email,
                             name: main.name,
                             type: 'contact',
                             id: main.id_contact
                         });
+                    }
+                    
+                    // Aplicar todas las preselecciones de una sola vez
+                    if (recipientsToSelect.length > 0) {
+                        setSelectedRecipients(recipientsToSelect);
+                        hasPreselectRef.current = true;
                     }
                 }
             })
@@ -142,11 +160,14 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
               try { savedRecipients = JSON.parse(savedRecipients); } catch(e) {}
           }
           setSelectedRecipients(savedRecipients);
+          hasPreselectRef.current = true;
       }
     };
 
-    loadData();
-  }, [isOpen, user, transactionData.id_client_company]);
+    if (isOpen && !hasPreselectRef.current) {
+      loadData();
+    }
+  }, [isOpen]);
 
   // Handlers
   const toggleRecipient = (recipient: Recipient) => {

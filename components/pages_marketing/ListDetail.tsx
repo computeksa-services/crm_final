@@ -149,7 +149,7 @@ const ListDetail: React.FC = () => {
     e.preventDefault();
     if (!id || !user) return;
 
-    console.log('💾 Enviando actualización de lista:', { id_list: id, id_user: user.id_user, id_tenant: user.id_tenant, ...editForm });
+
 
     try {
       const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/lists/update`, {
@@ -171,7 +171,7 @@ const ListDetail: React.FC = () => {
       }
 
       const updatedList = await response.json();
-      console.log('✅ Lista actualizada:', updatedList);
+
       
       // Actualizar el estado local
       setList(prev => prev ? { 

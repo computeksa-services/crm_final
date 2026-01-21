@@ -76,7 +76,6 @@ const QuoteCreate: React.FC = () => {
         try {
           if (!res.ok) {
             // Si es 404 o cualquier error, devolver array vacío
-            console.warn(`Endpoint ${endpoints[index]} returned ${res.status}`);
             return [];
           }
           const text = await res.text();
@@ -214,12 +213,12 @@ const QuoteCreate: React.FC = () => {
           id_user: user.id_user,
           id_client_company: quote.id_client_company
         }).toString();
-        console.log('Llamando a /api/deals/by_company con GET y params:', params);
+
         const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/by_company?${params}`);
-        console.log('Respuesta de /api/deals/by_company:', res);
+
         if (!res.ok) throw new Error('No se pudieron cargar los tratos de la empresa');
         const data = await res.json();
-        console.log('Datos recibidos de /api/deals/by_company:', data);
+
         let tratos = data?.data?.tratos || data?.tratos || data || [];
         if (!Array.isArray(tratos)) tratos = [];
         setFilteredDeals(tratos);

@@ -46,12 +46,12 @@ const Avatar: React.FC<AvatarProps> = ({
   const shouldShowFallback = !imageUrl || imageError;
 
   const handleImageError = () => {
-    console.log(`❌ Error cargando avatar de ${name}:`, src);
+
     setImageError(true);
   };
 
   const handleImageLoad = () => {
-    console.log(`✅ Avatar cargado correctamente para ${name}`);
+
     setImageLoaded(true);
   };
 

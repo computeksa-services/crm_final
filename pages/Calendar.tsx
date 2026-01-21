@@ -39,7 +39,6 @@ const Calendar: React.FC = () => {
       try {
         localStorage.setItem('calendar-current-date', newDate.toISOString());
       } catch {
-        console.warn('No se pudo guardar la fecha del calendario');
       }
       return newDate;
     });
@@ -60,7 +59,6 @@ const Calendar: React.FC = () => {
     try {
       localStorage.setItem('calendar-view-mode', mode);
     } catch {
-      console.warn('No se pudo guardar la preferencia de vista del calendario');
     }
   };
 
@@ -167,7 +165,7 @@ const Calendar: React.FC = () => {
     
     const { start, end } = getDateRange();
     
-    console.log('📅 Iniciando carga de calendario:', { start, end, id_user: user.id_user, id_tenant: user.id_tenant, viewMode });
+
 
     // =====================================
     // FASE 1: CARGA RÁPIDA (BD Local)
@@ -250,7 +248,6 @@ const Calendar: React.FC = () => {
         }
       }
       
-      console.log('✅ Datos BD cargados (Fase 1):', eventsData.length, 'eventos');
       
       // MOSTRAR DATOS INMEDIATAMENTE
       setEvents(eventsData);
@@ -272,7 +269,7 @@ const Calendar: React.FC = () => {
     // =====================================
     setIsSyncing(true);
     try {
-      console.log('🔄 Iniciando sincronización en segundo plano...');
+
       
       const syncResponse = await apiFetch(
         `${import.meta.env.VITE_WEBHOOK_URL}/api/calendar/sync?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&id_user=${user.id_user}&id_tenant=${user.id_tenant}`,
@@ -283,9 +280,8 @@ const Calendar: React.FC = () => {
       );
       
       if (!syncResponse.ok) {
-        console.warn('⚠️ Error en sincronización:', syncResponse.status);
       } else {
-        console.log('✅ Sincronización completada');
+
         
         // Volver a obtener eventos actualizados después de sincronizar
         const eventsResponseUpdated = await apiFetch(
@@ -296,7 +292,7 @@ const Calendar: React.FC = () => {
           const eventsText = await eventsResponseUpdated.text();
           if (eventsText.trim()) {
             const eventsDataUpdated = JSON.parse(eventsText);
-            console.log('🔄 Eventos actualizados después de sincronizar:', eventsDataUpdated.length, 'eventos');
+
             // Actualizar eventos silenciosamente
             setEvents(eventsDataUpdated);
           }
@@ -424,7 +420,7 @@ const Calendar: React.FC = () => {
       }
       
       const data = await response.json();
-      console.log('Event detail received:', data);
+
       setSelectedEventDetail(data);
     } catch (error) {
       console.error('Error fetching event detail:', error);
@@ -585,20 +581,20 @@ const Calendar: React.FC = () => {
 
   // Agregar sugerencias automáticas basadas en el trato seleccionado
   const handleDealChange = (dealId: string) => {
-    console.log('Deal selected:', dealId, 'Available deals:', deals);
+
     
     setFormData(prev => ({ ...prev, id_trato: dealId }));
     
     if (dealId && deals.length > 0) {
       const selectedDeal = deals.find(d => d.id_trato === dealId);
-      console.log('Found deal:', selectedDeal);
+
       
       if (selectedDeal) {
         // Sugerir contacto del trato
         if (selectedDeal.id_contact) {
           const contact = contacts.find(c => c.id_contact === selectedDeal.id_contact);
           if (contact && !attendees.find(a => a.email === contact.email)) {
-            console.log('Adding contact:', contact);
+
             addAttendee({
               email: contact.email,
               name: `${contact.first_name} ${contact.last_name}`,
@@ -612,7 +608,7 @@ const Calendar: React.FC = () => {
         if (selectedDeal.id_user && selectedDeal.id_user !== user?.id_user) {
           const creator = users.find(u => u.id_user === selectedDeal.id_user);
           if (creator && !attendees.find(a => a.email === creator.email_user)) {
-            console.log('Adding deal creator:', creator);
+
             addAttendee({
               email: creator.email_user,
               name: creator.name_user,
@@ -679,7 +675,7 @@ const Calendar: React.FC = () => {
         attendees: attendees
       };
 
-      console.log('Creating event:', payload);
+
 
       const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events`, {
         method: 'POST',
@@ -718,8 +714,9 @@ const Calendar: React.FC = () => {
           id_event: editingEventId,
           title: formData.title,
           description: formData.description,
-          start: new Date(formData.start).toISOString(),
-          end: new Date(formData.end).toISOString(),
+          // Enviar la hora tal como se ve en el formulario (hora local, sin convertir a UTC)
+          start: formData.start,
+          end: formData.end,
           is_all_day: formData.is_all_day,
           location: formData.location || undefined,
           generate_meeting: formData.generate_meeting,
@@ -730,7 +727,7 @@ const Calendar: React.FC = () => {
         attendees: attendees
       };
 
-      console.log('Updating event:', payload);
+
 
       const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/update`, {
         method: 'POST',

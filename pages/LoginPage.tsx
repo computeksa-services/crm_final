@@ -10,9 +10,7 @@ const LoginPage: React.FC = () => {
   
   // Si el usuario ya está logueado, redirigir a dashboard
   useEffect(() => {
-    console.log('📊 LoginPage useEffect - Estado:', { loading, userExists: !!user });
     if (!loading && user) {
-      console.log('✅ Usuario autenticado, redirigiendo a dashboard');
       navigate('/app/dashboard', { replace: true });
     }
   }, [user, loading, navigate]);
@@ -25,7 +23,7 @@ const LoginPage: React.FC = () => {
   const sendCodeToGateway = async (code: string, provider: 'google' | 'microsoft') => {
     try {
       setError('');
-      console.log('🔐 Enviando código OAuth al Gateway...', { provider });
+
       
       // Intercambio de Token: POST ${VITE_WEBHOOK_URL}/auth/login
       // El Gateway devuelve: { token: "appToken", user: {...} }
@@ -47,7 +45,7 @@ const LoginPage: React.FC = () => {
       }
 
       const responseData = await response.json();
-      console.log('✅ Respuesta del Gateway:', responseData);
+
 
       // El Gateway devuelve: { token: "appToken", user: {...} }
       // El objeto user contiene los datos mapeados a la estructura del CRM
@@ -56,8 +54,7 @@ const LoginPage: React.FC = () => {
       }
 
       const { token: appToken, user: userData } = responseData;
-      console.log('✅ Token recibido del Gateway');
-      console.log('✅ Datos del usuario:', userData);
+
 
       // Validar que el usuario tenga los campos esenciales
       if (!userData || !userData.id_user || !userData.id_tenant) {
@@ -66,9 +63,9 @@ const LoginPage: React.FC = () => {
 
       // Guardar el appToken y el usuario en el contexto
       // El useEffect del componente detectará el cambio en 'user' y navegará automáticamente
-      console.log('🔐 Guardando sesión con appToken...');
+
       login(appToken, userData);
-      console.log('✅ Sesión guardada. Redirigiendo al dashboard...');
+
 
     } catch (err: any) {
       console.error('❌ Error al intercambiar token:', err);
@@ -82,7 +79,7 @@ const LoginPage: React.FC = () => {
   const googleLogin = useGoogleLogin({
     onSuccess: (tokenResponse: any) => {
       setLoadingProvider('google');
-      console.log('🔐 Google authorization code recibido');
+
       // tokenResponse.code contiene el authorization code en flujo auth-code
       const code = tokenResponse.code;
       if (!code) {

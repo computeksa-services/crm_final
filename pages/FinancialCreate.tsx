@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Toast from '../components/Toast';
@@ -40,6 +40,7 @@ const FinancialCreate: React.FC = () => {
   const [selectedRecipients, setSelectedRecipients] = useState<SelectedRecipient[]>([]);
   const [externalEmail, setExternalEmail] = useState('');
   const [externalName, setExternalName] = useState('');
+  const hasPreselectRef = useRef(false);
 
   // --- FILTRADO DINÁMICO ---
   const filteredQuotes = useMemo(() => {
@@ -56,8 +57,11 @@ const FinancialCreate: React.FC = () => {
 
   // --- CARGA DE DATOS ---
   const fetchData = useCallback(async () => {
-    if (!user?.id_tenant || !user?.id_user) return;
+    if (!user?.id_tenant || !user?.id_user) {
+      return;
+    }
     try {
+
       const [companiesRes, quotesRes, contactsRes, teamRes] = await Promise.all([
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
@@ -68,17 +72,27 @@ const FinancialCreate: React.FC = () => {
       const parse = async (r: Response) => (r.ok ? await r.json() : []);
       const [cData, qData, conData, tData] = await Promise.all([parse(companiesRes), parse(quotesRes), parse(contactsRes), parse(teamRes)]);
 
+
       setClientCompanies(cData);
       setQuotes(qData);
       setAllCompanyContacts(conData);
-      setTeamMembers(tData.filter((u: any) => u.id_user !== user.id_user).map((u: any) => ({
-        id: u.id_user || u.id,
-        name: u.name_user || u.name || 'Sin nombre',
-        email: u.email || u.email_user || ''
-      })));
+      
+      // Mapear usuarios del equipo (excluyendo al usuario actual)
+      const mappedTeam = (Array.isArray(tData) ? tData : [])
+        .filter((u: any) => u.id_user !== user.id_user)
+        .map((u: any) => ({
+          id: u.id_user || u.id,
+          name: u.name_user || u.name || 'Sin nombre',
+          email: u.email_user || u.email || ''
+        }))
+        .filter((u: any) => u.email); // Filtrar usuarios sin email
+      
+
+      setTeamMembers(mappedTeam);
 
       setDefaults();
     } catch (error) {
+      console.error("❌ Error cargando datos:", error);
       setToast({ message: 'Error al cargar recursos.', type: 'error' });
     } finally {
       setLoading(false);
@@ -103,6 +117,47 @@ const FinancialCreate: React.FC = () => {
   };
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // --- PRESELECCIONAR RECIPIENTES AL ACTIVAR AUTOMATIZACIÓN ---
+  useEffect(() => {
+    if (transaction.enable_automation && transaction.id_client_company && !hasPreselectRef.current) {
+      const recipientsToAdd = [];
+      
+      // 1. Agregar al usuario actual
+      if (user?.email_user && user?.name_user) {
+        recipientsToAdd.push({
+          email: user.email_user,
+          name: user.name_user,
+          type: 'team' as const,
+          id: user.id_user
+        });
+      }
+      
+      // 2. Agregar el contacto principal de la empresa
+      const selectedCompanyContacts = allCompanyContacts.filter(
+        c => c.id_client_company === transaction.id_client_company
+      );
+      
+      if (selectedCompanyContacts.length > 0) {
+        const mainContact = selectedCompanyContacts.find(c => c.es_principal) || selectedCompanyContacts[0];
+        if (mainContact && (mainContact.email || mainContact.email_contact)) {
+          recipientsToAdd.push({
+            email: mainContact.email || mainContact.email_contact,
+            name: `${mainContact.first_name || ''} ${mainContact.last_name || ''}`.trim(),
+            type: 'contact' as const,
+            id: mainContact.id_contact
+          });
+        }
+      }
+      
+      if (recipientsToAdd.length > 0) {
+        setSelectedRecipients(recipientsToAdd);
+        hasPreselectRef.current = true;
+      }
+    } else if (!transaction.enable_automation) {
+      hasPreselectRef.current = false;
+    }
+  }, [transaction.enable_automation, transaction.id_client_company]);
 
   // --- HANDLERS ---
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -300,9 +355,13 @@ const FinancialCreate: React.FC = () => {
                   <div className="space-y-2">
                     <p className="text-[9px] font-black text-slate-400 uppercase">Mi Equipo</p>
                     <div className="max-h-24 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                      {teamMembers.map(m => (
-                        <label key={m.id} className="flex items-center gap-2 p-1.5 hover:bg-white rounded text-[11px] cursor-pointer"><input type="checkbox" checked={selectedRecipients.some(r => r.email === m.email)} onChange={() => toggleRecipient({ email: m.email, name: m.name, type: 'team', id: m.id })} className="w-3.5 h-3.5 rounded text-indigo-600" /><span>{m.name}</span></label>
-                      ))}
+                      {teamMembers.length > 0 ? (
+                        teamMembers.map(m => (
+                          <label key={m.id} className="flex items-center gap-2 p-1.5 hover:bg-white rounded text-[11px] cursor-pointer"><input type="checkbox" checked={selectedRecipients.some(r => r.email === m.email)} onChange={() => toggleRecipient({ email: m.email, name: m.name, type: 'team', id: m.id })} className="w-3.5 h-3.5 rounded text-indigo-600" /><span>{m.name}</span></label>
+                        ))
+                      ) : (
+                        <p className="text-[10px] text-slate-300">Sin miembros del equipo.</p>
+                      )}
                     </div>
                   </div>
 

@@ -148,6 +148,17 @@ const CampaignDetail: React.FC = () => {
                 setToast({ message: 'Campaña reanudada', type: 'success' });
                 loadCampaignDetail();
             }
+        },
+        sendNow: {
+            title: 'Enviar Ahora',
+            message: `Se enviará inmediatamente a ${campaign.total_target} destinatarios. ¿Confirmar?`,
+            confirmText: 'Enviar',
+            isDestructive: false,
+            fn: async () => {
+                await marketingApi.campaignAction(campaign.id_campaign, user.id_tenant, user.id_user, 'send');
+                setToast({ message: 'Campaña iniciada', type: 'success' });
+                loadCampaignDetail();
+            }
         }
     };
 
@@ -219,7 +230,17 @@ const CampaignDetail: React.FC = () => {
         );
     }
 
-    return null;
+    if (status === 'SCHEDULED') {
+        return (
+            <button 
+                onClick={() => handleAction('sendNow')}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold shadow-sm shadow-blue-200 transition-all flex items-center gap-2"
+            >
+                <i className="fa-solid fa-paper-plane"></i>
+                Enviar Ahora
+            </button>
+        );
+    }
   };
 
   const renderStatusBadge = (member: AudienceMember) => {

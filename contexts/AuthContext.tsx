@@ -20,7 +20,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   useEffect(() => {
     // 1. Cargar sesión al iniciar la app
-    console.log("🔄 AuthContext: Cargando sesión desde localStorage...");
+
     
     // Primero intentar cargar el appToken del nuevo sistema
     const appToken = authService.getToken();
@@ -29,21 +29,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // También verificamos el token legacy por compatibilidad
     const legacyToken = localStorage.getItem('token');
 
-    console.log("   appToken encontrado:", appToken ? "✓" : "✗");
-    console.log("   Token legacy encontrado:", legacyToken ? "✓" : "✗");
-    console.log("   Usuario encontrado:", storedUser ? "✓" : "✗");
+
+
+
 
     const finalToken = appToken || legacyToken;
 
     if (finalToken && storedUser) {
       try {
         const parsedUser = JSON.parse(storedUser);
-        console.log("   Usuario parseado:", parsedUser);
-        console.log("   Rol del usuario:", parsedUser?.rol_user);
+
+
         
         setToken(finalToken);
         setUser(parsedUser);
-        console.log("✅ Sesión restaurada correctamente");
+
       } catch (e) {
         console.error("🔴 Error al leer usuario del storage", e);
         authService.removeToken();
@@ -51,19 +51,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.removeItem('user');
       }
     } else {
-      console.log("ℹ️ No hay sesión guardada");
+
     }
     setLoading(false);
   }, []);
 
   const login = (newToken: string, newUser: User) => {
-    console.log("🟢 AuthContext.login ejecutándose");
+
     console.log("   Token recibido:", newToken ? "Sí (Oculto)" : "No");
     console.log("   Usuario recibido:", JSON.stringify(newUser, null, 2));
-    console.log("   ID Tenant del usuario:", newUser?.id_tenant);
-    console.log("   Email del usuario:", newUser?.email_user);
-    console.log("   Rol del usuario:", newUser?.rol_user);
-    console.log("   Avatar URL:", newUser?.avatar_url);
+
+
+
+
 
     // VALIDACIÓN DE SEGURIDAD
     if (typeof newUser !== 'object' || !newUser) {
@@ -92,10 +92,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // También guardamos en el formato legacy por compatibilidad temporal
     localStorage.setItem('token', newToken);
     
-    console.log("✅ Sesión guardada en localStorage");
-    console.log("   ✓ appToken guardado");
-    console.log("   ✓ Usuario guardado con id_tenant:", newUser.id_tenant);
-    console.log("   ✓ Estructura mapeada desde Gateway:");
+
+
+
+
     console.log("     - id_user (Gateway.id)");
     console.log("     - id_tenant (Gateway.tenantId)");
     console.log("     - name_user (Gateway.name)");

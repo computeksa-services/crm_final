@@ -194,7 +194,6 @@ export const marketingApi = {
     try {
       if (!id_list) throw new Error('id_list is required');
       if (!contact_ids || contact_ids.length === 0) {
-        console.warn('⚠️ No contact_ids provided to manageListMembers');
         return;
       }
 
@@ -204,7 +203,7 @@ export const marketingApi = {
         action 
       };
 
-      console.log('📤 Enviando payload a manageListMembers:', payload);
+
 
       const response = await apiFetch(`${API_BASE}/api/marketing/lists/members`, {
         method: 'POST',

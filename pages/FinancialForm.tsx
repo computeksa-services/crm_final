@@ -58,6 +58,7 @@ const FinancialForm: React.FC = () => {
   const [externalEmail, setExternalEmail] = useState('');
   const [externalName, setExternalName] = useState('');
 
+
   // --- FILTRADO DINÁMICO ---
   const filteredQuotes = useMemo(() => {
     if (!transaction.id_client_company) return [];
@@ -70,6 +71,56 @@ const FinancialForm: React.FC = () => {
       String(c.id_client_company || c.id_company || c.company_id) === String(transaction.id_client_company)
     );
   }, [transaction.id_client_company, allCompanyContacts]);
+
+  // --- PRESELECCIÓN DE DESTINATARIOS ---
+  useEffect(() => {
+    // Si NO se activa automación o no hay empresa seleccionada, no hacer nada
+    if (!transaction.enable_automation || !transaction.id_client_company) return;
+
+    // IMPORTANTE: Si ya hay recipientes cargados desde la API (edición),
+    // no sobrescribir. Pero si fueron preseleccionados por este efecto antes,
+    // sí podemos actualizar.
+    const hasLoadedFromApi = transaction.automation_recipients && transaction.automation_recipients.length > 0;
+    
+    // Si estamos en modo edición y ya hay datos cargados, no sobrescribir
+    if (hasLoadedFromApi && selectedRecipients.length > 0) return;
+
+    // Si ya tenemos recipientes y no es edición, verificar si son los que preseleccionamos
+    if (selectedRecipients.length > 0 && !hasLoadedFromApi) return;
+
+    const recipientsToSelect: SelectedRecipient[] = [];
+
+    // 1. Preseleccionar al usuario actual
+    if (user?.email_user && user?.name_user) {
+      recipientsToSelect.push({
+        email: user.email_user,
+        name: user.name_user,
+        type: 'team',
+        id: user.id_user || null
+      });
+    }
+
+    // 2. Preseleccionar el contacto principal de la empresa
+    const companyContacts = filteredContacts;
+    
+    if (companyContacts.length > 0) {
+      // Buscar contacto marcado como principal
+      const mainContact = companyContacts.find((c: any) => c.es_principal || c.is_main);
+      const contactToSelect = mainContact || companyContacts[0];
+      
+      recipientsToSelect.push({
+        email: contactToSelect.email || contactToSelect.email_contact,
+        name: contactToSelect.first_name + (contactToSelect.last_name ? ' ' + contactToSelect.last_name : ''),
+        type: 'contact',
+        id: contactToSelect.id_contact || null
+      });
+    }
+
+    // Aplicar preselección
+    if (recipientsToSelect.length > 0) {
+      setSelectedRecipients(recipientsToSelect);
+    }
+  }, [transaction.enable_automation, transaction.id_client_company, filteredContacts, user]);
 
   // --- LÓGICA DE CÁLCULO ---
   // Calcula el total visualmente basado en el estado actual de los inputs
@@ -105,15 +156,21 @@ const FinancialForm: React.FC = () => {
       setClientCompanies(cData);
       setQuotes(qData);
       setAllCompanyContacts(conData);
-      setTeamMembers(tData.filter((u: any) => u.id_user !== user.id_user).map((u: any) => ({
-        id: u.id_user || u.id,
-        name: u.name_user || u.name || 'Sin nombre',
-        email: u.email || u.email_user || ''
-      })));
+      
+      // Mapear usuarios del equipo (incluyendo al usuario actual)
+      const mappedTeam = (Array.isArray(tData) ? tData : [])
+        .map((u: any) => ({
+          id: u.id_user || u.id,
+          name: u.name_user || u.name || 'Sin nombre',
+          email: u.email || u.email_user || ''
+        }))
+        .filter((u: any) => u.email); // Filtrar usuarios sin email
+      
+      setTeamMembers(mappedTeam);
 
       // Si es modo edición, cargar los datos de la transacción
       if (isEditingMode && transactionId) {
-        console.log('🔄 Cargando transacción para editar:', transactionId);
+
         const detailRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${transactionId}`);
         if (detailRes.ok) {
           const data = await detailRes.json();
@@ -257,9 +314,21 @@ const FinancialForm: React.FC = () => {
   };
 
   const addExternalRecipient = () => {
-    if (!externalEmail || !externalName) return;
+    if (!externalEmail || !externalName) {
+      setToast({ message: 'Complete nombre y email.', type: 'error' });
+      return;
+    }
+    
+    // Validar formato de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(externalEmail)) {
+      setToast({ message: 'El email no es válido.', type: 'error' });
+      return;
+    }
+    
     toggleRecipient({ email: externalEmail, name: externalName, type: 'external', id: null });
-    setExternalEmail(''); setExternalName('');
+    setExternalEmail(''); 
+    setExternalName('');
   };
 
   const handleSave = async () => {
@@ -297,7 +366,7 @@ const FinancialForm: React.FC = () => {
         res = { ok: true }; 
       } else {
         // Crear nuevo
-        console.log('Creando con payload:', payload);
+
         res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials`, {
           method: 'POST',
           body: JSON.stringify(payload),
@@ -480,49 +549,76 @@ const FinancialForm: React.FC = () => {
           </div>
 
           {/* AUTOMATIZACIÓN */}
-          <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-6">
-            <div className="flex items-center gap-2 mb-4"><i className="fa-solid fa-robot text-indigo-500"></i><h2 className="text-sm font-bold text-indigo-900">Cobranza Automática</h2></div>
-            <label className="flex items-center justify-between p-3 bg-white border border-indigo-200 rounded-lg cursor-pointer hover:shadow-sm mb-4"><span className="text-xs font-bold text-slate-700">Activar Recordatorios</span><input type="checkbox" name="enable_automation" checked={transaction.enable_automation || false} onChange={handleInputChange} className="w-4 h-4 text-indigo-600 rounded" /></label>
+          <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <i className="fa-solid fa-robot text-blue-600"></i>
+              <h2 className="text-sm font-bold text-slate-800">Cobranza Automática</h2>
+            </div>
+            <label className="flex items-center justify-between p-3 bg-white border border-blue-200 rounded-lg cursor-pointer hover:shadow-md transition-shadow mb-4">
+              <span className="text-xs font-bold text-slate-700">Activar Recordatorios</span>
+              <input type="checkbox" name="enable_automation" checked={transaction.enable_automation || false} onChange={handleInputChange} className="w-4 h-4 text-blue-600 rounded focus:ring-2 focus:ring-blue-400" />
+            </label>
 
             {transaction.enable_automation && (
               <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
-                <div className="text-[11px] text-indigo-700 bg-white p-2.5 rounded border border-indigo-100 flex items-center gap-2"><span>Cada</span><input type="text" inputMode="numeric" name="automation_frequency" value={transaction.automation_frequency} onChange={handleInputChange} className="w-10 text-center font-bold bg-transparent border-b border-indigo-300 outline-none" placeholder="3" /><span>días.</span></div>
+                <div className="text-xs text-slate-700 bg-white p-3 rounded-lg border border-blue-200 flex items-center gap-2 shadow-sm">
+                  <span className="text-slate-600">Recordatorio cada</span>
+                  <input type="text" inputMode="numeric" name="automation_frequency" value={transaction.automation_frequency} onChange={handleInputChange} className="w-12 text-center font-bold bg-blue-50 border-b-2 border-blue-400 outline-none rounded px-1" placeholder="3" />
+                  <span className="text-slate-600">días</span>
+                </div>
+                
+                <div className="bg-blue-100 border border-blue-300 rounded-lg p-3 text-[11px] text-blue-900 flex items-start gap-2.5 leading-relaxed">
+                  <i className="fa-solid fa-info-circle mt-0.5 text-blue-600 flex-shrink-0"></i>
+                  <div className="space-y-1.5">
+                    <p><strong>Horario:</strong> Envío automático desde las 9:00 AM en días laborales (Lun-Vie).</p>
+                    <p><strong>Canal:</strong> Notificaciones vía correo electrónico a destinatarios seleccionados.</p>
+                  </div>
+                </div>
                 
                 <div className="space-y-4">
-                  <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">Destinatarios de Alertas</p>
+                  <p className="text-[10px] font-bold text-blue-700 uppercase tracking-widest">Destinatarios de Alertas</p>
                   
                   <div className="space-y-2">
-                    <p className="text-[9px] font-black text-slate-400 uppercase">Contactos Empresa</p>
+                    <p className="text-[9px] font-black text-slate-500 uppercase">Contactos Empresa</p>
                     <div className="max-h-24 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
                       {filteredContacts.length > 0 ? filteredContacts.map(c => (
-                        <label key={c.id_contact} className="flex items-center gap-2 p-1.5 hover:bg-white rounded text-[11px] cursor-pointer"><input type="checkbox" checked={selectedRecipients.some(r => r.email === (c.email || c.email_contact))} onChange={() => toggleRecipient({ email: c.email || c.email_contact, name: c.first_name, type: 'contact', id: c.id_contact })} className="w-3.5 h-3.5 rounded text-indigo-600" /><span>{c.first_name} {c.last_name}</span></label>
-                      )) : <p className="text-[10px] text-slate-300">Sin contactos.</p>}
+                        <label key={c.id_contact} className="flex items-center gap-2 p-1.5 hover:bg-white rounded text-[11px] cursor-pointer transition-colors"><input type="checkbox" checked={selectedRecipients.some(r => r.email === (c.email || c.email_contact))} onChange={() => toggleRecipient({ email: c.email || c.email_contact, name: c.first_name, type: 'contact', id: c.id_contact })} className="w-3.5 h-3.5 rounded text-blue-600" /><span>{c.first_name} {c.last_name}</span></label>
+                      )) : <p className="text-[10px] text-slate-400">Sin contactos.</p>}
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <p className="text-[9px] font-black text-slate-400 uppercase">Mi Equipo</p>
+                    <p className="text-[9px] font-black text-slate-500 uppercase">Mi Equipo</p>
                     <div className="max-h-24 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                      {teamMembers.map(m => (
-                        <label key={m.id} className="flex items-center gap-2 p-1.5 hover:bg-white rounded text-[11px] cursor-pointer"><input type="checkbox" checked={selectedRecipients.some(r => r.email === m.email)} onChange={() => toggleRecipient({ email: m.email, name: m.name, type: 'team', id: m.id })} className="w-3.5 h-3.5 rounded text-indigo-600" /><span>{m.name}</span></label>
-                      ))}
+                      {teamMembers && teamMembers.length > 0 ? (
+                        teamMembers.map(m => (
+                          <label key={m.id} className="flex items-center gap-2 p-1.5 hover:bg-white rounded text-[11px] cursor-pointer transition-colors"><input type="checkbox" checked={selectedRecipients.some(r => r.email === m.email)} onChange={() => toggleRecipient({ email: m.email, name: m.name, type: 'team', id: m.id })} className="w-3.5 h-3.5 rounded text-blue-600" /><span>{m.name}</span></label>
+                        ))
+                      ) : (
+                        <p className="text-[10px] text-slate-400">Sin miembros del equipo.</p>
+                      )}
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-indigo-100">
-                    <p className="text-[9px] font-black text-slate-400 uppercase mb-1.5">Externos</p>
-                    <div className="flex gap-1">
-                        <input value={externalEmail} onChange={e => setExternalEmail(e.target.value)} className="flex-1 px-2 py-1.5 border border-indigo-200 rounded text-[10px] outline-none focus:ring-1 focus:ring-indigo-400" placeholder="Email" />
-                        <input value={externalName} onChange={e => setExternalName(e.target.value)} className="flex-1 px-2 py-1.5 border border-indigo-200 rounded text-[10px] outline-none focus:ring-1 focus:ring-indigo-400" placeholder="Nombre" />
-                        <button onClick={addExternalRecipient} className="px-2.5 bg-indigo-500 text-white rounded text-xs">+</button>
+                  <div className="pt-2 border-t border-blue-200">
+                    <p className="text-[9px] font-black text-slate-500 uppercase mb-1.5">Externos</p>
+                    <div className="grid grid-cols-1 gap-1.5">
+                        <input value={externalName} onChange={e => setExternalName(e.target.value)} className="w-full px-2 py-1.5 border border-blue-200 rounded text-[10px] outline-none focus:ring-2 focus:ring-blue-400" placeholder="Nombre" />
+                        <input value={externalEmail} onChange={e => setExternalEmail(e.target.value)} className="w-full px-2 py-1.5 border border-blue-200 rounded text-[10px] outline-none focus:ring-2 focus:ring-blue-400" placeholder="Email" />
+                        <button onClick={addExternalRecipient} className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold transition-colors">Agregar</button>
                     </div>
                   </div>
 
                   {selectedRecipients.length > 0 && (
-                    <div className="pt-2 border-t border-indigo-200 flex flex-wrap gap-1">
+                    <div className="pt-2 border-t border-blue-200">
+                      <div className="flex flex-wrap gap-1.5 max-w-full">
                         {selectedRecipients.map((r, i) => (
-                            <span key={i} className="px-2 py-0.5 bg-white text-indigo-600 border border-indigo-200 rounded-full text-[9px] font-bold flex items-center gap-1">{r.name} <button onClick={() => toggleRecipient(r)} className="text-rose-400 hover:text-rose-600 font-bold">×</button></span>
+                            <span key={i} className="px-2.5 py-1 bg-white text-blue-700 border border-blue-300 rounded-full text-[9px] font-bold flex items-center gap-1.5 shadow-sm break-all max-w-full">
+                              <span className="truncate max-w-[150px]" title={r.name}>{r.name}</span>
+                              <button onClick={() => toggleRecipient(r)} className="text-rose-500 hover:text-rose-700 font-bold text-xs flex-shrink-0">×</button>
+                            </span>
                         ))}
+                      </div>
                     </div>
                   )}
                 </div>

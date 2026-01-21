@@ -24,8 +24,8 @@ export async function apiFetch(url: string, options: FetchOptions = {}): Promise
   const token = authService.getToken();
   
   // Debug: Verificar si el token está disponible
-  console.log(`🔐 apiFetch llamado para: ${url}`);
-  console.log(`   Token disponible: ${token ? '✓ Sí' : '✗ No'}`);
+
+
   
   // Preparar headers
   const headers = new Headers(options.headers || {});
@@ -33,9 +33,8 @@ export async function apiFetch(url: string, options: FetchOptions = {}): Promise
   // Agregar token de autorización si existe
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
-    console.log(`   ✓ Header Authorization agregado`);
+
   } else {
-    console.warn(`   ⚠️ Sin token: La petición será rechazada con 401`);
   }
   
   // ⚠️ IMPORTANTE: Solo establecer Content-Type si:
@@ -59,7 +58,6 @@ export async function apiFetch(url: string, options: FetchOptions = {}): Promise
   
   // Si recibimos 401 (No autorizado), limpiar el token y redirigir al login
   if (response.status === 401) {
-    console.warn('⚠️ Token expirado o inválido. Redirigiendo al login...');
     authService.removeToken();
     localStorage.removeItem('token');
     localStorage.removeItem('user');

@@ -128,7 +128,7 @@ let quoteItems: QuoteItem[] = [];
 
 const apiFetch = async (endpoint: string, method: string = 'GET', body?: any) => {
   const fullUrl = `${N8N_BASE_URL}${endpoint}`;
-  console.log(`Intentando conectar a: ${method} ${fullUrl}`);
+
   
   try {
     // Usar apiClientFetch que incluye automáticamente el token de autorización
@@ -952,7 +952,6 @@ deleteInterestStatus: async (id: string): Promise<void> => {
       };
       try {
         const result = await apiFetch('/api/quotes', 'POST', payload);
-        console.log("n8n API addQuote response:", result); // <-- AÑADIDO PARA DEPURAR
         quotesCache = null; // Invalidar caché DESPUÉS de éxito
         // Como n8n no devuelve el objeto completo de la cotización, retornamos un objeto básico
         // que cumple con el tipo Promise<Quote>. La redirección no necesita el ID exacto.

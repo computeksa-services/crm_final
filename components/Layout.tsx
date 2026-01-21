@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getImageUrl } from '../utils/imageUtils';
 import { NAV_GROUPS, PAGE_NAMES } from '../services/routes.config';
-import { apiFetch } from '../services/apiClient';
-import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -26,13 +24,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   // Estado para modal de confirmación de logout
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
-  const [tenantName, setTenantName] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem('tenant-name');
-    } catch {
-      return null;
-    }
-  });
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   
   const { user, logout } = useAuth(); 
@@ -58,45 +49,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [isMobileSidebarOpen]);
-
-  const didFetchTenantRef = React.useRef<string | null>(null);
-  useEffect(() => {
-    if (!user?.id_tenant) {
-      setTenantName(null);
-      return;
-    }
-
-    let isMounted = true;
-
-    const fetchTenantName = async () => {
-      try {
-        const response = await apiFetch(buildUrl(GATEWAY_CONFIG.API.TENANTS.DETAIL, { id_tenant: user.id_tenant }));
-        if (response.ok) {
-          const data = await response.json();
-          const name = Array.isArray(data) ? data[0]?.name_tenant : data.name_tenant;
-          if (isMounted) {
-            setTenantName(name || null);
-            try {
-              if (name) localStorage.setItem('tenant-name', name);
-            } catch {
-              /* ignore */
-            }
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching tenant", error);
-      }
-    };
-    // Evitar doble fetch en StrictMode y dentro de una misma sesión
-    const sessionKey = `tenant:fetched:${user.id_tenant}`;
-    const shouldFetch = didFetchTenantRef.current !== user.id_tenant && !sessionStorage.getItem(sessionKey);
-    if (shouldFetch) {
-      didFetchTenantRef.current = user.id_tenant;
-      sessionStorage.setItem(sessionKey, '1');
-      fetchTenantName();
-    }
-    return () => { isMounted = false; };
-  }, [user?.id_tenant]);
 
   const handleLogout = () => {
     setUserMenuOpen(false);
@@ -397,10 +349,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           
           <div className="flex items-center space-x-4 md:space-x-6">
              {/* Tenant Info visible junto al avatar */}
-             {tenantName && (
+             {user?.name_tenant && (
                <div className="flex flex-col items-end">
-                  <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center">
-                      {tenantName}
+                  <span className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center">
+                      {user?.name_tenant}
                       <i className="fa-solid fa-circle-check text-brand-500 ml-1.5 text-[10px]"></i>
                   </span>
                   <span className="text-[10px] text-slate-400">Plan Enterprise</span>
@@ -426,7 +378,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       }}
                   />
                   <div className="hidden sm:flex flex-col items-start leading-tight">
-                    <span className="text-xs font-semibold text-slate-800 truncate max-w-[120px]">{user?.name_user || 'Usuario'}</span>
+                    <span className="text-xs font-semibold text-slate-800 max-w-[140px] line-clamp-2">{user?.name_user || 'Usuario'}</span>
                   </div>
                   <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}></i>
                </button>

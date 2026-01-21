@@ -618,7 +618,7 @@ const ClientCompanyDetail: React.FC = () => {
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 border border-slate-200">
-                                                    {(contact.first_name || 'C').charAt(0)}
+                                                    {(contact.first_name || 'C').charAt(0)}{(contact.last_name || '').charAt(0)}
                                                 </div>
                                                 <span className="font-medium text-slate-700">{contact.first_name} {contact.last_name}</span>
                                             </div>
@@ -656,13 +656,13 @@ const ClientCompanyDetail: React.FC = () => {
           </div>
 
           {/* Mapa */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative ${(shareModalOpen || isCompanyModalOpen || isModalOpen) ? 'z-0' : ''}`}>
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                     <i className="fa-solid fa-map"></i> Ubicación
                 </h3>
             </div>
-            <div className="p-6">
+            <div className={`p-6 ${(shareModalOpen || isCompanyModalOpen || isModalOpen) ? 'pointer-events-none opacity-50' : ''}`}>
               <CompanyMap
                 address={company.address}
                 city={company.city}
@@ -676,7 +676,7 @@ const ClientCompanyDetail: React.FC = () => {
 
       {/* SHARE MODAL MEJORADO (Estilo de la imagen) */}
       {shareModalOpen && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 transition-opacity">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 transition-opacity">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
             
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
@@ -781,7 +781,7 @@ const ClientCompanyDetail: React.FC = () => {
 
       {/* MODAL EDITAR EMPRESA */}
       {isCompanyModalOpen && editingCompany && createPortal(
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -971,7 +971,7 @@ const ClientCompanyDetail: React.FC = () => {
 
       {/* MODAL DE CONTACTO (Mismo estilo que lista) */}
       {isModalOpen && editingContact && createPortal(
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
               <h2 className="text-lg font-bold text-slate-800">{isEditMode ? 'Editar Contacto' : 'Nuevo Contacto'}</h2>

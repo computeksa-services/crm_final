@@ -52,7 +52,6 @@ const DealCreate: React.FC = () => {
 
       const parseData = async (res: Response, endpointName: string) => {
         if (!res.ok) {
-          console.warn(`⚠️ ${endpointName}: respuesta no exitosa (${res.status})`);
           return [];
         }
         
@@ -60,7 +59,6 @@ const DealCreate: React.FC = () => {
         
         // Si la respuesta está vacía, retornar array vacío
         if (!text || text.trim() === '') {
-          console.warn(`⚠️ ${endpointName}: respuesta vacía`);
           return [];
         }
         
@@ -89,13 +87,13 @@ const DealCreate: React.FC = () => {
         usersData
       ] = await Promise.all(responses.map((res, idx) => parseData(res, endpoints[idx].name)));
 
-      console.log('🔍 DATOS CARGADOS EN DEALCREATE:');
-      console.log('  📋 Empresas:', companiesData?.length || 0, companiesData);
-      console.log('  👤 Contactos:', contactsData?.length || 0);
-      console.log('  🎯 Estados de Trato:', dealStatusesData?.length || 0, dealStatusesData);
-      console.log('  ⭐ Niveles de Interés:', interestStatusesData?.length || 0, interestStatusesData);
-      console.log('  📡 Canales:', channelsData?.length || 0, channelsData);
-      console.log('  👥 Usuarios:', usersData?.length || 0, usersData);
+
+
+
+
+
+
+
 
       setCompanies(companiesData);
       setContacts(contactsData);

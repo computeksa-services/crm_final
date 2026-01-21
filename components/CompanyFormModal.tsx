@@ -89,7 +89,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
     // Solo cargar si es una nueva empresa o diferente a la última cargada
     const currentId = initialData?.id_client_company;
     if (mode === 'edit' && initialData && lastLoadedIdRef.current !== currentId) {
-      console.log('🔄 Cargando datos de empresa para edición:', initialData);
+
       lastLoadedIdRef.current = currentId;
       
       const newFormData = {
@@ -106,11 +106,6 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         phone_company: initialData.phone_company || '',
         website: initialData.website || '',
       };
-      console.log('✅ Valores cargados:', {
-        country: newFormData.id_country,
-        company_type: newFormData.id_company_type,
-        label: newFormData.id_label
-      });
       setFormData(newFormData);
     } else if (mode === 'create') {
       lastLoadedIdRef.current = undefined;
