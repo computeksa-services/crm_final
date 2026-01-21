@@ -237,7 +237,7 @@ const UsersList: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600 font-medium">
-                        {getTenantName(u.id_tenant)}
+                        {u.name_tenant || getTenantName(u.id_tenant)}
                       </td>
                       <td className="px-6 py-4 text-sm">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
