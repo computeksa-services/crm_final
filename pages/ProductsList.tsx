@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { Product, ProductType } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -7,13 +8,12 @@ import { apiFetch } from '../services/apiClient';
 
 const ProductsList: React.FC = () => {
   const { user } = useAuth();
+  const { products: cachedProducts, loading: cacheLoading, invalidateProducts } = useDataCache();
   
   // Datos
-  const [products, setProducts] = useState<Product[]>([]);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   
   // UI & Filtros
-  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>(() => {
     // Cargar la vista guardada desde localStorage
     if (typeof window !== 'undefined') {
@@ -46,13 +46,9 @@ const ProductsList: React.FC = () => {
   // --- CARGA DE DATOS ---
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant) return;
-    setLoading(true);
 
     try {
-      const [productsRes, typesRes] = await Promise.all([
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type`)
-      ]);
+      const typesRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type`);
 
       const parseResponse = async (res: Response) => {
         if (!res.ok) {
@@ -63,7 +59,6 @@ const ProductsList: React.FC = () => {
         return text ? JSON.parse(text) : [];
       };
 
-      const parsedProducts = await parseResponse(productsRes);
       const parsedTypes = await parseResponse(typesRes);
       
       // Asegurar que los tipos tengan id_product_type
@@ -74,14 +69,10 @@ const ProductsList: React.FC = () => {
           }))
         : [];
       
-      setProducts(parsedProducts);
       setProductTypes(validTypes);
 
     } catch (e: any) {
-      console.error("Error fetching data:", e);
       setToast({ message: 'Error al cargar el catálogo.', type: 'error' });
-    } finally {
-      setLoading(false);
     }
   }, [user]);
 
@@ -91,7 +82,7 @@ const ProductsList: React.FC = () => {
 
   // --- FILTROS ---
   const filteredProducts = useMemo(() => {
-    return products.filter(p => {
+    return cachedProducts.filter(p => {
       const matchesSearch = 
         (p.descripcion || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (p.codigo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -101,13 +92,13 @@ const ProductsList: React.FC = () => {
 
       return matchesSearch && matchesType;
     });
-  }, [products, searchTerm, typeFilter]);
+  }, [cachedProducts, searchTerm, typeFilter]);
 
   // --- HANDLERS ---
   const getNextProductCode = () => {
-    if (products.length === 0) return 'COD-001';
+    if (cachedProducts.length === 0) return 'COD-001';
     
-    const codes = products
+    const codes = cachedProducts
       .map(p => p.codigo || '')
       .filter(c => c.startsWith('COD-'))
       .map(c => parseInt(c.replace('COD-', '')) || 0)
@@ -181,7 +172,7 @@ const ProductsList: React.FC = () => {
           if (!response.ok) throw new Error('Error al eliminar');
           
           setToast({ message: 'Artículo eliminado.', type: 'success' });
-          fetchData();
+          await invalidateProducts();
         } catch (error) {
           setToast({ message: 'Error al eliminar.', type: 'error' });
         } finally {
@@ -238,7 +229,7 @@ const ProductsList: React.FC = () => {
       setToast({ message: isEditMode ? 'Artículo actualizado.' : 'Artículo creado.', type: 'success' });
       setImageFile(null); // Limpiar el archivo
       setIsModalOpen(false);
-      fetchData();
+      await invalidateProducts();
 
     } catch (error: any) {
       setToast({ message: error.message, type: 'error' });
@@ -273,7 +264,7 @@ const ProductsList: React.FC = () => {
   };
 
   const renderContent = () => {
-    if (loading) {
+    if (cacheLoading) {
         return (
           <div className="p-12 text-center">
               <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500 mb-4"></i>
@@ -282,7 +273,7 @@ const ProductsList: React.FC = () => {
         );
     }
 
-    if (products.length === 0 && !loading) {
+    if (cachedProducts.length === 0 && !cacheLoading) {
         return (
             <div className="p-16 text-center flex flex-col items-center">
                 <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">

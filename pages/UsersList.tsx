@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { User, Tenant } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -7,13 +8,9 @@ import { apiFetch } from '../services/apiClient';
 
 const UsersList: React.FC = () => {
   const { user } = useAuth();
-  
-  // Datos
-  const [users, setUsers] = useState<User[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const { users: cachedUsers, tenants: cachedTenants, loading: cacheLoading, invalidateUsers } = useDataCache();
   
   // UI & Filtros
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -33,57 +30,9 @@ const UsersList: React.FC = () => {
     isDestructive: false,
   });
 
-  // --- CARGA DE DATOS ---
-  const fetchData = useCallback(async () => {
-    if (!user?.id_tenant || !user?.id_user) return;
-    setLoading(true);
-    const tenantId = user.id_tenant;
-    const userId = user.id_user;
-
-    try {
-      const usersRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${tenantId}&id_user=${userId}`);
-      
-      const parseResponse = async (res: Response) => {
-        if (!res.ok) {
-          if (res.status === 404) return [];
-          const errorText = await res.text();
-          throw new Error(`Error del servidor: ${res.status} - ${errorText}`);
-        }
-        const text = await res.text();
-        return text ? JSON.parse(text) : [];
-      };
-
-      const usersData = await parseResponse(usersRes);
-      setUsers(usersData);
-
-      let fetchedTenants: Tenant[] = [];
-      if (user.rol_user === 'superadmin') {
-        const tenantsRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants?id_user=${userId}`);
-        fetchedTenants = await parseResponse(tenantsRes);
-      } else if (user.id_tenant) {
-        const tenantDetailRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/detail?id_tenant=${user.id_tenant}`);
-        const tenantDetailData = await parseResponse(tenantDetailRes);
-        if (tenantDetailData) {
-          fetchedTenants = Array.isArray(tenantDetailData) ? tenantDetailData : [tenantDetailData];
-        }
-      }
-      setTenants(fetchedTenants);
-
-    } catch (e: any) {
-      console.error("Error fetching data:", e);
-      setToast({ message: e.message || 'Error al cargar usuarios.', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
   // --- FILTROS ---
   const filteredUsers = useMemo(() => {
-    return users.filter(u => {
+    return cachedUsers.filter(u => {
       const matchesSearch = 
         (u.name_user || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (u.email_user || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -93,12 +42,12 @@ const UsersList: React.FC = () => {
 
       return matchesSearch && matchesRole && matchesStatus;
     });
-  }, [users, searchTerm, roleFilter, statusFilter]);
+  }, [cachedUsers, searchTerm, roleFilter, statusFilter]);
 
   // --- HANDLERS ---
   const handleAddNew = () => {
     if (!user?.id_tenant) return;
-    if (user.rol_user === 'superadmin' && tenants.length === 0) {
+    if (user.rol_user === 'superadmin' && cachedTenants.length === 0) {
       setToast({ message: 'Primero debe crear un Tenant.', type: 'error' });
       return;
     }
@@ -109,7 +58,7 @@ const UsersList: React.FC = () => {
       phone_user: '', 
       rol_user: 'usuario', 
       job_title: '',
-      id_tenant: user.rol_user === 'superadmin' && tenants.length > 0 ? tenants[0]?.id_tenant : user.id_tenant,
+      id_tenant: user.rol_user === 'superadmin' && cachedTenants.length > 0 ? cachedTenants[0]?.id_tenant : user.id_tenant,
       status_user: 'Activo'
     });
     setIsEditMode(false);
@@ -140,7 +89,7 @@ const UsersList: React.FC = () => {
           if (!response.ok) throw new Error('Error al eliminar usuario.');
           
           setToast({ message: 'Usuario eliminado.', type: 'success' });
-          await fetchData(); 
+          await invalidateUsers(); 
         } catch (error: any) {
           setToast({ message: error.message, type: 'error' });
         } finally {
@@ -192,7 +141,7 @@ const UsersList: React.FC = () => {
       
       setToast({ message: isEditMode ? 'Usuario actualizado.' : 'Usuario creado.', type: 'success' });
       setIsModalOpen(false);
-      await fetchData(); 
+      await invalidateUsers(); 
     } catch (error: any) {
       setToast({ message: error.message, type: 'error' });
     } finally { 
@@ -205,11 +154,11 @@ const UsersList: React.FC = () => {
     setEditingUser(prev => (prev ? { ...prev, [name]: value } : null));
   };
 
-  const getTenantName = (id: string) => tenants.find(t => t.id_tenant === id)?.name_tenant || id;
+  const getTenantName = (id: string) => cachedTenants.find(t => t.id_tenant === id)?.name_tenant || id;
 
   // Renderizado condicional
   const renderContent = () => {
-    if (loading) {
+    if (cacheLoading) {
         return (
           <div className="p-12 text-center">
               <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500 mb-4"></i>
@@ -218,7 +167,7 @@ const UsersList: React.FC = () => {
         );
     }
 
-    if (users.length === 0) {
+    if (cachedUsers.length === 0) {
         return (
             <div className="p-16 text-center flex flex-col items-center">
                 <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
@@ -391,7 +340,7 @@ const UsersList: React.FC = () => {
 
       {/* Pagination Footer */}
       <div className="flex justify-between items-center text-xs text-slate-400 px-2">
-         <span>Mostrando {filteredUsers.length} de {users.length} usuarios</span>
+         <span>Mostrando {filteredUsers.length} de {cachedUsers.length} usuarios</span>
       </div>
     </div>
 
@@ -426,11 +375,35 @@ const UsersList: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre Completo</label>
-                  <input type="text" name="name_user" required value={editingUser.name_user || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 transition-all" placeholder="Juan Pérez" />
+                  <input 
+                    type="text" 
+                    name="name_user" 
+                    required 
+                    value={editingUser.name_user || ''} 
+                    onChange={handleInputChange} 
+                    disabled={isEditMode && user?.rol_user === 'admin'}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" 
+                    placeholder="Juan Pérez" 
+                  />
+                  {isEditMode && user?.rol_user === 'admin' && (
+                    <p className="text-xs text-slate-400 mt-1 italic">Solo lectura para admins</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Email</label>
-                  <input type="email" name="email_user" required value={editingUser.email_user || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 transition-all" placeholder="juan@empresa.com" />
+                  <input 
+                    type="email" 
+                    name="email_user" 
+                    required 
+                    value={editingUser.email_user || ''} 
+                    onChange={handleInputChange} 
+                    disabled={isEditMode && user?.rol_user === 'admin'}
+                    className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" 
+                    placeholder="juan@empresa.com" 
+                  />
+                  {isEditMode && user?.rol_user === 'admin' && (
+                    <p className="text-xs text-slate-400 mt-1 italic">Solo lectura para admins</p>
+                  )}
                 </div>
               </div>
 
@@ -450,12 +423,22 @@ const UsersList: React.FC = () => {
                 <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Estado</label>
                     <div className="relative">
-                        <select name="status_user" required value={editingUser.status_user || 'Activo'} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-brand-500 appearance-none">
+                        <select 
+                          name="status_user" 
+                          required 
+                          value={editingUser.status_user || 'Activo'} 
+                          onChange={handleInputChange} 
+                          disabled={isEditMode && user?.rol_user === 'admin'}
+                          className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-brand-500 appearance-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
+                        >
                             <option value="Activo">Activo</option>
                             <option value="Inactivo">Inactivo</option>
                         </select>
                         <div className="absolute right-3 top-2.5 text-slate-400 pointer-events-none text-xs"><i className="fa-solid fa-chevron-down"></i></div>
                     </div>
+                    {isEditMode && user?.rol_user === 'admin' && (
+                      <p className="text-xs text-slate-400 mt-1 italic">Solo lectura para admins</p>
+                    )}
                 </div>
               </div>
 
@@ -472,12 +455,12 @@ const UsersList: React.FC = () => {
               </div>
 
               {/* Superadmin Tenant Selector */}
-              {user?.rol_user === 'superadmin' && tenants.length > 0 && (
+              {user?.rol_user === 'superadmin' && cachedTenants.length > 0 && (
                 <div className="pt-2 border-t border-slate-100">
                   <label className="block text-xs font-bold text-purple-600 uppercase tracking-wider mb-2">Asignar a Empresa (Tenant)</label>
                   <select name="id_tenant" required value={editingUser.id_tenant || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-purple-100 rounded-xl bg-purple-50 outline-none focus:ring-2 focus:ring-purple-500 text-purple-900">
                     <option value="">-- Seleccionar --</option>
-                    {tenants.map(t => <option key={t.id_tenant} value={t.id_tenant}>{t.name_tenant}</option>)}
+                    {cachedTenants.map(t => <option key={t.id_tenant} value={t.id_tenant}>{t.name_tenant}</option>)}
                   </select>
                 </div>
               )}

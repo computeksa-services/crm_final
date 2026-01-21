@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext'; // Importar
 import { DealFiltersProvider } from './contexts/DealFiltersContext';
+import { DataCacheProvider } from './contexts/DataCacheContext';
 import Layout from './components/Layout';
 import { APP_ROUTES } from './services/routes.config';
 import { googleClientId } from './services/oauthConfig';
@@ -65,6 +66,7 @@ const App: React.FC = () => {
   return (
     <GoogleOAuthProvider clientId={googleClientId}>
       <AuthProvider>
+        <DataCacheProvider>
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<LandingPage />} />
@@ -112,6 +114,7 @@ const App: React.FC = () => {
             </Route>
           </Routes>
         </BrowserRouter>
+        </DataCacheProvider>
       </AuthProvider>
     </GoogleOAuthProvider>
   );

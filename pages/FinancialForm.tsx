@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { financialService } from '../services/financials.service';
 import Toast from '../components/Toast';
 import { apiFetch } from '../services/apiClient';
@@ -39,6 +40,7 @@ const FinancialForm: React.FC = () => {
   const queryParams = new URLSearchParams(location.search);
   const id = queryParams.get('id');
   const { user } = useAuth();
+  const { companies: cachedCompanies, contacts: cachedContacts, users: cachedUsers, loading: cacheLoading } = useDataCache();
   
   // Modo edición si el id existe
   const isEditMode = !!id;
@@ -135,6 +137,26 @@ const FinancialForm: React.FC = () => {
   }, [transaction.subtotal, transaction.tax_amount, transaction.retention_value]);
 
   // --- CARGA DE DATOS ---
+  // Sync local lists from cache for instant rendering
+  useEffect(() => {
+    setClientCompanies(cachedCompanies as unknown as ClientCompany[]);
+  }, [cachedCompanies]);
+
+  useEffect(() => {
+    setAllCompanyContacts(cachedContacts);
+  }, [cachedContacts]);
+
+  useEffect(() => {
+    const mappedTeam = (cachedUsers || [])
+      .map((u: any) => ({
+        id: u.id_user || u.id,
+        name: u.name_user || u.name || 'Sin nombre',
+        email: u.email || u.email_user || ''
+      }))
+      .filter((u: any) => u.email);
+    setTeamMembers(mappedTeam);
+  }, [cachedUsers]);
+
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
     
@@ -143,30 +165,10 @@ const FinancialForm: React.FC = () => {
     const isEditingMode = !!transactionId;
     
     try {
-      const [companiesRes, quotesRes, contactsRes, teamRes] = await Promise.all([
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}`)
-      ]);
-
-      const parse = async (r: Response) => (r.ok ? await r.json() : []);
-      const [cData, qData, conData, tData] = await Promise.all([parse(companiesRes), parse(quotesRes), parse(contactsRes), parse(teamRes)]);
-
-      setClientCompanies(cData);
+      // Fetch only quotes; companies/contacts/users come from cache effects above
+      const quotesRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`);
+      const qData = quotesRes.ok ? await quotesRes.json() : [];
       setQuotes(qData);
-      setAllCompanyContacts(conData);
-      
-      // Mapear usuarios del equipo (incluyendo al usuario actual)
-      const mappedTeam = (Array.isArray(tData) ? tData : [])
-        .map((u: any) => ({
-          id: u.id_user || u.id,
-          name: u.name_user || u.name || 'Sin nombre',
-          email: u.email || u.email_user || ''
-        }))
-        .filter((u: any) => u.email); // Filtrar usuarios sin email
-      
-      setTeamMembers(mappedTeam);
 
       // Si es modo edición, cargar los datos de la transacción
       if (isEditingMode && transactionId) {
@@ -336,10 +338,18 @@ const FinancialForm: React.FC = () => {
       setToast({ message: 'Factura, Cliente y Descripción son obligatorios.', type: 'error' });
       return;
     }
+    
+    // Convertir strings a números antes de validar
+    const finalSubtotal = parseFloat(String(transaction.subtotal)) || 0;
+    
+    // Validar que el subtotal sea mayor a 0
+    if (finalSubtotal <= 0) {
+      setToast({ message: 'El subtotal debe ser mayor a cero.', type: 'error' });
+      return;
+    }
+    
     setSaving(true);
     try {
-      // Convertir strings a números antes de enviar
-      const finalSubtotal = parseFloat(String(transaction.subtotal)) || 0;
       const finalTax = parseFloat(String(transaction.tax_amount)) || 0;
       const finalRetention = parseFloat(String(transaction.retention_value)) || 0;
       

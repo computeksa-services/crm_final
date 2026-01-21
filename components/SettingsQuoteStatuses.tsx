@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { QuoteStatus } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -20,10 +21,10 @@ const PRESET_COLORS = [
 
 const SettingsQuoteStatuses: React.FC = () => {
   const { user } = useAuth();
+  const { quoteStatuses: cachedStatuses, loading: cacheLoading, invalidateQuoteStatuses } = useDataCache();
   
-  // Datos
+  // Datos locales para drag & drop
   const [statuses, setStatuses] = useState<QuoteStatus[]>([]);
-  const [loading, setLoading] = useState(true);
   
   // Edición
   const [editingStatus, setEditingStatus] = useState<Partial<QuoteStatus> | null>(null);
@@ -39,31 +40,12 @@ const SettingsQuoteStatuses: React.FC = () => {
   const [orderChanged, setOrderChanged] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
-  // Carga inicial
-  const fetchData = useCallback(async () => {
-    if (!user?.id_tenant) return;
-    setLoading(true);
-    try {
-      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${user.id_tenant}`);
-      if (!response.ok) {
-        if(response.status === 404) setStatuses([]);
-        else throw new Error('Failed to fetch quote statuses');
-        return;
-      }
-      const data = await response.json();
-      const sortedData = data.sort((a: QuoteStatus, b: QuoteStatus) => a.status_order - b.status_order);
-      setStatuses(sortedData);
-      setOrderChanged(false);
-    } catch (error) {
-      setToast({ message: 'Error al cargar los estados.', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
+  // Sincronizar cache con estado local para drag & drop
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    const sortedData = [...cachedStatuses].sort((a, b) => a.status_order - b.status_order);
+    setStatuses(sortedData);
+    setOrderChanged(false);
+  }, [cachedStatuses]);
 
   // --- DRAG AND DROP ---
   const handleDragStart = (index: number) => {
@@ -162,7 +144,7 @@ const SettingsQuoteStatuses: React.FC = () => {
       
       setToast({ message: `Estado ${isUpdating ? 'actualizado' : 'creado'}.`, type: 'success' });
       setIsModalOpen(false);
-      fetchData();
+      await invalidateQuoteStatuses();
     } catch (error) {
       setToast({ message: (error as Error).message, type: 'error' });
     }
@@ -183,7 +165,7 @@ const SettingsQuoteStatuses: React.FC = () => {
           if (!response.ok) throw new Error('Error al eliminar');
           setToast({ message: 'Estado eliminado.', type: 'success' });
           setConfirmState(prev => ({ ...prev, isOpen: false }));
-          fetchData();
+          await invalidateQuoteStatuses();
         } catch (error) {
           setToast({ message: (error as Error).message, type: 'error' });
         }
@@ -191,7 +173,7 @@ const SettingsQuoteStatuses: React.FC = () => {
     });
   };
 
-  if (loading) return (
+  if (cacheLoading) return (
       <div className="flex justify-center p-8">
           <i className="fa-solid fa-circle-notch fa-spin text-brand-500"></i>
       </div>
@@ -235,7 +217,7 @@ const SettingsQuoteStatuses: React.FC = () => {
       };
       
       setToast({ message: `Estado movido a ${categoryNames[category]}`, type: 'success' });
-      fetchData();
+      await invalidateQuoteStatuses();
     } catch (error) {
       setToast({ message: 'Error al cambiar categoría', type: 'error' });
     } finally {

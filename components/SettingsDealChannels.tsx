@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { DealChannel } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -19,9 +20,9 @@ const PRESET_COLORS = [
 
 const SettingsDealChannels: React.FC = () => {
   const { user } = useAuth();
+  const { dealChannels: cachedChannels, loading: cacheLoading, invalidateDealChannels } = useDataCache();
 
   const [channels, setChannels] = useState<DealChannel[]>([]);
-  const [loading, setLoading] = useState(true);
   const [editingChannel, setEditingChannel] = useState<Partial<DealChannel> | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [showIconPicker, setShowIconPicker] = useState(false);
@@ -32,30 +33,12 @@ const SettingsDealChannels: React.FC = () => {
   const [orderChanged, setOrderChanged] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    if (!user?.id_tenant) return;
-    setLoading(true);
-    try {
-      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channel?id_tenant=${user.id_tenant}`);
-      if (!response.ok) {
-        if (response.status === 404) setChannels([]);
-        else throw new Error('Failed to fetch channels');
-        return;
-      }
-      const data = await response.json();
-      const sorted = data.sort((a: DealChannel, b: DealChannel) => a.status_order - b.status_order);
-      setChannels(sorted);
-      setOrderChanged(false);
-    } catch (error) {
-      setToast({ message: 'Error al cargar los canales.', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
+  // Sincronizar cache con estado local para drag & drop
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    const sortedData = [...cachedChannels].sort((a, b) => a.status_order - b.status_order);
+    setChannels(sortedData);
+    setOrderChanged(false);
+  }, [cachedChannels]);
 
   const handleDragStart = (index: number) => setDraggedItemIndex(index);
   const handleDragOver = (e: React.DragEvent, index: number) => {
@@ -141,7 +124,7 @@ const SettingsDealChannels: React.FC = () => {
       if (!response.ok) throw new Error(isUpdating ? 'Error al actualizar' : 'Error al crear');
       setToast({ message: `Canal ${isUpdating ? 'actualizado' : 'creado'}.`, type: 'success' });
       setIsModalOpen(false);
-      fetchData();
+      await invalidateDealChannels();
     } catch (error) {
       setToast({ message: (error as Error).message, type: 'error' });
     }
@@ -162,7 +145,7 @@ const SettingsDealChannels: React.FC = () => {
           if (!response.ok) throw new Error('Error al eliminar');
           setToast({ message: 'Canal eliminado.', type: 'success' });
           setConfirmState(prev => ({ ...prev, isOpen: false }));
-          fetchData();
+          await invalidateDealChannels();
         } catch (error) {
           setToast({ message: (error as Error).message, type: 'error' });
         }
@@ -170,7 +153,7 @@ const SettingsDealChannels: React.FC = () => {
     });
   };
 
-  if (loading) {
+  if (cacheLoading) {
     return (
       <div className="flex justify-center p-8">
         <i className="fa-solid fa-circle-notch fa-spin text-brand-500"></i>

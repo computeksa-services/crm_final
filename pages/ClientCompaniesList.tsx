@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { ClientCompany } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -26,10 +27,14 @@ import {
 const ClientCompaniesList: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { companies: cachedCompanies, loading: cacheLoading, invalidateCompanies } = useDataCache();
   
   // --- ESTADOS DE DATOS ---
-  const [companies, setCompanies] = useState<ClientCompany[]>([]);
-  const [loading, setLoading] = useState(true);
+  const companies = useMemo(() => 
+    cachedCompanies.filter(c => c && c.id_client_company), 
+    [cachedCompanies]
+  );
+  const loading = cacheLoading;
   
   // --- ESTADOS DE LA TABLA ---
   const [sorting, setSorting] = useState<SortingState>([{ id: 'name_company', desc: false }]);
@@ -58,33 +63,8 @@ const ClientCompaniesList: React.FC = () => {
     isDestructive: false 
   });
 
-  // --- CARGA DE DATOS ---
-  const fetchData = useCallback(async () => {
-    if (!user?.id_tenant || !user?.id_user) return;
-    setLoading(true);
-    try {
-      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies`);
-
-      const parseResponse = async (res: Response) => {
-        if (!res.ok) return [];
-        const text = await res.text();
-        if (!text) return [];
-        const data = JSON.parse(text);
-        // Filtrar registros válidos que tengan al menos un id_client_company
-        return Array.isArray(data) ? data.filter(company => company && company.id_client_company) : [];
-      };
-
-      setCompanies(await parseResponse(response));
-    } catch (e) {
-      setToast({ message: 'Error al cargar las empresas.', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  // --- CARGA DE DATOS (Ya no necesaria, usa caché) ---
+  // El caché se carga automáticamente al iniciar sesión
 
   // Guardar estado de agrupación en localStorage
   useEffect(() => {
@@ -144,9 +124,9 @@ const ClientCompaniesList: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleModalSuccess = () => {
+  const handleModalSuccess = async () => {
     setIsModalOpen(false);
-    fetchData();
+    await invalidateCompanies(); // Recargar caché
     setToast({ message: isEditMode ? 'Empresa actualizada.' : 'Empresa creada.', type: 'success' });
   };
 
@@ -170,7 +150,7 @@ const ClientCompaniesList: React.FC = () => {
           });
           if (!response.ok) throw new Error();
           setToast({ message: 'Empresa eliminada correctamente.', type: 'success' });
-          fetchData();
+          await invalidateCompanies(); // Recargar caché
         } catch (error) {
           setToast({ message: 'Error al eliminar la empresa.', type: 'error' });
         } finally {

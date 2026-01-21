@@ -5,7 +5,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import CollectionModal from '../components/CollectionModal';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
-import type { FinancialTransaction, ClientCompany, Quote } from '../types';
+import type { FinancialTransaction } from '../types';
 
 // --- HELPERS ---
 
@@ -98,8 +98,6 @@ const FinancialDetail: React.FC = () => {
   const { user } = useAuth();
 
   const [transaction, setTransaction] = useState<any | null>(null);
-  const [clientCompanies, setClientCompanies] = useState<ClientCompany[]>([]);
-  const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -114,15 +112,7 @@ const FinancialDetail: React.FC = () => {
     if (!id || !user?.id_tenant) return;
     setLoading(true);
     try {
-      const [txResponse, companiesRes, quotesRes] = await Promise.all([
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${id}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`),
-      ]);
-
-      if (companiesRes.ok) setClientCompanies(await companiesRes.json());
-      if (quotesRes.ok) setQuotes(await quotesRes.json());
-
+      const txResponse = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${id}`);
       if (!txResponse.ok) throw new Error('Error de red');
       const data = await txResponse.json();
       const tx = Array.isArray(data) ? data[0] : data;

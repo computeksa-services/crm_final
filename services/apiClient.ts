@@ -56,12 +56,20 @@ export async function apiFetch(url: string, options: FetchOptions = {}): Promise
     headers,
   });
   
-  // Si recibimos 401 (No autorizado), limpiar el token y redirigir al login
-  if (response.status === 401) {
+  // Intercepción Global: Si recibimos 401 o 403 (No autorizado/Prohibido),
+  // limpiar el token y forzar redirección al login
+  if (response.status === 401 || response.status === 403) {
+    // Limpiar todo el estado de autenticación
     authService.removeToken();
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    window.location.href = '/login';
+    localStorage.removeItem('appToken');
+    
+    // Redirigir con parámetro para mostrar mensaje de sesión expirada
+    window.location.href = '/login?expired=true';
+    
+    // Lanzar error para detener la ejecución actual
+    throw new Error('Sesión expirada. Por favor, ingresa nuevamente.');
   }
   
   return response;

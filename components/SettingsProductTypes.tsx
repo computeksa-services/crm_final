@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { ProductType } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -7,10 +8,9 @@ import { apiFetch } from '../services/apiClient';
 
 const SettingsProductTypes: React.FC = () => {
   const { user } = useAuth();
+  const { productTypes: cachedTypes, loading: cacheLoading, invalidateProductTypes } = useDataCache();
   
-  // Datos
-  const [productTypes, setProductTypes] = useState<ProductType[]>([]);
-  const [loading, setLoading] = useState(true);
+  // No necesitamos state local, usamos directamente cachedTypes
   
   // Edición
   const [editingType, setEditingType] = useState<Partial<ProductType> | null>(null);
@@ -19,31 +19,6 @@ const SettingsProductTypes: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
-
-  const fetchData = useCallback(async () => {
-    if (!user?.id_tenant) return;
-    setLoading(true);
-    try {
-      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`);
-      if (!response.ok) {
-        if(response.status === 404) {
-          setProductTypes([]);
-          return;
-        }
-        throw new Error('Failed to fetch product types');
-      }
-      const data = await response.json();
-      setProductTypes(data);
-    } catch (error) {
-      setToast({ message: 'Error al cargar los tipos de producto.', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   const handleAddNew = () => {
     setEditingType({ type: '' });
@@ -82,7 +57,7 @@ const SettingsProductTypes: React.FC = () => {
       
       setToast({ message: `Tipo ${isUpdating ? 'actualizado' : 'creado'} con éxito.`, type: 'success' });
       setIsModalOpen(false);
-      fetchData();
+      await invalidateProductTypes();
 
     } catch (error) {
       setToast({ message: (error as Error).message, type: 'error' });
@@ -104,7 +79,7 @@ const SettingsProductTypes: React.FC = () => {
           if (!response.ok) throw new Error('Error al eliminar el tipo');
           setToast({ message: 'Tipo eliminado con éxito.', type: 'success' });
           setConfirmState(prev => ({ ...prev, isOpen: false }));
-          fetchData();
+          await invalidateProductTypes();
         } catch (error) {
           setToast({ message: (error as Error).message, type: 'error' });
         }
@@ -112,7 +87,7 @@ const SettingsProductTypes: React.FC = () => {
     });
   };
 
-  if (loading) return (
+  if (cacheLoading) return (
       <div className="flex justify-center p-8">
           <i className="fa-solid fa-circle-notch fa-spin text-brand-500"></i>
       </div>
@@ -141,14 +116,14 @@ const SettingsProductTypes: React.FC = () => {
       </div>
 
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        {productTypes.length === 0 ? (
+        {cachedTypes.length === 0 ? (
             <div className="p-12 text-center text-slate-400">
                 <i className="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i>
                 <p>No hay tipos de producto configurados.</p>
             </div>
         ) : (
             <div className="divide-y divide-slate-100">
-            {productTypes.map((item) => (
+            {cachedTypes.map((item) => (
                 <div key={item.id_product_type} className="group flex items-center justify-between p-4 hover:bg-slate-50 transition-colors">
                     <div className="flex items-center gap-4">
                         {/* Icono Genérico para mantener consistencia visual */}

@@ -70,6 +70,7 @@ export const ROUTE_LABELS: { [key: string]: string } = {
   
   // Inventario
   'products': 'Productos',
+  'inventory': 'Dashboard Inventario',
   
   // Admin
   'users': 'Usuarios',

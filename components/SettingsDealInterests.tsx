@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { DealInterest } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -20,10 +21,10 @@ const PRESET_COLORS = [
 
 const SettingsDealInterests: React.FC = () => {
   const { user } = useAuth();
+  const { dealInterests: cachedInterests, loading: cacheLoading, invalidateDealInterests } = useDataCache();
   
-  // Datos
+  // Datos locales para drag & drop
   const [interests, setInterests] = useState<DealInterest[]>([]);
-  const [loading, setLoading] = useState(true);
   
   // Edición
   const [editingInterest, setEditingInterest] = useState<Partial<DealInterest> | null>(null);
@@ -39,31 +40,12 @@ const SettingsDealInterests: React.FC = () => {
   const [orderChanged, setOrderChanged] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
-  // Carga inicial
-  const fetchData = useCallback(async () => {
-    if (!user?.id_tenant) return;
-    setLoading(true);
-    try {
-      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${user.id_tenant}`);
-      if (!response.ok) {
-        if(response.status === 404) setInterests([]);
-        else throw new Error('Failed to fetch deal interests');
-        return;
-      }
-      const data = await response.json();
-      const sortedData = data.sort((a: DealInterest, b: DealInterest) => a.status_order - b.status_order);
-      setInterests(sortedData);
-      setOrderChanged(false);
-    } catch (error) {
-      setToast({ message: 'Error al cargar los niveles de interés.', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
+  // Sincronizar cache con estado local para drag & drop
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    const sortedData = [...cachedInterests].sort((a, b) => a.status_order - b.status_order);
+    setInterests(sortedData);
+    setOrderChanged(false);
+  }, [cachedInterests]);
 
   // --- LÓGICA DE DRAG AND DROP ---
   const handleDragStart = (index: number) => {
@@ -156,7 +138,7 @@ const SettingsDealInterests: React.FC = () => {
       
       setToast({ message: `Interés ${isUpdating ? 'actualizado' : 'creado'}.`, type: 'success' });
       setIsModalOpen(false);
-      fetchData();
+      await invalidateDealInterests();
     } catch (error) {
       setToast({ message: (error as Error).message, type: 'error' });
     }
@@ -177,7 +159,7 @@ const SettingsDealInterests: React.FC = () => {
           if (!response.ok) throw new Error('Error al eliminar');
           setToast({ message: 'Interés eliminado.', type: 'success' });
           setConfirmState(prev => ({ ...prev, isOpen: false }));
-          fetchData();
+          await invalidateDealInterests();
         } catch (error) {
           setToast({ message: (error as Error).message, type: 'error' });
         }
@@ -185,7 +167,7 @@ const SettingsDealInterests: React.FC = () => {
     });
   };
 
-  if (loading) return (
+  if (cacheLoading) return (
       <div className="flex justify-center p-8">
           <i className="fa-solid fa-circle-notch fa-spin text-brand-500"></i>
       </div>

@@ -120,6 +120,8 @@ const QuoteDetail: React.FC = () => {
   // --- ESTADOS UI & LOADING ---
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false); // Procesos generales (Enviar correo, generar PDF)
+  const [generatingPDF, setGeneratingPDF] = useState(false); // Específico para generar
+  const [sendingQuoteId, setSendingQuoteId] = useState<string | undefined | null>(null); // Específico para enviar (ID de versión o undefined para manual)
   
   // Estados específicos de carga para adjuntos
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
@@ -150,6 +152,29 @@ const QuoteDetail: React.FC = () => {
     isOpen: false, title: '', message: '', onConfirm: () => {}, isDestructive: false,
   });
 
+  // --- HELPER FUNCTIONS ---
+  const getColorFromName = (name: string) => {
+    const colors = [
+      'from-red-500 to-pink-600',
+      'from-orange-500 to-amber-600',
+      'from-yellow-500 to-orange-600',
+      'from-green-500 to-emerald-600',
+      'from-blue-500 to-cyan-600',
+      'from-indigo-500 to-purple-600',
+      'from-violet-500 to-purple-600',
+      'from-pink-500 to-rose-600',
+    ];
+    
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      const char = name.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    
+    return colors[Math.abs(hash) % colors.length];
+  };
+
   // --- FETCH DATA ---
   const fetchData = useCallback(async () => {
     if (!id || !user?.id_tenant || !user?.id_user) return;
@@ -169,7 +194,43 @@ const QuoteDetail: React.FC = () => {
 
       if (q) {
         setQuote(q);
-        setItems(q.items || []);
+        // Mantener el orden original de los items, solo actualizar datos
+        setItems(prevItems => {
+          if (!q.items || q.items.length === 0) return q.items || [];
+          if (prevItems.length === 0) return q.items;
+          
+          // Crear un mapa de los nuevos items por ID para lookup rápido
+          const newItemsMap = new Map(
+            q.items.map((item: any) => [
+              item.id_articulo_cot || item.id_quote_item,
+              item
+            ])
+          );
+          
+          // Mantener el orden de prevItems, actualizando solo los datos
+          const orderedItems = prevItems
+            .map(oldItem => {
+              const id = oldItem.id_articulo_cot || oldItem.id_quote_item;
+              return newItemsMap.get(id) || oldItem;
+            })
+            .filter(item => {
+              const id = item.id_articulo_cot || item.id_quote_item;
+              return newItemsMap.has(id);
+            });
+          
+          // Agregar items nuevos que no existían antes al final
+          q.items.forEach((newItem: any) => {
+            const id = newItem.id_articulo_cot || newItem.id_quote_item;
+            const existsInOld = prevItems.some(
+              oldItem => (oldItem.id_articulo_cot || oldItem.id_quote_item) === id
+            );
+            if (!existsInOld) {
+              orderedItems.push(newItem);
+            }
+          });
+          
+          return orderedItems;
+        });
         setQuoteStatuses(q.available_statuses || []);
         navigate(location.pathname, { state: { breadcrumb: q.nombre_cotizacion }, replace: true });
       } else {
@@ -192,6 +253,15 @@ const QuoteDetail: React.FC = () => {
     const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
     if (match && match[1]) {
       return `https://images.weserv.nl/?url=${encodeURIComponent(`https://drive.google.com/uc?id=${match[1]}&export=view`)}&n=-1`;
+    }
+    return url;
+  };
+
+  const getGoogleDrivePdfUrl = (url: string): string => {
+    if (!url) return '';
+    const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) {
+      return `https://drive.google.com/uc?id=${match[1]}&export=view`;
     }
     return url;
   };
@@ -590,7 +660,7 @@ const QuoteDetail: React.FC = () => {
   // --- HANDLERS: PDF Y ENVIO ---
   const handleGeneratePDF = async () => {
     if (!quote || !user) return;
-    setProcessing(true);
+    setGeneratingPDF(true);
     try {
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/generate-pdf`, {
         method: 'POST',
@@ -606,7 +676,7 @@ const QuoteDetail: React.FC = () => {
     } catch {
       setToast({ message: 'Error al generar PDF.', type: 'error' });
     } finally {
-      setProcessing(false);
+      setGeneratingPDF(false);
     }
   };
 
@@ -622,7 +692,7 @@ const QuoteDetail: React.FC = () => {
         isDestructive: false,
         onConfirm: async () => {
             setConfirmState(prev => ({...prev, isOpen: false}));
-            setProcessing(true);
+            setSendingQuoteId(idVersion ?? undefined);
             try {
             const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/send`, {
                 method: 'POST',
@@ -641,7 +711,7 @@ const QuoteDetail: React.FC = () => {
             } catch {
             setToast({ message: 'Error al enviar.', type: 'error' });
             } finally {
-            setProcessing(false);
+            setSendingQuoteId(null);
             }
         }
     });
@@ -987,9 +1057,9 @@ const QuoteDetail: React.FC = () => {
                                 <i className="fa-solid fa-cloud-arrow-up mr-1.5"></i> Subir Manual
                              </button>
                              {items.length > 0 && (
-                                <button onClick={handleGeneratePDF} disabled={processing} className="text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg transition-colors font-bold flex items-center disabled:opacity-50 uppercase tracking-wide border border-indigo-100">
-                                    {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-1.5"></i> : <i className="fa-solid fa-file-pdf mr-1.5"></i>}
-                                    Generar v{(quote.versions?.length || 0) + 1}
+                                <button onClick={handleGeneratePDF} disabled={generatingPDF} className="text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg transition-colors font-bold flex items-center disabled:opacity-50 uppercase tracking-wide border border-indigo-100">
+                                    {generatingPDF ? <i className="fa-solid fa-circle-notch fa-spin mr-1.5"></i> : <i className="fa-solid fa-file-pdf mr-1.5"></i>}
+                                    {generatingPDF ? 'Generando...' : `Generar v${(quote.versions?.length || 0) + 1}`}
                                 </button>
                              )}
                         </div>
@@ -1026,11 +1096,11 @@ const QuoteDetail: React.FC = () => {
                                     <>
                                         <button 
                                             onClick={() => handleSendQuote(undefined)} 
-                                            disabled={processing}
-                                            className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center"
+                                            disabled={sendingQuoteId === undefined}
+                                            className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
                                         >
-                                            {processing ? <i className="fa-solid fa-circle-notch fa-spin mr-1"></i> : <i className="fa-solid fa-paper-plane mr-1"></i>}
-                                            Enviar
+                                            {sendingQuoteId === undefined ? <i className="fa-solid fa-circle-notch fa-spin mr-1"></i> : <i className="fa-solid fa-paper-plane mr-1"></i>}
+                                            {sendingQuoteId === undefined ? 'Enviando...' : 'Enviar'}
                                         </button>
                                         <button 
                                             onClick={handleDeleteManualQuote} 
@@ -1048,15 +1118,21 @@ const QuoteDetail: React.FC = () => {
                     {/* CASO 2: LISTA DE VERSIONES SISTEMA (RENDERIZADAS SIEMPRE DEBAJO) */}
                     {quote.versions?.map(pdf => (
                         <div key={pdf.id_version} className={`px-6 py-4 hover:bg-slate-50 transition-colors flex items-center justify-between group ${isManualQuoteActive ? 'opacity-60 grayscale-[0.5]' : ''}`}>
-                            <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-sm border border-indigo-100">
+                            <div className="flex items-center gap-4 flex-1">
+                                <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center text-sm border border-indigo-100 shrink-0">
                                     <i className="fa-solid fa-file-pdf"></i>
                                 </div>
-                                <div>
-                                    <p className="text-sm font-bold text-slate-700">Versión {pdf.version_number}</p>
-                                    <p className="text-[11px] text-slate-500 mt-0.5">
+                                <div className="flex-1">
+                                    <p className="text-sm font-bold text-slate-700 mb-1">Versión {pdf.version_number}</p>
+                                    <p className="text-[11px] text-slate-500 mb-2">
                                         {pdf.created_at ? new Date(pdf.created_at).toLocaleString() : '-'}
                                     </p>
+                                    {(pdf.creator_name || pdf.generado_por) && (
+                                        <p className="text-xs text-slate-500">
+                                            <span className="text-slate-400">Creado por: </span>
+                                            <span className="text-slate-700 font-medium">{pdf.creator_name || pdf.generado_por}</span>
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex items-center gap-2">
@@ -1064,8 +1140,9 @@ const QuoteDetail: React.FC = () => {
                                     <i className="fa-solid fa-external-link-alt mr-1"></i> Abrir
                                 </a>
                                 {canEdit && !isManualQuoteActive && (
-                                    <button onClick={() => handleSendQuote(pdf.id_version)} className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors">
-                                        <i className="fa-solid fa-paper-plane mr-1"></i> Enviar
+                                    <button onClick={() => handleSendQuote(pdf.id_version)} disabled={sendingQuoteId === pdf.id_version} className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50">
+                                        {sendingQuoteId === pdf.id_version ? <i className="fa-solid fa-circle-notch fa-spin mr-1"></i> : <i className="fa-solid fa-paper-plane mr-1"></i>}
+                                        {sendingQuoteId === pdf.id_version ? 'Enviando...' : 'Enviar'}
                                     </button>
                                 )}
                             </div>
@@ -1097,82 +1174,81 @@ const QuoteDetail: React.FC = () => {
                     {(!quote.sent_history || quote.sent_history.length === 0) ? (
                         <div className="text-center py-4 text-slate-400 text-xs italic">Sin actividad de envíos.</div>
                     ) : (
-                        <div className="space-y-4">
+                        <div className="space-y-2">
                             {quote.sent_history.map((log, idx) => (
-                                <div key={idx} className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
-                                    {/* Cabecera Tarjeta */}
-                                    <div className="flex justify-between items-start mb-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                                                <i className="fa-solid fa-envelope"></i>
-                                            </div>
-                                            <div>
-                                                <h4 className="font-bold text-slate-800 text-sm">
-                                                    {log.version_enviada ? `Versión ${log.version_enviada}` : 'Cotización Manual'}
-                                                </h4>
-                                                <p className="text-xs text-slate-500">{log.sent_at_fmt}</p>
-                                            </div>
+                                <div key={idx} className="bg-gradient-to-r from-slate-50 to-transparent border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-all">
+                                    {/* Cabecera: Versión, PDF y Fecha */}
+                                    <div className="flex items-center justify-between gap-3 mb-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-bold text-slate-800">
+                                                {log.version_enviada ? `v${log.version_enviada}` : 'Manual'}
+                                            </span>
+                                            <span className={`text-[9px] font-bold px-2 py-1 rounded-full ${log.email_policy === 'CORPORATE' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                {log.email_policy === 'CORPORATE' ? 'Email Corporativo' : 'Email Personal'}
+                                            </span>
+                                            {log.sent_file_url && (
+                                                <a 
+                                                    href={log.sent_file_url} 
+                                                    target="_blank" 
+                                                    rel="noreferrer"
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[9px] font-bold hover:bg-emerald-200 transition-colors"
+                                                    title="Ver PDF"
+                                                >
+                                                    <i className="fa-solid fa-file-pdf"></i> Ver PDF
+                                                </a>
+                                            )}
                                         </div>
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1">
-                                            <i className="fa-solid fa-circle text-[6px] text-emerald-500"></i> {log.method}
-                                        </span>
+                                        <span className="text-[10px] text-slate-400">{log.sent_at_fmt}</span>
                                     </div>
 
-                                    {/* Detalles del envío */}
-                                    <div className="space-y-2 text-xs text-slate-600 pl-[52px]">
-                                        <div className="flex items-center gap-2">
-                                            <i className="fa-solid fa-user text-slate-400 w-4 text-center"></i>
-                                            <span className="font-medium text-slate-700">{log.sent_by_name}</span>
-                                        </div>
-                                        <div className="flex items-start gap-2">
-                                            <i className="fa-solid fa-paper-plane text-slate-400 w-4 text-center mt-0.5"></i>
-                                            <div className="min-w-0 flex-1">
-                                                <p className="font-medium text-blue-600 hover:underline cursor-pointer truncate">{log.sent_to}</p>
-                                                {log.sent_cc && <p className="text-slate-400 text-[11px] mt-0.5 truncate">CC: {log.sent_cc}</p>}
-                                            </div>
-                                        </div>
-                                        {log.subject && (
-                                            <div className="flex items-start gap-2">
-                                                <i className="fa-solid fa-heading text-slate-400 w-4 text-center mt-0.5"></i>
-                                                <p className="italic text-slate-500 truncate">{log.subject}</p>
-                                            </div>
-                                        )}
-                                        <div className="flex items-center gap-2">
-                                            <i className={`fa-solid ${log.email_policy === 'CORPORATE' ? 'fa-building' : 'fa-user'} text-slate-400 w-4 text-center`}></i>
-                                            <span className="text-slate-500">{log.email_policy === 'CORPORATE' ? 'Email Corporativo' : 'Email Personal'}</span>
-                                        </div>
+                                    {/* Quién envió */}
+                                    <p className="text-xs text-slate-600 mb-3">
+                                        <span className="text-slate-400">Enviado por: </span>
+                                        <span className="font-medium text-slate-800">{log.creator_name || quote.owner_detail?.name || 'Usuario'}</span>
+                                    </p>
 
-                                        {/* NUEVO: Links a los archivos enviados (SNAPSHOT) */}
-                                        {(log.sent_file_url || (log.attachments && log.attachments.length > 0)) && (
-                                            <div className="mt-3 pt-3 border-t border-slate-50 flex flex-wrap gap-2">
-                                                {/* PDF Principal */}
-                                                {log.sent_file_url && (
-                                                    <a 
-                                                        href={convertGoogleDriveUrl(log.sent_file_url)} 
-                                                        target="_blank" 
-                                                        rel="noreferrer"
-                                                        className="inline-flex items-center gap-1.5 px-2 py-1 bg-emerald-50 text-emerald-700 rounded border border-emerald-100 hover:bg-emerald-100 transition-colors text-[10px] font-bold"
-                                                    >
-                                                        <i className="fa-solid fa-file-pdf"></i> PDF Enviado
-                                                    </a>
-                                                )}
-                                                
-                                                {/* Adjuntos */}
-                                                {log.attachments?.map((att, i) => (
-                                                    <a 
-                                                        key={i}
-                                                        href={att.url} 
-                                                        target="_blank" 
-                                                        rel="noreferrer"
-                                                        className="inline-flex items-center gap-1.5 px-2 py-1 bg-slate-50 text-slate-600 rounded border border-slate-100 hover:bg-slate-100 transition-colors text-[10px]"
-                                                        title={att.nombre}
-                                                    >
-                                                        <i className={`fa-solid ${getFileIcon(att.tipo || 'file')}`}></i> {att.nombre.length > 15 ? att.nombre.substring(0, 12) + '...' : att.nombre}
-                                                    </a>
-                                                ))}
-                                            </div>
-                                        )}
+                                    {/* Destinatarios en dos líneas */}
+                                    <div className="space-y-1.5 text-xs">
+                                        <div className="flex items-center gap-2">
+                                            <i className="fa-solid fa-envelope text-slate-400 w-4"></i>
+                                            <span className="text-slate-500">Para:</span>
+                                            <span className="font-medium text-slate-800">{log.sent_to}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <i className="fa-solid fa-copy text-slate-400 w-4"></i>
+                                            <span className="text-slate-500">Copia:</span>
+                                            {log.sent_cc ? (
+                                                <span className="font-medium text-slate-800">{log.sent_cc}</span>
+                                            ) : (
+                                                <span className="italic text-slate-400">sin copia</span>
+                                            )}
+                                        </div>
                                     </div>
+
+                                    {/* Asunto (si existe) */}
+                                    {log.subject && (
+                                        <p className="mt-2 text-xs text-slate-600 italic border-t border-slate-100 pt-2">
+                                            <span className="text-slate-400">Asunto: </span>{log.subject}
+                                        </p>
+                                    )}
+
+                                    {/* Adjuntos (si existen) */}
+                                    {log.attachments && log.attachments.length > 0 && (
+                                        <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
+                                            {log.attachments?.map((att, i) => (
+                                                <a 
+                                                    key={i}
+                                                    href={att.url} 
+                                                    target="_blank" 
+                                                    rel="noreferrer"
+                                                    className="inline-flex items-center gap-1 px-2 py-1 bg-slate-200 text-slate-700 rounded text-[9px] hover:bg-slate-300 transition-colors"
+                                                    title={att.nombre}
+                                                >
+                                                    <i className={`fa-solid ${getFileIcon(att.tipo || 'file')}`}></i> {att.nombre.length > 12 ? att.nombre.substring(0, 10) + '...' : att.nombre}
+                                                </a>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useAuth } from '../contexts/AuthContext'; // Importar
-import { Tenant } from '../types'; // Updated Type
+import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
+import { Tenant } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import { getImageUrl } from '../utils/imageUtils';
@@ -8,9 +9,8 @@ import { apiFetch } from '../services/apiClient';
 import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
 
 const CompaniesList: React.FC = () => {
-  const { user } = useAuth(); // Usar para validación de rol
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const { tenants: cachedTenants, loading: cacheLoading, invalidateTenants } = useDataCache();
     const [searchTerm, setSearchTerm] = useState('');
     const [countryFilter, setCountryFilter] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -32,40 +32,6 @@ const CompaniesList: React.FC = () => {
     onConfirm: () => {},
     isDestructive: false,
   });
-
-  const fetchData = useCallback(async () => {
-    // Solo un superadmin puede ver esta lista
-    if (user?.rol_user !== 'superadmin') {
-      setTenants([]);
-      setLoading(false);
-      return;
-    }
-    if (!user?.id_user) return; // Comprobar que hay id_user
-
-    setLoading(true);
-    const userId = user.id_user;
-
-    try {
-      const response = await apiFetch(buildUrl(GATEWAY_CONFIG.API.TENANTS.LIST, { id_user: userId }));
-      if (!response.ok) {
-        if (response.status === 404) setTenants([]);
-        else throw new Error('Error al cargar tenants');
-        return;
-      }
-      const text = await response.text();
-      const data = text ? JSON.parse(text) : [];
-      setTenants(data);
-    } catch (e) {
-      setToast({ message: 'Error al cargar los tenants.', type: 'error' });
-      setTenants([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   const handleAddNew = () => {
     setEditingTenant({ ruc: '', name_tenant: '', country: 'Ecuador', city: '', address: '', website: '', logo_url: '' });
@@ -90,8 +56,6 @@ const CompaniesList: React.FC = () => {
       message: '¿Estás seguro? Se eliminarán todos los usuarios y datos asociados a esta empresa suscrita.',
       isDestructive: true,
       onConfirm: async () => {
-        const original = [...tenants];
-        setTenants(prev => prev.filter(t => t.id_tenant !== id));
         try {
           const response = await apiFetch(GATEWAY_CONFIG.API.TENANTS.DELETE, {
             method: 'POST',
@@ -99,9 +63,9 @@ const CompaniesList: React.FC = () => {
           });
           if (!response.ok) throw new Error('Error al eliminar tenant');
           setToast({ message: 'Tenant eliminado.', type: 'success' });
+          await invalidateTenants();
         } catch (error) {
           setToast({ message: 'Error al eliminar.', type: 'error' });
-          setTenants(original);
         }
       },
     });
@@ -182,12 +146,9 @@ const CompaniesList: React.FC = () => {
           const errorText = await response.text();
           throw new Error(`Error al actualizar tenant (${response.status}): ${errorText}`);
         }
-        const apiResponse = await response.json();
-        const logoToUse = apiResponse.logo_url || logoPreview || editingTenant.logo_url;
 
-        const updated = { ...editingTenant, ...apiResponse, logo_url: logoToUse } as Tenant;
-        setTenants(prev => prev.map(t => t.id_tenant === updated.id_tenant ? updated : t));
         setToast({ message: 'Tenant actualizado.', type: 'success' });
+        await invalidateTenants();
       } else {
         let response;
         
@@ -227,13 +188,10 @@ const CompaniesList: React.FC = () => {
           const errorText = await response.text();
           throw new Error(`Error al crear tenant (${response.status}): ${errorText}`);
         }
-        const apiResponse = await response.json();
-        const logoToUse = apiResponse.logo_url || logoPreview || editingTenant.logo_url;
 
-        const newT = { ...editingTenant, ...apiResponse, logo_url: logoToUse } as Tenant;
-        setTenants(prev => [newT, ...prev]);
         setToast({ message: 'Tenant creado.', type: 'success' });
         setIsModalOpen(false);
+        await invalidateTenants();
       }
     } catch (error: any) {
       console.error('❌ Error en operación de tenant:', error);
@@ -292,11 +250,16 @@ const CompaniesList: React.FC = () => {
         </button>
       </div>
 
-      {loading ? (
+      {cacheLoading ? (
         <div className="p-8 text-center text-slate-500">Cargando suscripciones...</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {tenants.map((tenant) => (
+          {cachedTenants.filter(t => {
+            const matchesSearch = (t.name_tenant || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                  (t.ruc || '').toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesCountry = countryFilter ? t.country === countryFilter : true;
+            return matchesSearch && matchesCountry;
+          }).map((tenant) => (
             <div 
               key={tenant.id_tenant} 
               onClick={() => handleEdit(tenant)}

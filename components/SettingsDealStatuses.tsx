@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { DealStatus } from '../types'; // Asegúrate de agregar notify_client?: boolean en tu type DealStatus
+import { useDataCache } from '../contexts/DataCacheContext';
+import { DealStatus } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import IconPicker from '../components/IconPicker';
@@ -25,10 +26,10 @@ interface ExtendedDealStatus extends DealStatus {
 
 const SettingsDealStatuses: React.FC = () => {
   const { user } = useAuth();
+  const { dealStatuses: cachedStatuses, loading: cacheLoading, invalidateDealStatuses } = useDataCache();
   
-  // Datos
+  // Datos locales para drag & drop
   const [statuses, setStatuses] = useState<ExtendedDealStatus[]>([]);
-  const [loading, setLoading] = useState(true);
   
   // Edición
   const [editingStatus, setEditingStatus] = useState<Partial<ExtendedDealStatus> | null>(null);
@@ -44,31 +45,12 @@ const SettingsDealStatuses: React.FC = () => {
   const [orderChanged, setOrderChanged] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
 
-  // Carga inicial
-  const fetchData = useCallback(async () => {
-    if (!user?.id_tenant) return;
-    setLoading(true);
-    try {
-      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}`);
-      if (!response.ok) {
-        if(response.status === 404) setStatuses([]);
-        else throw new Error('Failed to fetch deal statuses');
-        return;
-      }
-      const data = await response.json();
-      const sortedData = data.sort((a: ExtendedDealStatus, b: ExtendedDealStatus) => a.status_order - b.status_order);
-      setStatuses(sortedData);
-      setOrderChanged(false);
-    } catch (error) {
-      setToast({ message: 'Error al cargar los estados.', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
-
+  // Sincronizar cache con estado local para drag & drop
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    const sortedData = [...cachedStatuses].sort((a, b) => a.status_order - b.status_order);
+    setStatuses(sortedData as ExtendedDealStatus[]);
+    setOrderChanged(false);
+  }, [cachedStatuses]);
 
   // --- DRAG AND DROP ---
   const handleDragStart = (index: number) => {
@@ -168,7 +150,7 @@ const SettingsDealStatuses: React.FC = () => {
       
       setToast({ message: `Estado ${isUpdating ? 'actualizado' : 'creado'}.`, type: 'success' });
       setIsModalOpen(false);
-      fetchData();
+      await invalidateDealStatuses();
     } catch (error) {
       setToast({ message: (error as Error).message, type: 'error' });
     }
@@ -190,7 +172,7 @@ const SettingsDealStatuses: React.FC = () => {
           });
           if (!response.ok) throw new Error('Error al eliminar');
           setToast({ message: 'Estado eliminado.', type: 'success' });
-          fetchData();
+          await invalidateDealStatuses();
         } catch (error) {
           setToast({ message: (error as Error).message, type: 'error' });
         } finally {
@@ -200,7 +182,7 @@ const SettingsDealStatuses: React.FC = () => {
     });
   };
 
-  if (loading) return (
+  if (cacheLoading) return (
       <div className="flex justify-center p-8">
           <i className="fa-solid fa-circle-notch fa-spin text-brand-500"></i>
       </div>
@@ -233,7 +215,7 @@ const SettingsDealStatuses: React.FC = () => {
 
       if (!response.ok) throw new Error('Error al actualizar');
       setToast({ message: 'Categoría actualizada', type: 'success' });
-      fetchData();
+      await invalidateDealStatuses();
     } catch (error) {
       setToast({ message: 'Error al cambiar categoría', type: 'error' });
     } finally {

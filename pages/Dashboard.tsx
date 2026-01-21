@@ -31,8 +31,9 @@ type QuoteSummary = {
 
 type CalendarEvent = {
   titulo: string;
-  fecha_inicio: string;
-  tipo: string;
+  hora?: string;
+  fecha_inicio?: string;
+  tipo?: string | null;
 };
 
 type SalesByCompany = {
@@ -464,18 +465,39 @@ const Dashboard: React.FC = () => {
                             <p className="text-sm text-slate-400 italic text-center py-4">No tienes eventos hoy.</p>
                         ) : (
                             <ul className="space-y-4">
-                                {todayEvents.map((evt, i) => (
+                                {todayEvents.map((evt, i) => {
+                                    let timeString = 'Sin hora';
+                                    
+                                    // Prioritizar campo 'hora' (texto tipo "10:00")
+                                    if (evt.hora) {
+                                        timeString = evt.hora.substring(0, 5); // Extrae HH:MM
+                                    } else if (evt.fecha_inicio) {
+                                        // Fallback a fecha_inicio si existe
+                                        if (typeof evt.fecha_inicio === 'string' && /^\d{1,2}:\d{2}/.test(evt.fecha_inicio)) {
+                                            timeString = evt.fecha_inicio.substring(0, 5);
+                                        } else {
+                                            const eventTime = new Date(evt.fecha_inicio);
+                                            if (!isNaN(eventTime.getTime())) {
+                                                timeString = eventTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                                            }
+                                        }
+                                    }
+                                    
+                                    const tipoDisplay = evt.tipo ? evt.tipo : 'Evento';
+                                    
+                                    return (
                                     <li key={i} className="flex gap-3 items-start relative pl-4">
                                         <div className="absolute left-0 top-1 bottom-1 w-1 bg-blue-500 rounded-full"></div>
                                         <div>
                                             <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded mb-1 inline-block">
-                                                {new Date(evt.fecha_inicio).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                {timeString}
                                             </span>
                                             <p className="text-sm font-semibold text-slate-800 leading-tight">{evt.titulo}</p>
-                                            <span className="text-[10px] text-slate-400 uppercase tracking-wide">{evt.tipo}</span>
+                                            <span className="text-[10px] text-slate-400 uppercase tracking-wide">{tipoDisplay}</span>
                                         </div>
                                     </li>
-                                ))}
+                                    );
+                                })}
                             </ul>
                         )}
                     </div>

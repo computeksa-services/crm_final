@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { financialService } from '../services/financials.service';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -238,13 +239,14 @@ const getPaymentStatusColor = (code?: string) => {
 
 const FinancialsList: React.FC = () => {
   const { user } = useAuth();
+    const { financialsCache, invalidateFinancials } = useDataCache();
   const navigate = useNavigate();
 
   // --- STATE ---
   const [transactions, setTransactions] = useState<FinancialTransaction[]>([]);
   const [kpiSummary, setKpiSummary] = useState<KpiSummary | null>(null);
   const [availableList, setAvailableList] = useState<YearWithMonths[]>([]);
-  const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(true);
 
   // Table State
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -299,110 +301,75 @@ const FinancialsList: React.FC = () => {
   }, []);
 
   // --- DATA LOADING ---
-  const didInitRef = useRef(false);
-  
-  const loadData = useCallback(async () => {
-      if (!user?.id_tenant) return;
-      setLoading(true);
-      try {
-          const data = await financialService.getAll(user.id_tenant, { ...dateRange, include_open: includeOpen });
-          const result = Array.isArray(data) ? data[0] : data;
+    const didInitRef = useRef(false);
 
-          if (result.kpis) {
-              setKpiSummary({
-                  ventasMes: Number(result.kpis.ventas_periodo || 0),
-                  porCobrarTotal: Number(result.kpis.por_cobrar_total || 0),
-                  vencidoTotal: Number(result.kpis.vencido_total || 0),
-                  cobradoMes: Number(result.kpis.cobrado_periodo || 0)
-              });
-          }
-          if (result.meses_disponibles) {
-              setAvailableList(result.meses_disponibles);
-          }
-          
-          const txList = (result.data || []).filter((t: any) => t && Object.keys(t).length > 0);
-          setTransactions(txList.map((t: any) => ({
-              ...t,
-              id_transaction: t.id_transaction || t.id_transaccion,
-              invoice_number: t.invoice_number || t.numero_factura,
-              description: t.description || t.descripcion_concepto,
-              client_company_name: t.client_company_name || t.nombre_cliente_proveedor,
-              status: t.status || t.estado_registro,
-              transaction_type: t.tipo_transaccion,
-              total_value: Number(t.total_value || t.total_factura || 0),
-              paid_amount: Number(t.paid_amount || t.monto_pagado_caja || 0),
-              retention_value: Number(t.retention_value || t.valor_retencion || 0),
-              balance_due: Math.max(Number(t.v_saldo_pendiente || t.saldo_pendiente || 0) - Number(t.valor_retencion || 0), 0),
-              issue_date: t.issue_date || t.fecha_emision,
-              due_date: t.due_date || t.fecha_vencimiento,
-              subtotal: Number(t.subtotal || 0),
-              tax_amount: Number(t.tax_amount || t.impuestos || 0),
-              payment_status_code: t.v_codigo_estado,
-              payment_status_label: t.v_etiqueta_estado
-          })));
-      } catch (e) { console.error(e); setToast({ message: 'Error de conexión', type: 'error' }); } finally { setLoading(false); }
-  }, [user, dateRange, includeOpen]);
+    const computeKey = useCallback(() => {
+        return `${dateRange.start || ''}|${dateRange.end || ''}|${includeOpen ? 1 : 0}`;
+    }, [dateRange.start, dateRange.end, includeOpen]);
+
+    // Hidratar desde cache cuando haya datos para la clave actual
+    useEffect(() => {
+        const key = computeKey();
+        const entry = financialsCache[key];
+        if (entry && entry.result) {
+            const result = entry.result;
+            if (result.kpis) {
+                setKpiSummary({
+                    ventasMes: Number(result.kpis.ventas_periodo || 0),
+                    porCobrarTotal: Number(result.kpis.por_cobrar_total || 0),
+                    vencidoTotal: Number(result.kpis.vencido_total || 0),
+                    cobradoMes: Number(result.kpis.cobrado_periodo || 0)
+                });
+            } else {
+                setKpiSummary(null);
+            }
+            if (result.meses_disponibles) {
+                setAvailableList(result.meses_disponibles);
+            }
+            const txList = (result.data || []).filter((t: any) => t && Object.keys(t).length > 0);
+            setTransactions(txList.map((t: any) => ({
+                ...t,
+                id_transaction: t.id_transaction || t.id_transaccion,
+                invoice_number: t.invoice_number || t.numero_factura,
+                description: t.description || t.descripcion_concepto,
+                client_company_name: t.client_company_name || t.nombre_cliente_proveedor,
+                status: t.status || t.estado_registro,
+                transaction_type: t.tipo_transaccion,
+                total_value: Number(t.total_value || t.total_factura || 0),
+                paid_amount: Number(t.paid_amount || t.monto_pagado_caja || 0),
+                retention_value: Number(t.retention_value || t.valor_retencion || 0),
+                balance_due: Math.max(Number(t.v_saldo_pendiente || t.saldo_pendiente || 0) - Number(t.valor_retencion || 0), 0),
+                issue_date: t.issue_date || t.fecha_emision,
+                due_date: t.due_date || t.fecha_vencimiento,
+                subtotal: Number(t.subtotal || 0),
+                tax_amount: Number(t.tax_amount || t.impuestos || 0),
+                payment_status_code: t.v_codigo_estado,
+                payment_status_label: t.v_etiqueta_estado
+            })));
+            setLoading(false);
+        }
+    }, [financialsCache, computeKey]);
 
   // Carga inicial - solo una vez
-  useEffect(() => { 
-    if (didInitRef.current) return;
-    didInitRef.current = true;
-    
-    const fetchInitial = async () => {
-      if (!user?.id_tenant) return;
-      setLoading(true);
-      try {
-        const data = await financialService.getAll(user.id_tenant, { ...dateRange, include_open: includeOpen });
-        const result = Array.isArray(data) ? data[0] : data;
-
-        if (result.kpis) {
-          setKpiSummary({
-            ventasMes: Number(result.kpis.ventas_periodo || 0),
-            porCobrarTotal: Number(result.kpis.por_cobrar_total || 0),
-            vencidoTotal: Number(result.kpis.vencido_total || 0),
-            cobradoMes: Number(result.kpis.cobrado_periodo || 0)
-          });
-        }
-        if (result.meses_disponibles) {
-          setAvailableList(result.meses_disponibles);
-        }
-        
-        const txList = (result.data || []).filter((t: any) => t && Object.keys(t).length > 0);
-        setTransactions(txList.map((t: any) => ({
-          ...t,
-          id_transaction: t.id_transaction || t.id_transaccion,
-          invoice_number: t.invoice_number || t.numero_factura,
-          description: t.description || t.descripcion_concepto,
-          client_company_name: t.client_company_name || t.nombre_cliente_proveedor,
-          status: t.status || t.estado_registro,
-          transaction_type: t.tipo_transaccion,
-          total_value: Number(t.total_value || t.total_factura || 0),
-          paid_amount: Number(t.paid_amount || t.monto_pagado_caja || 0),
-          retention_value: Number(t.retention_value || t.valor_retencion || 0),
-          balance_due: Math.max(Number(t.v_saldo_pendiente || t.saldo_pendiente || 0) - Number(t.valor_retencion || 0), 0),
-          issue_date: t.issue_date || t.fecha_emision,
-          due_date: t.due_date || t.fecha_vencimiento,
-          subtotal: Number(t.subtotal || 0),
-          tax_amount: Number(t.tax_amount || t.impuestos || 0),
-          payment_status_code: t.v_codigo_estado,
-          payment_status_label: t.v_etiqueta_estado
-        })));
-      } catch (e) { 
-        console.error(e); 
-        setToast({ message: 'Error de conexión', type: 'error' }); 
-      } finally { 
-        setLoading(false); 
-      }
-    };
-    
-    fetchInitial();
-  }, [user?.id_tenant]);
+    useEffect(() => { 
+        if (didInitRef.current) return;
+        didInitRef.current = true;
+        if (!user?.id_tenant) return;
+        const key = computeKey();
+        const hasCache = Boolean(financialsCache[key]);
+        if (!hasCache) setLoading(true);
+        // Sync en segundo plano; al completar, el efecto de cache hidratará
+        invalidateFinancials({ start: dateRange.start, end: dateRange.end, include_open: includeOpen });
+    }, [user?.id_tenant]);
 
   // Recargar solo cuando el usuario cambia los filtros MANUALMENTE (después de la carga inicial)
-  useEffect(() => {
-    if (!didInitRef.current) return;
-    loadData();
-  }, [dateRange, includeOpen, loadData]);
+    useEffect(() => {
+        if (!didInitRef.current) return;
+        const key = computeKey();
+        const hasCache = Boolean(financialsCache[key]);
+        if (!hasCache) setLoading(true);
+        invalidateFinancials({ start: dateRange.start, end: dateRange.end, include_open: includeOpen });
+    }, [dateRange, includeOpen]);
 
   // Actualizar selectedYear y selectedMonth cuando lleguen los datos disponibles (sin disparar nuevo fetch)
   useEffect(() => {
@@ -431,7 +398,7 @@ const FinancialsList: React.FC = () => {
           try {
               await financialService.update({ id_transaction: tx.id_transaction, id_tenant: user?.id_tenant, status: newStatus, paid_amount: 0, balance_due: tx.total_value });
               setToast({ message: 'Estado actualizado', type: 'success' });
-              loadData();
+              invalidateFinancials({ start: dateRange.start, end: dateRange.end, include_open: includeOpen });
           } catch (e) { setToast({ message: 'Error al actualizar', type: 'error' }); }
       }
   };
@@ -446,7 +413,7 @@ const FinancialsList: React.FC = () => {
           });
           setPaymentModal(prev => ({ ...prev, isOpen: false }));
           setToast({ message: 'Pago registrado', type: 'success' });
-          loadData();
+          invalidateFinancials({ start: dateRange.start, end: dateRange.end, include_open: includeOpen });
       } catch (e) { setToast({ message: 'Error registrando pago', type: 'error' }); }
   };
 
@@ -456,7 +423,7 @@ const FinancialsList: React.FC = () => {
           await financialService.delete(deleteId, user.id_tenant, user.id_user);
           setToast({ message: 'Eliminado correctamente', type: 'success' });
           setDeleteId(null);
-          loadData();
+          invalidateFinancials({ start: dateRange.start, end: dateRange.end, include_open: includeOpen });
       } catch (e) { setToast({ message: 'Error al eliminar', type: 'error' }); }
   };
 

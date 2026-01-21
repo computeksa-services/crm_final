@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { ClientContact } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
@@ -25,11 +26,11 @@ import {
 const ClientContactsList: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { contacts: cachedContacts, loading: cacheLoading, invalidateContacts } = useDataCache();
   
   // --- ESTADOS DE DATOS ---
-  const [contacts, setContacts] = useState<ClientContact[]>([]);
-  const [totalPages, setTotalPages] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const contacts = useMemo(() => cachedContacts.filter(c => c && c.id_contact), [cachedContacts]);
+  const loading = cacheLoading;
   
   // --- ESTADOS DE LA TABLA ---
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -58,63 +59,11 @@ const ClientContactsList: React.FC = () => {
     isDestructive: false 
   });
 
-  // --- CARGA DE DATOS ---
-  const fetchData = useCallback(async () => {
-    if (!user?.id_tenant || !user?.id_user) return;
-    setLoading(true);
-    try {
-      const page = pagination.pageIndex + 1;
-      const limit = pagination.pageSize;
-      const contactsRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?page=${page}&limit=${limit}`);
-
-      const parseResponse = async (res: Response) => {
-        if (!res.ok) return { data: [], totalPages: 1 };
-        const text = await res.text();
-        if (!text) return { data: [], totalPages: 1 };
-        const response = JSON.parse(text);
-        
-        // Manejar estructura: { data: [...], pagination: { total, totalPages, ... } }
-        if (response && response.data && response.pagination) {
-          const contacts = Array.isArray(response.data) 
-            ? response.data.filter(item => item && item.id_contact) 
-            : [];
-          return { data: contacts, totalPages: response.pagination.totalPages || 1 };
-        }
-        
-        // Fallback para estructura antigua (array directo)
-        if (Array.isArray(response)) {
-          return { 
-            data: response.filter(item => item && item.id_contact),
-            totalPages: 1
-          };
-        }
-        
-        return { data: [], totalPages: 1 };
-      };
-
-      const result = await parseResponse(contactsRes);
-      setContacts(result.data);
-      setTotalPages(result.totalPages);
-    } catch (e) {
-      setToast({ message: 'Error al cargar los datos.', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [user, pagination]);
-
-  const didInitRef = useRef(false);
-  useEffect(() => {
-    if (didInitRef.current) return;
-    didInitRef.current = true;
-    fetchData();
-  }, [fetchData]);
-
-  // Ejecutar fetchData cuando cambie la paginación
-  useEffect(() => {
-    if (didInitRef.current) {
-      fetchData();
-    }
-  }, [pagination, fetchData]);
+  // --- CARGA DE DATOS (Ya no necesaria, usa caché) ---
+  // El caché se carga automáticamente
+  
+  // Calcular total de páginas basado en los contactos cacheados
+  const totalPages = Math.ceil(contacts.length / pagination.pageSize) || 1;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -156,9 +105,9 @@ const ClientContactsList: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleModalSuccess = () => {
+  const handleModalSuccess = async () => {
     setIsModalOpen(false);
-    fetchData();
+    await invalidateContacts(); // Recargar caché
     setToast({ message: isEditMode ? 'Contacto actualizado.' : 'Contacto creado.', type: 'success' });
   };
 
@@ -182,7 +131,7 @@ const ClientContactsList: React.FC = () => {
           });
           if (!response.ok) throw new Error();
           setToast({ message: 'Contacto eliminado correctamente.', type: 'success' });
-          fetchData();
+          await invalidateContacts(); // Recargar caché
         } catch (error) {
           setToast({ message: 'Error al eliminar el contacto.', type: 'error' });
         } finally {

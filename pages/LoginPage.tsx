@@ -15,6 +15,16 @@ const LoginPage: React.FC = () => {
     }
   }, [user, loading, navigate]);
   
+  // Detectar si la sesión expiró y mostrar mensaje
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('expired') === 'true') {
+      setError('Tu sesión ha expirado por seguridad. Por favor, ingresa nuevamente.');
+      // Limpiar el parámetro de la URL sin recargar
+      window.history.replaceState({}, document.title, '/login');
+    }
+  }, []);
+  
   // Estados para UI
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [error, setError] = useState('');
@@ -134,8 +144,8 @@ const LoginPage: React.FC = () => {
     // Vigilar el Popup
     const interval = setInterval(() => {
         try {
-            // Si el popup regresó a nuestro dominio (verificar que la URL comience con oauthRedirectUri)
-            if (popup?.location.href.indexOf(oauthRedirectUri) === 0) {
+            // Verificar si el popup ha sido redirigido a nuestro dominio
+            if (popup && popup.location && popup.location.origin === window.location.origin) {
                 // Obtener el query string que contiene el code
                 const searchParams = new URLSearchParams(popup.location.search);
                 const code = searchParams.get('code');

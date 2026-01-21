@@ -204,6 +204,14 @@ const FinancialCreate: React.FC = () => {
       setToast({ message: 'Factura y Cliente son obligatorios.', type: 'error' });
       return;
     }
+    
+    // Validar que el subtotal sea mayor a 0
+    const subtotalValue = parseFloat(String(transaction.subtotal)) || 0;
+    if (subtotalValue <= 0) {
+      setToast({ message: 'El subtotal debe ser mayor a cero.', type: 'error' });
+      return;
+    }
+    
     setSaving(true);
     try {
       const payload = {

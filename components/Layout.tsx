@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { getImageUrl } from '../utils/imageUtils';
 import { NAV_GROUPS, PAGE_NAMES } from '../services/routes.config';
 
@@ -26,7 +27,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   
-  const { user, logout } = useAuth(); 
+  const { user, logout } = useAuth();
+  const { loading: cacheLoading } = useDataCache();
   const location = useLocation();
   const navigate = useNavigate();
   const userRole = user?.rol_user || 'usuario';
@@ -348,6 +350,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
           
           <div className="flex items-center space-x-4 md:space-x-6">
+             {/* Indicador de carga del caché */}
+             {cacheLoading && (
+               <div className="flex items-center gap-2 text-xs text-slate-500">
+                 <div className="animate-spin">
+                   <i className="fa-solid fa-circle-notch text-brand-500"></i>
+                 </div>
+                 <span>Cargando datos...</span>
+               </div>
+             )}
+             
              {/* Tenant Info visible junto al avatar */}
              {user?.name_tenant && (
                <div className="flex flex-col items-end">
