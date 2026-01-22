@@ -418,57 +418,52 @@ const ClientCompaniesList: React.FC = () => {
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans">
       
       {/* TOOLBAR RESPONSIVO */}
-      <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        
-        {(loading || companies.length > 0) && (
-          <>
-            <div className="relative order-3 lg:order-1 w-full lg:flex-1">
-                <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input 
-                    value={globalFilter} 
-                    onChange={e => setGlobalFilter(e.target.value)}
-                    placeholder="Buscar empresas..." 
-                    className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm"
-                />
-            </div>
+        <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
+        <div className="relative order-3 lg:order-1 w-full lg:flex-1">
+          <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+          <input 
+            value={globalFilter} 
+            onChange={e => setGlobalFilter(e.target.value)}
+            placeholder="Buscar empresas..." 
+            className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm"
+          />
+        </div>
 
-            <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm min-w-[200px]">
-                <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
-                <div className="flex items-center gap-1 flex-wrap">
-                    <button 
-                        onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'country_name' ? [] : ['country_name'])}
-                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
-                            grouping.length && grouping[0] === 'country_name' 
-                            ? 'bg-brand-600 text-white shadow-inner' 
-                            : 'text-slate-500 hover:bg-slate-50'
-                        }`}
-                    >
-                        <i className="fa-solid fa-globe text-[11px]"></i> País
-                    </button>
-                    <button 
-                        onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'city' ? [] : ['city'])}
-                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
-                            grouping.length && grouping[0] === 'city' 
-                            ? 'bg-brand-600 text-white shadow-inner' 
-                            : 'text-slate-500 hover:bg-slate-50'
-                        }`}
-                    >
-                        <i className="fa-solid fa-city text-[11px]"></i> Ciudad
-                    </button>
-                    <button 
-                        onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'company_type_name' ? [] : ['company_type_name'])}
-                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
-                            grouping.length && grouping[0] === 'company_type_name' 
-                            ? 'bg-brand-600 text-white shadow-inner' 
-                            : 'text-slate-500 hover:bg-slate-50'
-                        }`}
-                    >
-                        <i className="fa-solid fa-building text-[11px]"></i> Tipo
-                    </button>
-                </div>
-            </div>
-          </>
-        )}
+        <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm min-w-[200px]">
+          <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
+          <div className="flex items-center gap-1 flex-wrap">
+            <button 
+              onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'country_name' ? [] : ['country_name'])}
+              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
+                grouping.length && grouping[0] === 'country_name' 
+                ? 'bg-brand-600 text-white shadow-inner' 
+                : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              <i className="fa-solid fa-globe text-[11px]"></i> País
+            </button>
+            <button 
+              onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'city' ? [] : ['city'])}
+              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
+                grouping.length && grouping[0] === 'city' 
+                ? 'bg-brand-600 text-white shadow-inner' 
+                : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              <i className="fa-solid fa-city text-[11px]"></i> Ciudad
+            </button>
+            <button 
+              onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'company_type_name' ? [] : ['company_type_name'])}
+              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
+                grouping.length && grouping[0] === 'company_type_name' 
+                ? 'bg-brand-600 text-white shadow-inner' 
+                : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              <i className="fa-solid fa-building text-[11px]"></i> Tipo
+            </button>
+          </div>
+        </div>
         
         <button 
           onClick={handleAddNew} 
@@ -479,25 +474,6 @@ const ClientCompaniesList: React.FC = () => {
       </div>
 
       {/* Área de la Tabla */}
-      {!loading && companies.length === 0 ? (
-        <div className="flex-1 flex items-center justify-center bg-slate-50/30">
-          <div className="flex flex-col items-center gap-4 max-w-md text-center">
-            <div className="w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center">
-              <i className="fa-solid fa-building text-3xl text-slate-300"></i>
-            </div>
-            <div>
-              <p className="text-slate-600 font-bold text-lg">No hay empresas registradas</p>
-              <p className="text-slate-400 text-sm mt-2">Comienza agregando tu primera empresa usando el botón superior</p>
-            </div>
-            <button 
-              onClick={handleAddNew} 
-              className="px-6 py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition-all flex items-center gap-2"
-            >
-              <i className="fa-solid fa-plus"></i> Nueva Empresa
-            </button>
-          </div>
-        </div>
-      ) : (
       <div className="flex-1 overflow-auto relative bg-slate-50/10">
         <table className="border-separate border-spacing-0" style={{ width: `${table.getTotalSize()}px`, minWidth: '100%' }}>
           <thead className="sticky top-0 z-40 shadow-sm">
@@ -590,6 +566,17 @@ const ClientCompaniesList: React.FC = () => {
                    <p className="text-slate-400 text-sm font-medium tracking-wide">Cargando empresas...</p>
                 </td>
               </tr>
+            ) : table.getRowModel().rows.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} className="py-20 text-center">
+                  <div className="flex flex-col items-center gap-3 text-slate-500">
+                    <i className="fa-regular fa-building text-4xl text-slate-300"></i>
+                    <p className="font-bold text-slate-600">No hay empresas aún</p>
+                    <p className="text-sm text-slate-400">Crea tu primera empresa para visualizarla aquí.</p>
+                    <button onClick={handleAddNew} className="px-4 py-2 bg-emerald-600 text-white rounded-lg shadow-sm hover:bg-emerald-700 transition-all text-sm font-bold">Crear empresa</button>
+                  </div>
+                </td>
+              </tr>
             ) : table.getRowModel().rows.map(row => {
               const isGrouped = row.getIsGrouped();
               
@@ -628,7 +615,6 @@ const ClientCompaniesList: React.FC = () => {
           </tbody>
         </table>
       </div>
-      )}
 
       {/* Footer / Paginación */}
       <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">

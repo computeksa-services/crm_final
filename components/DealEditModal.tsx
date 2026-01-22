@@ -39,6 +39,21 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
   const [expandedSections, setExpandedSections] = useState({ status: false, interest: false, channel: false });
   const didLoadDataRef = useRef(false);
 
+  // Cerrar dropdowns al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('[data-dropdown-container]')) {
+        setExpandedSections({ status: false, interest: false, channel: false });
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen]);
+
   // Inicializar deal cuando cambia initialData - asegurar que campos críticos se preserven
   useEffect(() => {
     if (initialData && isOpen) {

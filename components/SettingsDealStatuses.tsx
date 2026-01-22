@@ -47,6 +47,10 @@ const SettingsDealStatuses: React.FC = () => {
 
   // Sincronizar cache con estado local para drag & drop
   useEffect(() => {
+    console.log('🔄 SettingsDealStatuses: useEffect ejecutado', {
+      cachedStatusesLength: cachedStatuses.length,
+      cachedStatuses: cachedStatuses
+    });
     const sortedData = [...cachedStatuses].sort((a, b) => a.status_order - b.status_order);
     setStatuses(sortedData as ExtendedDealStatus[]);
     setOrderChanged(false);
@@ -234,15 +238,15 @@ const SettingsDealStatuses: React.FC = () => {
       onDragStart={() => handleDragStart(globalIndex)}
       onDragOver={(e) => handleDragOver(e, globalIndex)}
       onDragEnd={handleDragEnd}
-      className={`group flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-50 scale-95' : ''}`}
+      className={`group flex items-start justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all cursor-grab active:cursor-grabbing overflow-hidden ${isDragging ? 'opacity-50 scale-95' : ''}`}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <div className="text-slate-300 group-hover:text-slate-500">
           <i className="fa-solid fa-grip-vertical text-sm"></i>
         </div>
 
         <div 
-          className="w-9 h-9 rounded-lg flex items-center justify-center shadow-sm relative"
+          className="w-10 h-10 min-w-[2.5rem] min-h-[2.5rem] rounded-lg flex items-center justify-center shadow-sm relative"
           style={{ backgroundColor: `${status.color}15`, color: status.color }}
         >
           <i className={status.icon}></i>
@@ -252,14 +256,14 @@ const SettingsDealStatuses: React.FC = () => {
             </span>
           )}
         </div>
-        <div>
-          <span className="block font-bold text-sm" style={{ color: status.color }}>
+        <div className="min-w-0">
+          <span className="block font-bold text-sm leading-5" style={{ color: status.color }}>
             {status.name}
           </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
         <button onClick={() => handleEdit(status)} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors">
           <i className="fa-solid fa-pen-to-square text-xs"></i>
         </button>
@@ -298,7 +302,7 @@ const SettingsDealStatuses: React.FC = () => {
           <i className="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i> <p>No hay estados configurados.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
           {/* Renderizado de columnas usando los arrays filtrados */}
           {['DRAFT', 'PROGRESS', 'PAUSED', 'WON', 'LOST'].map(cat => {
              const list = cat === 'DRAFT' ? draftStatuses : cat === 'PROGRESS' ? progressStatuses : cat === 'PAUSED' ? pausedStatuses : cat === 'WON' ? wonStatuses : lostStatuses;
@@ -307,7 +311,7 @@ const SettingsDealStatuses: React.FC = () => {
              const icons: any = { DRAFT: 'fa-file-lines', PROGRESS: 'fa-arrows-spin', PAUSED: 'fa-pause', WON: 'fa-trophy', LOST: 'fa-circle-xmark' };
              
              return (
-               <div 
+              <div 
                  key={cat}
                  onDragOver={(e) => handleDragOverCategory(e)}
                  onDrop={(e) => handleDropOnCategory(e, cat)}

@@ -19,6 +19,19 @@ const PRESET_COLORS = [
   '#64748b', // Slate
 ];
 
+// Normaliza categorías para la UI y el API
+const mapCategoryToUi = (category?: string | null): QuoteStatus['status_category'] => {
+  if (category === 'WON') return 'ACCEPTED';
+  if (category === 'LOST') return 'REJECTED';
+  return (category as QuoteStatus['status_category']) || 'DRAFT';
+};
+
+const mapCategoryToApi = (category: QuoteStatus['status_category']): string => {
+  if (category === 'ACCEPTED') return 'WON';
+  if (category === 'REJECTED') return 'LOST';
+  return category;
+};
+
 const SettingsQuoteStatuses: React.FC = () => {
   const { user } = useAuth();
   const { quoteStatuses: cachedStatuses, loading: cacheLoading, invalidateQuoteStatuses } = useDataCache();
@@ -42,7 +55,11 @@ const SettingsQuoteStatuses: React.FC = () => {
 
   // Sincronizar cache con estado local para drag & drop
   useEffect(() => {
-    const sortedData = [...cachedStatuses].sort((a, b) => a.status_order - b.status_order);
+    const normalized = cachedStatuses.map(s => ({
+      ...s,
+      status_category: mapCategoryToUi(s.status_category)
+    }));
+    const sortedData = [...normalized].sort((a, b) => a.status_order - b.status_order);
     setStatuses(sortedData);
     setOrderChanged(false);
   }, [cachedStatuses]);
@@ -179,11 +196,11 @@ const SettingsQuoteStatuses: React.FC = () => {
       </div>
   );
 
-  // Agrupar estados por categoría
-  const draftStatuses = statuses.filter(s => s.status_category === 'DRAFT' || !s.status_category);
-  const sentStatuses = statuses.filter(s => s.status_category === 'SENT');
-  const acceptedStatuses = statuses.filter(s => s.status_category === 'ACCEPTED');
-  const rejectedStatuses = statuses.filter(s => s.status_category === 'REJECTED');
+  // Agrupar estados por categoría normalizada
+  const draftStatuses = statuses.filter(s => mapCategoryToUi(s.status_category) === 'DRAFT');
+  const sentStatuses = statuses.filter(s => mapCategoryToUi(s.status_category) === 'SENT');
+  const acceptedStatuses = statuses.filter(s => mapCategoryToUi(s.status_category) === 'ACCEPTED');
+  const rejectedStatuses = statuses.filter(s => mapCategoryToUi(s.status_category) === 'REJECTED');
 
   const handleDragOverCategory = (e: React.DragEvent, category: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED') => {
     e.preventDefault();
@@ -198,7 +215,7 @@ const SettingsQuoteStatuses: React.FC = () => {
     if (draggedStatus.status_category === category) return; // Ya está en esta categoría
 
     // Actualizar categoría
-    const updatedStatus = { ...draggedStatus, status_category: category, id_tenant: user?.id_tenant };
+    const updatedStatus = { ...draggedStatus, status_category: mapCategoryToApi(category), id_tenant: user?.id_tenant };
     
     try {
       const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes/update`, {
@@ -212,9 +229,9 @@ const SettingsQuoteStatuses: React.FC = () => {
       const categoryNames = {
         DRAFT: 'Borrador',
         SENT: 'Enviado',
-        ACCEPTED: 'Aceptado',
-        REJECTED: 'Rechazado'
-      };
+        ACCEPTED: 'Ganada',
+        REJECTED: 'Perdida'
+      } as const;
       
       setToast({ message: `Estado movido a ${categoryNames[category]}`, type: 'success' });
       await invalidateQuoteStatuses();
@@ -244,7 +261,7 @@ const SettingsQuoteStatuses: React.FC = () => {
         </div>
 
         <div 
-          className="w-9 h-9 rounded-lg flex items-center justify-center shadow-sm"
+          className="w-10 h-10 min-w-[2.5rem] min-h-[2.5rem] rounded-lg flex items-center justify-center shadow-sm"
           style={{ 
             backgroundColor: `${status.color}15`, 
             color: status.color 
@@ -318,7 +335,7 @@ const SettingsQuoteStatuses: React.FC = () => {
           <p>No hay estados configurados.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
           
           {/* BORRADOR */}
           <div 

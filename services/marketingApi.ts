@@ -45,8 +45,10 @@ export const marketingApi = {
       const response = await apiFetch(`${API_BASE}/api/marketing/lists?id_tenant=${id_tenant}&id_user=${id_user}`);
       const data = await parseResponse(response);
       if (!Array.isArray(data)) return [];
+      // Filtrar respuestas vacías: {success: true} sin campos de lista
+      const validLists = data.filter(item => item.id_list || item.list_id || item.name);
       // Normalizamos id_list/list_id para que el frontend siempre tenga ambos
-      return data.map((item: any) => ({
+      return validLists.map((item: any) => ({
         ...item,
         list_id: item.list_id ?? item.id_list,
         id_list: item.id_list ?? item.list_id,

@@ -628,6 +628,17 @@ const DealsList: React.FC = () => {
           <tbody className="bg-white">
             {loading ? (
                 <tr><td colSpan={columns.length} className="py-24 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i><p className="text-slate-400 text-sm font-medium">Cargando tratos...</p></td></tr>
+            ) : table.getRowModel().rows.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.length} className="py-20 text-center">
+                    <div className="flex flex-col items-center gap-3 text-slate-500">
+                      <i className="fa-regular fa-handshake text-4xl text-slate-300"></i>
+                      <p className="font-bold text-slate-600">No hay tratos aún</p>
+                      <p className="text-sm text-slate-400">Crea tu primer trato para visualizarlo aquí.</p>
+                      <button onClick={() => navigate('/app/deals/new')} className="px-4 py-2 bg-emerald-600 text-white rounded-lg shadow-sm hover:bg-emerald-700 transition-all text-sm font-bold">Crear trato</button>
+                    </div>
+                  </td>
+                </tr>
             ) : table.getRowModel().rows.map(row => {
                 const isGrouped = row.getIsGrouped();
                 const handleRowClick = () => {

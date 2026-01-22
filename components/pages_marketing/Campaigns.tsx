@@ -619,11 +619,16 @@ const Campaigns: React.FC = () => {
              ) : table.getRowModel().rows.length === 0 ? (
                  <tr>
                     <td colSpan={columns.length} className="py-24 text-center">
-                        <div className="flex flex-col items-center">
-                            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-                                <i className="fa-solid fa-paper-plane text-2xl text-slate-300"></i>
-                            </div>
-                            <p className="text-slate-500 font-bold">No se encontraron campañas</p>
+                        <div className="flex flex-col items-center gap-3">
+                            <i className="fa-regular fa-paper-plane text-4xl text-slate-400"></i>
+                            <p className="text-slate-500 font-bold">No hay campañas aún</p>
+                            <button 
+                                onClick={() => navigate('/app/marketing/campaigns/new')}
+                                className="mt-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2"
+                            >
+                                <i className="fa-solid fa-plus"></i>
+                                Crear campaña
+                            </button>
                         </div>
                     </td>
                  </tr>

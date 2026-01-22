@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Deal, ClientCompany, ClientContact, CustomStatus, User, DealChannel } from '../types';
+import { useDataCache } from '../contexts/DataCacheContext';
+import { Deal, ClientCompany, ClientContact, User } from '../types';
 import { apiFetch } from '../services/apiClient';
 import Toast from '../components/Toast';
 import CompanyFormModal from '../components/CompanyFormModal';
@@ -11,153 +12,88 @@ const DealCreate: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  
+  // Usar datos del cache centralizado
+  const { 
+    companies: cachedCompanies, 
+    contacts: cachedContacts,
+    dealStatuses: cachedDealStatuses,
+    dealInterests: cachedDealInterests,
+    dealChannels: cachedDealChannels,
+    users: cachedUsers,
+    loading: cacheLoading 
+  } = useDataCache();
 
   const [deal, setDeal] = useState<Partial<Deal>>({});
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  const [companies, setCompanies] = useState<ClientCompany[]>([]);
-  const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<ClientContact[]>([]);
-  const [dealStatuses, setDealStatuses] = useState<CustomStatus[]>([]);
-  const [interestStatuses, setInterestStatuses] = useState<CustomStatus[]>([]);
-  const [dealChannels, setDealChannels] = useState<DealChannel[]>([]);
-  const [availableUsers, setAvailableUsers] = useState<User[]>([]);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [sharePermission, setSharePermission] = useState<'VIEW' | 'EDIT'>('VIEW');
-  const [loading, setLoading] = useState(true);
   
-  // Modal states for inline creation
+  // Modal states
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   
   const [expandedSections, setExpandedSections] = useState({ status: false, interest: false, channel: false });
-  const closeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchData = useCallback(async () => {
-    if (!user?.id_tenant || !user?.id_user) return;
-    const { id_tenant, id_user } = user;
-    const queryParams = new URLSearchParams(location.search);
-
-    try {
-      setLoading(true);
-      const endpoints = [
-        { name: 'Empresas', url: `/api/clients/companies` },
-        { name: 'Contactos', url: `/api/clients/contacts` },
-        { name: 'Estados', url: `/api/statuses/deals` },
-        { name: 'Intereses', url: `/api/statuses/interests` },
-        { name: 'Canales', url: `/api/channel` },
-        { name: 'Usuarios', url: `/api/users` }
-      ];
-
-      const parseData = async (res: Response, endpointName: string) => {
-        if (!res.ok) {
-          return [];
-        }
-        
-        const text = await res.text();
-        
-        // Si la respuesta está vacía, retornar array vacío
-        if (!text || text.trim() === '') {
-          return [];
-        }
-        
-        try {
-          const json = JSON.parse(text);
-          // Manejar si el backend devuelve { data: [...] } o el array directo
-          return Array.isArray(json) ? json : (json.data || []);
-        } catch (e) {
-          console.error(`❌ ${endpointName}: error parseando JSON`, text.substring(0, 100));
-          return [];
-        }
-      };
-
-      const responses = await Promise.all(
-        endpoints.map(endpoint => 
-          apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}${endpoint.url}?id_tenant=${id_tenant}&id_user=${id_user}`)
-        )
-      );
-
-      const [
-        companiesData, 
-        contactsData, 
-        dealStatusesData, 
-        interestStatusesData, 
-        channelsData, 
-        usersData
-      ] = await Promise.all(responses.map((res, idx) => parseData(res, endpoints[idx].name)));
-
-
-
-
-
-
-
-
-
-      setCompanies(companiesData);
-      setContacts(contactsData);
-      setDealStatuses(dealStatusesData);
-      setInterestStatuses(interestStatusesData);
-      setDealChannels(channelsData);
-      setAvailableUsers(usersData.filter((u: User) => u.id_user !== id_user));
-      
-      // Lógica para IDs por defecto
-      const defaultStatus = dealStatusesData.find((s: any) => s.is_default) || dealStatusesData[0];
-      const defaultInterest = interestStatusesData.find((s: any) => s.is_default) || interestStatusesData[0];
-      const defaultChannel = channelsData.find((c: any) => c.is_default) || channelsData[0];
-
-      // Normalización del ID de interés (puede venir como id_status o id_interest)
-      const getInterestId = (item: any) => item?.id_status || item?.id_interest || item?.id || '';
-
-      let initialState: Partial<Deal> = {
-        nombre_trato: '',
-        valor_trato: '',
-        id_client_company: queryParams.get('clientCompanyId') || '',
-        id_contact: queryParams.get('contactId') || '',
-        id_deal_status: defaultStatus?.id_status || defaultStatus?.id || '',
-        id_interest: getInterestId(defaultInterest),
-        id_channel: defaultChannel?.id_channel || defaultChannel?.id || '',
-        id_tenant: id_tenant,
-        id_user_owner: id_user,
-        id_user: id_user,
-        descripcion: '',
-      };
-
-      if (initialState.id_client_company) {
-        setFilteredContacts(contactsData.filter((c: ClientContact) => String(c.id_client_company) === String(initialState.id_client_company)));
-      }
-      setDeal(initialState);
-    } catch (e) {
-      console.error("Error fetching data:", e);
-      setToast({ message: 'Error cargando datos.', type: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [user, location.search]);
-
-  useEffect(() => { fetchData(); }, [fetchData]);
-
-  // Manejador de clics fuera para cerrar dropdowns
+  // Cerrar dropdowns al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (!(event.target as HTMLElement).closest('[data-dropdown-container]')) {
+      const target = event.target as HTMLElement;
+      if (!target.closest('[data-dropdown-container]')) {
         setExpandedSections({ status: false, interest: false, channel: false });
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Inicializar deal con valores por defecto del cache
+  useEffect(() => {
+    if (!cachedDealStatuses.length || !cachedDealInterests.length || !cachedDealChannels.length) return;
+    if (!user?.id_tenant || !user?.id_user) return;
+
+    const queryParams = new URLSearchParams(location.search);
+    const defaultStatus = cachedDealStatuses.find((s: any) => s.is_default) || cachedDealStatuses[0];
+    const defaultInterest = cachedDealInterests.find((i: any) => i.is_default) || cachedDealInterests[0];
+    const defaultChannel = cachedDealChannels.find((c: any) => c.is_default) || cachedDealChannels[0];
+
+    const initialState: Partial<Deal> = {
+      nombre_trato: '',
+      valor_trato: '',
+      descripcion: '',
+      id_client_company: queryParams.get('clientCompanyId') || '',
+      id_contact: queryParams.get('contactId') || '',
+      id_deal_status: defaultStatus?.id_status || '',
+      id_interest: defaultInterest?.id_interest || '',
+      channel: defaultChannel?.id_channel || '',
+      id_tenant: user.id_tenant,
+      id_user_owner: user.id_user,
+      id_user: user.id_user,
+    };
+
+    if (initialState.id_client_company) {
+      setFilteredContacts(cachedContacts.filter((c: ClientContact) => 
+        String(c.id_client_company) === String(initialState.id_client_company)
+      ));
+    }
+    
+    setDeal(initialState);
+  }, [cachedDealStatuses, cachedDealInterests, cachedDealChannels, user, location.search, cachedContacts]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    
     if (name === 'id_client_company') {
       if (value === '__ADD_NEW_COMPANY__') {
         setIsCompanyModalOpen(true);
         return;
       }
       setDeal(prev => ({ ...prev, id_client_company: value, id_contact: '' }));
-      setFilteredContacts(contacts.filter(c => String(c.id_client_company) === String(value)));
+      setFilteredContacts(cachedContacts.filter(c => String(c.id_client_company) === String(value)));
     } else if (name === 'id_contact') {
       if (value === '__ADD_NEW_CONTACT__') {
         setIsContactModalOpen(true);
@@ -170,15 +106,13 @@ const DealCreate: React.FC = () => {
   };
 
   const handleCompanyCreated = (newCompany: ClientCompany) => {
-    setCompanies(prev => [...prev, newCompany]);
     setDeal(prev => ({ ...prev, id_client_company: newCompany.id_client_company, id_contact: '' }));
-    setFilteredContacts(contacts.filter(c => String(c.id_client_company) === String(newCompany.id_client_company)));
+    setFilteredContacts(cachedContacts.filter(c => String(c.id_client_company) === String(newCompany.id_client_company)));
     setIsCompanyModalOpen(false);
     setToast({ message: 'Empresa creada exitosamente.', type: 'success' });
   };
 
   const handleContactCreated = (newContact: ClientContact) => {
-    setContacts(prev => [...prev, newContact]);
     if (newContact.id_client_company && String(newContact.id_client_company) === String(deal.id_client_company)) {
       setFilteredContacts(prev => [...prev, newContact]);
     }
@@ -192,6 +126,7 @@ const DealCreate: React.FC = () => {
       setToast({ message: 'Nombre, Empresa, Contacto y Estado son obligatorios.', type: 'error' });
       return;
     }
+
     setProcessing(true);
     try {
       const payload = { ...deal, created_at: new Date().toISOString() };
@@ -241,12 +176,36 @@ const DealCreate: React.FC = () => {
     }
   };
 
-  // Helpers para encontrar los labels seleccionados (asegurando comparación de strings)
-  const selectedStatus = useMemo(() => dealStatuses.find((s: any) => String(s.id_status || s.id) === String(deal.id_deal_status)), [dealStatuses, deal.id_deal_status]);
-  const selectedInterest = useMemo(() => interestStatuses.find((i: any) => String(i.id_status || i.id_interest || i.id) === String(deal.id_interest)), [interestStatuses, deal.id_interest]);
-  const selectedChannel = useMemo(() => dealChannels.find((c: any) => String(c.id_channel || c.id) === String(deal.id_channel)), [dealChannels, deal.id_channel]);
-  const selectedCompany = useMemo(() => companies.find(c => String(c.id_client_company) === String(deal.id_client_company)), [companies, deal.id_client_company]);
-  const selectedContact = useMemo(() => contacts.find(c => String(c.id_contact) === String(deal.id_contact)), [contacts, deal.id_contact]);
+  // Helpers para encontrar elementos seleccionados
+  const selectedStatus = useMemo(() => 
+    cachedDealStatuses.find((s: any) => String(s.id_status || s.id) === String(deal.id_deal_status)), 
+    [cachedDealStatuses, deal.id_deal_status]
+  );
+  
+  const selectedInterest = useMemo(() => 
+    cachedDealInterests.find((i: any) => String(i.id_interest || i.id) === String(deal.id_interest)), 
+    [cachedDealInterests, deal.id_interest]
+  );
+  
+  const selectedChannel = useMemo(() => 
+    cachedDealChannels.find((c: any) => String(c.id_channel || c.id) === String(deal.channel)), 
+    [cachedDealChannels, deal.channel]
+  );
+  
+  const selectedCompany = useMemo(() => 
+    cachedCompanies.find(c => String(c.id_client_company) === String(deal.id_client_company)), 
+    [cachedCompanies, deal.id_client_company]
+  );
+  
+  const selectedContact = useMemo(() => 
+    cachedContacts.find(c => String(c.id_contact) === String(deal.id_contact)), 
+    [cachedContacts, deal.id_contact]
+  );
+
+  const availableUsers = useMemo(() => 
+    cachedUsers.filter((u: User) => u.id_user !== user?.id_user),
+    [cachedUsers, user?.id_user]
+  );
 
   return (
     <div className="w-full bg-slate-50 min-h-screen animate-fade-in">
@@ -263,7 +222,7 @@ const DealCreate: React.FC = () => {
              <button onClick={() => navigate(-1)} className="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm font-bold hover:bg-slate-50">
                  Cancelar
              </button>
-             <button onClick={handleSave} disabled={processing || loading} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 shadow-md flex items-center gap-2 disabled:opacity-50">
+             <button onClick={handleSave} disabled={processing || cacheLoading} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 shadow-md flex items-center gap-2 disabled:opacity-50">
                  {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
                  Guardar
              </button>
@@ -302,10 +261,10 @@ const DealCreate: React.FC = () => {
                   </h3>
                   <div>
                       <label className="block text-xs font-bold text-slate-600 mb-1.5">Empresa *</label>
-                      <select name="id_client_company" value={deal.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
-                          <option value="">-- Seleccionar Empresa --</option>
+                      <select name="id_client_company" value={deal.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none" disabled={cacheLoading}>
+                          <option value="">{cacheLoading ? 'Cargando...' : '-- Seleccionar Empresa --'}</option>
                           <option value="__ADD_NEW_COMPANY__" className="font-bold text-emerald-600 bg-emerald-50">+ Nueva Empresa</option>
-                          {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
+                          {cachedCompanies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
                       </select>
                   </div>
                   {selectedCompany && (
@@ -330,8 +289,8 @@ const DealCreate: React.FC = () => {
                   {deal.id_client_company && (
                     <div>
                       <label className="block text-xs font-bold text-slate-600 mb-1.5">Contacto *</label>
-                      <select name="id_contact" value={deal.id_contact || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
-                          <option value="">-- Seleccionar Contacto --</option>
+                      <select name="id_contact" value={deal.id_contact || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none" disabled={cacheLoading}>
+                          <option value="">{cacheLoading ? 'Cargando...' : '-- Seleccionar Contacto --'}</option>
                           <option value="__ADD_NEW_CONTACT__" className="font-bold text-emerald-600 bg-emerald-50">+ Nuevo Contacto</option>
                           {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{c.first_name} {c.last_name}</option>)}
                       </select>
@@ -365,24 +324,24 @@ const DealCreate: React.FC = () => {
                   {/* Dropdown Estado */}
                   <div className="relative" data-dropdown-container>
                       <label className="block text-xs font-bold text-slate-600 mb-1.5">Estado del Pipeline *</label>
-                      <button type="button" onClick={() => setExpandedSections(p => ({...p, status: !p.status}))} className="w-full px-3 py-2 text-xs font-bold border rounded-lg flex items-center justify-between" style={{ backgroundColor: selectedStatus ? `${selectedStatus.color}15` : '#f8fafc', color: selectedStatus?.color || '#64748b', borderColor: selectedStatus?.color || '#e2e8f0' }}>
+                      <button type="button" onClick={() => setExpandedSections(p => ({...p, status: !p.status}))} disabled={cacheLoading} className="w-full px-3 py-2 text-xs font-bold border rounded-lg flex items-center justify-between disabled:opacity-60" style={{ backgroundColor: selectedStatus ? `${selectedStatus.color}15` : '#f8fafc', color: selectedStatus?.color || '#64748b', borderColor: selectedStatus?.color || '#e2e8f0' }}>
                           <span className="flex items-center gap-2">
-                            {selectedStatus ? <><i className={selectedStatus.icon}></i> {selectedStatus.name}</> : 'Seleccionar Estado'}
+                            {selectedStatus ? <><i className={selectedStatus.icon}></i> {selectedStatus.nombre_estado || selectedStatus.name}</> : 'Seleccionar Estado'}
                           </span>
                           <i className={`fa-solid fa-chevron-down transition-transform ${expandedSections.status ? 'rotate-180' : ''}`}></i>
                       </button>
                       {expandedSections.status && (
                           <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] p-2 space-y-1 max-h-60 overflow-y-auto">
-                              {dealStatuses.length === 0 ? (
+                              {cachedDealStatuses.length === 0 ? (
                                   <div className="p-4 text-center text-xs text-slate-400">
                                       <i className="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-400"></i>
                                       <p className="font-bold">No hay estados configurados</p>
                                       <p className="text-[10px] mt-1">Ve a Ajustes para configurarlos</p>
                                   </div>
                               ) : (
-                                  dealStatuses.map(s => (
+                                  cachedDealStatuses.map(s => (
                                       <button key={s.id_status || (s as any).id} onClick={() => { setDeal(p => ({...p, id_deal_status: s.id_status || (s as any).id})); setExpandedSections(p => ({...p, status: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: s.color }}>
-                                          <i className={s.icon}></i> {s.name}
+                                          <i className={s.icon}></i> {s.nombre_estado || s.name}
                                       </button>
                                   ))
                               )}
@@ -393,29 +352,26 @@ const DealCreate: React.FC = () => {
                   {/* Dropdown Interés */}
                   <div className="relative" data-dropdown-container>
                       <label className="block text-xs font-bold text-slate-600 mb-1.5">Nivel de Interés *</label>
-                      <button type="button" onClick={() => setExpandedSections(p => ({...p, interest: !p.interest}))} className="w-full px-3 py-2 text-xs font-bold border rounded-lg flex items-center justify-between" style={{ backgroundColor: selectedInterest ? `${selectedInterest.color}15` : '#f8fafc', color: selectedInterest?.color || '#64748b', borderColor: selectedInterest?.color || '#e2e8f0' }}>
+                      <button type="button" onClick={() => setExpandedSections(p => ({...p, interest: !p.interest}))} disabled={cacheLoading} className="w-full px-3 py-2 text-xs font-bold border rounded-lg flex items-center justify-between disabled:opacity-60" style={{ backgroundColor: selectedInterest ? `${selectedInterest.color}15` : '#f8fafc', color: selectedInterest?.color || '#64748b', borderColor: selectedInterest?.color || '#e2e8f0' }}>
                           <span className="flex items-center gap-2">
-                            {selectedInterest ? <><i className={selectedInterest.icon}></i> {selectedInterest.name}</> : 'Seleccionar Interés'}
+                            {selectedInterest ? <><i className={selectedInterest.icon}></i> {selectedInterest.nombre_interes || selectedInterest.name}</> : 'Seleccionar Interés'}
                           </span>
                           <i className={`fa-solid fa-chevron-down transition-transform ${expandedSections.interest ? 'rotate-180' : ''}`}></i>
                       </button>
                       {expandedSections.interest && (
                           <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] p-2 space-y-1 max-h-60 overflow-y-auto">
-                              {interestStatuses.length === 0 ? (
+                              {cachedDealInterests.length === 0 ? (
                                   <div className="p-4 text-center text-xs text-slate-400">
                                       <i className="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-400"></i>
                                       <p className="font-bold">No hay niveles de interés configurados</p>
                                       <p className="text-[10px] mt-1">Ve a Ajustes para configurarlos</p>
                                   </div>
                               ) : (
-                                  interestStatuses.map((i: any) => {
-                                      const id = i.id_status || i.id_interest || i.id;
-                                      return (
-                                        <button key={id} onClick={() => { setDeal((p: Partial<Deal>) => ({...p, id_interest: id})); setExpandedSections(p => ({...p, interest: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: i.color }}>
-                                            <i className={i.icon}></i> {i.name}
-                                        </button>
-                                      );
-                                  })
+                                  cachedDealInterests.map(i => (
+                                      <button key={i.id_interest || (i as any).id} onClick={() => { setDeal(p => ({...p, id_interest: i.id_interest || (i as any).id})); setExpandedSections(p => ({...p, interest: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: i.color }}>
+                                          <i className={i.icon}></i> {i.nombre_interes || i.name}
+                                      </button>
+                                  ))
                               )}
                           </div>
                       )}
@@ -424,7 +380,7 @@ const DealCreate: React.FC = () => {
                   {/* Dropdown Canal */}
                   <div className="relative" data-dropdown-container>
                       <label className="block text-xs font-bold text-slate-600 mb-1.5">Canal de Origen *</label>
-                      <button type="button" onClick={() => setExpandedSections(p => ({...p, channel: !p.channel}))} className="w-full px-3 py-2 text-xs font-bold border rounded-lg flex items-center justify-between" style={{ backgroundColor: selectedChannel ? `${selectedChannel.color}15` : '#f8fafc', color: selectedChannel?.color || '#64748b', borderColor: selectedChannel?.color || '#e2e8f0' }}>
+                      <button type="button" onClick={() => setExpandedSections(p => ({...p, channel: !p.channel}))} disabled={cacheLoading} className="w-full px-3 py-2 text-xs font-bold border rounded-lg flex items-center justify-between disabled:opacity-60" style={{ backgroundColor: selectedChannel ? `${selectedChannel.color}15` : '#f8fafc', color: selectedChannel?.color || '#64748b', borderColor: selectedChannel?.color || '#e2e8f0' }}>
                           <span className="flex items-center gap-2">
                             {selectedChannel ? <><i className={selectedChannel.icon}></i> {selectedChannel.name}</> : 'Seleccionar Canal'}
                           </span>
@@ -432,15 +388,15 @@ const DealCreate: React.FC = () => {
                       </button>
                       {expandedSections.channel && (
                           <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] p-2 space-y-1 max-h-60 overflow-y-auto">
-                              {dealChannels.length === 0 ? (
+                              {cachedDealChannels.length === 0 ? (
                                   <div className="p-4 text-center text-xs text-slate-400">
                                       <i className="fa-solid fa-triangle-exclamation text-2xl mb-2 text-amber-400"></i>
                                       <p className="font-bold">No hay canales configurados</p>
                                       <p className="text-[10px] mt-1">Ve a Ajustes para configurarlos</p>
                                   </div>
                               ) : (
-                                  dealChannels.map((c: any) => (
-                                      <button key={c.id_channel || c.id} onClick={() => { setDeal((p: Partial<Deal>) => ({...p, id_channel: c.id_channel || c.id})); setExpandedSections(p => ({...p, channel: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: c.color }}>
+                                  cachedDealChannels.map(c => (
+                                      <button key={c.id_channel || (c as any).id} onClick={() => { setDeal(p => ({...p, channel: c.id_channel || (c as any).id})); setExpandedSections(p => ({...p, channel: false})); }} className="w-full p-2 rounded-md text-left text-xs font-semibold hover:bg-slate-50 flex items-center gap-2" style={{ color: c.color }}>
                                           <i className={c.icon}></i> {c.name}
                                       </button>
                                   ))
@@ -503,7 +459,7 @@ const DealCreate: React.FC = () => {
         mode="create"
         initialData={deal.id_client_company ? { id_client_company: deal.id_client_company } : undefined}
         onSuccess={handleContactCreated}
-        companies={companies}
+        companies={cachedCompanies}
       />
     </div>
   );

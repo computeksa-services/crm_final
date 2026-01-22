@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Deal, ClientCompany, ClientContact, DealStatus, InterestStatus } from '../types';
+import { Deal, ClientCompany, ClientContact, DealStatus, DealChannel } from '../types';
 import Toast from './Toast';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { apiFetch } from '../services/apiClient';
 import CompanyFormModal from './CompanyFormModal';
 import ContactFormModal from './ContactFormModal';
@@ -25,6 +26,15 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
   contacts = [],
 }) => {
   const { user } = useAuth();
+  const { 
+    companies: cachedCompanies, 
+    contacts: cachedContacts,
+    dealStatuses: cachedDealStatuses,
+    dealInterests: cachedDealInterests,
+    dealChannels: cachedDealChannels,
+    loading: cacheLoading 
+  } = useDataCache();
+
   const [formData, setFormData] = useState<Partial<Deal>>({
     nombre_trato: '',
     valor_trato: '',
@@ -36,18 +46,27 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
     channel: '',
   });
 
-  const [companiesList, setCompaniesList] = useState<ClientCompany[]>(companies || []);
-  const [contactsList, setContactsList] = useState<ClientContact[]>(contacts || []);
-  const [dealStatuses, setDealStatuses] = useState<DealStatus[]>([]);
-  const [interestStatuses, setInterestStatuses] = useState<InterestStatus[]>([]);
+  const [companiesList, setCompaniesList] = useState<ClientCompany[]>([]);
+  const [contactsList, setContactsList] = useState<ClientContact[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [loadingData, setLoadingData] = useState(false);
-  const didLoadDataRef = useRef(false);
   
   // Modales inline para crear empresa/contacto
   const [isCompanyFormOpen, setIsCompanyFormOpen] = useState(false);
   const [isContactFormOpen, setIsContactFormOpen] = useState(false);
+
+  // Sincronizar con datos del cache
+  useEffect(() => {
+    if (cachedCompanies.length > 0) {
+      setCompaniesList(cachedCompanies);
+    }
+  }, [cachedCompanies]);
+
+  useEffect(() => {
+    if (cachedContacts.length > 0) {
+      setContactsList(cachedContacts);
+    }
+  }, [cachedContacts]);
 
   // Inicializar form con datos de edición
   useEffect(() => {
@@ -64,50 +83,6 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
       channel: initialData.channel || '',
     });
   }, [isOpen, initialData]);
-
-  // Cargar empresas, contactos, statuses y interests lazy
-  const ensureDataLoaded = async () => {
-    if (loadingData || didLoadDataRef.current || !user?.id_tenant || !user?.id_user) return;
-    if ((companiesList.length > 0 && contactsList.length > 0 && dealStatuses.length > 0 && interestStatuses.length > 0)) return;
-    didLoadDataRef.current = true;
-    try {
-      setLoadingData(true);
-      const [companiesRes, contactsRes, dealStatusesRes, interestStatusesRes] = await Promise.all([
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/interests?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
-      ]);
-      const parseList = async (res: Response) => {
-        if (!res.ok) return [];
-        const text = await res.text();
-        const data = text ? JSON.parse(text) : [];
-        return Array.isArray(data) ? data.filter((item: any) => item && (item.id_client_company || item.id_contact || item.id_status || item.id_interest)) : [];
-      };
-      const [compData, contData, dealStatusesData, interestStatusesData] = await Promise.all([
-        parseList(companiesRes),
-        parseList(contactsRes),
-        parseList(dealStatusesRes),
-        parseList(interestStatusesRes)
-      ]);
-      setCompaniesList(compData);
-      setContactsList(contData);
-      setDealStatuses(dealStatusesData);
-      setInterestStatuses(interestStatusesData);
-    } catch (err) {
-      setToast({ message: 'Error al cargar datos.', type: 'error' });
-    } finally {
-      setLoadingData(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!isOpen) {
-      didLoadDataRef.current = false;
-      return;
-    }
-    ensureDataLoaded();
-  }, [isOpen, user?.id_tenant, user?.id_user]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -206,10 +181,10 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
                   required
                   value={formData.id_client_company || ''}
                   onChange={handleInputChange}
-                  disabled={loadingData}
+                  disabled={cacheLoading}
                   className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60"
                 >
-                  <option value="">{loadingData ? 'Cargando...' : 'Selecciona empresa'}</option>
+                  <option value="">{cacheLoading ? 'Cargando...' : 'Selecciona empresa'}</option>
                   {companiesList.map(c => (
                     <option key={c.id_client_company} value={c.id_client_company}>
                       {c.name_company}
@@ -237,10 +212,10 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
                   required
                   value={formData.id_contact || ''}
                   onChange={handleInputChange}
-                  disabled={loadingData}
+                  disabled={cacheLoading}
                   className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60"
                 >
-                  <option value="">{loadingData ? 'Cargando...' : 'Selecciona contacto'}</option>
+                  <option value="">{cacheLoading ? 'Cargando...' : 'Selecciona contacto'}</option>
                   {contactsList.map(c => (
                     <option key={c.id_contact} value={c.id_contact}>
                       {c.first_name} {c.last_name}
@@ -298,11 +273,11 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
                 name="id_deal_status"
                 value={formData.id_deal_status || ''}
                 onChange={handleInputChange}
-                disabled={loadingData}
+                disabled={cacheLoading}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60"
               >
-                <option value="">{loadingData ? 'Cargando...' : 'Selecciona estado'}</option>
-                {dealStatuses.map(s => (
+                <option value="">{cacheLoading ? 'Cargando...' : 'Selecciona estado'}</option>
+                {cachedDealStatuses.map(s => (
                   <option key={s.id_status} value={s.id_status}>
                     {s.nombre_estado}
                   </option>
@@ -320,11 +295,11 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
                 name="id_interest"
                 value={formData.id_interest || ''}
                 onChange={handleInputChange}
-                disabled={loadingData}
+                disabled={cacheLoading}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60"
               >
-                <option value="">{loadingData ? 'Cargando...' : 'Selecciona interés'}</option>
-                {interestStatuses.map(i => (
+                <option value="">{cacheLoading ? 'Cargando...' : 'Selecciona interés'}</option>
+                {cachedDealInterests.map(i => (
                   <option key={i.id_interest} value={i.id_interest}>
                     {i.nombre_interes}
                   </option>
@@ -336,14 +311,20 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
                 Canal
               </label>
-              <input
-                type="text"
+              <select
                 name="channel"
                 value={formData.channel || ''}
                 onChange={handleInputChange}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                placeholder="Ej. Email, Teléfono, Reunión"
-              />
+                disabled={cacheLoading}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60"
+              >
+                <option value="">{cacheLoading ? 'Cargando...' : 'Selecciona canal'}</option>
+                {cachedDealChannels.map(ch => (
+                  <option key={ch.id_channel} value={ch.id_channel}>
+                    {ch.name}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 

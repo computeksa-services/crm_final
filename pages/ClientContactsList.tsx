@@ -315,36 +315,31 @@ const ClientContactsList: React.FC = () => {
       
       {/* TOOLBAR RESPONSIVO */}
       <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        
-        {(loading || contacts.length > 0) && (
-          <>
-            <div className="relative order-3 lg:order-1 w-full lg:flex-1">
-                <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input 
-                    value={globalFilter} 
-                    onChange={e => setGlobalFilter(e.target.value)}
-                    placeholder="Buscar contacto..." 
-                    className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm"
-                />
-            </div>
+        <div className="relative order-3 lg:order-1 w-full lg:flex-1">
+            <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            <input 
+                value={globalFilter} 
+                onChange={e => setGlobalFilter(e.target.value)}
+                placeholder="Buscar contacto..." 
+                className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm"
+            />
+        </div>
 
-            <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm min-w-[200px]">
-                <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
-                <div className="flex items-center gap-1 flex-wrap">
-                    <button 
-                        onClick={() => setGrouping(prev => prev.length ? [] : ['id_client_company'])}
-                        className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
-                            grouping.length 
-                            ? 'bg-brand-600 text-white shadow-inner' 
-                            : 'text-slate-500 hover:bg-slate-50'
-                        }`}
-                    >
-                        <i className="fa-solid fa-building text-[11px]"></i> Empresa
-                    </button>
-                </div>
+        <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm min-w-[200px]">
+            <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
+            <div className="flex items-center gap-1 flex-wrap">
+                <button 
+                    onClick={() => setGrouping(prev => prev.length ? [] : ['id_client_company'])}
+                    className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
+                        grouping.length 
+                        ? 'bg-brand-600 text-white shadow-inner' 
+                        : 'text-slate-500 hover:bg-slate-50'
+                    }`}
+                >
+                    <i className="fa-solid fa-building text-[11px]"></i> Empresa
+                </button>
             </div>
-          </>
-        )}
+        </div>
         
         <button 
           onClick={handleAddNew} 
@@ -458,15 +453,12 @@ const ClientContactsList: React.FC = () => {
               </tr>
             ) : table.getRowModel().rows.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} className="py-24 text-center">
-                   <div className="flex flex-col items-center gap-3">
-                     <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center">
-                       <i className="fa-solid fa-user text-2xl text-slate-300"></i>
-                     </div>
-                     <div>
-                       <p className="text-slate-600 font-bold text-sm">No hay contactos registrados</p>
-                       <p className="text-slate-400 text-xs mt-1">Crea tu primer contacto para comenzar</p>
-                     </div>
+                <td colSpan={columns.length} className="py-20 text-center">
+                   <div className="flex flex-col items-center gap-3 text-slate-500">
+                     <i className="fa-solid fa-user text-4xl text-slate-300"></i>
+                     <p className="text-slate-600 font-bold text-sm">No hay contactos aún</p>
+                     <p className="text-slate-400 text-sm">Crea tu primer contacto para visualizarlo aquí.</p>
+                     <button onClick={handleAddNew} className="px-4 py-2 bg-emerald-600 text-white rounded-lg shadow-sm hover:bg-emerald-700 transition-all text-sm font-bold">Crear contacto</button>
                    </div>
                 </td>
               </tr>

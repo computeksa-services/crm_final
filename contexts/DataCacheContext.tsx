@@ -82,7 +82,11 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     if (!user?.id_tenant || !user?.id_user) return;
     
     // 1. Intentar cargar desde localStorage primero (sin parpadeo)
-    const cachedKey = `cache_${user.id_tenant}`;
+    // Limpieza de clave legacy por inquilino sin usuario
+    try {
+      localStorage.removeItem(`cache_${user.id_tenant}`);
+    } catch (e) {}
+    const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
     const cached = localStorage.getItem(cachedKey);
     if (cached) {
       try {
@@ -99,6 +103,15 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           dealChannels: cachedDealChannels,
           financialsCache: cachedFinancialsCache
         } = JSON.parse(cached);
+        
+        console.log('📦 DataCache: Cargando desde localStorage', {
+          dealStatuses: Array.isArray(cachedDealStatuses) ? cachedDealStatuses.length : 0,
+          quoteStatuses: Array.isArray(cachedQuoteStatuses) ? cachedQuoteStatuses.length : 0,
+          productTypes: Array.isArray(cachedProductTypes) ? cachedProductTypes.length : 0,
+          dealInterests: Array.isArray(cachedDealInterests) ? cachedDealInterests.length : 0,
+          dealChannels: Array.isArray(cachedDealChannels) ? cachedDealChannels.length : 0
+        });
+        
         setCompanies(Array.isArray(cachedCompanies) ? cachedCompanies : []);
         setContacts(Array.isArray(cachedContacts) ? cachedContacts : []);
         setProducts(Array.isArray(cachedProducts) ? cachedProducts : []);
@@ -113,14 +126,27 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setLoaded(true);
         // NO mostrar loading si ya tenemos datos en cache
       } catch (e) {
+        console.error('❌ Error al parsear cache, limpiando...', e);
         localStorage.removeItem(cachedKey);
       }
     } else {
+      console.log('📦 DataCache: No hay cache, mostrando loading');
       // Solo mostrar loading si NO hay cache
       setLoading(true);
     }
     
     // 2. Sincronizar con API en segundo plano
+    console.log('🌐 DataCache: Iniciando fetch desde API...');
+    const safeJson = async <T = any,>(res: Response, fallback: T): Promise<T> => {
+      try {
+        const text = await res.text();
+        if (!text) return fallback;
+        return JSON.parse(text);
+      } catch (err) {
+        console.error('⚠️ DataCache: Error parseando JSON', err);
+        return fallback;
+      }
+    };
     try {
       const [companiesRes, contactsRes, productsRes, usersRes, tenantsRes, dealStatusesRes, quoteStatusesRes, productTypesRes, dealInterestsRes, dealChannelsRes] = await Promise.all([
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
@@ -136,30 +162,48 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/interests/deals?id_tenant=${user.id_tenant}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channels/deals?id_tenant=${user.id_tenant}`)
       ]);
+      
+      console.log('✅ DataCache: Respuestas recibidas', {
+        dealStatusesOk: dealStatusesRes.ok,
+        quoteStatusesOk: quoteStatusesRes.ok,
+        productTypesOk: productTypesRes.ok,
+        dealInterestsOk: dealInterestsRes.ok,
+        dealChannelsOk: dealChannelsRes.ok
+      });
 
       const [companiesData, contactsData, productsData, usersData, tenantsData, dealStatusesData, quoteStatusesData, productTypesData, dealInterestsData, dealChannelsData] = await Promise.all([
-        companiesRes.ok ? companiesRes.json() : [],
-        contactsRes.ok ? contactsRes.json() : [],
-        productsRes.ok ? productsRes.json() : [],
-        usersRes.ok ? usersRes.json() : [],
-        tenantsRes.ok ? tenantsRes.json() : [],
-        dealStatusesRes.ok ? dealStatusesRes.json() : [],
-        quoteStatusesRes.ok ? quoteStatusesRes.json() : [],
-        productTypesRes.ok ? productTypesRes.json() : [],
-        dealInterestsRes.ok ? dealInterestsRes.json() : [],
-        dealChannelsRes.ok ? dealChannelsRes.json() : []
+        companiesRes.ok ? safeJson(companiesRes, []) : [],
+        contactsRes.ok ? safeJson(contactsRes, []) : [],
+        productsRes.ok ? safeJson(productsRes, []) : [],
+        usersRes.ok ? safeJson(usersRes, []) : [],
+        tenantsRes.ok ? safeJson(tenantsRes, []) : [],
+        dealStatusesRes.ok ? safeJson(dealStatusesRes, []) : [],
+        quoteStatusesRes.ok ? safeJson(quoteStatusesRes, []) : [],
+        productTypesRes.ok ? safeJson(productTypesRes, []) : [],
+        dealInterestsRes.ok ? safeJson(dealInterestsRes, []) : [],
+        dealChannelsRes.ok ? safeJson(dealChannelsRes, []) : []
       ]);
 
-      const companiesArray = Array.isArray(companiesData) ? companiesData : [];
-      const contactsArray = Array.isArray(contactsData) ? contactsData : [];
-      const productsArray = Array.isArray(productsData) ? productsData : [];
-      const usersArray = Array.isArray(usersData) ? usersData : [];
-      const tenantsArray = Array.isArray(tenantsData) ? (user.rol_user === 'superadmin' ? tenantsData : [tenantsData]) : [];
-      const dealStatusesArray = Array.isArray(dealStatusesData) ? dealStatusesData : [];
-      const quoteStatusesArray = Array.isArray(quoteStatusesData) ? quoteStatusesData : [];
-      const productTypesArray = Array.isArray(productTypesData) ? productTypesData : [];
-      const dealInterestsArray = Array.isArray(dealInterestsData) ? dealInterestsData : [];
-      const dealChannelsArray = Array.isArray(dealChannelsData) ? dealChannelsData : [];
+      // Filtrar objetos phantom {success: true} sin datos reales
+      const companiesArray = Array.isArray(companiesData) ? companiesData.filter((item: any) => item.id_client_company || item.name_company) : [];
+      const contactsArray = Array.isArray(contactsData) ? contactsData.filter((item: any) => item.id_contact || item.first_name || item.last_name) : [];
+      const productsArray = Array.isArray(productsData) ? productsData.filter((item: any) => item.id_product || item.product_name) : [];
+      const usersArray = Array.isArray(usersData) ? usersData.filter((item: any) => item.id_user || item.nombre_user) : [];
+      const tenantsArray = Array.isArray(tenantsData) ? (user.rol_user === 'superadmin' ? tenantsData.filter((item: any) => item.id_tenant || item.tenant_name) : [tenantsData].filter((item: any) => item.id_tenant || item.tenant_name)) : [];
+      const dealStatusesArray = Array.isArray(dealStatusesData) ? dealStatusesData.filter((item: any) => item.id_status || item.status_name) : [];
+      const quoteStatusesArray = Array.isArray(quoteStatusesData) ? quoteStatusesData.filter((item: any) => item.id_status || item.status_name) : [];
+      const productTypesArray = Array.isArray(productTypesData) ? productTypesData.filter((item: any) => item.id_product_type || item.product_type_name) : [];
+      const dealInterestsArray = Array.isArray(dealInterestsData) ? dealInterestsData.filter((item: any) => item.id_interest || item.interest_name) : [];
+      const dealChannelsArray = Array.isArray(dealChannelsData) ? dealChannelsData.filter((item: any) => item.id_channel || item.channel_name) : [];
+
+      console.log('📊 DataCache: Datos parseados desde API', {
+        dealStatusesData,
+        dealStatusesArray: dealStatusesArray.length,
+        quoteStatusesArray: quoteStatusesArray.length,
+        productTypesArray: productTypesArray.length,
+        dealInterestsArray: dealInterestsArray.length,
+        dealChannelsArray: dealChannelsArray.length
+      });
 
       setCompanies(companiesArray);
       setContacts(contactsArray);
@@ -171,6 +215,17 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setProductTypes(productTypesArray);
       setDealInterests(dealInterestsArray);
       setDealChannels(dealChannelsArray);
+      
+      console.log('📦 DataCache: Datos cargados desde API', {
+        companies: companiesArray.length,
+        contacts: contactsArray.length,
+        users: usersArray.length,
+        dealStatuses: dealStatusesArray.length,
+        quoteStatuses: quoteStatusesArray.length,
+        productTypes: productTypesArray.length,
+        dealInterests: dealInterestsArray.length,
+        dealChannels: dealChannelsArray.length
+      });
       
       // 3. Guardar en localStorage para próxima carga
       try {
@@ -186,6 +241,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           dealInterests: dealInterestsArray,
           dealChannels: dealChannelsArray,
           financialsCache,
+          meta: { id_tenant: user.id_tenant, id_user: user.id_user },
           timestamp: Date.now()
         }));
       } catch (e) {
@@ -194,6 +250,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       
       setLoaded(true);
     } catch (error) {
+      console.error('❌ DataCache: Error en fetch API', error);
     } finally {
       setLoading(false);
     }
@@ -212,11 +269,12 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       if (res.ok) {
         const data = await res.json();
-        const companiesArray = Array.isArray(data) ? data : [];
+        // Filtrar objetos phantom {success: true} sin datos reales
+        const companiesArray = Array.isArray(data) ? data.filter((item: any) => item.id_client_company || item.name_company) : [];
         setCompanies(companiesArray);
         
         // Guardar en localStorage
-        const cachedKey = `cache_${user.id_tenant}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : { contacts: [] };
@@ -237,11 +295,12 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       if (res.ok) {
         const data = await res.json();
-        const contactsArray = Array.isArray(data) ? data : [];
+        // Filtrar objetos phantom {success: true} sin datos reales
+        const contactsArray = Array.isArray(data) ? data.filter((item: any) => item.id_contact || item.first_name || item.last_name) : [];
         setContacts(contactsArray);
         
         // Guardar en localStorage
-        const cachedKey = `cache_${user.id_tenant}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : { companies: [] };
@@ -262,11 +321,12 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products`);
       if (res.ok) {
         const data = await res.json();
-        const productsArray = Array.isArray(data) ? data : [];
+        // Filtrar objetos phantom {success: true} sin datos reales
+        const productsArray = Array.isArray(data) ? data.filter((item: any) => item.id_product || item.product_name) : [];
         setProducts(productsArray);
         
         // Guardar en localStorage
-        const cachedKey = `cache_${user.id_tenant}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : {};
@@ -287,11 +347,12 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       if (res.ok) {
         const data = await res.json();
-        const usersArray = Array.isArray(data) ? data : [];
+        // Filtrar objetos phantom {success: true} sin datos reales
+        const usersArray = Array.isArray(data) ? data.filter((item: any) => item.id_user || item.nombre_user) : [];
         setUsers(usersArray);
         
         // Guardar en localStorage
-        const cachedKey = `cache_${user.id_tenant}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : {};
@@ -315,11 +376,12 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       
       if (res.ok) {
         const data = await res.json();
-        const tenantsArray = Array.isArray(data) ? (user.rol_user === 'superadmin' ? data : [data]) : [];
+        // Filtrar objetos phantom {success: true} sin datos reales
+        const tenantsArray = Array.isArray(data) ? (user.rol_user === 'superadmin' ? data.filter((item: any) => item.id_tenant || item.tenant_name) : [data].filter((item: any) => item.id_tenant || item.tenant_name)) : [];
         setTenants(tenantsArray);
         
         // Guardar en localStorage
-        const cachedKey = `cache_${user.id_tenant}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : {};
@@ -339,9 +401,10 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}`);
       if (res.ok) {
         const data = await res.json();
-        const array = Array.isArray(data) ? data : [];
+        // Filtrar objetos phantom {success: true} sin datos reales
+        const array = Array.isArray(data) ? data.filter((item: any) => item.id_status || item.status_name) : [];
         setDealStatuses(array);
-        const cachedKey = `cache_${user.id_tenant}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : {};
@@ -357,9 +420,10 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${user.id_tenant}`);
       if (res.ok) {
         const data = await res.json();
-        const array = Array.isArray(data) ? data : [];
+        // Filtrar objetos phantom {success: true} sin datos reales
+        const array = Array.isArray(data) ? data.filter((item: any) => item.id_status || item.status_name) : [];
         setQuoteStatuses(array);
-        const cachedKey = `cache_${user.id_tenant}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : {};
@@ -375,9 +439,10 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`);
       if (res.ok) {
         const data = await res.json();
-        const array = Array.isArray(data) ? data : [];
+        // Filtrar objetos phantom {success: true} sin datos reales
+        const array = Array.isArray(data) ? data.filter((item: any) => item.id_product_type || item.product_type_name) : [];
         setProductTypes(array);
-        const cachedKey = `cache_${user.id_tenant}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : {};
@@ -393,9 +458,10 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/interests/deals?id_tenant=${user.id_tenant}`);
       if (res.ok) {
         const data = await res.json();
-        const array = Array.isArray(data) ? data : [];
+        // Filtrar objetos phantom {success: true} sin datos reales
+        const array = Array.isArray(data) ? data.filter((item: any) => item.id_interest || item.interest_name) : [];
         setDealInterests(array);
-        const cachedKey = `cache_${user.id_tenant}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : {};
@@ -411,9 +477,10 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channels/deals?id_tenant=${user.id_tenant}`);
       if (res.ok) {
         const data = await res.json();
-        const array = Array.isArray(data) ? data : [];
+        // Filtrar objetos phantom {success: true} sin datos reales
+        const array = Array.isArray(data) ? data.filter((item: any) => item.id_channel || item.channel_name) : [];
         setDealChannels(array);
-        const cachedKey = `cache_${user.id_tenant}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : {};
@@ -439,7 +506,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setFinancialsCache(prev => {
           const next = { ...prev, [key]: { result, lastUpdated: Date.now() } };
           // Persistir en localStorage junto al resto del cache
-          const cachedKey = `cache_${user.id_tenant}`;
+          const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
           try {
             const cached = localStorage.getItem(cachedKey);
             const parsed = cached ? JSON.parse(cached) : {};

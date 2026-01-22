@@ -510,44 +510,40 @@ const QuotesList: React.FC = () => {
       {/* TOOLBAR RESPONSIVO MEJORADO */}
       <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3">
 
-        {(loading || quotes.length > 0) && (
-          <>
-            {/* 1. BUSCADOR */}
-            <div className="relative order-3 lg:order-1 w-full lg:flex-1">
-                <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                <input 
-                    value={globalFilter} 
-                    onChange={e => setGlobalFilter(e.target.value)}
-                    placeholder="Buscar cotización..." 
-                    className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm"
-                />
-            </div>
-            
-            {/* 2. FILTROS */}
-            <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm min-w-[200px]">
-                <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
-                <div className="flex items-center gap-1 flex-wrap">
-                    {[
-                        { id: 'client_company_name', label: 'Cliente', icon: 'fa-building' },
-                        { id: 'id_quote_status', label: 'Estado', icon: 'fa-list-check' },
-                        { id: 'created_by_name', label: 'Owner', icon: 'fa-user-tie' }
-                    ].map(opt => (
-                        <button 
-                            key={opt.id} 
-                            onClick={() => setGrouping(prev => prev.includes(opt.id) ? [] : [opt.id])}
-                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
-                                grouping.includes(opt.id)
-                                ? 'bg-brand-600 text-white shadow-inner' 
-                                : 'text-slate-500 hover:bg-slate-50'
-                            }`}
-                        >
-                            <i className={`fa-solid ${opt.icon} text-[11px]`}></i> {opt.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-          </>
-        )}
+        {/* 1. BUSCADOR */}
+        <div className="relative order-3 lg:order-1 w-full lg:flex-1">
+          <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+          <input 
+            value={globalFilter} 
+            onChange={e => setGlobalFilter(e.target.value)}
+            placeholder="Buscar cotización..." 
+            className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm"
+          />
+        </div>
+        
+        {/* 2. FILTROS */}
+        <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm min-w-[200px]">
+          <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {[
+              { id: 'client_company_name', label: 'Cliente', icon: 'fa-building' },
+              { id: 'id_quote_status', label: 'Estado', icon: 'fa-list-check' },
+              { id: 'created_by_name', label: 'Owner', icon: 'fa-user-tie' }
+            ].map(opt => (
+              <button 
+                key={opt.id} 
+                onClick={() => setGrouping(prev => prev.includes(opt.id) ? [] : [opt.id])}
+                className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
+                  grouping.includes(opt.id)
+                  ? 'bg-brand-600 text-white shadow-inner' 
+                  : 'text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                <i className={`fa-solid ${opt.icon} text-[11px]`}></i> {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {/* 3. BOTÓN AÑADIR */}
         <Link 
@@ -621,7 +617,16 @@ const QuotesList: React.FC = () => {
             {loading ? (
                 <tr><td colSpan={columns.length} className="py-24 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i><p className="text-slate-400 text-sm font-medium">Cargando cotizaciones...</p></td></tr>
             ) : table.getRowModel().rows.length === 0 ? (
-                <tr><td colSpan={columns.length} className="py-24 text-center text-slate-500">No se encontraron cotizaciones.</td></tr>
+                <tr>
+                  <td colSpan={columns.length} className="py-20 text-center">
+                    <div className="flex flex-col items-center gap-3 text-slate-500">
+                      <i className="fa-regular fa-file-lines text-4xl text-slate-300"></i>
+                      <p className="font-bold text-slate-600">No hay cotizaciones aún</p>
+                      <p className="text-sm text-slate-400">Crea tu primera cotización para visualizarla aquí.</p>
+                      <button onClick={() => navigate('/app/quotes/new')} className="px-4 py-2 bg-emerald-600 text-white rounded-lg shadow-sm hover:bg-emerald-700 transition-all text-sm font-bold">Crear cotización</button>
+                    </div>
+                  </td>
+                </tr>
             ) : table.getRowModel().rows.map(row => {
                 const isGrouped = row.getIsGrouped();
                 return (
