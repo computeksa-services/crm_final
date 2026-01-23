@@ -116,7 +116,14 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
         if (response.ok) {
           const data = await response.json();
-          setCountries(Array.isArray(data) ? data : []);
+          // Transformar a formato consistente {id, name}
+          const normalized = Array.isArray(data) ? data.map((item: any) => {
+            if (typeof item === 'string') {
+              return { id: item, name: item };
+            }
+            return { id: item.id_country || item.id || item.name, name: item.name };
+          }) : [];
+          setCountries(normalized);
         }
       } catch (error) {
         console.error('Error loading countries:', error);
@@ -133,7 +140,14 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
         if (response.ok) {
           const data = await response.json();
-          setCompanyTypes(Array.isArray(data) ? data : []);
+          // Transformar a formato consistente {id_company_types, name}
+          const normalized = Array.isArray(data) ? data.map((item: any) => {
+            if (typeof item === 'string') {
+              return { id_company_types: item, name: item };
+            }
+            return { id_company_types: item.id_company_type || item.id_company_types || item.id || item.name, name: item.name };
+          }) : [];
+          setCompanyTypes(normalized);
         }
       } catch (error) {
         console.error('Error loading company types:', error);
@@ -185,10 +199,10 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         id_type: initialData.id_type || 'RUC',
         id_number: initialData.id_number || '',
         name_company: initialData.name_company || '',
-        id_country: (initialData as any).country_name || initialData.id_country || 'Ecuador',
+        id_country: initialData.id_country || '',
         city: initialData.city || '',
         address: initialData.address || '',
-        id_company_type: (initialData as any).company_type_name || (initialData as any).id_company_type || '',
+        id_company_type: initialData.id_company_type || '',
         labels: (initialData as any).labels || [],
         email_company: initialData.email_company || '',
         phone_company: initialData.phone_company || '',
@@ -201,7 +215,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
         id_type: 'RUC',
         id_number: '',
         name_company: '',
-        id_country: 'Ecuador',
+        id_country: '',
         city: '',
         address: '',
         id_company_type: '',
@@ -470,7 +484,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
               >
                 <option value="">Seleccionar tipo</option>
                 {companyTypes.map(type => (
-                  <option key={type.id_company_types || type.name} value={type.name}>{type.name}</option>
+                  <option key={type.id_company_types || type.name} value={type.id_company_types}>{type.name}</option>
                 ))}
               </select>
             </div>
@@ -509,7 +523,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
               >
                 <option value="">Seleccionar país</option>
                 {countries.map(country => (
-                  <option key={country.id || country.name} value={country.name}>{country.name}</option>
+                  <option key={country.id || country.name} value={country.id}>{country.name}</option>
                 ))}
               </select>
             </div>
