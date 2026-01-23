@@ -23,20 +23,17 @@ import {
   ExpandedState,
 } from '@tanstack/react-table';
 
-// DATOS DE REFERENCIA
 const ClientCompaniesList: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { companies: cachedCompanies, companyLabelsMap, loading: cacheLoading, invalidateCompanies } = useDataCache();
   
-  // --- ESTADOS DE DATOS ---
   const companies = useMemo(() => 
     cachedCompanies.filter(c => c && c.id_client_company), 
     [cachedCompanies]
   );
   const loading = cacheLoading;
   
-  // --- ESTADOS DE LA TABLA ---
   const [sorting, setSorting] = useState<SortingState>([{ id: 'name_company', desc: false }]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
@@ -48,7 +45,6 @@ const ClientCompaniesList: React.FC = () => {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
   const [columnSizing, setColumnSizing] = useState({});
 
-  // --- ESTADOS DE UI ---
   const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -56,46 +52,19 @@ const ClientCompaniesList: React.FC = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Partial<ClientCompany> | null>(null);
   const [confirmState, setConfirmState] = useState({ 
-    isOpen: false, 
-    title: '', 
-    message: '', 
-    onConfirm: () => {}, 
-    isDestructive: false 
+    isOpen: false, title: '', message: '', onConfirm: () => {}, isDestructive: false 
   });
 
-
-  // --- CARGA DE DATOS (Ya no necesaria, usa caché) ---
-  // El caché se carga automáticamente al iniciar sesión
-
-  // Guardar estado de agrupación en localStorage
   useEffect(() => {
     localStorage.setItem('companiesList_grouping', JSON.stringify(grouping));
   }, [grouping]);
 
   const handleGroupingChange = useCallback((newGrouping: string[]) => {
     setGrouping(newGrouping);
-    
-    if (newGrouping.length > 0) {
-      const groupByColumn = newGrouping[0];
-      const allExpanded: ExpandedState = {};
-      const seenGroups = new Set<string>();
-      companies.forEach((company) => {
-        const groupValue = (company as any)[groupByColumn];
-        if (groupValue !== null && groupValue !== undefined) {
-          const groupKey = String(groupValue);
-          if (!seenGroups.has(groupKey)) {
-            allExpanded[groupKey] = true;
-            seenGroups.add(groupKey);
-          }
-        }
-      });
-      setExpanded(allExpanded);
-    } else {
-      setExpanded({});
-    }
-  }, [companies]);
+    if (newGrouping.length > 0) setExpanded(true);
+    else setExpanded({});
+  }, []);
 
-  // Clic fuera para cerrar filtros
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (filterMenuRef.current && !filterMenuRef.current.contains(e.target as Node)) {
@@ -106,12 +75,10 @@ const ClientCompaniesList: React.FC = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // --- HELPERS ---
   const getInitials = (name: string = '') => {
     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || '?';
   };
 
-  // --- HANDLERS DE ACCIONES ---
   const handleAddNew = () => {
     setEditingCompany(undefined);
     setIsEditMode(false);
@@ -127,7 +94,7 @@ const ClientCompaniesList: React.FC = () => {
 
   const handleModalSuccess = async () => {
     setIsModalOpen(false);
-    await invalidateCompanies(); // Recargar caché
+    await invalidateCompanies();
     setToast({ message: isEditMode ? 'Empresa actualizada.' : 'Empresa creada.', type: 'success' });
   };
 
@@ -143,15 +110,11 @@ const ClientCompaniesList: React.FC = () => {
           const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/delete`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-              id_client_company: id, 
-              id_tenant: user?.id_tenant, 
-              id_user: user?.id_user 
-            }),
+            body: JSON.stringify({ id_client_company: id, id_tenant: user?.id_tenant, id_user: user?.id_user }),
           });
           if (!response.ok) throw new Error();
           setToast({ message: 'Empresa eliminada correctamente.', type: 'success' });
-          await invalidateCompanies(); // Recargar caché
+          await invalidateCompanies();
         } catch (error) {
           setToast({ message: 'Error al eliminar la empresa.', type: 'error' });
         } finally {
@@ -161,20 +124,13 @@ const ClientCompaniesList: React.FC = () => {
     });
   };
 
-  // --- LÓGICA DE FILTROS FACETADOS ---
   const getFacetedValues = (columnId: string) => {
     const counts = new Map<string, number>();
     companies.forEach(company => {
       if (columnId === 'labels') {
         const ids: string[] = Array.isArray((company as any).labels) ? (company as any).labels : [];
-        if (ids.length === 0) {
-          const key = '(Sin etiqueta)';
-          counts.set(key, (counts.get(key) || 0) + 1);
-        } else {
-          ids.forEach(id => {
-            counts.set(id, (counts.get(id) || 0) + 1);
-          });
-        }
+        if (ids.length === 0) counts.set('(Sin etiqueta)', (counts.get('(Sin etiqueta)') || 0) + 1);
+        else ids.forEach(id => counts.set(id, (counts.get(id) || 0) + 1));
       } else {
         const val = (company as any)[columnId] ?? '(Vacío)';
         counts.set(String(val), (counts.get(String(val)) || 0) + 1);
@@ -201,92 +157,58 @@ const ClientCompaniesList: React.FC = () => {
     setColumnFilters(currentFilters);
   };
 
-  // Datos para la tabla: si agrupamos por etiquetas, duplicamos filas por etiqueta
+  // --- PASO 1: PREPARACIÓN DE DATOS (FLATTENING) ---
   const tableData = useMemo(() => {
-    if (grouping.length && grouping[0] === 'labels') {
-      const flattened = companies.flatMap((company) => {
-        const ids: string[] = Array.isArray((company as any).labels) ? (company as any).labels : [];
-        if (ids.length === 0) {
-          return [{ ...company, __labelsGroupId: '(Sin etiqueta)', __labelsGroupName: '(Sin etiqueta)' }];
-        }
-        return ids.map((id) => ({
-          ...company,
-          __labelsGroupId: id,
-          __labelsGroupName: companyLabelsMap[id]?.name || id,
-        }));
+    if (grouping.length > 0 && grouping[0] === 'labels') {
+      return companies.flatMap((company) => {
+        const ids = Array.isArray(company.labels) ? company.labels : [];
+        if (ids.length === 0) return [{ ...company, __f_label: '(Sin etiqueta)' }];
+        return ids.map(id => ({ ...company, __f_label: id }));
       });
-      return flattened;
     }
     return companies;
-  }, [companies, grouping, companyLabelsMap]);
+  }, [companies, grouping]);
 
-  // --- COLUMNAS ---
-  const columns = useMemo<ColumnDef<ClientCompany>[]>(() => [
+  // --- PASO 2: COLUMNAS ---
+  const columns = useMemo<ColumnDef<any>[]>(() => [
     {
       accessorKey: 'country_name',
       header: 'País',
       size: 120,
-      enableColumnFilter: true,
       cell: ({ row, getValue, column }) => {
-        if (row.getIsGrouped()) {
-          if (grouping[0] === column.id) {
-            return (
-              <div className="flex items-center gap-3">
-                {/* CAMBIO: Chevron icon en vez de botón pesado */}
-                <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
-                
-                <span className="font-bold text-slate-700 uppercase tracking-tight">
-                  {getValue() as string || 'No asignado'}
-                </span>
-                <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                  {row.subRows.length}
-                </span>
-              </div>
-            );
-          }
-          return null;
+        if (row.getIsGrouped() && grouping[0] === column.id) {
+          return (
+            <div className="flex items-center gap-3">
+              <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+              <span className="font-bold text-slate-700 uppercase tracking-tight">{getValue() as string || 'No asignado'}</span>
+              <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
+            </div>
+          );
         }
-        return <span className="text-slate-600 text-sm font-medium">{getValue() as string || '-'}</span>;
+        return row.getIsGrouped() ? null : <span className="text-slate-600 text-sm font-medium">{getValue() as string || '-'}</span>;
       },
-      filterFn: (row, id, filterValue: string[]) => 
-        filterValue.length === 0 || filterValue.includes(row.getValue(id) || '(Vacío)')
     },
     {
       accessorKey: 'city',
       header: 'Ciudad',
       size: 120,
-      enableColumnFilter: true,
       cell: ({ row, getValue, column }) => {
-        if (row.getIsGrouped()) {
-          if (grouping[0] === column.id) {
-            return (
-              <div className="flex items-center gap-3">
-                {/* CAMBIO: Chevron icon en vez de botón pesado */}
-                <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
-                
-                <span className="font-bold text-slate-700 uppercase tracking-tight">
-                  {getValue() as string || 'No asignado'}
-                </span>
-                <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                  {row.subRows.length}
-                </span>
-              </div>
-            );
-          }
-          return null;
+        if (row.getIsGrouped() && grouping[0] === column.id) {
+          return (
+            <div className="flex items-center gap-3">
+              <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+              <span className="font-bold text-slate-700 uppercase tracking-tight">{getValue() as string || 'No asignado'}</span>
+              <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
+            </div>
+          );
         }
-        return <span className="text-slate-600 text-sm font-medium">{getValue() as string || '-'}</span>;
+        return row.getIsGrouped() ? null : <span className="text-slate-600 text-sm font-medium">{getValue() as string || '-'}</span>;
       },
-      filterFn: (row, id, filterValue: string[]) => 
-        filterValue.length === 0 || filterValue.includes(row.getValue(id) || '(Vacío)')
     },
     {
       accessorKey: 'name_company',
       header: 'Empresa',
       size: 420,
-      minSize: 340,
-      maxSize: 580,
-      enableColumnFilter: false,
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) return null;
         return (
@@ -303,7 +225,6 @@ const ClientCompaniesList: React.FC = () => {
       accessorKey: 'id_number',
       header: 'Identificación',
       size: 140,
-      enableColumnFilter: false,
       cell: ({ row }) => row.getIsGrouped() ? null : (
         <div className="flex flex-col">
             <span className="text-[10px] font-black text-slate-400 uppercase leading-none">{row.original.id_type}</span>
@@ -315,105 +236,60 @@ const ClientCompaniesList: React.FC = () => {
       accessorKey: 'company_type_name',
       header: 'Tipo',
       size: 150,
-      enableColumnFilter: true,
       cell: ({ row, getValue, column }) => {
-        if (row.getIsGrouped()) {
-          if (grouping[0] === column.id) {
-            return (
-              <div className="flex items-center gap-3">
-                {/* CAMBIO: Chevron icon en vez de botón pesado */}
-                <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
-                
-                <span className="font-bold text-slate-700 uppercase tracking-tight">
-                  {getValue() as string || 'No asignado'}
-                </span>
-                <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                  {row.subRows.length}
-                </span>
-              </div>
-            );
-          }
-          return null;
+        if (row.getIsGrouped() && grouping[0] === column.id) {
+          return (
+            <div className="flex items-center gap-3">
+              <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+              <span className="font-bold text-slate-700 uppercase tracking-tight">{getValue() as string || 'No asignado'}</span>
+              <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
+            </div>
+          );
         }
-        return (
-          <span className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100 uppercase whitespace-nowrap">
-            {getValue() as string || '-'}
-          </span>
+        return row.getIsGrouped() ? null : (
+          <span className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100 uppercase whitespace-nowrap">{getValue() as string || '-'}</span>
         );
       },
-      filterFn: (row, id, filterValue: string[]) => 
-        filterValue.length === 0 || filterValue.includes(row.getValue(id) || '(Vacío)')
     },
     {
-      accessorKey: 'labels',
+      id: 'labels',
       header: 'Etiquetas',
       size: 240,
-      enableColumnFilter: true,
-      getGroupingValue: (row) => {
-        if (grouping.length && grouping[0] === 'labels') {
-          const orig: any = (row as any)?.original;
-          return orig?.__labelsGroupName ?? '(Sin etiqueta)';
-        }
-        const ids: string[] = Array.isArray((row as any)?.original?.labels) ? ((row as any).original as any).labels : [];
-        if (ids.length === 0) return '(Sin etiqueta)';
-        const names = ids
-          .map(id => companyLabelsMap[id]?.name || id)
-          .filter(Boolean)
-          .sort((a, b) => a.localeCompare(b));
-        return names[0] || '(Sin etiqueta)';
-      },
-      filterFn: (row, id, filterValue: string[]) => {
-        if (!filterValue || filterValue.length === 0) return true;
-        const ids: string[] = Array.isArray(row.original.labels) ? row.original.labels : [];
-        const hasNoLabels = ids.length === 0;
-        const wantsEmpty = filterValue.includes('(Sin etiqueta)');
-        const intersects = ids.some(x => filterValue.includes(x));
-        return (wantsEmpty && hasNoLabels) || intersects;
-      },
+      // EL CAMBIO CLAVE: El accessor cambia según si estamos agrupando o no
+      accessorFn: (row) => (grouping[0] === 'labels' ? row.__f_label : row.labels),
       cell: ({ row, column, getValue }) => {
-        if (row.getIsGrouped()) {
-          if (grouping[0] === column.id) {
-            const groupName = getValue() as string; // label name or '(Sin etiqueta)'
-            const isEmpty = groupName === '(Sin etiqueta)';
-            const orig: any = (row as any)?.original ?? {};
-            const idMatch = isEmpty ? undefined : orig.__labelsGroupId || Object.keys(companyLabelsMap).find(k => companyLabelsMap[k]?.name === groupName);
-            const info = idMatch ? companyLabelsMap[idMatch] : undefined;
-            const bg = info?.color ? `${info.color}15` : '#f1f5f9';
-            const color = info?.color || '#475569';
-            const border = info?.color || '#cbd5e1';
-            return (
-              <div className="flex items-center gap-3">
-                <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
-                <span
-                  className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap"
-                  style={{ backgroundColor: isEmpty ? '#f1f5f9' : bg, color: isEmpty ? '#475569' : color, borderColor: isEmpty ? '#cbd5e1' : border }}
-                >
-                  {isEmpty ? 'Sin etiqueta' : (info?.name || groupName)}
-                </span>
-                <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                  {row.subRows.length}
-                </span>
-              </div>
-            );
-          }
-          return null;
+        if (row.getIsGrouped() && grouping[0] === column.id) {
+          const labelId = getValue() as string;
+          const isNone = labelId === '(Sin etiqueta)';
+          const info = !isNone ? companyLabelsMap[labelId] : null;
+          
+          return (
+            <div className="flex items-center gap-3">
+              <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+              <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap"
+                style={{ 
+                  backgroundColor: info?.color ? `${info.color}15` : '#f1f5f9', 
+                  color: info?.color || '#475569', 
+                  borderColor: info?.color || '#cbd5e1' 
+                }}>
+                {isNone ? 'Sin etiqueta' : (info?.name || labelId)}
+              </span>
+              <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
+            </div>
+          );
         }
+        
+        if (row.getIsGrouped()) return null;
+
         const labelIds: string[] = Array.isArray(row.original.labels) ? row.original.labels : [];
         if (labelIds.length === 0) return <span className="text-slate-400 text-sm py-1">-</span>;
         return (
           <div className="flex flex-wrap gap-1">
             {labelIds.map((id) => {
               const info = companyLabelsMap[id];
-              const bg = info?.color ? `${info.color}15` : '#f1f5f9';
-              const color = info?.color || '#475569';
-              const border = info?.color || '#cbd5e1';
               return (
-                <span
-                  key={id}
-                  className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap"
-                  style={{ backgroundColor: bg, color, borderColor: border }}
-                  title={id}
-                >
+                <span key={id} className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap"
+                  style={{ backgroundColor: info?.color ? `${info.color}15` : '#f1f5f9', color: info?.color || '#475569', borderColor: info?.color || '#cbd5e1' }}>
                   {info?.name || id}
                 </span>
               );
@@ -426,20 +302,14 @@ const ClientCompaniesList: React.FC = () => {
       accessorKey: 'created_by_name',
       header: 'Creado',
       size: 200,
-      enableColumnFilter: false,
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) return null;
         const avatar = row.original.created_by_avatar;
         const name = getValue() as string || 'Desconocido';
         return (
           <div className="flex items-start gap-2 py-1">
-            {avatar ? (
-              <img src={avatar} alt={name} className="w-8 h-8 flex-shrink-0 rounded-full border border-slate-200 object-cover" />
-            ) : (
-              <div className="w-8 h-8 flex-shrink-0 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 border border-slate-200 font-bold">
-                {getInitials(name)}
-              </div>
-            )}
+            {avatar ? <img src={avatar} alt={name} className="w-8 h-8 rounded-full border border-slate-200 object-cover" /> : 
+            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 border border-slate-200 font-bold">{getInitials(name)}</div>}
             <span className="text-sm text-slate-600 font-medium">{name}</span>
           </div>
         );
@@ -449,25 +319,12 @@ const ClientCompaniesList: React.FC = () => {
       id: 'actions',
       header: 'ACCIONES',
       size: 100,
-      enableColumnFilter: false,
       cell: ({ row }) => {
         if (row.getIsGrouped()) return null;
         return (
           <div className="flex items-center justify-end gap-1">
-            <button 
-              onClick={(e) => handleEdit(e, row.original)} 
-              className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"
-              title="Editar"
-            >
-              <i className="fa-solid fa-pen text-[10px]"></i>
-            </button>
-            <button 
-              onClick={(e) => handleDelete(e, row.original.id_client_company)} 
-              className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"
-              title="Eliminar"
-            >
-              <i className="fa-solid fa-trash text-[10px]"></i>
-            </button>
+            <button onClick={(e) => handleEdit(e, row.original)} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
+            <button onClick={(e) => handleDelete(e, row.original.id_client_company)} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-trash text-[10px]"></i></button>
           </div>
         );
       },
@@ -491,227 +348,55 @@ const ClientCompaniesList: React.FC = () => {
     getPaginationRowModel: getPaginationRowModel(),
     getGroupedRowModel: getGroupedRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
-    columnSizingInfo: {
-      isResizingColumn: false,
-    },
     enableColumnResizing: true,
-    layoutMode: 'fixed',
   });
 
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans">
-      
-      {/* TOOLBAR RESPONSIVO */}
-        <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
+      <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div className="relative order-3 lg:order-1 w-full lg:flex-1">
           <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-          <input 
-            value={globalFilter} 
-            onChange={e => setGlobalFilter(e.target.value)}
-            placeholder="Buscar empresas..." 
-            className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm"
-          />
+          <input value={globalFilter} onChange={e => setGlobalFilter(e.target.value)} placeholder="Buscar empresas..." className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm" />
         </div>
-
         <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm min-w-[200px]">
           <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
           <div className="flex items-center gap-1 flex-wrap">
-            <button 
-              onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'country_name' ? [] : ['country_name'])}
-              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
-                grouping.length && grouping[0] === 'country_name' 
-                ? 'bg-brand-600 text-white shadow-inner' 
-                : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              <i className="fa-solid fa-globe text-[11px]"></i> País
-            </button>
-            <button 
-              onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'city' ? [] : ['city'])}
-              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
-                grouping.length && grouping[0] === 'city' 
-                ? 'bg-brand-600 text-white shadow-inner' 
-                : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              <i className="fa-solid fa-city text-[11px]"></i> Ciudad
-            </button>
-            <button 
-              onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'company_type_name' ? [] : ['company_type_name'])}
-              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
-                grouping.length && grouping[0] === 'company_type_name' 
-                ? 'bg-brand-600 text-white shadow-inner' 
-                : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              <i className="fa-solid fa-building text-[11px]"></i> Tipo
-            </button>
-            <button 
-              onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'labels' ? [] : ['labels'])}
-              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
-                grouping.length && grouping[0] === 'labels' 
-                ? 'bg-brand-600 text-white shadow-inner' 
-                : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              <i className="fa-solid fa-tags text-[11px]"></i> Etiquetas
-            </button>
+            <button onClick={() => handleGroupingChange(grouping[0] === 'country_name' ? [] : ['country_name'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'country_name' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-globe"></i> País</button>
+            <button onClick={() => handleGroupingChange(grouping[0] === 'city' ? [] : ['city'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'city' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-city"></i> Ciudad</button>
+            <button onClick={() => handleGroupingChange(grouping[0] === 'company_type_name' ? [] : ['company_type_name'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'company_type_name' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-building"></i> Tipo</button>
+            <button onClick={() => handleGroupingChange(grouping[0] === 'labels' ? [] : ['labels'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'labels' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-tags"></i> Etiquetas</button>
           </div>
         </div>
-        
-        <button 
-          onClick={handleAddNew} 
-          className={`order-1 lg:order-3 w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center justify-center gap-2 ${(!loading && companies.length === 0) ? 'mx-auto sm:mx-0' : ''}`}
-        >
-            <i className="fa-solid fa-plus"></i> Nueva Empresa
-        </button>
+        <button onClick={handleAddNew} className="order-1 lg:order-3 w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm transition-all flex items-center justify-center gap-2"><i className="fa-solid fa-plus"></i> Nueva Empresa</button>
       </div>
 
-      {/* Área de la Tabla */}
       <div className="flex-1 overflow-auto relative bg-slate-50/10">
         <table className="border-separate border-spacing-0" style={{ width: `${table.getTotalSize()}px`, minWidth: '100%' }}>
-          <thead className="sticky top-0 z-40 shadow-sm">
+          <thead className="sticky top-0 z-40 shadow-sm bg-slate-50">
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
-                {headerGroup.headers.map(header => {
-                  const isFiltered = columnFilters.some(f => f.id === header.column.id);
-                  const canFilter = header.column.columnDef.enableColumnFilter !== false;
-
-                  return (
-                    <th
-                      key={header.id}
-                      style={{ width: header.getSize() }}
-                      className="border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left relative group transition-colors"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div 
-                          className="flex items-center gap-2 cursor-pointer select-none"
-                          onClick={header.column.getToggleSortingHandler()}
-                        >
-                          <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </span>
-                          {{
-                            asc: <i className="fa-solid fa-sort-up text-brand-600"></i>,
-                            desc: <i className="fa-solid fa-sort-down text-brand-600"></i>,
-                          }[header.column.getIsSorted() as string] ?? null}
-                        </div>
-
-                        {canFilter && header.column.id !== 'actions' && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveFilterMenu(activeFilterMenu === header.column.id ? null : header.column.id);
-                            }}
-                            className={`w-6 h-6 rounded flex items-center justify-center transition-all ${
-                              isFiltered ? 'bg-brand-100 text-brand-600' : 'text-slate-300 hover:bg-slate-200 hover:text-slate-500'
-                            }`}
-                          >
-                            <i className="fa-solid fa-filter text-[10px]"></i>
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Dropdown de Filtros */}
-                      {activeFilterMenu === header.column.id && (
-                        <div 
-                          ref={filterMenuRef}
-                          className="absolute top-full left-0 mt-1 w-64 bg-white shadow-xl rounded-xl border border-slate-200 z-50 py-2 animate-in fade-in slide-in-from-top-1 duration-200"
-                        >
-                          <div className="max-h-60 overflow-y-auto px-1">
-                            {getFacetedValues(header.column.id).map(([val, count]) => {
-                              const activeValues = (columnFilters.find(f => f.id === header.column.id)?.value as string[]) || [];
-                              const isChecked = activeValues.includes(val);
-                              return (
-                                <label 
-                                  key={val} 
-                                  className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer group transition-colors"
-                                >
-                                  <div className="flex items-center gap-3">
-                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>
-                                      {isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}
-                                    </div>
-                                    {header.column.id === 'labels' ? (
-                                      <span className="text-xs font-bold text-slate-700 tracking-tight flex items-center gap-2">
-                                        <span
-                                          className="inline-block w-3 h-3 rounded"
-                                          style={{ backgroundColor: val !== '(Sin etiqueta)' && companyLabelsMap[val]?.color ? `${companyLabelsMap[val]?.color}60` : '#e2e8f0', border: '1px solid #cbd5e1' }}
-                                        ></span>
-                                        {val === '(Sin etiqueta)' ? 'Sin etiqueta' : (companyLabelsMap[val]?.name || val)}
-                                      </span>
-                                    ) : (
-                                      <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
-                                    )}
-                                  </div>
-                                  <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600">({count})</span>
-                                  <input 
-                                    type="checkbox" 
-                                    className="hidden" 
-                                    checked={isChecked} 
-                                    onChange={() => toggleFilterValue(header.column.id, val)}
-                                  />
-                                </label>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </th>
-                  );
-                })}
+                {headerGroup.headers.map(header => (
+                  <th key={header.id} style={{ width: header.getSize() }} className="border-b border-r border-slate-200 px-4 py-3 text-left">
+                    <div className="flex items-center gap-2 cursor-pointer select-none" onClick={header.column.getToggleSortingHandler()}>
+                      <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                      {{ asc: <i className="fa-solid fa-sort-up text-brand-600"></i>, desc: <i className="fa-solid fa-sort-down text-brand-600"></i> }[header.column.getIsSorted() as string] ?? null}
+                    </div>
+                  </th>
+                ))}
               </tr>
             ))}
           </thead>
           <tbody className="bg-white">
             {loading ? (
-              <tr>
-                <td colSpan={columns.length} className="py-24 text-center">
-                   <i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i>
-                   <p className="text-slate-400 text-sm font-medium tracking-wide">Cargando empresas...</p>
-                </td>
-              </tr>
+              <tr><td colSpan={columns.length} className="py-24 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i><p className="text-slate-400 text-sm font-medium">Cargando empresas...</p></td></tr>
             ) : table.getRowModel().rows.length === 0 ? (
-              <tr>
-                <td colSpan={columns.length} className="py-20 text-center">
-                  <div className="flex flex-col items-center gap-3 text-slate-500">
-                    <i className="fa-regular fa-building text-4xl text-slate-300"></i>
-                    <p className="font-bold text-slate-600">No hay empresas aún</p>
-                    <p className="text-sm text-slate-400">Crea tu primera empresa para visualizarla aquí.</p>
-                    <button onClick={handleAddNew} className="px-4 py-2 bg-emerald-600 text-white rounded-lg shadow-sm hover:bg-emerald-700 transition-all text-sm font-bold">Crear empresa</button>
-                  </div>
-                </td>
-              </tr>
+              <tr><td colSpan={columns.length} className="py-20 text-center"><p className="font-bold text-slate-600">No hay empresas aún</p></td></tr>
             ) : table.getRowModel().rows.map(row => {
               const isGrouped = row.getIsGrouped();
-              
-              // CAMBIO: Definimos el manejador de clic para la fila
-              const handleRowClick = () => {
-                if (isGrouped) {
-                  // Si es grupo, expandir/colapsar
-                  row.toggleExpanded();
-                } else {
-                  // Si no es grupo, navegar
-                  navigate(`/app/client-companies/${row.original.id_client_company}`);
-                }
-              };
-
               return (
-                <tr 
-                    key={row.id} 
-                    // CAMBIO: onClick condicional
-                    onClick={handleRowClick}
-                    className={`
-                      ${isGrouped 
-                        ? 'bg-slate-50/80 font-bold border-l-4 border-l-brand-500 cursor-pointer' 
-                        : 'hover:bg-blue-50/30 cursor-pointer group'
-                      } 
-                      border-b border-slate-100 transition-colors
-                    `}
-                >
+                <tr key={row.id} onClick={() => isGrouped ? row.toggleExpanded() : navigate(`/app/client-companies/${row.original.id_client_company}`)} className={`${isGrouped ? 'bg-slate-50/80 font-bold border-l-4 border-l-brand-500 cursor-pointer' : 'hover:bg-blue-50/30 cursor-pointer group'} border-b border-slate-100 transition-colors`}>
                   {row.getVisibleCells().map(cell => (
-                    <td key={cell.id} className={`px-4 ${isGrouped ? 'py-3' : 'py-1.5'} border-r border-slate-50`}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
+                    <td key={cell.id} className={`px-4 ${isGrouped ? 'py-3' : 'py-1.5'} border-r border-slate-50`}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
                   ))}
                 </tr>
               )
@@ -720,34 +405,16 @@ const ClientCompaniesList: React.FC = () => {
         </table>
       </div>
 
-      {/* Footer / Paginación */}
-      <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
-          <div className="flex items-center gap-4">
-            <span>{companies.length} REGISTROS</span>
-            {columnFilters.length > 0 && (
-                <button onClick={() => setColumnFilters([])} className="text-red-500 hover:text-red-700 font-black flex items-center gap-1 transition-colors">
-                    <i className="fa-solid fa-filter-circle-xmark text-xs"></i> Limpiar Filtros
-                </button>
-            )}
-          </div>
+      <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase shrink-0">
+          <span>{companies.length} REGISTROS</span>
           <div className="flex items-center gap-2">
-            <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-left"></i></button>
-            <span className="bg-white px-3 py-1 border border-slate-200 rounded shadow-sm text-brand-600 font-black tracking-normal">
-              {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
-            </span>
-            <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-right"></i></button>
+            <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="p-1 transition-colors"><i className="fa-solid fa-chevron-left"></i></button>
+            <span className="bg-white px-3 py-1 border border-slate-200 rounded shadow-sm text-brand-600 font-black">{table.getState().pagination.pageIndex + 1} / {table.getPageCount()}</span>
+            <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 transition-colors"><i className="fa-solid fa-chevron-right"></i></button>
           </div>
       </div>
 
-      {/* Modal de Creación / Edición */}
-      <CompanyFormModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        mode={isEditMode ? 'edit' : 'create'}
-        initialData={editingCompany || undefined}
-        onSuccess={handleModalSuccess}
-      />
-
+      <CompanyFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} mode={isEditMode ? 'edit' : 'create'} initialData={editingCompany || undefined} onSuccess={handleModalSuccess} />
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />
     </div>
