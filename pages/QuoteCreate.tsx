@@ -94,7 +94,20 @@ const QuoteCreate: React.FC = () => {
         dealStatusesData, interestStatusesData, channelsData
       ] = data;
 
-      setCompanies(companiesData);
+      // Parsear companiesData para soportar unified_response.rows
+      let companiesArray: any[] = [];
+      if (Array.isArray(companiesData)) {
+        const unified = companiesData.find(item => item && typeof item === 'object' && 'unified_response' in item);
+        if (unified?.unified_response?.rows && Array.isArray(unified.unified_response.rows)) {
+          companiesArray = unified.unified_response.rows;
+        } else {
+          companiesArray = companiesData;
+        }
+      } else if (companiesData?.unified_response?.rows && Array.isArray(companiesData.unified_response.rows)) {
+        companiesArray = companiesData.unified_response.rows;
+      }
+
+      setCompanies(companiesArray);
       setContacts(contactsData);
       setQuoteStatuses(statusesData);
       setDeals(dealsData);
