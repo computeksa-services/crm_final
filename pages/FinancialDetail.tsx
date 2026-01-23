@@ -5,6 +5,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import CollectionModal from '../components/CollectionModal';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
+import { financialService } from '../services/financials.service';
 import type { FinancialTransaction } from '../types';
 
 // --- HELPERS ---
@@ -201,17 +202,19 @@ const FinancialDetail: React.FC = () => {
   };
 
   const handleDelete = async () => {
+    if (!transaction?.id_transaction || !user) return;
     try {
       setProcessing(true);
-      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/delete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_transaction: transaction?.id_transaction })
-      });
-      if (!res.ok) throw new Error();
+      await financialService.delete(transaction.id_transaction, user.id_tenant, user.id_user);
+      setConfirmState(p => ({ ...p, isOpen: false }));
       setToast({ message: 'Eliminado', type: 'success' });
       navigate('/app/financials');
-    } catch { setToast({ message: 'Error al eliminar', type: 'error' }); }
+    } catch { 
+      setToast({ message: 'Error al eliminar', type: 'error' }); 
+    } finally {
+      setProcessing(false);
+      setConfirmState(p => ({ ...p, isOpen: false }));
+    }
   };
 
   const handleSendCollection = async (modalData: any) => {

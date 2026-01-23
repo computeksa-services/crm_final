@@ -531,8 +531,20 @@ const ClientCompanyDetail: React.FC = () => {
                     <p className="text-xs font-bold uppercase inline-block px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">{company.company_type_name || '—'}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-slate-400 mb-1">Etiqueta</p>
-                    {company.label_name ? (
+                    <p className="text-xs text-slate-400 mb-1">Etiquetas</p>
+                    {Array.isArray((company as any).label_details) && (company as any).label_details.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {(company as any).label_details.map((detail: any, idx: number) => (
+                          <span
+                            key={detail.id_label || idx}
+                            className="px-2.5 py-1 rounded-full border text-[11px] font-bold inline-block"
+                            style={{ backgroundColor: `${detail.color || '#64748b'}15`, color: detail.color || '#64748b', borderColor: detail.color || '#cbd5e1' }}
+                          >
+                            {detail.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : company.label_name ? (
                       <span
                         className="px-2 py-1 rounded-full border text-[11px] font-bold uppercase inline-block"
                         style={{ backgroundColor: `${company.label_color || '#64748b'}15`, color: company.label_color || '#64748b', borderColor: company.label_color || '#cbd5e1' }}

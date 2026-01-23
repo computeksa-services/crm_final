@@ -226,23 +226,43 @@ export const marketingApi = {
   /**
    * Buscar contactos en el CRM para agregar a listas
    * Tabla: client_contacts
+   * IMPORTANTE: Usa POST con body (no GET con query params)
+   * Soporta filtros demográficos e histórico de ventas
    */
   async searchCrmContacts(
     id_tenant: string, 
     id_user: string, 
-    filters: { search?: string; company_id?: string; position?: string; location?: string }
+    filters: any
   ): Promise<any[]> {
     try {
-      const params = new URLSearchParams({
+      // Construir payload con estructura exacta requerida por el backend
+      const payload = {
         id_tenant,
         id_user,
-        search: filters.search || '',
-        company_id: filters.company_id || '',
-        position: filters.position || '',
-        location: filters.location || ''
-      });
+        // Filtros demográficos (con IDs)
+        search: filters.search || undefined,
+        company_id: filters.id_company || undefined,
+        id_company_type: filters.id_company_type || undefined,  // NUEVO: ID de categoría
+        id_country: filters.id_country || undefined,             // CAMBIO: Ahora es ID
+        city: filters.city || undefined,
+        tags_ids: filters.tags_ids && filters.tags_ids.length > 0 ? filters.tags_ids : undefined,  // CAMBIO: Ahora son IDs
+        position: filters.position || undefined,
+        industry: filters.industry || undefined,
+        // Filtros de historial de ventas (NUEVOS)
+        bought_product_ids: filters.bought_product_ids && filters.bought_product_ids.length > 0 ? filters.bought_product_ids : undefined,
+        winning_status_ids: filters.winning_status_ids && filters.winning_status_ids.length > 0 ? filters.winning_status_ids : undefined,
+        purchase_period_days: filters.purchase_period_days || undefined
+      };
 
-      const response = await apiFetch(`${API_BASE}/api/marketing/contacts/search?${params.toString()}`);
+      // Remover propiedades undefined para no contaminar el payload
+      Object.keys(payload).forEach(key => payload[key] === undefined && delete payload[key]);
+
+      const response = await apiFetch(`${API_BASE}/api/marketing/contacts/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
       const data = await parseResponse(response);
       return Array.isArray(data) ? data : [];
     } catch (error) {

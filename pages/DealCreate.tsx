@@ -211,7 +211,7 @@ const DealCreate: React.FC = () => {
     <div className="w-full bg-slate-50 min-h-screen animate-fade-in">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <div className="sticky top-0 z-50 bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center justify-between shadow-sm">
+      <div className="sticky top-0 z-40 bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center justify-between shadow-sm">
          <div className="flex items-center gap-4">
              <button onClick={() => navigate(-1)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full transition-colors">
                  <i className="fa-solid fa-arrow-left text-lg"></i>

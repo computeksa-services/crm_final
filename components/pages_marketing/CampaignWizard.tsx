@@ -42,10 +42,11 @@ const CampaignWizard: React.FC = () => {
   const [lists, setLists] = useState<MarketingList[]>([]);
   const [isLoadingLists, setIsLoadingLists] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [tenantData, setTenantData] = useState<{ corporate_email_address?: string; name_tenant?: string } | null>(null);
+  const [tenantData, setTenantData] = useState<{ corporate_email_address?: string; name_tenant?: string; isMicrosoft?: boolean } | null>(null);
   const [searchLists, setSearchLists] = useState('');
   const [useRichEditor, setUseRichEditor] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [isCreator, setIsCreator] = useState(true);
   
   // Estado para controlar si hay cambios pendientes
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -99,9 +100,7 @@ const CampaignWizard: React.FC = () => {
           '{{email}}': 'Email',
           '{{company_name}}': 'Empresa',
           '{{position}}': 'Cargo',
-          '{{city}}': 'Ciudad',
-          '{{website}}': 'Sitio Web',
-          '{{unsubscribe_url}}': 'Link Desuscripción'
+          '{{city}}': 'Ciudad'
         },
         exec: (editor: any, _this: any, { control }: any) => {
            const key = control.args?.[0];
@@ -150,7 +149,8 @@ const CampaignWizard: React.FC = () => {
         const tenant = Array.isArray(data) ? data[0] : data;
         setTenantData({
           corporate_email_address: tenant?.corporate_email_address,
-          name_tenant: tenant?.name_tenant
+          name_tenant: tenant?.name_tenant,
+          isMicrosoft: user?.outlookConnected || false
         });
       }
     } catch (error) { console.error(error); }
@@ -165,6 +165,9 @@ const CampaignWizard: React.FC = () => {
       const normalizedLists = Array.isArray(campaign.target_lists) 
         ? campaign.target_lists.map((listId: any) => String(listId))
         : [];
+      
+      // Verificar si el usuario actual es el creador
+      setIsCreator(user?.id_user === campaign.created_by);
       
       setFormData(prev => ({
         ...prev,
@@ -185,6 +188,19 @@ const CampaignWizard: React.FC = () => {
       setHasUnsavedChanges(false);
     } catch (error) { console.error(error); }
   };
+
+    // Si no hay cuenta corporativa disponible, forzamos cuenta personal
+    useEffect(() => {
+        const hasCorporate = Boolean(tenantData?.corporate_email_address);
+        if (!hasCorporate && formData.senderType === 'TENANT') {
+            setFormData(prev => ({
+                ...prev,
+                senderType: 'USER',
+                senderEmail: user?.email_user || '',
+                senderName: user?.name_user || '',
+            }));
+        }
+    }, [tenantData?.corporate_email_address, formData.senderType, user?.email_user, user?.name_user]);
 
   // --- MANEJADORES DE PASOS ---
   const handleNext = () => {
@@ -253,11 +269,13 @@ const CampaignWizard: React.FC = () => {
     setHasUnsavedChanges(true);
   };
 
-  const handleSenderTypeChange = (type: 'USER' | 'TENANT') => {
-    let senderEmail = type === 'USER' ? (user?.email_user || '') : (tenantData?.corporate_email_address || '');
-    let senderName = type === 'USER' ? (user?.name_user || '') : (tenantData?.name_tenant || 'Empresa');
-    updateForm({ senderType: type, senderEmail, senderName });
-  };
+    const handleSenderTypeChange = (type: 'USER' | 'TENANT') => {
+        const hasCorporate = Boolean(tenantData?.corporate_email_address);
+        if (type === 'TENANT' && !hasCorporate) return;
+        const senderEmail = type === 'USER' ? (user?.email_user || '') : (tenantData?.corporate_email_address || '');
+        const senderName = type === 'USER' ? (user?.name_user || '') : (tenantData?.name_tenant || 'Empresa');
+        updateForm({ senderType: type, senderEmail, senderName });
+    };
 
   const toggleList = (listId: string) => {
     const normId = String(listId);
@@ -578,33 +596,38 @@ const CampaignWizard: React.FC = () => {
                         <h3 className="text-sm font-bold text-slate-800 uppercase mb-4">Configuración de Envío</h3>
                         <div className="grid md:grid-cols-2 gap-4 mb-5">
                             <div 
-                                onClick={() => handleSenderTypeChange('USER')}
-                                className={`cursor-pointer p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${formData.senderType === 'USER' ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300'}`}
+                                onClick={() => isCreator && handleSenderTypeChange('USER')}
+                                className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${
+                                  !isCreator ? 'opacity-50 cursor-not-allowed' :
+                                  formData.senderType === 'USER' ? 'border-brand-500 bg-brand-50 cursor-pointer' : 'border-slate-200 hover:border-slate-300 cursor-pointer'
+                                }`}
+                                title={!isCreator ? 'Solo el creador puede cambiar el remitente' : ''}
                             >
                                 <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border shadow-sm text-brand-600"><i className="fa-solid fa-user"></i></div>
                                 <div>
                                     <p className="font-bold text-sm text-slate-800">Cuenta Personal</p>
-                                    <p className="text-xs text-slate-500">{user?.email_user}</p>
                                 </div>
                             </div>
-                            <div 
-                                onClick={() => tenantData?.corporate_email_address && handleSenderTypeChange('TENANT')}
-                                className={`cursor-pointer p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${
-                                    !tenantData?.corporate_email_address ? 'opacity-50 cursor-not-allowed' :
-                                    formData.senderType === 'TENANT' ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-slate-300'
-                                }`}
-                            >
-                                <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border shadow-sm text-indigo-600"><i className="fa-solid fa-building"></i></div>
-                                <div>
-                                    <p className="font-bold text-sm text-slate-800">Cuenta Corporativa</p>
-                                    <p className="text-xs text-slate-500">{tenantData?.corporate_email_address || 'No configurado'}</p>
-                                </div>
-                            </div>
+                            {tenantData?.corporate_email_address && (
+                              <div 
+                                  onClick={() => isCreator && handleSenderTypeChange('TENANT')}
+                                  className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${
+                                      !isCreator ? 'opacity-50 cursor-not-allowed' :
+                                      formData.senderType === 'TENANT' ? 'border-brand-500 bg-brand-50 cursor-pointer' : 'border-slate-200 hover:border-slate-300 cursor-pointer'
+                                  }`}
+                                  title={!isCreator ? 'Solo el creador puede cambiar el remitente' : ''}
+                              >
+                                  <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border shadow-sm text-indigo-600"><i className="fa-solid fa-building"></i></div>
+                                  <div>
+                                      <p className="font-bold text-sm text-slate-800">Cuenta Corporativa</p>
+                                  </div>
+                              </div>
+                            )}
                         </div>
                         <div className="grid md:grid-cols-2 gap-5">
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nombre Remitente</label>
-                                <input type="text" value={formData.senderName} onChange={e => updateForm({ senderName: e.target.value })} className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-500" />
+                                <input type="text" value={formData.senderName} onChange={e => updateForm({ senderName: e.target.value })} disabled={tenantData?.isMicrosoft || !isCreator} className={`w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-500 ${(tenantData?.isMicrosoft || !isCreator) ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : ''}`} title={!isCreator ? 'Solo el creador puede cambiar el remitente' : ''} />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Email Remitente</label>
@@ -880,20 +903,25 @@ const CampaignWizard: React.FC = () => {
                 <div className="flex gap-3">
                     <button 
                         onClick={() => setIsScheduleModalOpen(true)} 
-                        disabled={!isValidForSending}
-                        className="px-5 py-2.5 bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 rounded-lg font-bold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={!isValidForSending || !isCreator}
+                        className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${
+                          isCreator
+                          ? 'bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed'
+                          : 'bg-slate-100 border-2 border-slate-200 text-slate-400 cursor-not-allowed opacity-50'
+                        }`}
+                        title={!isCreator ? 'Solo el creador puede programar' : !isValidForSending ? 'Completa todos los campos obligatorios' : 'Programar envío'}
                     >
                         <i className="fa-regular fa-clock mr-2"></i> Programar
                     </button>
                     <button 
                         onClick={() => saveCampaign()} 
-                        disabled={isSaving || !isValidForSending} 
+                        disabled={isSaving || !isValidForSending || !isCreator} 
                         className={`px-8 py-2.5 text-white rounded-lg font-bold text-sm shadow-lg transition-all flex items-center gap-2 ${
-                            !isValidForSending 
+                            !isValidForSending || !isCreator
                             ? 'bg-slate-300 cursor-not-allowed shadow-none' 
                             : 'bg-emerald-600 hover:bg-emerald-700 hover:shadow-emerald-200'
                         }`}
-                        title={!isValidForSending ? 'Completa todos los campos obligatorios para enviar' : ''}
+                        title={!isCreator ? 'Solo el creador puede enviar campañas' : !isValidForSending ? 'Completa todos los campos obligatorios para enviar' : ''}
                     >
                         {isSaving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>} 
                         Enviar Ahora

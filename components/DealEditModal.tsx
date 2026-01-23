@@ -251,7 +251,7 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
     <div className="fixed inset-0 z-[70] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95">
         {/* Header */}
-        <div className="sticky top-0 z-50 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+        <div className="sticky top-0 z-40 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
           <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
             <i className="fa-solid fa-pen-to-square text-brand-600"></i>
             Editar Trato

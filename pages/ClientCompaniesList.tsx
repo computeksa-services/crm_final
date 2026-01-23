@@ -27,7 +27,7 @@ import {
 const ClientCompaniesList: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { companies: cachedCompanies, loading: cacheLoading, invalidateCompanies } = useDataCache();
+  const { companies: cachedCompanies, companyLabelsMap, loading: cacheLoading, invalidateCompanies } = useDataCache();
   
   // --- ESTADOS DE DATOS ---
   const companies = useMemo(() => 
@@ -62,6 +62,7 @@ const ClientCompaniesList: React.FC = () => {
     onConfirm: () => {}, 
     isDestructive: false 
   });
+
 
   // --- CARGA DE DATOS (Ya no necesaria, usa caché) ---
   // El caché se carga automáticamente al iniciar sesión
@@ -164,8 +165,20 @@ const ClientCompaniesList: React.FC = () => {
   const getFacetedValues = (columnId: string) => {
     const counts = new Map<string, number>();
     companies.forEach(company => {
-      const val = (company as any)[columnId] || '(Vacío)';
-      counts.set(val, (counts.get(val) || 0) + 1);
+      if (columnId === 'labels') {
+        const ids: string[] = Array.isArray((company as any).labels) ? (company as any).labels : [];
+        if (ids.length === 0) {
+          const key = '(Sin etiqueta)';
+          counts.set(key, (counts.get(key) || 0) + 1);
+        } else {
+          ids.forEach(id => {
+            counts.set(id, (counts.get(id) || 0) + 1);
+          });
+        }
+      } else {
+        const val = (company as any)[columnId] ?? '(Vacío)';
+        counts.set(String(val), (counts.get(String(val)) || 0) + 1);
+      }
     });
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   };
@@ -187,6 +200,25 @@ const ClientCompaniesList: React.FC = () => {
     }
     setColumnFilters(currentFilters);
   };
+
+  // Datos para la tabla: si agrupamos por etiquetas, duplicamos filas por etiqueta
+  const tableData = useMemo(() => {
+    if (grouping.length && grouping[0] === 'labels') {
+      const flattened = companies.flatMap((company) => {
+        const ids: string[] = Array.isArray((company as any).labels) ? (company as any).labels : [];
+        if (ids.length === 0) {
+          return [{ ...company, __labelsGroupId: '(Sin etiqueta)', __labelsGroupName: '(Sin etiqueta)' }];
+        }
+        return ids.map((id) => ({
+          ...company,
+          __labelsGroupId: id,
+          __labelsGroupName: companyLabelsMap[id]?.name || id,
+        }));
+      });
+      return flattened;
+    }
+    return companies;
+  }, [companies, grouping, companyLabelsMap]);
 
   // --- COLUMNAS ---
   const columns = useMemo<ColumnDef<ClientCompany>[]>(() => [
@@ -313,30 +345,82 @@ const ClientCompaniesList: React.FC = () => {
         filterValue.length === 0 || filterValue.includes(row.getValue(id) || '(Vacío)')
     },
     {
-      accessorKey: 'label_name',
-      header: 'Etiqueta',
-      size: 120,
+      accessorKey: 'labels',
+      header: 'Etiquetas',
+      size: 240,
       enableColumnFilter: true,
-      cell: ({ row, getValue }) => {
-        if (row.getIsGrouped()) return null;
-        const labelName = getValue() as string;
-        const labelColor = row.original.label_color;
-        if (!labelName) return <span className="text-slate-400 text-sm py-1">-</span>;
+      getGroupingValue: (row) => {
+        if (grouping.length && grouping[0] === 'labels') {
+          const orig: any = (row as any)?.original;
+          return orig?.__labelsGroupName ?? '(Sin etiqueta)';
+        }
+        const ids: string[] = Array.isArray((row as any)?.original?.labels) ? ((row as any).original as any).labels : [];
+        if (ids.length === 0) return '(Sin etiqueta)';
+        const names = ids
+          .map(id => companyLabelsMap[id]?.name || id)
+          .filter(Boolean)
+          .sort((a, b) => a.localeCompare(b));
+        return names[0] || '(Sin etiqueta)';
+      },
+      filterFn: (row, id, filterValue: string[]) => {
+        if (!filterValue || filterValue.length === 0) return true;
+        const ids: string[] = Array.isArray(row.original.labels) ? row.original.labels : [];
+        const hasNoLabels = ids.length === 0;
+        const wantsEmpty = filterValue.includes('(Sin etiqueta)');
+        const intersects = ids.some(x => filterValue.includes(x));
+        return (wantsEmpty && hasNoLabels) || intersects;
+      },
+      cell: ({ row, column, getValue }) => {
+        if (row.getIsGrouped()) {
+          if (grouping[0] === column.id) {
+            const groupName = getValue() as string; // label name or '(Sin etiqueta)'
+            const isEmpty = groupName === '(Sin etiqueta)';
+            const orig: any = (row as any)?.original ?? {};
+            const idMatch = isEmpty ? undefined : orig.__labelsGroupId || Object.keys(companyLabelsMap).find(k => companyLabelsMap[k]?.name === groupName);
+            const info = idMatch ? companyLabelsMap[idMatch] : undefined;
+            const bg = info?.color ? `${info.color}15` : '#f1f5f9';
+            const color = info?.color || '#475569';
+            const border = info?.color || '#cbd5e1';
+            return (
+              <div className="flex items-center gap-3">
+                <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+                <span
+                  className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap"
+                  style={{ backgroundColor: isEmpty ? '#f1f5f9' : bg, color: isEmpty ? '#475569' : color, borderColor: isEmpty ? '#cbd5e1' : border }}
+                >
+                  {isEmpty ? 'Sin etiqueta' : (info?.name || groupName)}
+                </span>
+                <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                  {row.subRows.length}
+                </span>
+              </div>
+            );
+          }
+          return null;
+        }
+        const labelIds: string[] = Array.isArray(row.original.labels) ? row.original.labels : [];
+        if (labelIds.length === 0) return <span className="text-slate-400 text-sm py-1">-</span>;
         return (
-          <span 
-            className="inline-block px-2.5 py-1 rounded-full text-xs font-bold border whitespace-nowrap" 
-            style={{ 
-              backgroundColor: labelColor ? `${labelColor}15` : '#f1f5f9',
-              color: labelColor || '#64748b',
-              borderColor: labelColor || '#cbd5e1'
-            }}
-          >
-            {labelName}
-          </span>
+          <div className="flex flex-wrap gap-1">
+            {labelIds.map((id) => {
+              const info = companyLabelsMap[id];
+              const bg = info?.color ? `${info.color}15` : '#f1f5f9';
+              const color = info?.color || '#475569';
+              const border = info?.color || '#cbd5e1';
+              return (
+                <span
+                  key={id}
+                  className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap"
+                  style={{ backgroundColor: bg, color, borderColor: border }}
+                  title={id}
+                >
+                  {info?.name || id}
+                </span>
+              );
+            })}
+          </div>
         );
       },
-      filterFn: (row, id, filterValue: string[]) => 
-        filterValue.length === 0 || filterValue.includes(row.getValue(id) || '(Vacío)')
     },
     {
       accessorKey: 'created_by_name',
@@ -388,10 +472,10 @@ const ClientCompaniesList: React.FC = () => {
         );
       },
     }
-  ], [grouping]);
+  ], [grouping, companyLabelsMap]);
 
   const table = useReactTable({
-    data: companies,
+    data: tableData,
     columns,
     state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination, columnSizing },
     onSortingChange: setSorting,
@@ -461,6 +545,16 @@ const ClientCompaniesList: React.FC = () => {
               }`}
             >
               <i className="fa-solid fa-building text-[11px]"></i> Tipo
+            </button>
+            <button 
+              onClick={() => handleGroupingChange(grouping.length && grouping[0] === 'labels' ? [] : ['labels'])}
+              className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
+                grouping.length && grouping[0] === 'labels' 
+                ? 'bg-brand-600 text-white shadow-inner' 
+                : 'text-slate-500 hover:bg-slate-50'
+              }`}
+            >
+              <i className="fa-solid fa-tags text-[11px]"></i> Etiquetas
             </button>
           </div>
         </div>
@@ -537,7 +631,17 @@ const ClientCompaniesList: React.FC = () => {
                                     <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>
                                       {isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}
                                     </div>
-                                    <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
+                                    {header.column.id === 'labels' ? (
+                                      <span className="text-xs font-bold text-slate-700 tracking-tight flex items-center gap-2">
+                                        <span
+                                          className="inline-block w-3 h-3 rounded"
+                                          style={{ backgroundColor: val !== '(Sin etiqueta)' && companyLabelsMap[val]?.color ? `${companyLabelsMap[val]?.color}60` : '#e2e8f0', border: '1px solid #cbd5e1' }}
+                                        ></span>
+                                        {val === '(Sin etiqueta)' ? 'Sin etiqueta' : (companyLabelsMap[val]?.name || val)}
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
+                                    )}
                                   </div>
                                   <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600">({count})</span>
                                   <input 

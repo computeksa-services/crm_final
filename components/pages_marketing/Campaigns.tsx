@@ -94,23 +94,33 @@ const Campaigns: React.FC = () => {
   });
 
   // --- DATA LOADING ---
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
     if (!user?.id_tenant || !user?.id_user) return;
     setLoading(true);
+    const load = async () => {
+      try {
+        const result = await marketingApi.getCampaigns(user.id_tenant, user.id_user);
+        setData(result);
+      } catch (error) {
+        console.error(error);
+        setToast({ message: 'Error al cargar campañas', type: 'error' });
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [user?.id_tenant, user?.id_user]);
+
+  const reloadData = async () => {
+    if (!user?.id_tenant || !user?.id_user) return;
     try {
       const result = await marketingApi.getCampaigns(user.id_tenant, user.id_user);
       setData(result);
     } catch (error) {
       console.error(error);
       setToast({ message: 'Error al cargar campañas', type: 'error' });
-    } finally {
-      setLoading(false);
     }
-  }, [user]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+  };
 
   // Click outside to close filters
   useEffect(() => {
@@ -155,7 +165,7 @@ const Campaigns: React.FC = () => {
           
           setToast({ message: 'Campaña duplicada correctamente', type: 'success' });
           if(newCamp?.id_campaign) navigate(`/app/marketing/campaigns/edit/${newCamp.id_campaign}`);
-          else fetchData();
+          else reloadData();
         } catch (e) {
           setToast({ message: 'Error al duplicar', type: 'error' });
         } finally {
@@ -213,7 +223,7 @@ const Campaigns: React.FC = () => {
               action: 'send',
             });
             setToast({ message: 'Campaña iniciada', type: 'success' });
-            fetchData();
+            reloadData();
         } catch (e) {
             setToast({ message: 'Error al iniciar', type: 'error' });
         } finally {
@@ -242,7 +252,7 @@ const Campaigns: React.FC = () => {
               action: 'pause',
             });
             setToast({ message: 'Campaña pausada', type: 'success' });
-            fetchData();
+            reloadData();
         } catch (e) {
             setToast({ message: 'Error al pausar', type: 'error' });
         } finally {
@@ -271,7 +281,7 @@ const Campaigns: React.FC = () => {
               action: 'send',
             });
             setToast({ message: 'Campaña reanudada', type: 'success' });
-            fetchData();
+            reloadData();
         } catch (e) {
             setToast({ message: 'Error al reanudar', type: 'error' });
         } finally {
@@ -467,34 +477,71 @@ const Campaigns: React.FC = () => {
       cell: ({ row }) => {
         const c = row.original;
         const st = c.status || 'DRAFT';
+        const isCreator = user?.id_user === c.created_by;
         
         return (
           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             
-            {/* Lanzar (Solo draft) */}
+            {/* Lanzar (Solo draft y solo el creador) */}
             {st === 'DRAFT' && (
-                <button onClick={(e) => handleLaunch(e, c)} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors" title="Lanzar">
+                <button 
+                  onClick={(e) => isCreator && handleLaunch(e, c)} 
+                  disabled={!isCreator}
+                  className={`w-6 h-6 flex items-center justify-center text-slate-400 rounded transition-colors ${
+                    isCreator 
+                      ? 'hover:text-green-600 hover:bg-green-50 cursor-pointer' 
+                      : 'opacity-40 cursor-not-allowed'
+                  }`} 
+                  title={isCreator ? 'Lanzar' : 'Solo el creador puede lanzar'}
+                >
                     <i className="fa-solid fa-rocket text-[10px]"></i>
                 </button>
             )}
 
-            {/* Pausar (Solo sending) */}
+            {/* Pausar (Solo sending y solo el creador) */}
             {['SENDING','PROCESSING'].includes(st) && (
-                <button onClick={(e) => handlePause(e, c)} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded transition-colors" title="Pausar">
+                <button 
+                  onClick={(e) => isCreator && handlePause(e, c)} 
+                  disabled={!isCreator}
+                  className={`w-6 h-6 flex items-center justify-center text-slate-400 rounded transition-colors ${
+                    isCreator 
+                      ? 'hover:text-amber-600 hover:bg-amber-50 cursor-pointer' 
+                      : 'opacity-40 cursor-not-allowed'
+                  }`} 
+                  title={isCreator ? 'Pausar' : 'Solo el creador puede pausar'}
+                >
                     <i className="fa-solid fa-pause text-[10px]"></i>
                 </button>
             )}
 
-            {/* Reanudar (Solo paused) */}
+            {/* Reanudar (Solo paused y solo el creador) */}
             {st === 'PAUSED' && (
-                <button onClick={(e) => handleResume(e, c)} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors" title="Reanudar">
+                <button 
+                  onClick={(e) => isCreator && handleResume(e, c)} 
+                  disabled={!isCreator}
+                  className={`w-6 h-6 flex items-center justify-center text-slate-400 rounded transition-colors ${
+                    isCreator 
+                      ? 'hover:text-green-600 hover:bg-green-50 cursor-pointer' 
+                      : 'opacity-40 cursor-not-allowed'
+                  }`} 
+                  title={isCreator ? 'Reanudar' : 'Solo el creador puede reanudar'}
+                >
                     <i className="fa-solid fa-play text-[10px]"></i>
                 </button>
             )}
 
-            {/* Editar (siempre visible pero lleva al wizard) */}
-            <button onClick={(e) => handleEdit(e, c)} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-slate-50 rounded transition-colors" title="Editar">
+            {/* Editar (todos pueden editar) */}
+            <button 
+              onClick={(e) => handleEdit(e, c)} 
+              className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-slate-50 rounded transition-colors cursor-pointer" 
+              title="Editar"
+            >
                <i className="fa-solid fa-pen text-[10px]"></i>
+            </button>
+
+            {/* Duplicar (siempre visible) */}
+            <button onClick={(e) => handleDuplicate(e, c)} className="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded transition-colors" title="Duplicar">
+                <i className="fa-solid fa-copy text-[10px]"></i>
             </button>
 
             {/* Eliminar */}

@@ -396,7 +396,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                </button>
 
                {userMenuOpen && (
-                 <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-30 py-2">
+                 <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-2">
                    <Link
                      to="/app/profile"
                      onClick={() => setUserMenuOpen(false)}

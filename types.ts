@@ -509,6 +509,11 @@ export interface MarketingCampaign {
   unique_opens?: string | number;
   unique_clicks?: string | number;
   progress_percentage?: string | number;
+  chart_data?: Array<{
+    time: string;
+    opens: number;
+    clicks: number;
+  }>;
 }
 
 export interface CampaignTemplate {

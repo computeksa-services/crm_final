@@ -71,7 +71,7 @@ const MarketingCenter: React.FC = () => {
     <div className="flex flex-col h-full w-full bg-slate-50 overflow-y-auto">
       
       {/* HEADER COMPACTO */}
-      <div className="bg-white border-b border-slate-200 shrink-0 sticky top-0 z-20">
+      <div className="bg-white border-b border-slate-200 shrink-0">
         <div className="w-full px-4 md:px-6 py-3">
           
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

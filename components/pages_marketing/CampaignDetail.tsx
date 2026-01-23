@@ -17,11 +17,18 @@ interface AudienceMember {
   sent_at: string | null;
 }
 
+interface ChartDataPoint {
+  time: string;
+  opens: number;
+  clicks: number;
+}
+
 interface CampaignDetailData extends MarketingCampaign {
   audience_detail?: AudienceMember[];
   processed_count?: number;
   remaining_count?: number;
   open_rate?: number;
+  chart_data?: ChartDataPoint[];
 }
 
 const CampaignDetail: React.FC = () => {
@@ -48,14 +55,17 @@ const CampaignDetail: React.FC = () => {
 
   useEffect(() => {
     loadCampaignDetail();
-    // Polling inteligente: solo si está enviando
+  }, [id]);
+
+  // Polling inteligente: solo si está enviando
+  useEffect(() => {
+    if (!campaign || (campaign.status !== 'SENDING' && campaign.status !== 'PROCESSING')) return;
+    
     const interval = setInterval(() => {
-        if (campaign?.status === 'SENDING' || campaign?.status === 'PROCESSING') {
-            loadCampaignDetail(true); // Silent reload
-        }
+        loadCampaignDetail(true); // Silent reload
     }, 10000);
     return () => clearInterval(interval);
-  }, [id, campaign?.status]);
+  }, [campaign?.status]);
 
   const loadCampaignDetail = async (silent = false) => {
     if (!id) return;
@@ -90,8 +100,16 @@ const CampaignDetail: React.FC = () => {
   }, [campaign?.audience_detail, audienceSearch]);
 
   // --- ACCIONES ---
+  const isCreator = user?.id_user === campaign?.created_by;
+
   const handleAction = (actionType: 'delete' | 'launch' | 'pause' | 'resume') => {
     if (!campaign || !user?.id_tenant || !user?.id_user) return;
+    
+    // Verificar que el usuario es el creador para acciones de envío
+    if (['launch', 'pause', 'resume'].includes(actionType) && !isCreator) {
+      alert('⚠️ Solo el creador de la campaña puede realizar esta acción. Duplica la campaña si deseas usar la misma configuración.');
+      return;
+    }
 
     if (actionType === 'launch') {
         const totalAudience = toNumber(campaign.total_target);
@@ -190,15 +208,17 @@ const CampaignDetail: React.FC = () => {
     const hasAudience = audienceSize > 0;
 
     if (status === 'DRAFT') {
+        const canLaunch = hasAudience && isCreator;
         return (
             <button 
-                onClick={() => handleAction('launch')}
+                onClick={() => canLaunch && handleAction('launch')}
+                disabled={!canLaunch}
                 className={`px-5 py-2.5 rounded-lg font-bold shadow-sm flex items-center gap-2 transition-all ${
-                    hasAudience 
+                    canLaunch 
                     ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200' 
-                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-50'
                 }`}
-                title={hasAudience ? 'Iniciar envío masivo' : 'Agrega listas con contactos para enviar'}
+                title={!isCreator ? 'Solo el creador puede lanzar' : !hasAudience ? 'Agrega listas con contactos para enviar' : 'Iniciar envío masivo'}
             >
                 <i className="fa-solid fa-rocket"></i>
                 Lanzar Campaña
@@ -209,8 +229,14 @@ const CampaignDetail: React.FC = () => {
     if (status === 'SENDING' || status === 'PROCESSING') {
         return (
             <button 
-                onClick={() => handleAction('pause')}
-                className="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow-sm shadow-amber-200 transition-all flex items-center gap-2"
+                onClick={() => isCreator && handleAction('pause')}
+                disabled={!isCreator}
+                className={`px-5 py-2.5 rounded-lg font-bold shadow-sm flex items-center gap-2 transition-all ${
+                  isCreator
+                  ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-200'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-50'
+                }`}
+                title={isCreator ? 'Pausar envío' : 'Solo el creador puede pausar'}
             >
                 <i className="fa-solid fa-pause"></i>
                 Pausar Envío
@@ -221,8 +247,14 @@ const CampaignDetail: React.FC = () => {
     if (status === 'PAUSED') {
         return (
             <button 
-                onClick={() => handleAction('resume')}
-                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold shadow-sm shadow-emerald-200 transition-all flex items-center gap-2"
+                onClick={() => isCreator && handleAction('resume')}
+                disabled={!isCreator}
+                className={`px-5 py-2.5 rounded-lg font-bold shadow-sm flex items-center gap-2 transition-all ${
+                  isCreator
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-200'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-50'
+                }`}
+                title={isCreator ? 'Reanudar envío' : 'Solo el creador puede reanudar'}
             >
                 <i className="fa-solid fa-play"></i>
                 Reanudar Envío
@@ -250,6 +282,29 @@ const CampaignDetail: React.FC = () => {
       return <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px] font-bold border border-slate-200">PENDIENTE</span>;
   };
 
+  // Datos para el gráfico (usar datos reales del backend o fallback a mockup)
+  // ⚠️ MUST be called unconditionally before any early returns
+  const chartData = useMemo(() => {
+    if (campaign && campaign.chart_data && campaign.chart_data.length > 0) {
+      // Usar datos reales del backend, formateando la hora
+      return campaign.chart_data.map(point => ({
+        time: new Date(point.time).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }),
+        opens: point.opens,
+        clicks: point.clicks
+      }));
+    }
+    // Fallback a datos mockup si no hay datos reales
+    if (!campaign) return [];
+    return [
+      { time: '00:00', opens: 0, clicks: 0 },
+      { time: '04:00', opens: 0, clicks: 0 },
+      { time: '08:00', opens: Math.floor(toNumber(campaign.open_count) * 0.2), clicks: Math.floor(toNumber(campaign.click_count) * 0.2) },
+      { time: '12:00', opens: Math.floor(toNumber(campaign.open_count) * 0.6), clicks: Math.floor(toNumber(campaign.click_count) * 0.6) },
+      { time: '16:00', opens: Math.floor(toNumber(campaign.open_count) * 0.9), clicks: Math.floor(toNumber(campaign.click_count) * 0.9) },
+      { time: '20:00', opens: toNumber(campaign.open_count), clicks: toNumber(campaign.click_count) },
+    ];
+  }, [campaign, campaign?.chart_data, campaign?.open_count, campaign?.click_count]);
+
   if (isLoading) {
     return (
       <div className="h-96 flex flex-col items-center justify-center text-slate-400">
@@ -262,15 +317,6 @@ const CampaignDetail: React.FC = () => {
   if (!campaign) {
     return <div className="p-8 text-center text-slate-500">Campaña no encontrada</div>;
   }
-
-  // Datos para el gráfico (mockup o real si tienes datos por hora)
-  const chartData = [
-    { time: '00:00', opens: 0 }, { time: '04:00', opens: 0 },
-    { time: '08:00', opens: Math.floor(toNumber(campaign.open_count) * 0.2) },
-    { time: '12:00', opens: Math.floor(toNumber(campaign.open_count) * 0.6) },
-    { time: '16:00', opens: Math.floor(toNumber(campaign.open_count) * 0.9) },
-    { time: '20:00', opens: toNumber(campaign.open_count) },
-  ];
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
@@ -313,15 +359,21 @@ const CampaignDetail: React.FC = () => {
             <Link 
                 to={`/app/marketing/campaigns/edit/${id}`}
                 className="px-3 py-2 bg-white border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 font-medium text-sm transition-colors flex items-center gap-2 shadow-sm"
+                title="Editar campaña"
             >
                 <i className="fa-regular fa-pen-to-square"></i> <span className="hidden sm:inline">Editar</span>
             </Link>
             
             {(normalizeStatus(campaign.status) === 'DRAFT' || normalizeStatus(campaign.status) === 'COMPLETED' || normalizeStatus(campaign.status) === 'FAILED') && (
                 <button 
-                    onClick={() => handleAction('delete')}
-                    className="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 font-medium text-sm transition-colors shadow-sm"
-                    title="Eliminar campaña"
+                    onClick={() => isCreator && handleAction('delete')}
+                    disabled={!isCreator}
+                    className={`px-3 py-2 rounded-lg font-medium text-sm transition-colors ${
+                      isCreator
+                      ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50'
+                      : 'bg-slate-100 border border-slate-200 text-slate-400 cursor-not-allowed opacity-50'
+                    }`}
+                    title={isCreator ? 'Eliminar campaña' : 'Solo el creador puede eliminar'}
                 >
                     <i className="fa-regular fa-trash-can"></i>
                 </button>
@@ -336,7 +388,7 @@ const CampaignDetail: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between relative overflow-hidden">
            <div className="flex justify-between items-start z-10 relative">
                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Estado / Progreso</p>
-               <i className={`fa-solid ${normalizeStatus(campaign.status) === 'COMPLETED' ? 'fa-check-circle text-green-400' : 'fa-spinner fa-spin text-blue-400'}`}></i>
+               <i className={`fa-solid ${['SENDING', 'PROCESSING'].includes(normalizeStatus(campaign.status)) ? 'fa-spinner fa-spin text-blue-400' : normalizeStatus(campaign.status) === 'COMPLETED' ? 'fa-check-circle text-green-400' : 'fa-circle text-slate-300'}`}></i>
            </div>
            <div className="mt-2 z-10 relative">
                 <p className="text-2xl font-bold text-slate-800">{toNumber(campaign.progress_percentage)}%</p>
@@ -454,12 +506,17 @@ const CampaignDetail: React.FC = () => {
                             <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.2}/>
                             <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
                           </linearGradient>
+                          <linearGradient id="gradClick" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10B981" stopOpacity={0.2}/>
+                            <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                          </linearGradient>
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
                         <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
                         <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 11}} />
                         <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                        <Area type="monotone" dataKey="opens" stroke="#3B82F6" strokeWidth={3} fill="url(#gradOpen)" name="Aperturas" />
+                        <Area type="monotone" dataKey="opens" stroke="#3B82F6" strokeWidth={2} fill="url(#gradOpen)" name="Aperturas" />
+                        <Area type="monotone" dataKey="clicks" stroke="#10B981" strokeWidth={2} fill="url(#gradClick)" name="Clics" />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>

@@ -25,6 +25,7 @@ const CampaignReview: React.FC<CampaignReviewProps> = ({
   onSuccess,
   onClose,
 }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState<LoadingState>({
     isSaving: false,
     isLaunching: false,
@@ -72,6 +73,11 @@ const CampaignReview: React.FC<CampaignReviewProps> = ({
    * 2. Luego lanza la campaña con el ID retornado
    */
   const handleLaunchCampaign = async () => {
+    if (loading.isLaunching) return; // evitar doble submit
+    if (!user?.id_user) {
+      setError('No se detectó el usuario autenticado para lanzar la campaña');
+      return;
+    }
     try {
       setLoading((prev) => ({ ...prev, isLaunching: true }));
       setError(null);
@@ -91,7 +97,8 @@ const CampaignReview: React.FC<CampaignReviewProps> = ({
 
       // Paso 2: Lanzar la campaña
       const launchResponse = await marketingApi.launchCampaign(
-        campaignIdToLaunch
+        campaignIdToLaunch,
+        user.id_user
       );
 
       setSuccessMessage(

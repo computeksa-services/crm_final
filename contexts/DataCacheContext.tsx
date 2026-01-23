@@ -22,6 +22,7 @@ type Contact = {
 type DataCacheState = {
   // Datos
   companies: ClientCompany[];
+  companyLabelsMap: Record<string, { name: string; color?: string }>;
   contacts: Contact[];
   products: Product[];
   users: User[];
@@ -64,6 +65,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { user } = useAuth();
   
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
+  const [companyLabelsMap, setCompanyLabelsMap] = useState<Record<string, { name: string; color?: string }>>({});
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<User[]>([]);
@@ -76,6 +78,31 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [financialsCache, setFinancialsCache] = useState<Record<string, { result: any; lastUpdated: number }>>({});
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
+
+  // Normaliza una respuesta que puede venir como array envolviendo unified_response o como array plano
+  const parseCompaniesPayload = useCallback((payload: any) => {
+    const normalized = Array.isArray(payload)
+      ? payload.find(item => item && typeof item === 'object' && 'unified_response' in item) ?? payload
+      : payload;
+
+    let companiesArray: any[] = [];
+    let labelsMap: Record<string, { name: string; color?: string }> = {};
+
+    if (normalized && typeof normalized === 'object' && (normalized as any).unified_response) {
+      const ur = (normalized as any).unified_response;
+      const dict = Array.isArray(ur?.dictionary) ? ur.dictionary : [];
+      dict.forEach((l: any) => {
+        if (l?.id_label) labelsMap[l.id_label] = { name: l.name, color: l.color };
+      });
+      const rows = Array.isArray(ur?.rows) ? ur.rows : [];
+      companiesArray = rows.filter((item: any) => item.id_client_company || item.name_company);
+    } else {
+      const arr = Array.isArray(normalized) ? normalized : [];
+      companiesArray = arr.filter((item: any) => item.id_client_company || item.name_company);
+    }
+
+    return { companiesArray, labelsMap };
+  }, []);
 
   // --- CARGA INICIAL ---
   const loadData = useCallback(async () => {
@@ -92,6 +119,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       try {
         const { 
           companies: cachedCompanies, 
+          companyLabelsMap: cachedCompanyLabelsMap,
           contacts: cachedContacts, 
           products: cachedProducts, 
           users: cachedUsers, 
@@ -113,6 +141,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         });
         
         setCompanies(Array.isArray(cachedCompanies) ? cachedCompanies : []);
+        setCompanyLabelsMap(cachedCompanyLabelsMap || {});
         setContacts(Array.isArray(cachedContacts) ? cachedContacts : []);
         setProducts(Array.isArray(cachedProducts) ? cachedProducts : []);
         setUsers(Array.isArray(cachedUsers) ? cachedUsers : []);
@@ -184,8 +213,8 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         dealChannelsRes.ok ? safeJson(dealChannelsRes, []) : []
       ]);
 
-      // Filtrar objetos phantom {success: true} sin datos reales
-      const companiesArray = Array.isArray(companiesData) ? companiesData.filter((item: any) => item.id_client_company || item.name_company) : [];
+      // Soportar unified_response { dictionary, rows } y el array envolviendo
+      const { companiesArray, labelsMap } = parseCompaniesPayload(companiesData);
       const contactsArray = Array.isArray(contactsData) ? contactsData.filter((item: any) => item.id_contact || item.first_name || item.last_name) : [];
       const productsArray = Array.isArray(productsData) ? productsData.filter((item: any) => item.id_product || item.product_name) : [];
       const usersArray = Array.isArray(usersData) ? usersData.filter((item: any) => item.id_user || item.nombre_user) : [];
@@ -206,6 +235,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
 
       setCompanies(companiesArray);
+      setCompanyLabelsMap(labelsMap);
       setContacts(contactsArray);
       setProducts(productsArray);
       setUsers(usersArray);
@@ -231,6 +261,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       try {
         localStorage.setItem(cachedKey, JSON.stringify({ 
           companies: companiesArray, 
+          companyLabelsMap: labelsMap,
           contacts: contactsArray,
           products: productsArray,
           users: usersArray,
@@ -254,7 +285,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, parseCompaniesPayload]);
 
   // Cargar datos al montar si hay usuario
   useEffect(() => {
@@ -269,9 +300,9 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       if (res.ok) {
         const data = await res.json();
-        // Filtrar objetos phantom {success: true} sin datos reales
-        const companiesArray = Array.isArray(data) ? data.filter((item: any) => item.id_client_company || item.name_company) : [];
+        const { companiesArray, labelsMap } = parseCompaniesPayload(data);
         setCompanies(companiesArray);
+        setCompanyLabelsMap(labelsMap);
         
         // Guardar en localStorage
         const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
@@ -280,13 +311,14 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           const parsed = cached ? JSON.parse(cached) : { contacts: [] };
           localStorage.setItem(cachedKey, JSON.stringify({ 
             ...parsed,
-            companies: companiesArray 
+            companies: companiesArray,
+            companyLabelsMap: labelsMap
           }));
         } catch (e) {}
       }
     } catch (error) {
     }
-  }, [user]);
+  }, [user, parseCompaniesPayload]);
 
   const invalidateContacts = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
@@ -555,6 +587,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const value: DataCacheState = {
     companies,
+    companyLabelsMap,
     contacts,
     products,
     users,

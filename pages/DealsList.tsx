@@ -79,6 +79,32 @@ const InlineBadgeSelector: React.FC<{
   const [isOpen, setIsOpen] = useState(false);
   const current = items.find(i => i.id === valueId);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  // Encontrar el índice del estado actual
+  const currentIndex = items.findIndex(i => i.id === valueId);
+  
+  // Dividir items en los que van arriba y abajo del estado actual
+  const itemsAbove = currentIndex > 0 ? items.slice(0, currentIndex) : [];
+  const itemsBelow = currentIndex < items.length - 1 ? items.slice(currentIndex + 1) : [];
+  
+  // Determinar si mostrar el dropdown hacia arriba o abajo
+  const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
+  
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      
+      // Si hay más espacio arriba y el dropdown es grande, mostrarlo arriba
+      if (spaceAbove > spaceBelow && spaceBelow < 200) {
+        setDropdownPosition('top');
+      } else {
+        setDropdownPosition('bottom');
+      }
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -91,6 +117,7 @@ const InlineBadgeSelector: React.FC<{
   return (
     <div className="relative inline-block" ref={dropdownRef}>
       <button
+        ref={buttonRef}
         type="button"
         onClick={(e) => { e.stopPropagation(); if (!disabled) setIsOpen(!isOpen); }}
         className={`flex items-center gap-2 px-2 py-1 rounded-lg border text-[10px] font-black uppercase tracking-tight transition-all ${disabled ? 'cursor-default opacity-70' : 'hover:bg-white active:scale-95'}`}
@@ -101,19 +128,55 @@ const InlineBadgeSelector: React.FC<{
         {!disabled && <i className="fa-solid fa-chevron-down opacity-50 text-[8px]"></i>}
       </button>
       {isOpen && (
-        <div className="absolute z-[100] mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-xl py-1 overflow-hidden animate-in fade-in slide-in-from-top-1">
-          {items.map(item => (
-            <button
-              key={item.id}
-              onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
-              className="w-full px-3 py-2.5 hover:bg-slate-50 flex items-center gap-3 text-left border-b border-slate-50 last:border-0"
-            >
-              <div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor: `${item.color}20`, color: item.color }}>
-                <i className={item.icon || 'fa-solid fa-tag'}></i>
+        <div 
+          className={`absolute z-[100] ${dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'} left-0 w-52 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in ${dropdownPosition === 'top' ? 'slide-in-from-bottom-1' : 'slide-in-from-top-1'}`}
+        >
+          {/* Estados arriba del actual */}
+          {itemsAbove.length > 0 && (
+            <div className="py-1">
+              {itemsAbove.map(item => (
+                <button
+                  key={item.id}
+                  onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
+                  className="w-full px-3 py-2.5 hover:bg-slate-50 flex items-center gap-3 text-left border-b border-slate-50 last:border-0 transition-colors"
+                >
+                  <div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor: `${item.color}20`, color: item.color }}>
+                    <i className={item.icon || 'fa-solid fa-tag'}></i>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          
+          {/* Estado actual (deshabilitado) */}
+          <div className="py-1 bg-slate-50 border-y border-slate-200">
+            <div className="w-full px-3 py-2.5 flex items-center gap-3 opacity-60 cursor-not-allowed">
+              <div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor: `${current?.color}20`, color: current?.color }}>
+                <i className={current?.icon || 'fa-solid fa-tag'}></i>
               </div>
-              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
-            </button>
-          ))}
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">{current?.name || 'S/N'}</span>
+              <i className="fa-solid fa-check text-[10px] ml-auto text-slate-400"></i>
+            </div>
+          </div>
+          
+          {/* Estados abajo del actual */}
+          {itemsBelow.length > 0 && (
+            <div className="py-1">
+              {itemsBelow.map(item => (
+                <button
+                  key={item.id}
+                  onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
+                  className="w-full px-3 py-2.5 hover:bg-slate-50 flex items-center gap-3 text-left border-b border-slate-50 last:border-0 transition-colors"
+                >
+                  <div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor: `${item.color}20`, color: item.color }}>
+                    <i className={item.icon || 'fa-solid fa-tag'}></i>
+                  </div>
+                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -311,6 +374,14 @@ const DealsList: React.FC = () => {
 
   const handleInlineUpdate = async (deal: Deal, updates: Partial<Deal>) => {
     if (!user?.id_tenant || !user?.id_user) return;
+
+    // Prevenir cambio al mismo estado o interés
+    if (updates.id_deal_status && updates.id_deal_status === deal.id_deal_status) {
+      return;
+    }
+    if (updates.id_interest && updates.id_interest === deal.id_interest) {
+      return;
+    }
 
     const isStatusChange = updates.id_deal_status && updates.id_deal_status !== deal.id_deal_status;
     const targetStatus = isStatusChange
