@@ -78,7 +78,21 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
       if (!res.ok) throw new Error('Error al cargar empresas');
       const text = await res.text();
       const data = text ? JSON.parse(text) : [];
-      const valid = Array.isArray(data) ? data.filter((c: any) => c && c.id_client_company) : [];
+      
+      // Soportar unified_response.rows además de array plano
+      let companiesArray: any[] = [];
+      if (Array.isArray(data)) {
+        const unified = data.find(item => item && typeof item === 'object' && 'unified_response' in item);
+        if (unified?.unified_response?.rows && Array.isArray(unified.unified_response.rows)) {
+          companiesArray = unified.unified_response.rows;
+        } else {
+          companiesArray = data;
+        }
+      } else if (data?.unified_response?.rows && Array.isArray(data.unified_response.rows)) {
+        companiesArray = data.unified_response.rows;
+      }
+      
+      const valid = companiesArray.filter((c: any) => c && c.id_client_company);
       setCompaniesList(valid);
     } catch (err) {
       setToast({ message: 'No se pudieron cargar las empresas.', type: 'error' });
@@ -191,7 +205,7 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
               onChange={handleInputChange}
               onFocus={ensureCompaniesLoaded}
               onClick={ensureCompaniesLoaded}
-              disabled={!!(preselectedCompanyId || initialData?.id_client_company)}
+              disabled={!!(preselectedCompanyId && mode === 'create')}
               className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <option value="">Selecciona empresa</option>
