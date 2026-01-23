@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { FinancialTransaction, ClientCompany, Quote } from '../types';
 
 interface FinancialFormModalProps {
@@ -52,7 +53,7 @@ const FinancialFormModal: React.FC<FinancialFormModalProps> = ({
 
   if (!isOpen || !editData) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 px-6 py-5 border-b border-slate-100 bg-white flex justify-between items-center">
@@ -273,7 +274,8 @@ const FinancialFormModal: React.FC<FinancialFormModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

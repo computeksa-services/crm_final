@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { marketingApi } from '../../services/marketingApi';
 import { useAuth } from '../../contexts/AuthContext';
@@ -932,9 +933,9 @@ const CampaignWizard: React.FC = () => {
       </div>
 
       {/* MODALS */}
-      {isTestEmailModalOpen && (
+      {isTestEmailModalOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
                 <h3 className="text-lg font-bold text-slate-800 mb-4">Enviar Prueba</h3>
                 <input 
                     type="email" 
@@ -948,12 +949,13 @@ const CampaignWizard: React.FC = () => {
                     <button onClick={handleSendTest} className="px-6 py-2 bg-brand-600 text-white rounded-lg font-bold shadow-md hover:bg-brand-700">Enviar</button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {isScheduleModalOpen && (
+      {isScheduleModalOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
                 <h3 className="text-lg font-bold text-slate-800 mb-2">Programar Envío</h3>
                 <div className="grid grid-cols-2 gap-4 mb-6">
                     <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="w-full border rounded p-2" />
@@ -964,7 +966,8 @@ const CampaignWizard: React.FC = () => {
                     <button onClick={handleScheduleSave} className="px-6 py-2 bg-brand-600 text-white rounded-lg font-bold">Confirmar</button>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {toast && <Toast message={toast.message} type={toast.type as any} onClose={() => setToast(null)} />}

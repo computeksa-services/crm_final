@@ -39,6 +39,28 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
   const [expandedSections, setExpandedSections] = useState({ status: false, interest: false, channel: false });
   const didLoadDataRef = useRef(false);
 
+  const formatDate = (value?: string | number | Date) => {
+    if (!value) return 'N/A';
+    // Manejar strings ya formateados (ej. "22/01/2026 16:27:00") sin romper
+    if (typeof value === 'string') {
+      const raw = value.trim();
+      const hasSlash = raw.includes('/');
+      const hasSpace = raw.includes(' ');
+      // Intentar parseo estándar primero
+      const parsed = new Date(raw.includes('T') ? raw : raw.replace(' ', 'T'));
+      if (!isNaN(parsed.getTime())) {
+        return parsed.toLocaleDateString('es-ES');
+      }
+      // Si viene en dd/MM/yyyy con hora, devolver la parte de fecha
+      if (hasSlash && hasSpace) {
+        return raw.split(' ')[0];
+      }
+      return raw || 'N/A';
+    }
+    const date = value instanceof Date ? value : new Date(value);
+    return isNaN(date.getTime()) ? 'N/A' : date.toLocaleDateString('es-ES');
+  };
+
   // Cerrar dropdowns al hacer clic fuera
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -68,8 +90,8 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
         id_interest: initialData.id_interest,
         id_channel: initialData.id_channel,
         fecha_cierre_esperada: initialData.fecha_cierre_esperada,
-        created_at: initialData.created_at,
-        updated_at: initialData.updated_at,
+        created_at: initialData.created_at ?? (initialData as any).fecha_creacion,
+        updated_at: initialData.updated_at ?? (initialData as any).fecha_actualizacion,
       });
     }
   }, [initialData, isOpen]);
@@ -86,8 +108,8 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
         { name: 'Empresas', url: `/api/clients/companies` },
         { name: 'Contactos', url: `/api/clients/contacts` },
         { name: 'Estados', url: `/api/statuses/deals` },
-        { name: 'Intereses', url: `/api/statuses/interests` },
-        { name: 'Canales', url: `/api/channel` },
+        { name: 'Intereses', url: `/api/interests/deals` },
+        { name: 'Canales', url: `/api/channels/deals` },
       ];
 
       const parseData = async (res: Response, endpointName: string) => {
@@ -104,7 +126,21 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
         
         try {
           const json = JSON.parse(text);
-          return Array.isArray(json) ? json : (json.data || []);
+          // Soporta respuesta directa, data o unified_response.rows
+          if (Array.isArray(json)) {
+            const unified = json.find(item => item && typeof item === 'object' && 'unified_response' in item);
+            if (unified?.unified_response?.rows && Array.isArray(unified.unified_response.rows)) {
+              return unified.unified_response.rows;
+            }
+            return json;
+          }
+          if (json?.unified_response?.rows && Array.isArray(json.unified_response.rows)) {
+            return json.unified_response.rows;
+          }
+          if (Array.isArray(json?.data)) {
+            return json.data;
+          }
+          return [];
         } catch (e) {
           console.error(`❌ ${endpointName}: error parseando JSON`);
           return [];
@@ -324,7 +360,11 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
                 >
                   <option value="">-- Seleccionar Empresa --</option>
                   <option value="__ADD_NEW_COMPANY__" className="font-bold text-emerald-600">+ Nueva Empresa</option>
-                  {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
+                  {companies.map((c, idx) => (
+                    <option key={c.id_client_company || idx} value={c.id_client_company}>
+                      {c.name_company}
+                    </option>
+                  ))}
                 </select>
               </div>
               {selectedCompany && (
@@ -356,7 +396,11 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
                   >
                     <option value="">-- Seleccionar Contacto --</option>
                     <option value="__ADD_NEW_CONTACT__" className="font-bold text-emerald-600">+ Nuevo Contacto</option>
-                    {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{c.first_name} {c.last_name}</option>)}
+                    {filteredContacts.map((c, idx) => (
+                      <option key={c.id_contact || idx} value={c.id_contact}>
+                        {c.first_name} {c.last_name}
+                      </option>
+                    ))}
                   </select>
                   {selectedContact && (
                     <div className="bg-slate-100 border border-slate-200 rounded-lg p-3 text-xs space-y-2 mt-3">
@@ -405,9 +449,9 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
                 </button>
                 {expandedSections.status && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] p-2 space-y-1 max-h-48 overflow-y-auto">
-                    {dealStatuses.map((s: any) => (
+                    {dealStatuses.map((s: any, idx: number) => (
                       <button 
-                        key={s.id_status || s.id} 
+                        key={s.id_status || s.id || idx} 
                         onClick={() => { 
                           setDeal((p: Partial<Deal>) => ({...p, id_deal_status: s.id_status || s.id})); 
                           setExpandedSections(p => ({...p, status: false})); 
@@ -442,11 +486,11 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
                 </button>
                 {expandedSections.interest && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] p-2 space-y-1 max-h-48 overflow-y-auto">
-                    {interestStatuses.map((i: any) => {
+                    {interestStatuses.map((i: any, idx: number) => {
                       const id = i.id_status || i.id_interest || i.id;
                       return (
                         <button 
-                          key={id} 
+                          key={id || idx} 
                           onClick={() => { 
                             setDeal((p: Partial<Deal>) => ({...p, id_interest: id})); 
                             setExpandedSections(p => ({...p, interest: false})); 
@@ -482,9 +526,9 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
                 </button>
                 {expandedSections.channel && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-lg shadow-xl z-[100] p-2 space-y-1 max-h-48 overflow-y-auto">
-                    {dealChannels.map((c: any) => (
+                    {dealChannels.map((c: any, idx: number) => (
                       <button 
-                        key={c.id_channel || c.id} 
+                        key={c.id_channel || c.id || idx} 
                         onClick={() => { 
                           setDeal((p: Partial<Deal>) => ({...p, id_channel: c.id_channel || c.id})); 
                           setExpandedSections(p => ({...p, channel: false})); 
@@ -506,8 +550,8 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
                 <i className="fa-solid fa-info-circle text-brand-600"></i> Detalles
               </h3>
               <div className="mt-4 text-xs text-slate-600 space-y-2">
-                <p><span className="font-bold">Creado:</span> {deal.created_at ? new Date(deal.created_at).toLocaleDateString('es-ES') : 'N/A'}</p>
-                <p><span className="font-bold">Actualizado:</span> {deal.updated_at ? new Date(deal.updated_at).toLocaleDateString('es-ES') : 'N/A'}</p>
+                <p><span className="font-bold">Creado:</span> {formatDate(deal.created_at)}</p>
+                <p><span className="font-bold">Actualizado:</span> {formatDate(deal.updated_at)}</p>
               </div>
             </div>
           </div>

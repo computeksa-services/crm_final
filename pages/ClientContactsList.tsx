@@ -61,9 +61,6 @@ const ClientContactsList: React.FC = () => {
 
   // --- CARGA DE DATOS (Ya no necesaria, usa caché) ---
   // El caché se carga automáticamente
-  
-  // Calcular total de páginas basado en los contactos cacheados
-  const totalPages = Math.ceil(contacts.length / pagination.pageSize) || 1;
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -298,8 +295,6 @@ const ClientContactsList: React.FC = () => {
     onExpandedChange: setExpanded,
     onPaginationChange: setPagination,
     onColumnSizingChange: setColumnSizing,
-    manualPagination: true,
-    rowCount: totalPages * pagination.pageSize,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -504,7 +499,7 @@ const ClientContactsList: React.FC = () => {
       {/* Footer / Paginación */}
       <div className="bg-slate-50 border-t border-slate-200 px-4 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
           <div className="flex items-center gap-4">
-            <span>{contacts.length} contactos en esta página</span>
+            <span>{contacts.length} REGISTROS</span>
             {columnFilters.length > 0 && (
                 <button onClick={() => setColumnFilters([])} className="text-red-500 hover:text-red-700 font-black flex items-center gap-1 transition-colors">
                     <i className="fa-solid fa-filter-circle-xmark text-xs"></i> Limpiar Filtros
@@ -514,7 +509,7 @@ const ClientContactsList: React.FC = () => {
           <div className="flex items-center gap-2">
             <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-left"></i></button>
             <span className="bg-white px-3 py-1 border border-slate-200 rounded shadow-sm text-brand-600 font-black tracking-normal">
-              {table.getState().pagination.pageIndex + 1} / {totalPages}
+              {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
             </span>
             <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-right"></i></button>
           </div>

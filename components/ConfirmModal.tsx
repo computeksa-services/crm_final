@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -37,9 +38,31 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
     ? 'bg-red-600 hover:bg-red-700'
     : 'bg-brand-600 hover:bg-brand-700';
 
-  return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, width: '100vw', height: '100vh', zIndex: 9999999, backgroundColor: 'rgba(0, 0, 0, 0.7)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+  const backdrop = (
+    <div 
+      style={{ 
+        position: 'fixed', 
+        top: 0, 
+        left: 0, 
+        right: 0, 
+        bottom: 0, 
+        width: '100vw', 
+        height: '100vh', 
+        zIndex: 99999, 
+        backgroundColor: 'rgba(0, 0, 0, 0.7)', 
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        padding: '1rem'
+      }}
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-6">
           <div className="flex items-start">
             <div className={`mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full ${isDestructive ? 'bg-red-100' : 'bg-blue-100'} sm:mx-0 sm:h-10 sm:w-10`}>
@@ -76,6 +99,9 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
       </div>
     </div>
   );
+
+  // Renderizar en el body para que no esté afectado por otros z-index
+  return createPortal(backdrop, document.body);
 };
 
 export default ConfirmModal;

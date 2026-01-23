@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useDataCache } from '../contexts/DataCacheContext';
 import { Product, ProductType } from '../types';
@@ -487,8 +488,8 @@ const ProductsList: React.FC = () => {
       </div>
 
       {/* Create/Edit Modal */}
-      {isModalOpen && editingProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
+      {isModalOpen && editingProduct && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity" onClick={e => e.stopPropagation()}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
               <h2 className="text-lg font-bold text-slate-800">{isEditMode ? 'Editar Artículo' : 'Nuevo Artículo'}</h2>
@@ -609,7 +610,8 @@ const ProductsList: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
 

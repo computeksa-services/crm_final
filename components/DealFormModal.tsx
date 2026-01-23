@@ -76,11 +76,15 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
       nombre_trato: initialData.nombre_trato || '',
       valor_trato: initialData.valor_trato || '',
       descripcion: initialData.descripcion || '',
-      id_client_company: initialData.id_client_company || '',
-      id_contact: initialData.id_contact || '',
-      id_deal_status: initialData.id_deal_status || '',
-      id_interest: initialData.id_interest || '',
-      channel: initialData.channel || '',
+      id_client_company: initialData.id_client_company ? String(initialData.id_client_company) : '',
+      id_contact: initialData.id_contact ? String(initialData.id_contact) : '',
+      id_deal_status: initialData.id_deal_status ? String(initialData.id_deal_status) : '',
+      id_interest: initialData.id_interest ? String(initialData.id_interest) : '',
+      channel: initialData.id_channel
+        ? String(initialData.id_channel)
+        : initialData.channel
+        ? String(initialData.channel)
+        : '',
     });
   }, [isOpen, initialData]);
 

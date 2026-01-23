@@ -264,6 +264,31 @@ export const marketingApi = {
       });
       
       const data = await parseResponse(response);
+      
+      // Validación 1: Si devuelve {success: true} sin array de datos, retornar array vacío
+      if (data && typeof data === 'object' && data.success === true && !Array.isArray(data)) {
+        console.log('✅ Backend: {success: true} → 0 resultados encontrados');
+        return [];
+      }
+      
+      // Validación 2: Si es un array, filtrar elementos que sean solo {success: true}
+      if (Array.isArray(data)) {
+        const filtered = data.filter((item: any) => {
+          // Excluir objetos que sean solamente {success: true}
+          if (item && typeof item === 'object' && item.success === true && Object.keys(item).length === 1) {
+            return false; // Excluir este elemento
+          }
+          // Mantener solo elementos que tengan datos de contacto
+          return Boolean(item?.id_contact || item?.email || item?.first_name || item?.last_name);
+        });
+        
+        if (filtered.length === 0 && data.length > 0) {
+          console.log(`✅ Backend devolvió ${data.length} elemento(s) pero todos fueron {success: true} → 0 resultados`);
+        }
+        
+        return filtered;
+      }
+      
       return Array.isArray(data) ? data : [];
     } catch (error) {
       console.error('❌ Error searchCrmContacts:', error);

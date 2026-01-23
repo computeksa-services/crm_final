@@ -1,15 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { marketingApi } from '../../../services/marketingApi';
 import { apiFetch } from '../../../services/apiClient';
 import { marketingToolsApi } from '../../../services/marketingHelpers';
 import { useDataCache } from '../../../contexts/DataCacheContext';
 import ConfirmModal from '../../ConfirmModal';
-
-// Etiquetas hardcodeadas (mismo array que CompanyFormModal.tsx)
-const COMPANY_LABELS = [
-  'Cliente', 'Muy Interesado', 'Interesado', 'Poco Interesado', 'Proveedor',
-];
 
 // Definición de tipos
 interface Contact {
@@ -18,12 +13,17 @@ interface Contact {
   last_name: string | null;
   email: string;
   position?: string;
-  company_name?: string;
+  name_company?: string;  // Campo que devuelve el backend
+  company_name?: string;  // Alias para compatibilidad
   id_client_company?: string;
-  city?: string;
-  country?: string;
-  company_category?: string;
-  company_tags?: string[] | string;
+  company_city?: string;  // Campo que devuelve el backend
+  city?: string;          // Alias para compatibilidad
+  country_name?: string;  // Campo que devuelve el backend
+  country?: string;       // Alias para compatibilidad
+  category_name?: string; // Campo que devuelve el backend
+  company_category?: string; // Alias para compatibilidad
+  label_names?: string;   // Campo que devuelve el backend
+  company_tags?: string[] | string; // Alias para compatibilidad
   company_industry?: string;
   is_subscribed?: boolean;
 }
@@ -43,17 +43,141 @@ interface FilterOption {
 
 interface AdvancedFilters {
   search: string;
-  id_company: string;
-  id_company_type: string;        // ID de categoría
+  id_company: string[];
+  id_company_type: string[];      // IDs de categoría
   tags_ids: string[];             // Array de IDs de etiquetas
   position: string;
-  id_country: string;             // ID de país
-  industry: string;               // Tipo de industria
+  id_country: string[];           // IDs de país
   // Nuevos filtros de Historial de Ventas
   bought_product_ids: string[];
   winning_status_ids: string[];
   purchase_period_days: number | null;
 }
+
+interface CheckboxDropdownProps {
+  label: string;
+  options: FilterOption[];
+  selected: string[];
+  placeholder?: string;
+  onChange: (values: string[]) => void;
+}
+
+const CheckboxDropdown: React.FC<CheckboxDropdownProps> = ({ label, options, selected, placeholder = 'Seleccionar', onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const closeTimer = useRef<number | null>(null);
+
+  const toggleValue = (value: string) => {
+    const next = selected.includes(value)
+      ? selected.filter(v => v !== value)
+      : [...selected, value];
+    onChange(next);
+  };
+
+  const updatePosition = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) {
+      setMenuPos({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: rect.width
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    updatePosition();
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    const handleScroll = () => updatePosition();
+    const handleResize = () => updatePosition();
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [open]);
+
+  const menu = open ? createPortal(
+    <div
+      ref={menuRef}
+      style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width, zIndex: 9999 }}
+      className="bg-white border border-slate-200 rounded-lg shadow-xl p-2"
+      onMouseEnter={() => {
+        if (closeTimer.current) {
+          window.clearTimeout(closeTimer.current);
+          closeTimer.current = null;
+        }
+      }}
+      onMouseLeave={() => {
+        closeTimer.current = window.setTimeout(() => setOpen(false), 150);
+      }}
+    >
+      <div className="max-h-72 overflow-y-auto space-y-1 pr-1">
+        {options.map(opt => (
+          <label key={opt.value} className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-50 cursor-pointer text-sm text-slate-700">
+            <input
+              type="checkbox"
+              className="w-4 h-4 text-blue-600 rounded"
+              checked={selected.includes(opt.value)}
+              onChange={() => toggleValue(opt.value)}
+            />
+            <span className="truncate" title={opt.label}>{opt.label}</span>
+          </label>
+        ))}
+        {options.length === 0 && (
+          <p className="text-xs text-slate-400 px-2 py-1">Sin opciones</p>
+        )}
+      </div>
+      <div className="flex justify-between items-center pt-2 border-t border-slate-200 mt-2">
+        <button
+          type="button"
+          onClick={() => { onChange([]); setOpen(false); }}
+          className="text-xs text-slate-500 hover:text-slate-700 font-semibold"
+        >
+          Limpiar
+        </button>
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="text-xs text-blue-600 font-semibold"
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <div className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full px-3 py-2 border rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 flex items-center justify-between"
+      >
+        <span className="text-left text-slate-700 font-semibold">{label}</span>
+        <span className="text-xs text-slate-500">{selected.length > 0 ? `${selected.length} seleccionados` : placeholder}</span>
+      </button>
+      {menu}
+    </div>
+  );
+};
 
 interface Props {
   isOpen: boolean;
@@ -89,12 +213,11 @@ const AudienceMembersModal: React.FC<Props> = ({ isOpen, onClose, listId, listNa
   // Filtros Avanzados Mejorados
   const [filters, setFilters] = useState<AdvancedFilters>({
     search: '',
-    id_company: '',
-    id_company_type: '',
+    id_company: [],
+    id_company_type: [],
     tags_ids: [],
     position: '',
-    id_country: '',
-    industry: '',
+    id_country: [],
     bought_product_ids: [],
     winning_status_ids: [],
     purchase_period_days: null
@@ -105,7 +228,6 @@ const AudienceMembersModal: React.FC<Props> = ({ isOpen, onClose, listId, listNa
     categories: [] as FilterOption[],
     tags: [] as FilterOption[],
     countries: [] as FilterOption[],
-    industries: [] as FilterOption[],
     products: [] as FilterOption[],
     quoteStatuses: [] as FilterOption[]
   });
@@ -138,6 +260,13 @@ useEffect(() => {
     }
   }, [filters]);
 
+  // Rebuild filter options when cache data arrives (products, quote statuses)
+  useEffect(() => {
+    if (isOpen && activeTab === 'ADD') {
+      fetchFilterOptions();
+    }
+  }, [products, quoteStatuses, isOpen, activeTab]);
+
   const fetchCompanies = async () => {
     try {
       const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/marketing/tools/companies?id_tenant=${tenantId}`);
@@ -153,15 +282,15 @@ useEffect(() => {
   const fetchFilterOptions = async () => {
     try {
       // Usar los mismos endpoints que CompanyFormModal.tsx
-      const [countriesRes, companytypesRes] = await Promise.all([
+      const [countriesRes, companytypesRes, labelsRes] = await Promise.all([
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${tenantId}&id_user=${userId}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${tenantId}&id_user=${userId}`)
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${tenantId}&id_user=${userId}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/labels?id_tenant=${tenantId}&id_user=${userId}`)
       ]);
 
       let countries: FilterOption[] = [];
       let categories: FilterOption[] = [];
       let tags: FilterOption[] = [];
-      let industries: FilterOption[] = [];
       let productsList: FilterOption[] = [];
       let quoteStatusesList: FilterOption[] = [];
 
@@ -169,7 +298,7 @@ useEffect(() => {
       if (countriesRes.ok) {
         const countryData = await countriesRes.json();
         countries = Array.isArray(countryData) ? countryData.map((c: any) => ({
-          value: c.id || c.code || c.name,
+          value: c.id_country || c.id || c.name,
           label: c.name
         })) : [];
       }
@@ -178,30 +307,27 @@ useEffect(() => {
       if (companytypesRes.ok) {
         const typeData = await companytypesRes.json();
         categories = Array.isArray(typeData) ? typeData.map((t: any) => ({
-          value: t.id_company_types || t.id || t.name,
+          value: t.id_company_type || t.id || t.name,
           label: t.name
         })) : [];
       }
 
-      // Usar etiquetas hardcodeadas (mismo array que CompanyFormModal)
-      tags = COMPANY_LABELS.map(label => ({ value: label, label }));
-
-      // Extraer industrias únicas de companies
-      if (companies.length > 0) {
-        const industriesSet = new Set<string>();
-        companies.forEach(company => {
-          if (company.industry) {
-            industriesSet.add(company.industry);
-          }
-        });
-        industries = Array.from(industriesSet).map(industry => ({ value: industry, label: industry }));
+      // Etiquetas desde API
+      if (labelsRes.ok) {
+        const labelsData = await labelsRes.json();
+        tags = Array.isArray(labelsData)
+          ? labelsData.map((l: any) => ({
+              value: l.id_label || l.id || l.name,
+              label: l.name
+            }))
+          : [];
       }
 
       // Load products from DataCache
       if (products && products.length > 0) {
         productsList = products.map((p: any) => ({
           value: p.id_product || p.id,
-          label: p.product_name || p.name
+          label: p.product_name || p.name || p.descripcion || p.description || p.codigo || 'Producto'
         }));
       }
 
@@ -217,7 +343,6 @@ useEffect(() => {
         categories,
         tags,
         countries,
-        industries,
         products: productsList,
         quoteStatuses: quoteStatusesList
       });
@@ -230,9 +355,12 @@ useEffect(() => {
     setIsLoading(true);
     try {
       const data = await marketingApi.getListMembers(listId, userId);
-      setMembers(data as any);
+      const membersList = Array.isArray(data) ? data : [];
+      console.log(`👥 Miembros de la lista: ${membersList.length} cargados`);
+      setMembers(membersList);
     } catch (error) {
-      console.error(error);
+      console.error('❌ Error en fetchMembers:', error);
+      setMembers([]);
     } finally {
       setIsLoading(false);
     }
@@ -246,25 +374,30 @@ useEffect(() => {
         id_tenant: tenantId,
         search: filters.search || undefined,
         // FILTROS DEMOGRÁFICOS (IDs)
-        id_company_type: filters.id_company_type || undefined,
-        id_country: filters.id_country || undefined,
-        tags_ids: filters.tags_ids.length > 0 ? filters.tags_ids : [],
-        industry: filters.industry || undefined,
+        id_company: filters.id_company && filters.id_company.length > 0 ? filters.id_company : undefined,
+        id_company_type: filters.id_company_type && filters.id_company_type.length > 0 ? filters.id_company_type : undefined,
+        id_country: filters.id_country && filters.id_country.length > 0 ? filters.id_country : undefined,
+        tags_ids: filters.tags_ids && filters.tags_ids.length > 0 ? filters.tags_ids : undefined,
         position: filters.position || undefined,
         // FILTROS DE VENTAS (NUEVOS)
-        bought_product_ids: filters.bought_product_ids.length > 0 ? filters.bought_product_ids : [],
-        winning_status_ids: filters.winning_status_ids.length > 0 ? filters.winning_status_ids : [],
+        bought_product_ids: filters.bought_product_ids && filters.bought_product_ids.length > 0 ? filters.bought_product_ids : undefined,
+        winning_status_ids: filters.winning_status_ids && filters.winning_status_ids.length > 0 ? filters.winning_status_ids : undefined,
         purchase_period_days: filters.purchase_period_days || undefined
       };
 
       const data = await marketingApi.searchCrmContacts(tenantId, userId, payload);
 
+      // Si el backend devuelve {success: true} sin array, o cualquier cosa que no sea array, usar array vacío
+      const contactsData = Array.isArray(data) ? data : [];
+      console.log(`📊 Búsqueda de candidatos: ${contactsData.length} resultados encontrados`);
+      
       const currentMemberIds = new Set(members.map(m => m.id_contact));
-      const available = data.filter((c: any) => !currentMemberIds.has(c.id_contact));
+      const available = contactsData.filter((c: any) => !currentMemberIds.has(c.id_contact));
       
       setCandidates(available);
     } catch (error) {
-      console.error(error);
+      console.error('❌ Error en fetchCandidates:', error);
+      setCandidates([]);
     } finally {
       setIsLoading(false);
     }
@@ -344,8 +477,9 @@ useEffect(() => {
 
   // Helper seguro para obtener inicial (EVITA EL CRASH)
   const getInitial = (contact: Contact) => {
-    const source = contact.first_name || contact.last_name || contact.email || '?';
-    return source.charAt(0).toUpperCase();
+    const first = (contact.first_name || contact.last_name || contact.email || '??').charAt(0).toUpperCase();
+    const last = (contact.last_name || contact.first_name || contact.email || '??').charAt(0).toUpperCase();
+    return (first + last).substring(0, 2);
   };
 
   if (!isOpen) return null;
@@ -400,48 +534,25 @@ useEffect(() => {
                 </div>
 
                 {/* Empresa */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-2">Empresa</label>
-                  <select 
-                    value={filters.id_company}
-                    onChange={(e) => setFilters(prev => ({...prev, id_company: e.target.value}))}
-                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white text-slate-700"
-                  >
-                    <option value="">🏢 Todas</option>
-                    {companies.map(c => (
-                      <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>
-                    ))}
-                  </select>
+                <div className="space-y-1">
+                  <CheckboxDropdown
+                    label="Empresa"
+                    options={companies.map(c => ({ value: c.id_client_company, label: c.name_company }))}
+                    selected={filters.id_company}
+                    placeholder="Todas"
+                    onChange={(vals) => setFilters(prev => ({ ...prev, id_company: vals }))}
+                  />
                 </div>
 
                 {/* Categoría Empresa */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-2">Categoría Empresa</label>
-                  <select 
-                    value={filters.id_company_type}
-                    onChange={(e) => setFilters(prev => ({...prev, id_company_type: e.target.value}))}
-                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                  >
-                    <option value="">Todas</option>
-                    {filterOptions.categories.map(cat => (
-                      <option key={cat.value} value={cat.value}>{cat.label}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Industria */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-2">Industria</label>
-                  <select 
-                    value={filters.industry}
-                    onChange={(e) => setFilters(prev => ({...prev, industry: e.target.value}))}
-                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                  >
-                    <option value="">Todas</option>
-                    {filterOptions.industries.map(ind => (
-                      <option key={ind.value} value={ind.value}>{ind.label}</option>
-                    ))}
-                  </select>
+                <div className="space-y-1">
+                  <CheckboxDropdown
+                    label="Categoría Empresa"
+                    options={filterOptions.categories}
+                    selected={filters.id_company_type}
+                    placeholder="Todas"
+                    onChange={(vals) => setFilters(prev => ({ ...prev, id_company_type: vals }))}
+                  />
                 </div>
 
                 {/* Cargo */}
@@ -457,37 +568,25 @@ useEffect(() => {
                 </div>
 
                 {/* País */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-2">País</label>
-                  <select 
-                    value={filters.id_country}
-                    onChange={(e) => setFilters(prev => ({...prev, id_country: e.target.value}))}
-                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                  >
-                    <option value="">Todos</option>
-                    {filterOptions.countries.map(country => (
-                      <option key={country.value} value={country.value}>{country.label}</option>
-                    ))}
-                  </select>
+                <div className="space-y-1">
+                  <CheckboxDropdown
+                    label="País"
+                    options={filterOptions.countries}
+                    selected={filters.id_country}
+                    placeholder="Todos"
+                    onChange={(vals) => setFilters(prev => ({ ...prev, id_country: vals }))}
+                  />
                 </div>
 
                 {/* Etiquetas Empresa */}
-                <div>
-                  <label className="text-xs font-bold text-slate-700 uppercase block mb-2">Etiquetas Empresa</label>
-                  <select 
-                    multiple
-                    value={filters.tags_ids}
-                    onChange={(e) => {
-                      const selected = Array.from(e.target.selectedOptions, option => option.value);
-                      setFilters(prev => ({...prev, tags_ids: selected}));
-                    }}
-                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white min-h-[120px]"
-                  >
-                    {filterOptions.tags.map(tag => (
-                      <option key={tag.value} value={tag.value}>{tag.label}</option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-slate-500 mt-1">Ctrl/Cmd + Click para seleccionar múltiples</p>
+                <div className="space-y-1">
+                  <CheckboxDropdown
+                    label="Etiquetas Empresa"
+                    options={filterOptions.tags}
+                    selected={filters.tags_ids}
+                    placeholder="Todas"
+                    onChange={(vals) => setFilters(prev => ({ ...prev, tags_ids: vals }))}
+                  />
                 </div>
 
                 {/* Historial de Compra */}
@@ -497,41 +596,27 @@ useEffect(() => {
                   </label>
                   
                   {/* Productos Comprados */}
-                  <div className="mb-3">
-                    <label className="text-xs font-semibold text-slate-600 block mb-2">Productos Comprados</label>
-                    <select 
-                      multiple
-                      value={filters.bought_product_ids}
-                      onChange={(e) => {
-                        const selected = Array.from(e.target.selectedOptions, option => option.value);
-                        setFilters(prev => ({...prev, bought_product_ids: selected}));
-                      }}
-                      className="w-full px-3 py-2 border border-green-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white min-h-[100px]"
-                    >
-                      {filterOptions.products.map(product => (
-                        <option key={product.value} value={product.value}>{product.label}</option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-slate-500 mt-1">Ctrl/Cmd + Click para múltiples</p>
+                  <div className="mb-3 space-y-1">
+                    <label className="text-xs font-semibold text-slate-600 block mb-1">Productos Comprados</label>
+                    <CheckboxDropdown
+                      label="Productos"
+                      options={filterOptions.products}
+                      selected={filters.bought_product_ids}
+                      placeholder="Todos"
+                      onChange={(vals) => setFilters(prev => ({ ...prev, bought_product_ids: vals }))}
+                    />
                   </div>
 
                   {/* Estado de Ventas */}
-                  <div className="mb-3">
-                    <label className="text-xs font-semibold text-slate-600 block mb-2">Estado de Venta Ganada</label>
-                    <select 
-                      multiple
-                      value={filters.winning_status_ids}
-                      onChange={(e) => {
-                        const selected = Array.from(e.target.selectedOptions, option => option.value);
-                        setFilters(prev => ({...prev, winning_status_ids: selected}));
-                      }}
-                      className="w-full px-3 py-2 border border-green-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500 outline-none bg-white min-h-[100px]"
-                    >
-                      {filterOptions.quoteStatuses.map(status => (
-                        <option key={status.value} value={status.value}>{status.label}</option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-slate-500 mt-1">Ctrl/Cmd + Click para múltiples</p>
+                  <div className="mb-3 space-y-1">
+                    <label className="text-xs font-semibold text-slate-600 block mb-1">Estado de Venta Ganada</label>
+                    <CheckboxDropdown
+                      label="Estados"
+                      options={filterOptions.quoteStatuses}
+                      selected={filters.winning_status_ids}
+                      placeholder="Todos"
+                      onChange={(vals) => setFilters(prev => ({ ...prev, winning_status_ids: vals }))}
+                    />
                   </div>
 
                   {/* Período */}
@@ -554,12 +639,11 @@ useEffect(() => {
                   <button
                     onClick={() => setFilters({
                       search: '',
-                      id_company: '',
-                      id_company_type: '',
+                      id_company: [],
+                      id_company_type: [],
                       tags_ids: [],
                       position: '',
-                      id_country: '',
-                      industry: '',
+                      id_country: [],
                       bought_product_ids: [],
                       winning_status_ids: [],
                       purchase_period_days: null
@@ -598,7 +682,7 @@ useEffect(() => {
 
               {/* === VISTA: MIEMBROS === */}
               {activeTab === 'MEMBERS' && (
-                <div className="space-y-3">
+                <div className="grid grid-cols-3 gap-3">
 
               {members.filter(m => {
                 const name = renderName(m).toLowerCase();
@@ -623,7 +707,7 @@ useEffect(() => {
                   return (
                   <label 
                     key={member.id_contact || idx} 
-                    className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${
+                    className={`flex flex-col p-3 border rounded-lg cursor-pointer transition-all ${
                       isSelected
                         ? 'bg-red-50 border-red-300 ring-1 ring-red-300' 
                         : isUnsubscribed
@@ -631,33 +715,34 @@ useEffect(() => {
                         : 'bg-white border-slate-200 hover:border-slate-300'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-start gap-2 mb-2">
                       <input 
                         type="checkbox" 
-                        className="w-4 h-4 text-red-600 rounded focus:ring-red-500"
+                        className="w-4 h-4 text-red-600 rounded focus:ring-red-500 mt-0.5 flex-shrink-0"
                         checked={selectedIds.has(member.id_contact)}
                         onChange={() => handleToggleSelect(member.id_contact)}
                       />
-                      <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold uppercase">
+                      <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold uppercase flex-shrink-0">
                         {getInitial(member)}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-bold text-slate-700">{renderName(member)}</p>
-                          {member.is_subscribed === false && (
-                            <span className="px-2 py-0.5 text-[10px] font-bold bg-orange-100 text-orange-700 rounded-full">
-                              DESUSCRITO
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-500">{member.email}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-slate-700 truncate">{renderName(member)}</p>
+                        <p className="text-xs text-slate-500 truncate">{member.email}</p>
                       </div>
                     </div>
-                    <div className="text-right flex items-center gap-4">
-                       <div className="hidden md:block">
-                         <p className="text-xs font-semibold text-slate-700">{member.company_name || 'Particular'}</p>
-                         {member.position && <p className="text-[10px] text-slate-400">{member.position}</p>}
-                       </div>
+                    
+                    <div className="space-y-1 text-xs text-slate-600 border-t border-slate-100 pt-2">
+                      <div className="flex items-center gap-1">
+                        <i className="fa-solid fa-building text-slate-400"></i>
+                        <p className="font-semibold text-slate-700 truncate">{member.name_company || member.company_name || 'Particular'}</p>
+                      </div>
+                      {member.position && <p className="truncate"><span className="font-medium">Cargo:</span> {member.position}</p>}
+                      {member.is_subscribed === false && (
+                        <div className="flex items-center gap-1 text-orange-600">
+                          <i className="fa-solid fa-exclamation-circle text-xs"></i>
+                          <span className="font-bold">DESUSCRITO</span>
+                        </div>
+                      )}
                     </div>
                   </label>
                   );
@@ -668,8 +753,8 @@ useEffect(() => {
 
           {/* === VISTA: AGREGAR (SEARCH) === */}
           {activeTab === 'ADD' && (
-            <div className="space-y-2">
-              <div className="flex justify-between items-center mb-2 px-1">
+            <div>
+              <div className="flex justify-between items-center mb-4 px-1">
                  <p className="text-xs font-bold text-slate-500 uppercase">{candidates.length} resultados</p>
                  {candidates.length > 0 && (
                    <button onClick={handleSelectAll} className="text-xs text-blue-600 font-semibold hover:underline">
@@ -683,35 +768,41 @@ useEffect(() => {
                     <p>No se encontraron contactos con estos filtros.</p>
                  </div>
               ) : (
-                candidates.filter(c => c.id_contact && c.id_contact.trim() !== '').map((contact) => (
-                  <label 
-                    key={contact.id_contact} 
-                    className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${selectedIds.has(contact.id_contact) ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'bg-white border-slate-200 hover:border-blue-300'}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <input 
-                        type="checkbox" 
-                        className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                        checked={selectedIds.has(contact.id_contact)}
-                        onChange={() => handleToggleSelect(contact.id_contact)}
-                      />
-                      <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold uppercase">
-                        {getInitial(contact)}
+                <div className="grid grid-cols-3 gap-3">
+                  {candidates.filter(c => c.id_contact && c.id_contact.trim() !== '').map((contact) => (
+                    <label 
+                      key={contact.id_contact} 
+                      className={`flex flex-col p-3 border rounded-lg cursor-pointer transition-all ${selectedIds.has(contact.id_contact) ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500' : 'bg-white border-slate-200 hover:border-blue-300'}`}
+                    >
+                      <div className="flex items-start gap-2 mb-2">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 mt-0.5 flex-shrink-0"
+                          checked={selectedIds.has(contact.id_contact)}
+                          onChange={() => handleToggleSelect(contact.id_contact)}
+                        />
+                        <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold uppercase flex-shrink-0">
+                          {getInitial(contact)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-slate-700 truncate">{renderName(contact)}</p>
+                          <p className="text-xs text-slate-500 truncate">{contact.email}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-700">{renderName(contact)}</p>
-                        <p className="text-xs text-slate-500">{contact.email}</p>
+                      
+                      <div className="space-y-1 text-xs text-slate-600 border-t border-slate-100 pt-2">
+                        <div className="flex items-center gap-1">
+                          <i className="fa-solid fa-building text-slate-400"></i>
+                          <p className="font-semibold text-slate-700 truncate">{contact.name_company || contact.company_name || '—'}</p>
+                        </div>
+                        {contact.position && <p className="truncate"><span className="font-medium">Cargo:</span> {contact.position}</p>}
+                        {(contact.company_city || contact.city) && <p className="truncate"><span className="font-medium">Ciudad:</span> {contact.company_city || contact.city}</p>}
+                        {contact.category_name && <p className="truncate"><span className="font-medium">Categoría:</span> {contact.category_name}</p>}
+                        {contact.country_name && <p className="truncate"><span className="font-medium">País:</span> {contact.country_name}</p>}
                       </div>
-                    </div>
-                    <div className="text-right hidden md:block">
-                       <p className="text-xs font-bold text-slate-600">{contact.company_name || 'Sin Empresa'}</p>
-                       <p className="text-xs text-slate-400">
-                         {contact.position && <span>{contact.position}</span>}
-                         {contact.city && <span> • {contact.city}</span>}
-                       </p>
-                    </div>
-                  </label>
-                ))
+                    </label>
+                  ))}
+                </div>
               )}
             </div>
           )}
