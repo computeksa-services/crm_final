@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { marketingApi } from '../../services/marketingApi';
@@ -208,9 +209,9 @@ const Lists: React.FC = () => {
       </div>
 
       {/* CREATE LIST MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fadeIn">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
+      {isModalOpen && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <h3 className="font-bold text-lg text-slate-800">Nueva Lista de Difusión</h3>
               <button 
@@ -288,7 +289,8 @@ const Lists: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Componentes de notificación y confirmación */}

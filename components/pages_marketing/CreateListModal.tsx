@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { marketingApi } from '../../services/marketingApi';
 
@@ -51,8 +52,8 @@ const CreateListModal: React.FC<CreateListModalProps> = ({ isOpen, onClose, onSu
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-fadeIn">
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
           <h3 className="font-bold text-lg text-slate-800">Nueva Lista de Difusión</h3>
@@ -137,7 +138,8 @@ const CreateListModal: React.FC<CreateListModalProps> = ({ isOpen, onClose, onSu
           </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 
