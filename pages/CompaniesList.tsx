@@ -7,6 +7,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import { getImageUrl } from '../utils/imageUtils';
 import { apiFetch } from '../services/apiClient';
 import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
+import { handleApiResponse } from '../utils/apiResponseHandler';
 
 const CompaniesList: React.FC = () => {
   const { user } = useAuth();
@@ -53,7 +54,7 @@ const CompaniesList: React.FC = () => {
     setConfirmState({
       isOpen: true,
       title: 'Eliminar Tenant',
-      message: '¿Estás seguro? Se eliminarán todos los usuarios y datos asociados a esta empresa suscrita.',
+      message: 'Esta acción eliminará permanentemente el Tenant y TODOS los datos relacionados (usuarios, contactos, tratos, cotizaciones, finanzas). Esta operación es irreversible y SOLO debe realizarse en casos excepcionales. ¿Deseas continuar?',
       isDestructive: true,
       onConfirm: async () => {
         try {
@@ -61,11 +62,20 @@ const CompaniesList: React.FC = () => {
             method: 'POST',
             body: JSON.stringify({ id_tenant: id })
           });
-          if (!response.ok) throw new Error('Error al eliminar tenant');
-          setToast({ message: 'Tenant eliminado.', type: 'success' });
+          const result = await handleApiResponse(
+            response,
+            'Tenant eliminado.',
+            'Error al eliminar tenant.'
+          );
+          if (!result.success) throw new Error(result.message);
+
+          setToast({ message: result.message, type: 'success' });
           await invalidateTenants();
-        } catch (error) {
-          setToast({ message: 'Error al eliminar.', type: 'error' });
+        } catch (error: any) {
+          setToast({ message: error.message || 'Error al eliminar.', type: 'error' });
+        } finally {
+          // Cerrar el modal de confirmación tras completar la acción
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
         }
       },
     });
@@ -142,12 +152,14 @@ const CompaniesList: React.FC = () => {
           });
         }
         
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Error al actualizar tenant (${response.status}): ${errorText}`);
-        }
+        const result = await handleApiResponse(
+          response,
+          'Tenant actualizado.',
+          'Error al actualizar tenant.'
+        );
+        if (!result.success) throw new Error(result.message);
 
-        setToast({ message: 'Tenant actualizado.', type: 'success' });
+        setToast({ message: result.message, type: 'success' });
         await invalidateTenants();
       } else {
         let response;
@@ -184,12 +196,14 @@ const CompaniesList: React.FC = () => {
           });
         }
         
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Error al crear tenant (${response.status}): ${errorText}`);
-        }
+        const result = await handleApiResponse(
+          response,
+          'Tenant creado.',
+          'Error al crear tenant.'
+        );
+        if (!result.success) throw new Error(result.message);
 
-        setToast({ message: 'Tenant creado.', type: 'success' });
+        setToast({ message: result.message, type: 'success' });
         setIsModalOpen(false);
         await invalidateTenants();
       }

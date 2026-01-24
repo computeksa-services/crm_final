@@ -5,6 +5,7 @@ import { User, Tenant } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import { apiFetch } from '../services/apiClient';
+import { handleApiResponse } from '../utils/apiResponseHandler';
 
 const UsersList: React.FC = () => {
   const { user } = useAuth();
@@ -86,9 +87,18 @@ const UsersList: React.FC = () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id_user: id, id_tenant: user.id_tenant, id_current_user: user.id_user }),
           });
-          if (!response.ok) throw new Error('Error al eliminar usuario.');
           
-          setToast({ message: 'Usuario eliminado.', type: 'success' });
+          const result = await handleApiResponse(
+            response,
+            'Usuario eliminado correctamente.',
+            'Error al eliminar usuario.'
+          );
+          
+          if (!result.success) {
+            throw new Error(result.message);
+          }
+          
+          setToast({ message: result.message, type: 'success' });
           await invalidateUsers(); 
         } catch (error: any) {
           setToast({ message: error.message, type: 'error' });
@@ -137,9 +147,17 @@ const UsersList: React.FC = () => {
         body: JSON.stringify(cleanedPayload),
       });
 
-      if (!response.ok) throw new Error(isEditMode ? 'Error al actualizar.' : 'Error al crear.');
+      const result = await handleApiResponse(
+        response,
+        isEditMode ? 'Usuario actualizado correctamente.' : 'Usuario creado correctamente.',
+        isEditMode ? 'Error al actualizar usuario.' : 'Error al crear usuario.'
+      );
       
-      setToast({ message: isEditMode ? 'Usuario actualizado.' : 'Usuario creado.', type: 'success' });
+      if (!result.success) {
+        throw new Error(result.message);
+      }
+      
+      setToast({ message: result.message, type: 'success' });
       setIsModalOpen(false);
       await invalidateUsers(); 
     } catch (error: any) {
