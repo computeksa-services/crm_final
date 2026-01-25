@@ -8,10 +8,19 @@ import {
 
 // --- TIPOS DE DATOS ---
 type FinancialSummary = {
-  ingreso_total: number;
-  por_cobrar: number;
-  transacciones_mes: number;
+  ingreso_total?: number;
+  por_cobrar?: number;
+  transacciones_mes?: number;
   hidden?: boolean; 
+};
+
+type ResumenComercial = {
+  venta_mes_actual?: number;
+  venta_mes_anterior?: number;
+  venta_total_historica?: number;
+  pipeline_activo?: number;
+  transacciones_mes?: number;
+  crecimiento_porcentaje?: number;
 };
 
 type PipelineStage = {
@@ -37,7 +46,8 @@ type CalendarEvent = {
 };
 
 type SalesByCompany = {
-  nombre: string;
+  nombre?: string;
+  cliente?: string;
   total: number;
 };
 
@@ -47,17 +57,19 @@ type SalesHistory = {
 };
 
 type DashboardResponse = {
-    perfil: string;
-    resumen_financiero: FinancialSummary;
-    pipeline_ventas: PipelineStage[];
-    ventas_por_empresa: SalesByCompany[];
-    historial_ventas: SalesHistory[];
-    kpi_conversion: number;
-    cotizaciones_recientes: QuoteSummary[];
-    agenda_hoy: CalendarEvent[];
+    perfil?: string;
+    resumen_financiero?: FinancialSummary;
+    resumen_comercial?: ResumenComercial;
+    pipeline_ventas?: PipelineStage[];
+    ventas_por_empresa?: SalesByCompany[];
+    top_clientes?: SalesByCompany[];
+    historial_ventas?: SalesHistory[];
+    kpi_conversion?: number;
+    cotizaciones_recientes?: QuoteSummary[];
+    agenda_hoy?: CalendarEvent[];
     crecimiento?: {
-        total_empresas: number;
-        total_contactos: number;
+        total_empresas?: number;
+        total_contactos?: number;
     };
     ranking_vendedores?: Array<{
         nombre: string;
@@ -147,12 +159,32 @@ const Dashboard: React.FC = () => {
         }
 
         if (finalData) {
-          setFinancial(finalData.resumen_financiero || DEFAULT_FINANCIAL);
+          // Usar resumen_comercial nuevo, con fallback a resumen_financiero antiguo
+          const resumenNew = finalData.resumen_comercial;
+          const resumenOld = finalData.resumen_financiero;
+          if (resumenNew) {
+            setFinancial({
+              ingreso_total: resumenNew.venta_total_historica || 0,
+              por_cobrar: resumenNew.pipeline_activo || 0,
+              transacciones_mes: resumenNew.transacciones_mes || 0
+            });
+          } else {
+            setFinancial(resumenOld || DEFAULT_FINANCIAL);
+          }
+          
           setPipeline(Array.isArray(finalData.pipeline_ventas) ? finalData.pipeline_ventas : []);
-          setSalesByCompany(Array.isArray(finalData.ventas_por_empresa) ? finalData.ventas_por_empresa : []);
+          
+          // Usar top_clientes nuevo, con fallback a ventas_por_empresa antiguo
+          const clientes = Array.isArray(finalData.top_clientes) ? finalData.top_clientes : [];
+          const empresas = Array.isArray(finalData.ventas_por_empresa) ? finalData.ventas_por_empresa : [];
+          setSalesByCompany(clientes.length > 0 ? clientes.map(c => ({ nombre: c.cliente || c.nombre || '', total: c.total })) : empresas);
+          
           setSalesHistory(Array.isArray(finalData.historial_ventas) ? finalData.historial_ventas : []);
           setRecentQuotes(Array.isArray(finalData.cotizaciones_recientes) ? finalData.cotizaciones_recientes : []);
-          setTodayEvents(Array.isArray(finalData.agenda_hoy) ? finalData.agenda_hoy : []);
+          
+          // Si agenda_hoy tiene datos, mostrar; si está vacío, no mostrar
+          setTodayEvents(Array.isArray(finalData.agenda_hoy) && finalData.agenda_hoy.length > 0 ? finalData.agenda_hoy : []);
+          
           setConversionRate(Number(finalData.kpi_conversion) || 0);
           setGrowth(finalData.crecimiento || { total_empresas: 0, total_contactos: 0 });
           setRanking(Array.isArray(finalData.ranking_vendedores) ? finalData.ranking_vendedores : []);
@@ -208,42 +240,197 @@ const Dashboard: React.FC = () => {
         </div>
       ) : (
         <>
-            {/* 1. TARJETAS FINANCIERAS */}
+            {/* 1. TARJETAS DE KPIs */}
             {metricCards.length > 0 && (
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                                    {/* Tarjetas financieras */}
-                                    {metricCards.map((stat, idx) => (
-                                        <div key={idx} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center hover:shadow-md transition-shadow cursor-default">
-                                            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stat.bg} ${stat.color} mr-4`}>
-                                                <i className={`fa-solid ${stat.icon} text-xl`}></i>
-                                            </div>
-                                            <div>
-                                                <p className="text-sm text-slate-500 font-medium">{stat.label}</p>
-                                                <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                    {/* Métricas de Red */}
-                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center items-start hover:shadow-md transition-shadow cursor-default">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <i className="fa-solid fa-network-wired text-xl text-cyan-600"></i>
-                                            <span className="text-sm text-slate-500 font-medium">Empresas Totales</span>
-                                        </div>
-                                        <p className="text-2xl font-bold text-slate-800 mb-4">{growth.total_empresas || 0}</p>
-                                        <div className="flex items-center gap-3">
-                                            <i className="fa-solid fa-address-book text-xl text-fuchsia-600"></i>
-                                            <span className="text-sm text-slate-500 font-medium">Contactos en Base</span>
-                                        </div>
-                                        <p className="text-2xl font-bold text-slate-800">{growth.total_contactos || 0}</p>
-                                    </div>
-                                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    {/* Tarjetas financieras */}
+                    {metricCards.map((stat, idx) => (
+                        <div key={idx} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center hover:shadow-md transition-shadow cursor-default">
+                            <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stat.bg} ${stat.color} mr-4`}>
+                                <i className={`fa-solid ${stat.icon} text-xl`}></i>
+                            </div>
+                            <div>
+                                <p className="text-sm text-slate-500 font-medium">{stat.label}</p>
+                                <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
+                            </div>
+                        </div>
+                    ))}
+                    {/* Métricas de Red */}
+                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center items-start hover:shadow-md transition-shadow cursor-default">
+                        <div className="flex items-center gap-3 mb-2">
+                            <i className="fa-solid fa-network-wired text-xl text-cyan-600"></i>
+                            <span className="text-sm text-slate-500 font-medium">Empresas</span>
+                        </div>
+                        <p className="text-2xl font-bold text-slate-800 mb-2">{growth.total_empresas || 0}</p>
+                        <div className="flex items-center gap-3">
+                            <i className="fa-solid fa-address-book text-xl text-fuchsia-600"></i>
+                            <span className="text-sm text-slate-500 font-medium">Contactos</span>
+                        </div>
+                        <p className="text-2xl font-bold text-slate-800">{growth.total_contactos || 0}</p>
+                    </div>
+                </div>
             )}
 
-            {/* 2. GRÁFICOS */}
-            {!financial.hidden && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                    
-                    {/* Gráfico 1: Ventas por Empresa */}
+            {/* 2. AGENDA HOY Y PIPELINE (2 COLUMNAS) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                {/* Agenda */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                    <i className="fa-regular fa-calendar text-blue-500"></i> Mi Agenda Hoy
+                </h2>
+                {todayEvents.length === 0 ? (
+                    <p className="text-sm text-slate-400 italic text-center py-4">No tienes eventos hoy.</p>
+                ) : (
+                    <ul className="space-y-4">
+                        {todayEvents.map((evt, i) => {
+                            let timeString = 'Sin hora';
+                            
+                            // Prioritizar campo 'hora' (texto tipo "10:00")
+                            if (evt.hora) {
+                                timeString = evt.hora.substring(0, 5); // Extrae HH:MM
+                            } else if (evt.fecha_inicio) {
+                                // Fallback a fecha_inicio si existe
+                                if (typeof evt.fecha_inicio === 'string' && /^\d{1,2}:\d{2}/.test(evt.fecha_inicio)) {
+                                    timeString = evt.fecha_inicio.substring(0, 5);
+                                } else {
+                                    const eventTime = new Date(evt.fecha_inicio);
+                                    if (!isNaN(eventTime.getTime())) {
+                                        timeString = eventTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                                    }
+                                }
+                            }
+                            
+                            const tipoDisplay = evt.tipo ? evt.tipo : 'Evento';
+                            
+                            return (
+                            <li key={i} className="flex gap-3 items-start relative pl-4">
+                                <div className="absolute left-0 top-1 bottom-1 w-1 bg-blue-500 rounded-full"></div>
+                                <div>
+                                    <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded mb-1 inline-block">
+                                        {timeString}
+                                    </span>
+                                    <p className="text-sm font-semibold text-slate-800 leading-tight">{evt.titulo}</p>
+                                    <span className="text-[10px] text-slate-400 uppercase tracking-wide">{tipoDisplay}</span>
+                                </div>
+                            </li>
+                            );
+                        })}
+                    </ul>
+                )}
+                </div>
+
+                {/* Pipeline */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <i className="fa-solid fa-funnel-dollar text-orange-500"></i> Pipeline Activo
+                    </h2>
+                
+                {pipeline.length === 0 ? (
+                    <div className="h-40 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-100 rounded-lg">
+                        <i className="fa-solid fa-filter text-3xl mb-2 opacity-50"></i>
+                        <p className="text-sm">El pipeline está vacío</p>
+                    </div>
+                ) : (
+                    <div className="space-y-6">
+                        {pipeline.map((stage, idx) => {
+                            const max = Math.max(...pipeline.map(p => Number(p.monto))) || 1;
+                            const percent = (Number(stage.monto) / max) * 100;
+                            return (
+                            <div key={idx}>
+                                <div className="flex justify-between text-sm mb-2">
+                                    <span className="font-semibold text-slate-700 flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-orange-400"></span>
+                                        {stage.etapa} 
+                                        <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-xs font-normal">{stage.cantidad} tratos</span>
+                                    </span>
+                                    <span className="font-bold text-slate-800">${Number(stage.monto).toLocaleString('es-EC', { minimumFractionDigits: 2 })}</span>
+                                </div>
+                                <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full" style={{ width: `${percent}%` }}></div>
+                                </div>
+                            </div>
+                            );
+                        })}
+                    </div>
+                )}
+                </div>
+            </div>
+
+            {/* 3. HISTORIAL DE VENTAS Y TOP PRODUCTOS (2 COLUMNAS) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                {/* Historial */}
+            {!financial.hidden && salesHistory.length > 0 && (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i className="fa-solid fa-chart-line text-emerald-500"></i> Historial de Ventas
+                    </h2>
+                    <div className="h-60 w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={salesHistory} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                <defs>
+                                    <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                                <XAxis dataKey="mes" tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} dy={10} />
+                                <YAxis hide />
+                                <Tooltip 
+                                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Total']}
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                />
+                                <Area 
+                                    type="monotone" 
+                                    dataKey="total" 
+                                    stroke="#10b981" 
+                                    strokeWidth={3} 
+                                    fillOpacity={1} 
+                                    fill="url(#colorVentas)" 
+                                    activeDot={{ r: 6, strokeWidth: 0 }}
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            )}
+
+                {/* Top Productos */}
+            {!financial.hidden && topProducts.length > 0 && (
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i className="fa-solid fa-star text-yellow-500"></i> Top Productos
+                    </h2>
+                    <div style={{ height: `${Math.max(topProducts.length * 50, 220)}px` }} className="w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={topProducts} layout="vertical" margin={{ top: 10, right: 40, left: 20, bottom: 10 }}>
+                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
+                                <XAxis type="number" hide />
+                                <YAxis 
+                                    type="category" 
+                                    dataKey="producto" 
+                                    width={250}
+                                    tick={{fontSize: 12, fill: '#64748b'}}
+                                    interval={0}
+                                />
+                                <Tooltip 
+                                    cursor={{fill: '#fef3c7'}}
+                                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Ventas']}
+                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                />
+                                <Bar dataKey="total_ventas" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={30} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            )}
+            </div>
+
+            {/* 4. TOP CLIENTES Y COTIZACIONES (2 COLUMNAS) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                
+                {/* Top Clientes */}
+                {!financial.hidden && salesByCompany.length > 0 && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                             <i className="fa-solid fa-building text-blue-500"></i> Top Clientes (Ventas)
@@ -272,270 +459,112 @@ const Dashboard: React.FC = () => {
                             )}
                         </div>
                     </div>
+                )}
 
-                    {/* Gráfico 2: Historial de Ventas */}
-                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                        <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                            <i className="fa-solid fa-chart-line text-emerald-500"></i> Historial de Ventas
-                        </h2>
-                        <div className="h-72 w-full">
-                            {salesHistory.length > 0 ? (
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={salesHistory} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                        <defs>
-                                            <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
-                                                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                                        <XAxis dataKey="mes" tick={{fontSize: 12, fill: '#64748b'}} axisLine={false} tickLine={false} dy={10} />
-                                        <YAxis hide />
-                                        <Tooltip 
-                                            formatter={(value: number) => [`$${value.toLocaleString()}`, 'Total']}
-                                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                        />
-                                        <Area 
-                                            type="monotone" 
-                                            dataKey="total" 
-                                            stroke="#10b981" 
-                                            strokeWidth={3} 
-                                            fillOpacity={1} 
-                                            fill="url(#colorVentas)" 
-                                            activeDot={{ r: 6, strokeWidth: 0 }}
-                                        />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            ) : (
-                                <div className="h-full flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-100 rounded-lg">
-                                    <i className="fa-solid fa-chart-area text-3xl mb-2 opacity-50"></i>
-                                    <p className="text-sm">Sin historial reciente</p>
-                                </div>
-                            )}
+                {/* Cotizaciones Recientes */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i className="fa-solid fa-file-invoice text-purple-500"></i> Últimas Cotizaciones
+                    </h2>
+                    <div className="space-y-4">
+                        {recentQuotes.length === 0 ? (
+                            <p className="text-sm text-slate-400 italic text-center py-4">Sin cotizaciones recientes.</p>
+                        ) : recentQuotes.map((quote, i) => (
+                        <div key={i} className="flex justify-between items-start border-b border-slate-50 last:border-0 pb-3 last:pb-0">
+                            <div>
+                                <p className="text-sm font-bold text-slate-800 hover:text-blue-600 cursor-pointer transition-colors">
+                                    {formatQuoteNumber(quote.no_cotizacion)}
+                                </p>
+                                <p className="text-xs text-slate-600 truncate max-w-[120px]" title={quote.nombre_cotizacion}>
+                                    {quote.nombre_cotizacion}
+                                </p>
+                                <p className="text-[10px] text-slate-400 mt-0.5">{quote.vendedor}</p>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-sm font-bold text-slate-800">${Number(quote.total).toLocaleString('es-EC')}</p>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold inline-block mt-1 ${
+                                    quote.estado_decision === 'PENDIENTE' ? 'bg-amber-100 text-amber-700' : 
+                                    quote.estado_decision === 'ACEPTADA' ? 'bg-emerald-100 text-emerald-700' : 
+                                    'bg-rose-100 text-rose-700'
+                                }`}>
+                                    {quote.estado_decision}
+                                </span>
+                            </div>
                         </div>
+                        ))}
                     </div>
                 </div>
-            )}
+            </div>
 
-            {/* 2.5. KPIs DE MARKETING */}
-            {!financial.hidden && (marketingData.campanas > 0 || marketingData.aperturas > 0 || marketingData.clics > 0) && (
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
-                    <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <i className="fa-solid fa-bullhorn text-pink-500"></i> Efectividad de Marketing
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-purple-100 text-purple-600">
-                                <i className="fa-solid fa-rectangle-ad text-xl"></i>
-                            </div>
-                            <div>
-                                <p className="text-sm text-slate-500 font-medium">Campañas Activas</p>
-                                <p className="text-2xl font-bold text-slate-800">{marketingData.campanas || 0}</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-blue-100 text-blue-600">
-                                <i className="fa-solid fa-envelope-open text-xl"></i>
-                            </div>
-                            <div>
-                                <p className="text-sm text-slate-500 font-medium">Aperturas</p>
-                                <p className="text-2xl font-bold text-slate-800">{marketingData.aperturas || 0}</p>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-green-100 text-green-600">
-                                <i className="fa-solid fa-mouse-pointer text-xl"></i>
-                            </div>
-                            <div>
-                                <p className="text-sm text-slate-500 font-medium">Clics (CTR)</p>
-                                <p className="text-2xl font-bold text-slate-800">{marketingData.clics || 0}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 2.6. TOP PRODUCTOS */}
-            {!financial.hidden && topProducts.length > 0 && (
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-8">
-                    <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <i className="fa-solid fa-star text-yellow-500"></i> Top Productos (Best Sellers)
-                    </h2>
-                    <div style={{ height: `${Math.max(topProducts.length * 60, 300)}px` }} className="w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={topProducts} layout="vertical" margin={{ top: 10, right: 40, left: 20, bottom: 10 }}>
-                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
-                                <XAxis type="number" hide />
-                                <YAxis 
-                                    type="category" 
-                                    dataKey="producto" 
-                                    width={250}
-                                    tick={{fontSize: 12, fill: '#64748b'}}
-                                    interval={0}
-                                />
-                                <Tooltip 
-                                    cursor={{fill: '#fef3c7'}}
-                                    formatter={(value: number) => [`$${value.toLocaleString()}`, 'Ventas']}
-                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                                />
-                                <Bar dataKey="total_ventas" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={30} />
-                            </BarChart>
-                        </ResponsiveContainer>
-                    </div>
-                </div>
-            )}
-
-            {/* 3. PIPELINE Y LISTAS */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                
-                {/* Pipeline */}
-                <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                    <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                        <i className="fa-solid fa-funnel-dollar text-orange-500"></i> Pipeline Activo
-                    </h2>
-                    
-                    {pipeline.length === 0 ? (
-                        <div className="h-40 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-100 rounded-lg">
-                            <i className="fa-solid fa-filter text-3xl mb-2 opacity-50"></i>
-                            <p className="text-sm">El pipeline está vacío</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-6">
-                            {pipeline.map((stage, idx) => {
-                                const max = Math.max(...pipeline.map(p => Number(p.monto))) || 1;
-                                const percent = (Number(stage.monto) / max) * 100;
-                                return (
-                                <div key={idx}>
-                                    <div className="flex justify-between text-sm mb-2">
-                                        <span className="font-semibold text-slate-700 flex items-center gap-2">
-                                            <span className="w-2 h-2 rounded-full bg-orange-400"></span>
-                                            {stage.etapa} 
-                                            <span className="bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded text-xs font-normal">{stage.cantidad} tratos</span>
-                                        </span>
-                                        <span className="font-bold text-slate-800">${Number(stage.monto).toLocaleString('es-EC', { minimumFractionDigits: 2 })}</span>
-                                    </div>
-                                    <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden">
-                                        <div className="h-full bg-gradient-to-r from-orange-400 to-orange-500 rounded-full" style={{ width: `${percent}%` }}></div>
-                                    </div>
-                                </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </div>
-
-                {/* Columna Derecha */}
-                <div className="space-y-6">
-                    {/* Leaderboard Equipo */}
-                    {ranking.length > 0 && (
-                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                <i className="fa-solid fa-trophy text-yellow-500"></i> Leaderboard Equipo
-                            </h2>
-                            <ul className="space-y-4">
-                                {ranking.map((vendedor, i) => (
-                                    <li key={i} className="flex items-center gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
-                                        <div className="relative">
-                                            <img 
-                                                src={vendedor.avatar_url || 'https://via.placeholder.com/40'} 
-                                                alt={vendedor.nombre} 
-                                                className="w-10 h-10 rounded-full object-cover border-2 border-yellow-300" 
-                                            />
-                                            {i === 0 && <span className="absolute -top-1 -right-1 text-yellow-500 text-xs"><i className="fa-solid fa-crown"></i></span>}
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="font-bold text-slate-800 text-sm">{vendedor.nombre}</p>
-                                            <span className="text-xs text-slate-500">Cerrados: {vendedor.cerrados}</span>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="font-bold text-yellow-600 text-lg">${Number(vendedor.monto || 0).toLocaleString('es-EC')}</span>
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-
-                    {/* Agenda */}
+            {/* 5. LEADERBOARD Y MARKETING (2 COLUMNAS) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Leaderboard */}
+                {ranking.length > 0 && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                            <i className="fa-regular fa-calendar text-blue-500"></i> Agenda Hoy
+                            <i className="fa-solid fa-trophy text-yellow-500"></i> Leaderboard Equipo
                         </h2>
-                        {todayEvents.length === 0 ? (
-                            <p className="text-sm text-slate-400 italic text-center py-4">No tienes eventos hoy.</p>
-                        ) : (
-                            <ul className="space-y-4">
-                                {todayEvents.map((evt, i) => {
-                                    let timeString = 'Sin hora';
-                                    
-                                    // Prioritizar campo 'hora' (texto tipo "10:00")
-                                    if (evt.hora) {
-                                        timeString = evt.hora.substring(0, 5); // Extrae HH:MM
-                                    } else if (evt.fecha_inicio) {
-                                        // Fallback a fecha_inicio si existe
-                                        if (typeof evt.fecha_inicio === 'string' && /^\d{1,2}:\d{2}/.test(evt.fecha_inicio)) {
-                                            timeString = evt.fecha_inicio.substring(0, 5);
-                                        } else {
-                                            const eventTime = new Date(evt.fecha_inicio);
-                                            if (!isNaN(eventTime.getTime())) {
-                                                timeString = eventTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                                            }
-                                        }
-                                    }
-                                    
-                                    const tipoDisplay = evt.tipo ? evt.tipo : 'Evento';
-                                    
-                                    return (
-                                    <li key={i} className="flex gap-3 items-start relative pl-4">
-                                        <div className="absolute left-0 top-1 bottom-1 w-1 bg-blue-500 rounded-full"></div>
-                                        <div>
-                                            <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded mb-1 inline-block">
-                                                {timeString}
-                                            </span>
-                                            <p className="text-sm font-semibold text-slate-800 leading-tight">{evt.titulo}</p>
-                                            <span className="text-[10px] text-slate-400 uppercase tracking-wide">{tipoDisplay}</span>
-                                        </div>
-                                    </li>
-                                    );
-                                })}
-                            </ul>
-                        )}
+                        <ul className="space-y-4">
+                            {ranking.map((vendedor, i) => (
+                                <li key={i} className="flex items-center gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
+                                    <div className="relative">
+                                        <img 
+                                            src={vendedor.avatar_url || 'https://via.placeholder.com/40'} 
+                                            alt={vendedor.nombre} 
+                                            className="w-10 h-10 rounded-full object-cover border-2 border-yellow-300" 
+                                        />
+                                        {i === 0 && <span className="absolute -top-1 -right-1 text-yellow-500 text-xs"><i className="fa-solid fa-crown"></i></span>}
+                                    </div>
+                                    <div className="flex-1">
+                                        <p className="font-bold text-slate-800 text-sm">{vendedor.nombre}</p>
+                                        <span className="text-xs text-slate-500">Cerrados: {vendedor.cerrados}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="font-bold text-yellow-600 text-lg">${Number(vendedor.monto || 0).toLocaleString('es-EC')}</span>
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
                     </div>
+                )}
 
-                    {/* Cotizaciones Recientes */}
+                {/* Marketing */}
+                {!financial.hidden && (marketingData.campanas > 0 || marketingData.aperturas > 0 || marketingData.clics > 0) && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                            <i className="fa-solid fa-file-invoice text-purple-500"></i> Últimas Cotizaciones
+                            <i className="fa-solid fa-bullhorn text-pink-500"></i> Marketing
                         </h2>
                         <div className="space-y-4">
-                            {recentQuotes.length === 0 ? (
-                                <p className="text-sm text-slate-400 italic text-center py-4">Sin cotizaciones recientes.</p>
-                            ) : recentQuotes.map((quote, i) => (
-                            <div key={i} className="flex justify-between items-start border-b border-slate-50 last:border-0 pb-3 last:pb-0">
-                                <div>
-                                    <p className="text-sm font-bold text-slate-800 hover:text-blue-600 cursor-pointer transition-colors">
-                                        {formatQuoteNumber(quote.no_cotizacion)}
-                                    </p>
-                                    <p className="text-xs text-slate-600 truncate max-w-[120px]" title={quote.nombre_cotizacion}>
-                                        {quote.nombre_cotizacion}
-                                    </p>
-                                    <p className="text-[10px] text-slate-400 mt-0.5">{quote.vendedor}</p>
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-purple-100 text-purple-600">
+                                    <i className="fa-solid fa-rectangle-ad text-xl"></i>
                                 </div>
-                                <div className="text-right">
-                                    <p className="text-sm font-bold text-slate-800">${Number(quote.total).toLocaleString('es-EC')}</p>
-                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold inline-block mt-1 ${
-                                        quote.estado_decision === 'PENDIENTE' ? 'bg-amber-100 text-amber-700' : 
-                                        quote.estado_decision === 'ACEPTADA' ? 'bg-emerald-100 text-emerald-700' : 
-                                        'bg-rose-100 text-rose-700'
-                                    }`}>
-                                        {quote.estado_decision}
-                                    </span>
+                                <div>
+                                    <p className="text-sm text-slate-500 font-medium">Campañas</p>
+                                    <p className="text-2xl font-bold text-slate-800">{marketingData.campanas || 0}</p>
                                 </div>
                             </div>
-                            ))}
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-blue-100 text-blue-600">
+                                    <i className="fa-solid fa-envelope-open text-xl"></i>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-slate-500 font-medium">Aperturas</p>
+                                    <p className="text-2xl font-bold text-slate-800">{marketingData.aperturas || 0}</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-lg flex items-center justify-center bg-green-100 text-green-600">
+                                    <i className="fa-solid fa-mouse-pointer text-xl"></i>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-slate-500 font-medium">Clics (CTR)</p>
+                                    <p className="text-2xl font-bold text-slate-800">{marketingData.clics || 0}</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
             </div>
         </>
       )}

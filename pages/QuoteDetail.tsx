@@ -19,16 +19,21 @@ interface Attachment {
 interface SentLog {
   id_sent: string;
   sent_at_fmt: string;
-  sent_by_name: string;
+  sent_by_name?: string;
   sent_to: string;
-  sent_cc: string;
+  sent_cc?: string;
+  sent_from?: string;
   subject: string;
   method: string;
-  email_policy: string;
-  version_enviada: number | null;
+  email_policy?: string;
+  version_enviada?: number | null;
   sent_file_url?: string;
   attachments?: Attachment[];
   message_snapshot?: string;
+  message_content?: string;
+  operator_name?: string;
+  operator_avatar?: string;
+  creator_name?: string;
 }
 
 interface QuoteExtended extends Quote {
@@ -842,6 +847,7 @@ const QuoteDetail: React.FC = () => {
                                 <Link to={`/app/client-contacts/${quote.id_contact}`} className="font-bold text-slate-800 text-sm hover:text-brand-600 hover:underline block truncate">{quote.contact_detail?.full_name || 'Sin nombre'}</Link>
                                 {quote.contact_detail?.position && (<p className="text-xs text-slate-500 italic truncate">{quote.contact_detail.position}</p>)}
                                 {quote.contact_detail?.email && (<div className="flex items-center gap-1.5 mt-1 text-xs text-slate-500 truncate"><i className="fa-solid fa-envelope opacity-60"></i><span className="truncate">{quote.contact_detail.email}</span></div>)}
+                                {quote.correos_adicionales && (<div className="flex items-center gap-1.5 mt-1 text-xs text-slate-500 truncate"><i className="fa-solid fa-envelope opacity-60"></i><span className="font-semibold">CC:</span><span className="truncate" title={quote.correos_adicionales}>{quote.correos_adicionales}</span></div>)}
                                 {quote.contact_detail?.phone && (<div className="flex items-center gap-1.5 mt-1 text-xs text-slate-500"><i className="fa-solid fa-phone opacity-60"></i><span>{quote.contact_detail.phone}</span></div>)}
                             </div>
                         </div>
@@ -1175,18 +1181,40 @@ const QuoteDetail: React.FC = () => {
                         <div className="text-center py-4 text-slate-400 text-xs italic">Sin actividad de envíos.</div>
                     ) : (
                         <div className="space-y-2">
-                            {quote.sent_history.map((log, idx) => (
-                                <div key={idx} className="bg-gradient-to-r from-slate-50 to-transparent border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-all">
-                                    {/* Cabecera: Versión, PDF y Fecha */}
+                            {quote.sent_history.map((log, idx) => {
+                                const isReply = log.method === 'REPLY';
+                                const messageToShow = log.message_content || log.message_snapshot;
+                                // Para REPLY: usar contact_detail.full_name si operator_name está vacío
+                                const senderName = isReply 
+                                    ? (log.operator_name || quote.contact_detail?.full_name || 'Usuario')
+                                    : (log.operator_name || log.sent_by_name || log.creator_name || 'Usuario');
+                                const senderAvatar = log.operator_avatar;
+                                
+                                return (
+                                <div key={idx} className={`rounded-lg p-4 border transition-all ${
+                                    isReply 
+                                        ? 'bg-blue-50 border-blue-200 hover:border-blue-300' 
+                                        : 'bg-gradient-to-r from-slate-50 to-transparent border-slate-200 hover:border-slate-300'
+                                }`}>
+                                    {/* Cabecera */}
                                     <div className="flex items-center justify-between gap-3 mb-3">
                                         <div className="flex items-center gap-2">
-                                            <span className="text-sm font-bold text-slate-800">
-                                                {log.version_enviada ? `v${log.version_enviada}` : 'Manual'}
-                                            </span>
-                                            <span className={`text-[9px] font-bold px-2 py-1 rounded-full ${log.email_policy === 'CORPORATE' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                {log.email_policy === 'CORPORATE' ? 'Email Corporativo' : 'Email Personal'}
-                                            </span>
-                                            {log.sent_file_url && (
+                                            {isReply && (
+                                                <span className="text-sm font-bold text-blue-700 flex items-center gap-1">
+                                                    <i className="fa-solid fa-reply"></i> Respuesta del Cliente
+                                                </span>
+                                            )}
+                                            {!isReply && log.version_enviada && (
+                                                <span className="text-sm font-bold text-slate-800">
+                                                    v{log.version_enviada}
+                                                </span>
+                                            )}
+                                            {!isReply && log.email_policy && (
+                                                <span className={`text-[9px] font-bold px-2 py-1 rounded-full ${log.email_policy === 'CORPORATE' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                    {log.email_policy === 'CORPORATE' ? 'Email Corporativo' : 'Email Personal'}
+                                                </span>
+                                            )}
+                                            {!isReply && log.sent_file_url && (
                                                 <a 
                                                     href={log.sent_file_url} 
                                                     target="_blank" 
@@ -1198,42 +1226,108 @@ const QuoteDetail: React.FC = () => {
                                                 </a>
                                             )}
                                         </div>
-                                        <span className="text-[10px] text-slate-400">{log.sent_at_fmt}</span>
+                                        <span className={`text-[10px] ${isReply ? 'text-blue-500' : 'text-slate-400'}`}>{log.sent_at_fmt}</span>
                                     </div>
 
-                                    {/* Quién envió */}
-                                    <p className="text-xs text-slate-600 mb-3">
-                                        <span className="text-slate-400">Enviado por: </span>
-                                        <span className="font-medium text-slate-800">{log.creator_name || quote.owner_detail?.name || 'Usuario'}</span>
-                                    </p>
-
-                                    {/* Destinatarios en dos líneas */}
-                                    <div className="space-y-1.5 text-xs">
-                                        <div className="flex items-center gap-2">
-                                            <i className="fa-solid fa-envelope text-slate-400 w-4"></i>
-                                            <span className="text-slate-500">Para:</span>
-                                            <span className="font-medium text-slate-800">{log.sent_to}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <i className="fa-solid fa-copy text-slate-400 w-4"></i>
-                                            <span className="text-slate-500">Copia:</span>
-                                            {log.sent_cc ? (
-                                                <span className="font-medium text-slate-800">{log.sent_cc}</span>
-                                            ) : (
-                                                <span className="italic text-slate-400">sin copia</span>
+                                    {/* Quién envió / Quién respondió */}
+                                    {!isReply && (
+                                        <div className={`text-xs mb-3 flex items-center gap-2 ${isReply ? 'text-blue-700' : 'text-slate-600'}`}>
+                                            {senderAvatar && (
+                                                <img src={senderAvatar} alt={senderName} className="w-6 h-6 rounded-full object-cover border border-slate-200" />
                                             )}
+                                            <div>
+                                                <span className={isReply ? 'text-blue-500' : 'text-slate-400'}>
+                                                    Enviado por: 
+                                                </span>
+                                                <span className="font-medium text-slate-800">{senderName}</span>
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
 
-                                    {/* Asunto (si existe) */}
-                                    {log.subject && (
-                                        <p className="mt-2 text-xs text-slate-600 italic border-t border-slate-100 pt-2">
-                                            <span className="text-slate-400">Asunto: </span>{log.subject}
+                                    {/* sent_from para REPLY (nombre + email) */}
+                                    {isReply && log.sent_from && (
+                                        <p className="text-xs text-blue-600 mb-3">
+                                            <span className="text-blue-500 font-medium">Respondió: </span>
+                                            {log.sent_from}
                                         </p>
                                     )}
 
+                                    {/* Destinatarios / Correo respondiente */}
+                                    {!isReply && (
+                                        <div className="space-y-1.5 text-xs mb-3">
+                                            <div className="flex items-center gap-2">
+                                                <i className="fa-solid fa-envelope text-slate-400 w-4"></i>
+                                                <span className="text-slate-500">Para:</span>
+                                                <span className="font-medium text-slate-800">{log.sent_to}</span>
+                                            </div>
+                                            {log.sent_cc ? (
+                                                <div className="flex items-center gap-2">
+                                                    <i className="fa-solid fa-copy text-slate-400 w-4"></i>
+                                                    <span className="text-slate-500">Copia:</span>
+                                                    <span className="font-medium text-slate-800">{log.sent_cc}</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2">
+                                                    <i className="fa-solid fa-copy text-slate-400 w-4"></i>
+                                                    <span className="text-slate-500">Copia:</span>
+                                                    <span className="italic text-slate-400">sin copia</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {isReply && (
+                                        <div className="space-y-1.5 text-xs mb-3">
+                                            {log.sent_cc ? (
+                                                <div className="flex items-center gap-2">
+                                                    <i className="fa-solid fa-copy text-blue-400 w-4"></i>
+                                                    <span className="text-blue-500">Copia:</span>
+                                                    <span className="font-medium text-slate-800">{log.sent_cc}</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-2">
+                                                    <i className="fa-solid fa-copy text-blue-400 w-4"></i>
+                                                    <span className="text-blue-500">Copia:</span>
+                                                    <span className="italic text-slate-400">sin copia</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Asunto */}
+                                    {log.subject && (
+                                        <p className={`text-xs italic border-t pt-2 ${
+                                            isReply 
+                                                ? 'text-blue-600 border-blue-200' 
+                                                : 'text-slate-600 border-slate-100'
+                                        }`}>
+                                            <span className={isReply ? 'text-blue-500' : 'text-slate-400'}>Asunto: </span>
+                                            {log.subject}
+                                        </p>
+                                    )}
+
+                                    {/* MENSAJE DE RESPUESTA DEL CLIENTE O CONTENIDO */}
+                                    {messageToShow && (
+                                        <div className={`mt-3 rounded-lg p-3 border ${
+                                            isReply 
+                                                ? 'bg-white border-blue-100' 
+                                                : ''
+                                        }`}>
+                                            {isReply && (
+                                                <p className="text-[10px] text-blue-500 font-bold mb-2 flex items-center gap-1">
+                                                    <i className="fa-solid fa-quote-left"></i> Resumen del correo del cliente
+                                                </p>
+                                            )}
+                                            <p className={`text-xs leading-relaxed whitespace-pre-wrap ${
+                                                isReply ? 'text-blue-900' : 'text-slate-700'
+                                            }`}>
+                                                {messageToShow}
+                                            </p>
+                                        </div>
+                                    )}
+
                                     {/* Adjuntos (si existen) */}
-                                    {log.attachments && log.attachments.length > 0 && (
+                                    {!isReply && log.attachments && log.attachments.length > 0 && (
                                         <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
                                             {log.attachments?.map((att, i) => (
                                                 <a 
@@ -1250,7 +1344,8 @@ const QuoteDetail: React.FC = () => {
                                         </div>
                                     )}
                                 </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>

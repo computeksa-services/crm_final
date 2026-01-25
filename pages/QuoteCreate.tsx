@@ -473,11 +473,20 @@ const QuoteCreate: React.FC = () => {
           throw new Error(errorMessage);
       }
 
+      // Obtener el ID de la cotización creada/actualizada
+      const responseData = await res.json();
+      const createdQuoteId = Array.isArray(responseData) ? responseData[0]?.id_cotizacion : responseData?.id_cotizacion;
+
       setToast({ message: quoteId ? '¡Cotización actualizada correctamente!' : '¡Cotización creada correctamente!', type: 'success' });
       
       setTimeout(() => {
-        const dealIdParam = new URLSearchParams(location.search).get('dealId');
-        navigate(dealIdParam ? `/app/deals/${dealIdParam}` : '/app/quotes');
+        if (!quoteId && createdQuoteId) {
+          // Si es una creación nueva, ir directamente a los detalles
+          navigate(`/app/quotes/${createdQuoteId}`);
+        } else {
+          const dealIdParam = new URLSearchParams(location.search).get('dealId');
+          navigate(dealIdParam ? `/app/deals/${dealIdParam}` : '/app/quotes');
+        }
       }, 1000);
 
     } catch (error: any) {

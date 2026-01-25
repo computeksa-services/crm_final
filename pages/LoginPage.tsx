@@ -79,7 +79,13 @@ const LoginPage: React.FC = () => {
 
     } catch (err: any) {
       console.error('❌ Error al intercambiar token:', err);
-      setError(err.message || 'No se pudo iniciar sesión.');
+      // Detectar error específico de usuario no encontrado
+      const errorMessage = err.message || 'No se pudo iniciar sesión.';
+      if (errorMessage.includes('no_user')) {
+        setError('Este usuario no tiene acceso a la aplicación. Por favor, contacta a soporte@computeksa.com para solicitar acceso.');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoadingProvider(null);
     }
@@ -124,7 +130,7 @@ const LoginPage: React.FC = () => {
     setLoadingProvider('microsoft');
 
     // Scopes de Microsoft
-    const scopes = "openid profile email offline_access User.Read Mail.Send";
+    const scopes = "openid profile email offline_access User.Read Mail.ReadWrite Calendars.ReadWrite";
     
     // IMPORTANTE: Usar response_type=code para obtener authorization code (no id_token)
     // Y usar oauthRedirectUri de las variables de entorno
