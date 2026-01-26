@@ -137,6 +137,19 @@ const QuoteDetail: React.FC = () => {
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  // Historial: vista rápida/detallada
+  const [historyCondensed, setHistoryCondensed] = useState(false);
+  const historyDefaultSetRef = useRef(false);
+  const [expandedSentIds, setExpandedSentIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!historyDefaultSetRef.current && quote?.sent_history) {
+      if (quote.sent_history.length > 5) {
+        setHistoryCondensed(true);
+      }
+      historyDefaultSetRef.current = true;
+    }
+  }, [quote?.sent_history]);
 
   // Inputs de Archivos (Refs)
   const manualFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1174,13 +1187,35 @@ const QuoteDetail: React.FC = () => {
                         <p className="text-xs text-slate-500">Registro de cotizaciones enviadas por email.</p>
                     </div>
                   </div>
-                  {quote.sent_history?.length > 0 && <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full text-xs font-bold">{quote.sent_history.length}</span>}
+                  <div className="flex items-center gap-2">
+                    {quote.sent_history?.length > 0 && (
+                      <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full text-xs font-bold">{quote.sent_history.length}</span>
+                    )}
+                    {quote.sent_history && quote.sent_history.length > 5 && (
+                      <div className="flex items-center bg-slate-100 rounded-md p-0.5">
+                        <button
+                          className={`${historyCondensed ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500'} px-2 py-0.5 text-[10px] font-bold rounded`}
+                          onClick={() => { setHistoryCondensed(true); setExpandedSentIds(new Set()); }}
+                          title="Vista rápida"
+                        >
+                          Rápida
+                        </button>
+                        <button
+                          className={`${!historyCondensed ? 'bg-white text-slate-700 shadow-sm' : 'text-slate-500'} px-2 py-0.5 text-[10px] font-bold rounded`}
+                          onClick={() => { setHistoryCondensed(false); setExpandedSentIds(new Set()); }}
+                          title="Vista detallada"
+                        >
+                          Detallada
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="p-6">
                     {(!quote.sent_history || quote.sent_history.length === 0) ? (
                         <div className="text-center py-4 text-slate-400 text-xs italic">Sin actividad de envíos.</div>
                     ) : (
-                        <div className="space-y-2">
+                        <div className={historyCondensed ? 'space-y-1' : 'space-y-2'}>
                             {quote.sent_history.map((log, idx) => {
                                 const isReply = log.method === 'REPLY';
                                 const messageToShow = log.message_content || log.message_snapshot;
@@ -1189,82 +1224,222 @@ const QuoteDetail: React.FC = () => {
                                     ? (log.operator_name || quote.contact_detail?.full_name || 'Usuario')
                                     : (log.operator_name || log.sent_by_name || log.creator_name || 'Usuario');
                                 const senderAvatar = log.operator_avatar;
+                              const contactName = quote.contact_detail?.full_name;
+                              const contactEmail = quote.contact_detail?.email;
+                              const toMatchesContact = !!(contactEmail && log.sent_to && log.sent_to.includes(contactEmail));
                                 
+                                if (historyCondensed) {
+                                  const isExpanded = expandedSentIds.has(log.id_sent);
+                                  return (
+                                    <div key={idx} className={`rounded-md border ${isReply ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
+                                      <div
+                                        className="px-3 py-2 flex items-center justify-between gap-3 cursor-pointer hover:bg-white/50"
+                                        onClick={() => {
+                                          setExpandedSentIds(prev => {
+                                            const next = new Set(prev);
+                                            if (next.has(log.id_sent)) next.delete(log.id_sent); else next.add(log.id_sent);
+                                            return next;
+                                          });
+                                        }}
+                                      >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                          <i className={`fa-solid ${isReply ? 'fa-reply text-blue-600' : 'fa-paper-plane text-slate-500'}`}></i>
+                                          <div className="min-w-0">
+                                            <div className={`text-xs ${isReply ? 'text-blue-800' : 'text-slate-700'} whitespace-normal break-words`}>
+                                              {isReply ? (
+                                                <>{log.sent_from || senderName}</>
+                                              ) : (
+                                                <>Cotización #{quote.formatted_no_cotizacion || quote.id_cotizacion}{log.version_enviada ? ` v${log.version_enviada}` : ''} por {senderName}</>
+                                              )}
+                                            </div>
+                                            {!isReply && log.email_policy && (
+                                              <span className={`inline-block mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded ${log.email_policy === 'CORPORATE' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                {log.email_policy === 'CORPORATE' ? 'Email Corporativo' : 'Email Personal'}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                          {!isReply && log.sent_file_url && (
+                                            <a
+                                              href={log.sent_file_url}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              onClick={(e) => e.stopPropagation()}
+                                              className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[9px] font-bold hover:bg-emerald-200"
+                                              title="Ver PDF"
+                                            >
+                                              <i className="fa-solid fa-file-pdf"></i> PDF
+                                            </a>
+                                          )}
+                                          <span className={`text-[10px] ${isReply ? 'text-blue-500' : 'text-slate-400'}`}>{log.sent_at_fmt}</span>
+                                          <i className={`fa-solid ${isExpanded ? 'fa-chevron-up' : 'fa-chevron-down'} text-slate-400 text-xs`}></i>
+                                        </div>
+                                      </div>
+                                      {isExpanded && (
+                                        <div className={`px-3 pb-3 ${isReply ? 'text-blue-900' : 'text-slate-700'}`}>
+                                          {!isReply && (
+                                            <div className="text-[11px] mb-2 flex items-center gap-2">
+                                              {senderAvatar && (
+                                                <img src={senderAvatar} alt={senderName} className="w-5 h-5 rounded-full object-cover border border-slate-200" />
+                                              )}
+                                              <span className="text-slate-500">Enviado por:</span>
+                                              <span className="font-medium text-slate-800">{senderName}</span>
+                                            </div>
+                                          )}
+                                          {!isReply && log.subject && (
+                                            <div className="text-[11px] mb-2">
+                                              <span className="text-slate-500">Asunto:</span> <span className="font-medium whitespace-normal break-words">{log.subject}</span>
+                                            </div>
+                                          )}
+                                          {!isReply && (
+                                            <div className="space-y-1.5 text-[11px] mb-2">
+                                              <div className="flex items-start gap-2">
+                                                <i className="fa-solid fa-envelope text-slate-400 w-4 mt-0.5"></i>
+                                                <div className="min-w-0 flex-1">
+                                                  <span className="text-slate-500">Para:</span>{' '}
+                                                  <span className="font-medium whitespace-normal break-words">
+                                                    {toMatchesContact && contactEmail ? (
+                                                      <>
+                                                        {contactName || contactEmail} <span className="text-slate-500">&lt;</span>{contactEmail}<span className="text-slate-500">&gt;</span>
+                                                      </>
+                                                    ) : (
+                                                      log.sent_to
+                                                    )}
+                                                  </span>
+                                                </div>
+                                              </div>
+                                              {log.sent_cc && (
+                                                <div className="flex items-start gap-2">
+                                                  <i className="fa-solid fa-copy text-slate-400 w-4 mt-0.5"></i>
+                                                  <div className="min-w-0 flex-1">
+                                                    <span className="text-slate-500">Copia:</span>{' '}
+                                                    <span className="font-medium whitespace-normal break-words">{log.sent_cc}</span>
+                                                  </div>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                          {isReply && log.sent_cc && (
+                                            <div className="space-y-1.5 text-[11px] mb-2">
+                                              <div className="flex items-start gap-2">
+                                                <i className="fa-solid fa-copy text-blue-400 w-4 mt-0.5"></i>
+                                                <div className="min-w-0 flex-1">
+                                                  <span className="text-blue-500">Copia:</span>{' '}
+                                                  <span className="font-medium whitespace-normal break-words text-slate-800">{log.sent_cc}</span>
+                                                </div>
+                                              </div>
+                                            </div>
+                                          )}
+                                          {messageToShow && (
+                                            <div className={`mt-2 rounded-lg ${isReply ? 'p-2 bg-white border border-blue-100' : 'p-2 border border-slate-100'}`}>
+                                              {isReply && (
+                                                <p className="text-[10px] text-blue-500 font-bold mb-1 flex items-center gap-1">
+                                                  <i className="fa-solid fa-quote-left"></i> Resumen del correo del cliente
+                                                </p>
+                                              )}
+                                              <p className={`text-[11px] leading-relaxed whitespace-pre-wrap ${isReply ? 'text-blue-900' : 'text-slate-700'}`}>{messageToShow}</p>
+                                            </div>
+                                          )}
+                                          {!isReply && log.attachments && log.attachments.length > 0 && (
+                                            <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-1.5">
+                                              {log.attachments?.map((att, i) => (
+                                                <a
+                                                  key={i}
+                                                  href={att.url}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="inline-flex items-center gap-1 px-2 py-1 bg-slate-200 text-slate-700 rounded text-[9px] hover:bg-slate-300 transition-colors"
+                                                  title={att.nombre}
+                                                  onClick={(e) => e.stopPropagation()}
+                                                >
+                                                  <i className={`fa-solid ${getFileIcon(att.tipo || 'file')}`}></i> {att.nombre.length > 12 ? att.nombre.substring(0, 10) + '...' : att.nombre}
+                                                </a>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }
+
                                 return (
-                                <div key={idx} className={`rounded-lg p-4 border transition-all ${
+                                <div key={idx} className={`rounded-lg ${isReply ? 'p-3' : 'p-4'} border transition-all ${
                                     isReply 
                                         ? 'bg-blue-50 border-blue-200 hover:border-blue-300' 
                                         : 'bg-gradient-to-r from-slate-50 to-transparent border-slate-200 hover:border-slate-300'
                                 }`}>
                                     {/* Cabecera */}
-                                    <div className="flex items-center justify-between gap-3 mb-3">
-                                        <div className="flex items-center gap-2">
-                                            {isReply && (
-                                                <span className="text-sm font-bold text-blue-700 flex items-center gap-1">
-                                                    <i className="fa-solid fa-reply"></i> Respuesta del Cliente
-                                                </span>
+                                    <div className="flex sm:flex-row flex-col sm:items-center sm:justify-between items-start gap-2 mb-3">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        {isReply ? (
+                                          <span className="text-sm font-bold text-blue-700 flex items-center gap-1">
+                                            <i className="fa-solid fa-reply"></i>
+                                            <span className="font-medium text-blue-800 whitespace-normal break-words" title={log.sent_from || senderName}>{log.sent_from || senderName}</span>
+                                          </span>
+                                        ) : (
+                                          <>
+                                            {log.sent_file_url && (
+                                              <a 
+                                                href={log.sent_file_url} 
+                                                target="_blank" 
+                                                rel="noreferrer"
+                                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[9px] font-bold hover:bg-emerald-200 transition-colors"
+                                                title="Ver PDF"
+                                              >
+                                                <i className="fa-solid fa-file-pdf"></i> Ver PDF
+                                              </a>
                                             )}
-                                            {!isReply && log.version_enviada && (
-                                                <span className="text-sm font-bold text-slate-800">
-                                                    v{log.version_enviada}
-                                                </span>
+                                            <span className="text-sm text-slate-700">
+                                              Cotización #{quote.formatted_no_cotizacion || quote.id_cotizacion}
+                                              {log.version_enviada ? ` v${log.version_enviada}` : ''} enviado por:
+                                            </span>
+                                            {senderAvatar && (
+                                              <img src={senderAvatar} alt={senderName} className="w-6 h-6 rounded-full object-cover border border-slate-200" />
                                             )}
-                                            {!isReply && log.email_policy && (
-                                                <span className={`text-[9px] font-bold px-2 py-1 rounded-full ${log.email_policy === 'CORPORATE' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
-                                                    {log.email_policy === 'CORPORATE' ? 'Email Corporativo' : 'Email Personal'}
-                                                </span>
+                                            <span className="text-sm font-medium text-slate-800">{senderName}</span>
+                                            {log.email_policy && (
+                                              <span className={`text-[9px] font-bold px-2 py-1 rounded-full ${log.email_policy === 'CORPORATE' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                {log.email_policy === 'CORPORATE' ? 'Email Corporativo' : 'Email Personal'}
+                                              </span>
                                             )}
-                                            {!isReply && log.sent_file_url && (
-                                                <a 
-                                                    href={log.sent_file_url} 
-                                                    target="_blank" 
-                                                    rel="noreferrer"
-                                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded text-[9px] font-bold hover:bg-emerald-200 transition-colors"
-                                                    title="Ver PDF"
-                                                >
-                                                    <i className="fa-solid fa-file-pdf"></i> Ver PDF
-                                                </a>
-                                            )}
-                                        </div>
-                                        <span className={`text-[10px] ${isReply ? 'text-blue-500' : 'text-slate-400'}`}>{log.sent_at_fmt}</span>
+                                          </>
+                                        )}
+                                      </div>
+                                      <span className={`text-[10px] ${isReply ? 'text-blue-500' : 'text-slate-400'}`}>{log.sent_at_fmt}</span>
                                     </div>
 
                                     {/* Quién envió / Quién respondió */}
-                                    {!isReply && (
-                                        <div className={`text-xs mb-3 flex items-center gap-2 ${isReply ? 'text-blue-700' : 'text-slate-600'}`}>
-                                            {senderAvatar && (
-                                                <img src={senderAvatar} alt={senderName} className="w-6 h-6 rounded-full object-cover border border-slate-200" />
-                                            )}
-                                            <div>
-                                                <span className={isReply ? 'text-blue-500' : 'text-slate-400'}>
-                                                    Enviado por: 
-                                                </span>
-                                                <span className="font-medium text-slate-800">{senderName}</span>
-                                            </div>
-                                        </div>
-                                    )}
+                                    {/* Enviado por ya se muestra en la cabecera para EMAIL */}
 
-                                    {/* sent_from para REPLY (nombre + email) */}
-                                    {isReply && log.sent_from && (
-                                        <p className="text-xs text-blue-600 mb-3">
-                                            <span className="text-blue-500 font-medium">Respondió: </span>
-                                            {log.sent_from}
-                                        </p>
-                                    )}
+                                    {/* sent_from para REPLY (nombre + email) mostrado en cabecera */}
 
                                     {/* Destinatarios / Correo respondiente */}
                                     {!isReply && (
                                         <div className="space-y-1.5 text-xs mb-3">
-                                            <div className="flex items-center gap-2">
+                                          <div className="flex items-center gap-2">
                                                 <i className="fa-solid fa-envelope text-slate-400 w-4"></i>
                                                 <span className="text-slate-500">Para:</span>
-                                                <span className="font-medium text-slate-800">{log.sent_to}</span>
+                                            <div className="min-w-0 flex-1">
+                                              <span className="font-medium text-slate-800 block whitespace-normal break-words" title={toMatchesContact && contactEmail ? `${contactName || contactEmail} <${contactEmail}>` : (log.sent_to || '')}>
+                                                {toMatchesContact && contactEmail ? (
+                                                  <>
+                                                    {contactName || contactEmail} <span className="text-slate-500">&lt;</span>{contactEmail}<span className="text-slate-500">&gt;</span>
+                                                  </>
+                                                ) : (
+                                                  log.sent_to
+                                                )}
+                                              </span>
                                             </div>
-                                            {log.sent_cc ? (
-                                                <div className="flex items-center gap-2">
+                                            </div>
+                                          {log.sent_cc ? (
+                                            <div className="flex items-center gap-2">
                                                     <i className="fa-solid fa-copy text-slate-400 w-4"></i>
                                                     <span className="text-slate-500">Copia:</span>
-                                                    <span className="font-medium text-slate-800">{log.sent_cc}</span>
+                                              <div className="min-w-0 flex-1">
+                                                <span className="font-medium text-slate-800 block whitespace-normal break-words" title={log.sent_cc}>{log.sent_cc}</span>
+                                              </div>
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-2">
@@ -1277,25 +1452,27 @@ const QuoteDetail: React.FC = () => {
                                     )}
 
                                     {isReply && (
-                                        <div className="space-y-1.5 text-xs mb-3">
-                                            {log.sent_cc ? (
-                                                <div className="flex items-center gap-2">
-                                                    <i className="fa-solid fa-copy text-blue-400 w-4"></i>
-                                                    <span className="text-blue-500">Copia:</span>
-                                                    <span className="font-medium text-slate-800">{log.sent_cc}</span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex items-center gap-2">
-                                                    <i className="fa-solid fa-copy text-blue-400 w-4"></i>
-                                                    <span className="text-blue-500">Copia:</span>
-                                                    <span className="italic text-slate-400">sin copia</span>
-                                                </div>
-                                            )}
-                                        </div>
+                                      <div className="space-y-1.5 text-xs mb-3">
+                                        {log.sent_cc ? (
+                                          <div className="flex items-center gap-2">
+                                            <i className="fa-solid fa-copy text-blue-400 w-4"></i>
+                                            <span className="text-blue-500">Copia:</span>
+                                            <div className="min-w-0 flex-1">
+                                              <span className="font-medium text-slate-800 block whitespace-normal break-words" title={log.sent_cc}>{log.sent_cc}</span>
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-2">
+                                            <i className="fa-solid fa-copy text-blue-400 w-4"></i>
+                                            <span className="text-blue-500">Copia:</span>
+                                            <span className="italic text-slate-400">sin copia</span>
+                                          </div>
+                                        )}
+                                      </div>
                                     )}
 
                                     {/* Asunto */}
-                                    {log.subject && (
+                                    {log.subject && !isReply && (
                                         <p className={`text-xs italic border-t pt-2 ${
                                             isReply 
                                                 ? 'text-blue-600 border-blue-200' 
@@ -1308,7 +1485,7 @@ const QuoteDetail: React.FC = () => {
 
                                     {/* MENSAJE DE RESPUESTA DEL CLIENTE O CONTENIDO */}
                                     {messageToShow && (
-                                        <div className={`mt-3 rounded-lg p-3 border ${
+                                        <div className={`mt-3 rounded-lg ${isReply ? 'p-2' : 'p-3'} border ${
                                             isReply 
                                                 ? 'bg-white border-blue-100' 
                                                 : ''
