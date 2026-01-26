@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
+import { buildMicrosoftAuthUrl, registerAuthMessageListener } from '../services/authService';
 import { enabledProviders, microsoftClientId, oauthRedirectUri } from '../services/oauthConfig';
 
 const LoginPage: React.FC = () => {
@@ -131,51 +132,107 @@ const LoginPage: React.FC = () => {
 
     // Scopes de Microsoft
     const scopes = "openid profile email offline_access User.Read Mail.ReadWrite Calendars.ReadWrite";
-    
-    // IMPORTANTE: Usar response_type=code para obtener authorization code (no id_token)
-    // Y usar oauthRedirectUri de las variables de entorno
-    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${microsoftClientId}&response_type=code&redirect_uri=${encodeURIComponent(oauthRedirectUri)}&response_mode=query&scope=${encodeURIComponent(scopes)}&prompt=select_account&state=${Math.random()}`;
-    
+
+    // URL con prompt=select_account para evitar intentos de Silent SSO con sesiones caducadas
+    const authUrl = buildMicrosoftAuthUrl({
+      clientId: microsoftClientId,
+      redirectUri: oauthRedirectUri,
+      scopes,
+    });
+
+    // Seguimiento del popup y tolerancia a cierres breves durante MFA
+    let popup: Window | null = null;
+    let intervalId: number | null = null;
+    let closeTimeoutId: number | null = null;
+    let authCompleted = false;
+    let detachMessageListener: (() => void) | null = null;
+
+    const clearWatchers = (keepLoading = false) => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+      if (closeTimeoutId) {
+        clearTimeout(closeTimeoutId);
+        closeTimeoutId = null;
+      }
+      if (detachMessageListener) {
+        detachMessageListener();
+        detachMessageListener = null;
+      }
+      if (!keepLoading) {
+        setLoadingProvider(null);
+      }
+    };
+
+    const handleSuccess = (code: string) => {
+      authCompleted = true;
+      if (closeTimeoutId) {
+        clearTimeout(closeTimeoutId);
+        closeTimeoutId = null;
+      }
+      if (popup && !popup.closed) {
+        popup.close();
+      }
+      clearWatchers(true);
+      sendCodeToGateway(code, 'microsoft');
+    };
+
+    // Listener persistente: se registra ANTES de abrir el popup y se limpia al terminar
+    detachMessageListener = registerAuthMessageListener((message) => {
+      if (message.provider !== 'microsoft') return;
+      if (!message.code) return;
+      handleSuccess(message.code);
+    });
+
     // Centrar Popup
     const width = 500; const height = 600;
     const left = window.screen.width / 2 - width / 2;
     const top = window.screen.height / 2 - height / 2;
-    
-    const popup = window.open(
-        authUrl, 
-        'Microsoft Login', 
-        `width=${width},height=${height},top=${top},left=${left}`
+
+    popup = window.open(
+      authUrl,
+      'Microsoft Login',
+      `width=${width},height=${height},top=${top},left=${left}`
     );
 
-    // Vigilar el Popup
-    const interval = setInterval(() => {
-        try {
-            // Verificar si el popup ha sido redirigido a nuestro dominio
-            if (popup && popup.location && popup.location.origin === window.location.origin) {
-                // Obtener el query string que contiene el code
-                const searchParams = new URLSearchParams(popup.location.search);
-                const code = searchParams.get('code');
-                const err = searchParams.get('error');
-                
-                popup.close();
-                clearInterval(interval);
+    if (!popup) {
+      clearWatchers();
+      setError('No se pudo abrir la ventana de Microsoft.');
+      return;
+    }
 
-                if (code) {
-                    // Enviar el authorization code al Gateway
-                    sendCodeToGateway(code, 'microsoft');
-                } else {
-                    setError('Microsoft: ' + (err || 'Cancelado por el usuario'));
-                    setLoadingProvider(null);
-                }
-            }
-        } catch (e) {
-            // Ignoramos errores de cross-origin mientras el usuario está en microsoft.com
-        }
+    // Vigilar el Popup con tolerancia a cierres breves (2s) para MFA
+    intervalId = window.setInterval(() => {
+      try {
+        if (popup && popup.location && popup.location.origin === window.location.origin) {
+          const searchParams = new URLSearchParams(popup.location.search);
+          const code = searchParams.get('code');
+          const err = searchParams.get('error');
 
-        if (popup?.closed) {
-            clearInterval(interval);
-            if (loadingProvider === 'microsoft') setLoadingProvider(null);
+          if (code) {
+            handleSuccess(code);
+            return;
+          }
+
+          if (err && !authCompleted) {
+            clearWatchers();
+            popup.close();
+            setError('Microsoft: ' + err);
+            return;
+          }
         }
+      } catch (e) {
+        // Ignoramos errores de cross-origin mientras el usuario está en microsoft.com
+      }
+
+      if (popup?.closed && !closeTimeoutId && !authCompleted) {
+        closeTimeoutId = window.setTimeout(() => {
+          if (authCompleted) return;
+          clearWatchers();
+          setError('Microsoft: Cancelado por el usuario');
+        }, 2000);
+      }
     }, 500);
   };
 

@@ -7,6 +7,66 @@ if (!import.meta.env.VITE_WEBHOOK_URL) {
 
 export const GATEWAY_URL = import.meta.env.VITE_WEBHOOK_URL;
 
+// Mensajería entre el popup de OAuth y la ventana principal
+export const AUTH_SUCCESS_MESSAGE = 'AUTH_SUCCESS';
+
+export type AuthWindowSuccessMessage = {
+  type: typeof AUTH_SUCCESS_MESSAGE;
+  provider: 'google' | 'microsoft';
+  code: string;
+};
+
+/**
+ * Registra un listener persistente para recibir el AUTH_SUCCESS desde el popup.
+ * Se debe registrar ANTES de abrir el popup y sólo limpiarse al finalizar el flujo.
+ */
+export const registerAuthMessageListener = (
+  onSuccess: (message: AuthWindowSuccessMessage) => void
+): (() => void) => {
+  const handler = (event: MessageEvent) => {
+    if (event.origin !== window.location.origin) return;
+    const data = event.data as AuthWindowSuccessMessage | undefined;
+    if (!data || data.type !== AUTH_SUCCESS_MESSAGE) return;
+    if (!data.code || !data.provider) return;
+    onSuccess(data);
+  };
+
+  window.addEventListener('message', handler);
+  return () => window.removeEventListener('message', handler);
+};
+
+interface MicrosoftAuthUrlParams {
+  clientId: string;
+  redirectUri: string;
+  scopes: string;
+  state?: string;
+}
+
+/**
+ * Construye la URL de autorización de Microsoft asegurando prompt=select_account.
+ */
+export const buildMicrosoftAuthUrl = ({
+  clientId,
+  redirectUri,
+  scopes,
+  state,
+}: MicrosoftAuthUrlParams): string => {
+  const safeState =
+    state || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2));
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    response_type: 'code',
+    redirect_uri: redirectUri,
+    response_mode: 'query',
+    scope: scopes,
+    prompt: 'select_account',
+    state: safeState,
+  });
+
+  return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
+};
+
 interface LoginResponse {
   token: string;
   user?: any;

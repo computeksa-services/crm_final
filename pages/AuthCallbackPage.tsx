@@ -1,16 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { authService } from '../services/authService';
-import { apiFetch } from '../services/apiClient';
-import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
+import { authService, AUTH_SUCCESS_MESSAGE } from '../services/authService';
 
 // Guard global para evitar doble procesamiento del callback
 let isProcessingGlobal = false;
 
 const AuthCallbackPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -19,29 +15,55 @@ const AuthCallbackPage: React.FC = () => {
       if (isProcessingGlobal) return;
       isProcessingGlobal = true;
       try {
-        // Nota: El flujo de login ahora es directo desde LoginPage
-        // Este archivo se puede usar para validaciones futuras
-        // Por ahora, simplemente redirigir al dashboard si ya hay token
-        
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+        const errorParam = params.get('error');
+
+        // Si el proveedor ya devolvió el code, enviarlo a la ventana principal
+        if (code) {
+          setError('');
+          setLoading(true);
+
+          if (window.opener && !window.opener.closed) {
+            window.opener.postMessage(
+              { type: AUTH_SUCCESS_MESSAGE, provider: 'microsoft', code },
+              window.location.origin
+            );
+            // Permanecer en la pantalla de procesamiento mientras el Gateway responde vía la ventana principal
+            return;
+          }
+
+          // Fallback: si no hay ventana principal, informar y permitir reintentar
+          setError('No se detectó la ventana principal para completar el login. Regresa a la aplicación e inténtalo de nuevo.');
+          setLoading(false);
+        }
+
+        // Si el proveedor devolvió un error explícito, mostrarlo
+        if (errorParam) {
+          setError('Microsoft: ' + errorParam);
+          setLoading(false);
+          return;
+        }
+
+        // Sin code: decidir en base a sesión existente
         const token = authService.getToken();
         if (token) {
           navigate('/app/dashboard');
         } else {
-          // Si no hay token, volver al login
           navigate('/login');
         }
-
       } catch (err: any) {
         console.error('❌ Error en callback:', err);
         setError(err.message || 'Error al procesar la autenticación');
         setLoading(false);
+      } finally {
+        // Liberar el lock después de completar el flujo (salvo el return temprano por code)
+        isProcessingGlobal = false;
       }
-      // Liberar el lock después de completar el flujo
-      isProcessingGlobal = false;
     };
 
     handleCallback();
-  }, [login, navigate]);
+  }, [navigate]);
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4">
@@ -51,8 +73,8 @@ const AuthCallbackPage: React.FC = () => {
             <div className="animate-spin mb-4 inline-block">
               <i className="fa-solid fa-circle-notch text-brand-600 text-4xl"></i>
             </div>
-            <h2 className="text-lg font-semibold text-slate-800">Iniciando sesión...</h2>
-            <p className="text-sm text-slate-600 mt-2">Estamos validando tus credenciales.</p>
+            <h2 className="text-lg font-semibold text-slate-800">Procesando autenticación...</h2>
+            <p className="text-sm text-slate-600 mt-2">No cierres esta ventana mientras completamos el inicio de sesión.</p>
           </>
         )}
 
