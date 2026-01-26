@@ -292,7 +292,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
           setSubmitting(false);
           return;
         }
-      } else if (idType === 'IDENTIFICACION DEL EXTERIOR') {
+      } else if (idType === 'ID. DEL EXTERIOR') {
         if (!/^[A-Za-z0-9-]+$/.test(idNumber)) {
           setToast({ message: 'El ID del exterior solo puede contener letras, números y guion medio.', type: 'error' });
           setSubmitting(false);
@@ -444,7 +444,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
                 <option value="RUC">RUC</option>
                 <option value="CI">Cédula</option>
                 <option value="PASAPORTE">Pasaporte</option>
-                <option value="IDENTIFICACION DEL EXTERIOR">ID DEL EXTERIOR</option>
+                <option value="ID. DEL EXTERIOR">ID DEL EXTERIOR</option>
               </select>
             </div>
             <div className="space-y-1">
@@ -467,7 +467,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
               <p className="text-[10px] text-slate-400 mt-1 ml-1">
                 {formData.id_type === 'RUC' && '13 dígitos numéricos, debe terminar en 001'}
                 {formData.id_type === 'CI' && '10 dígitos numéricos (cédula válida)'}
-                {formData.id_type === 'IDENTIFICACION DEL EXTERIOR' && 'Letras, números y guion medio permitidos'}
+                {formData.id_type === 'ID. DEL EXTERIOR' && 'Letras, números y guion medio permitidos'}
                 {formData.id_type === 'PASAPORTE' && 'Formato alfanumérico'}
               </p>
             </div>
