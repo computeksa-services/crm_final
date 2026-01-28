@@ -6,6 +6,7 @@ import { ClientCompany, ClientContact } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import CompanyMap from '../components/CompanyMap';
+import CompanyFormModal from '../components/CompanyFormModal';
 import { apiFetch } from '../services/apiClient';
 
 const ClientCompanyDetail: React.FC = () => {
@@ -159,27 +160,18 @@ const ClientCompanyDetail: React.FC = () => {
 
   // --- HANDLERS EMPRESA (Edit/Update) ---
   const openEditCompany = () => {
-    if (!company || !canEditCompany) return;
-    setEditingCompany({
-      id_client_company: company.id_client_company,
-      id_type: company.id_type,
-      id_number: company.id_number,
-      name_company: company.name_company,
-      id_country: company.id_country || undefined,
-      city: company.city || '',
-      address: company.address || '',
-      id_company_type: company.company_type_name || '',
-      id_label: company.label_name || '',
-      email_company: company.email_company || '',
-      phone_company: company.phone_company || '',
-      website: company.website || '',
-    });
+    if (!canEditCompany) {
+      setToast({ message: 'No tienes permisos para editar esta empresa.', type: 'error' });
+      return;
+    }
+    setEditingCompany(company || undefined);
     setIsCompanyModalOpen(true);
   };
 
-  const handleCompanyInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setEditingCompany(prev => (prev ? { ...prev, [name]: value } : prev));
+  const handleCompanyModalSuccess = async () => {
+    setIsCompanyModalOpen(false);
+    await fetchData();
+    setToast({ message: 'Empresa actualizada correctamente.', type: 'success' });
   };
 
   // Validación de cédula ecuatoriana
@@ -205,58 +197,6 @@ const ClientCompanyDetail: React.FC = () => {
     const resultado = (10 - (suma % 10)) % 10;
     
     return resultado === digitoVerificador;
-  };
-
-  const handleCompanySubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingCompany || !user?.id_tenant || !user?.id_user) return;
-
-    // Validaciones específicas por tipo de ID
-    if (editingCompany.id_number) {
-      const idType = editingCompany.id_type || 'RUC';
-      const idNumber = editingCompany.id_number.trim();
-
-      if (idType === 'RUC') {
-        if (!/^\d{13}$/.test(idNumber)) {
-          setToast({ message: 'El RUC debe tener exactamente 13 dígitos numéricos.', type: 'error' });
-          return;
-        }
-        if (!idNumber.endsWith('001')) {
-          setToast({ message: 'El RUC debe terminar en 001.', type: 'error' });
-          return;
-        }
-      } else if (idType === 'CI') {
-        if (!validateCedula(idNumber)) {
-          setToast({ message: 'La cédula ingresada no es válida.', type: 'error' });
-          return;
-        }
-      } else if (idType === 'IDENTIFICACION DEL EXTERIOR') {
-        if (!/^[A-Za-z0-9-]+$/.test(idNumber)) {
-          setToast({ message: 'El ID del exterior solo puede contener letras, números y guion medio.', type: 'error' });
-          return;
-        }
-      }
-    }
-
-    setCompanySubmitting(true);
-    try {
-      const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/update`;
-      const payload = {
-        ...editingCompany,
-        id_client_company: editingCompany.id_client_company || company?.id_client_company,
-        id_tenant: user.id_tenant,
-        id_user: user.id_user,
-      };
-      const resp = await apiFetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      if (!resp.ok) throw new Error('Update failed');
-      setToast({ message: 'Empresa actualizada con éxito.', type: 'success' });
-      setIsCompanyModalOpen(false);
-      await fetchData();
-    } catch (err) {
-      setToast({ message: 'Error al actualizar la empresa.', type: 'error' });
-    } finally {
-      setCompanySubmitting(false);
-    }
   };
 
   // --- HANDLERS CONTACTO (Create/Edit/Delete) ---
@@ -792,194 +732,13 @@ const ClientCompanyDetail: React.FC = () => {
       )}
 
       {/* MODAL EDITAR EMPRESA */}
-      {isCompanyModalOpen && editingCompany && createPortal(
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-brand-100 text-brand-600">
-                   <i className="fa-solid fa-building-circle-check"></i>
-                </div>
-                Editar Empresa
-              </h2>
-              <button onClick={() => setIsCompanyModalOpen(false)} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-200 transition-colors text-slate-400">
-                <i className="fa-solid fa-xmark"></i>
-              </button>
-            </div>
-
-            <form onSubmit={handleCompanySubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 grid grid-cols-3 gap-3">
-                  <div className="col-span-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Tipo ID <span className="text-red-500">*</span></label>
-                    <select 
-                        name="id_type" 
-                        required 
-                        value={editingCompany.id_type || 'RUC'} 
-                        onChange={handleCompanyInputChange} 
-                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm font-bold outline-none"
-                    >
-                        <option value="RUC">RUC</option>
-                        <option value="CI">Cédula</option>
-                        <option value="PASAPORTE">Pasaporte</option>
-                        <option value="IDENTIFICACION DEL EXTERIOR">ID Exterior</option>
-                    </select>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Número <span className="text-red-500">*</span></label>
-                    <input 
-                        name="id_number" 
-                        required 
-                        value={editingCompany.id_number || ''} 
-                        onChange={handleCompanyInputChange} 
-                        className="w-full px-4 py-2 border border-slate-200 rounded-lg text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-brand-500" 
-                        placeholder="17900..." 
-                    />
-                  </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Razón Social <span className="text-red-500">*</span></label>
-                <input
-                  name="name_company"
-                  required
-                  value={editingCompany.name_company || ''}
-                  onChange={handleCompanyInputChange}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
-                  placeholder="Ej. Corporación Favorita"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">País <span className="text-red-500">*</span></label>
-                  <select
-                    name="id_country"
-                    required
-                    value={editingCompany.id_country || ''}
-                    onChange={handleCompanyInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
-                  >
-                    <option value="">Seleccionar país</option>
-                    {countries.map(country => (
-                      <option key={country.id} value={country.id}>{country.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ciudad <span className="text-red-500">*</span></label>
-                  <input
-                    name="city"
-                    required
-                    value={editingCompany.city || ''}
-                    onChange={handleCompanyInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                    placeholder="Quito"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dirección</label>
-                <input
-                  name="address"
-                  value={editingCompany.address || ''}
-                  onChange={handleCompanyInputChange}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                  placeholder="Av. Principal 123 y Secundaria"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Tipo de Empresa <span className="text-red-500">*</span></label>
-                  <select
-                    name="id_company_type"
-                    required
-                    value={editingCompany.id_company_type || ''}
-                    onChange={handleCompanyInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
-                  >
-                    <option value="">Seleccionar tipo</option>
-                    {companyTypes.map(type => (
-                      <option key={type.id_company_types} value={type.id_company_types}>{type.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Etiqueta <span className="text-red-500">*</span></label>
-                  <select
-                    name="id_label"
-                    required
-                    value={editingCompany.id_label || ''}
-                    onChange={handleCompanyInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-bold"
-                  >
-                    <option value="">Seleccionar etiqueta</option>
-                    {COMPANY_LABELS.map(label => (
-                      <option key={label} value={label}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Email Corp.</label>
-                  <input
-                    type="email"
-                    name="email_company"
-                    value={editingCompany.email_company || ''}
-                    onChange={handleCompanyInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
-                    placeholder="info@empresa.com"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Website</label>
-                  <input
-                    type="text"
-                    name="website"
-                    value={editingCompany.website || ''}
-                    onChange={handleCompanyInputChange}
-                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
-                    placeholder="empresa.com"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Teléfono</label>
-                <input
-                  name="phone_company"
-                  value={editingCompany.phone_company || ''}
-                  onChange={handleCompanyInputChange}
-                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium"
-                  placeholder="022..."
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsCompanyModalOpen(false)}
-                  className="px-5 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-all"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={companySubmitting}
-                  className="px-6 py-2.5 bg-brand-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-200 hover:bg-brand-700 disabled:opacity-50 transition-all flex items-center gap-2"
-                >
-                  {companySubmitting ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
-                  Guardar Cambios
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>,
-        document.body
-      )}
+      <CompanyFormModal 
+        isOpen={isCompanyModalOpen} 
+        onClose={() => setIsCompanyModalOpen(false)} 
+        mode="edit" 
+        initialData={editingCompany || undefined} 
+        onSuccess={handleCompanyModalSuccess} 
+      />
 
       {/* MODAL DE CONTACTO (Mismo estilo que lista) */}
       {isModalOpen && editingContact && createPortal(

@@ -188,44 +188,64 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({
       return;
     }
 
-    // Solo cargar si es una nueva empresa o diferente a la última cargada
-    const currentId = initialData?.id_client_company;
-    if (mode === 'edit' && initialData && lastLoadedIdRef.current !== currentId) {
+    const initializeForm = async () => {
+      // Solo cargar si es una nueva empresa o diferente a la última cargada
+      const currentId = initialData?.id_client_company;
+      if (mode === 'edit' && initialData && lastLoadedIdRef.current !== currentId) {
+        lastLoadedIdRef.current = currentId;
+        
+        // Si el initialData no tiene dirección, cargar los detalles completos desde la API
+        let companyData = initialData;
+        if (!initialData.address && currentId && user?.id_tenant && user?.id_user) {
+          try {
+            const response = await apiFetch(
+              `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/${currentId}?id_tenant=${user.id_tenant}&id_user=${user.id_user}`
+            );
+            if (response.ok) {
+              const detailedData = await response.json();
+              companyData = Array.isArray(detailedData) ? detailedData[0] : detailedData;
+            }
+          } catch (error) {
+            console.error('Error cargando detalles de empresa:', error);
+            // Continuar con el initialData original si falla la petición
+          }
+        }
+        
+        const newFormData = {
+          id_client_company: companyData.id_client_company,
+          id_type: companyData.id_type || 'RUC',
+          id_number: companyData.id_number || '',
+          name_company: companyData.name_company || '',
+          id_country: companyData.id_country || '',
+          city: companyData.city || '',
+          address: companyData.address || '',
+          id_company_type: companyData.id_company_type || '',
+          labels: (companyData as any).labels || [],
+          email_company: companyData.email_company || '',
+          phone_company: companyData.phone_company || '',
+          website: companyData.website || '',
+        };
+        setFormData(newFormData);
+      } else if (mode === 'create') {
+        lastLoadedIdRef.current = undefined;
+        setFormData({
+          id_type: 'RUC',
+          id_number: '',
+          name_company: '',
+          id_country: '',
+          city: '',
+          address: '',
+          id_company_type: '',
+          labels: [],
+          email_company: '',
+          phone_company: '',
+          website: '',
+        });
+      }
+    };
 
-      lastLoadedIdRef.current = currentId;
-      
-      const newFormData = {
-        id_client_company: initialData.id_client_company,
-        id_type: initialData.id_type || 'RUC',
-        id_number: initialData.id_number || '',
-        name_company: initialData.name_company || '',
-        id_country: initialData.id_country || '',
-        city: initialData.city || '',
-        address: initialData.address || '',
-        id_company_type: initialData.id_company_type || '',
-        labels: (initialData as any).labels || [],
-        email_company: initialData.email_company || '',
-        phone_company: initialData.phone_company || '',
-        website: initialData.website || '',
-      };
-      setFormData(newFormData);
-    } else if (mode === 'create') {
-      lastLoadedIdRef.current = undefined;
-      setFormData({
-        id_type: 'RUC',
-        id_number: '',
-        name_company: '',
-        id_country: '',
-        city: '',
-        address: '',
-        id_company_type: '',
-        labels: [],
-        email_company: '',
-        phone_company: '',
-        website: '',
-      });
-    }
-  }, [isOpen, mode, initialData?.id_client_company]); // Usar solo el id como dependencia
+    initializeForm();
+  }, [isOpen, mode, initialData?.id_client_company, user?.id_tenant, user?.id_user]);
 
   // Validación de cédula ecuatoriana
   const validateCedula = (cedula: string): boolean => {
