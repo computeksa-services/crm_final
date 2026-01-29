@@ -292,8 +292,8 @@ const ClientCompanyDetail: React.FC = () => {
 
   // Función para seleccionar/deseleccionar usuarios (Checkbox logic)
   const toggleShareTarget = (userId: string) => {
-    setShareTargets(prev => 
-        prev.includes(userId) 
+    setShareTargets(prev =>
+        prev.includes(userId)
         ? prev.filter(id => id !== userId) // Quitar si ya está
         : [...prev, userId] // Agregar si no está
     );
@@ -424,6 +424,13 @@ const ClientCompanyDetail: React.FC = () => {
                 <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Información Clave</h3>
             </div>
             <div className="p-6 space-y-5">
+                {company.razon_social && (
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">Razón Social</p>
+                    <p className="text-sm font-medium text-slate-700">{company.razon_social}</p>
+                  </div>
+                )}
+
                 <div>
                     <p className="text-xs text-slate-400 mb-1">Identificación ({company.id_type || 'ID'})</p>
                     <p className="font-mono text-sm font-medium text-slate-700 bg-slate-50 px-2 py-1 rounded inline-block border border-slate-100">

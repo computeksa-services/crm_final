@@ -35,7 +35,7 @@ const CompaniesList: React.FC = () => {
   });
 
   const handleAddNew = () => {
-    setEditingTenant({ ruc: '', name_tenant: '', country: 'Ecuador', city: '', address: '', website: '', logo_url: '' });
+    setEditingTenant({ ruc: '', name_tenant: '', razon_social: '', country: 'Ecuador', city: '', address: '', website: '', logo_url: '' });
     setIsEditMode(false);
     setLogoFile(null);
     setLogoPreview('');
@@ -123,6 +123,7 @@ const CompaniesList: React.FC = () => {
           formData.append('id_tenant', editingTenant.id_tenant || '');
           formData.append('ruc', editingTenant.ruc || '');
           formData.append('name_tenant', editingTenant.name_tenant || '');
+          formData.append('razon_social', editingTenant.razon_social || '');
           formData.append('country', editingTenant.country || '');
           formData.append('city', editingTenant.city || '');
           formData.append('address', editingTenant.address || '');
@@ -139,6 +140,7 @@ const CompaniesList: React.FC = () => {
             id_tenant: editingTenant.id_tenant,
             ruc: editingTenant.ruc || undefined,
             name_tenant: editingTenant.name_tenant || undefined,
+            razon_social: editingTenant.razon_social || undefined,
             country: editingTenant.country || undefined,
             city: editingTenant.city || undefined,
             address: editingTenant.address || undefined,
@@ -169,6 +171,7 @@ const CompaniesList: React.FC = () => {
           const formData = new FormData();
           formData.append('ruc', editingTenant.ruc || '');
           formData.append('name_tenant', editingTenant.name_tenant || '');
+          formData.append('razon_social', editingTenant.razon_social || '');
           formData.append('country', editingTenant.country || '');
           formData.append('city', editingTenant.city || '');
           formData.append('address', editingTenant.address || '');
@@ -184,6 +187,7 @@ const CompaniesList: React.FC = () => {
           const jsonPayload = {
             ruc: editingTenant.ruc || undefined,
             name_tenant: editingTenant.name_tenant || undefined,
+            razon_social: editingTenant.razon_social || undefined,
             country: editingTenant.country || undefined,
             city: editingTenant.city || undefined,
             address: editingTenant.address || undefined,
@@ -307,6 +311,7 @@ const CompaniesList: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-slate-800 leading-tight">{tenant.name_tenant}</h3>
+                  {tenant.razon_social && <p className="text-xs text-slate-500">{tenant.razon_social}</p>}
                   <p className="text-xs text-slate-500">RUC: {tenant.ruc}</p>
                 </div>
               </div>
@@ -382,15 +387,18 @@ const CompaniesList: React.FC = () => {
                  <p className="text-[10px] text-slate-400 mt-1">Max 800KB (PNG/JPG)</p>
                </div>
 
-               <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">RUC</label>
-                    <input name="ruc" value={editingTenant.ruc || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-500 mb-1">Nombre (Razón Social)</label>
-                    <input name="name_tenant" value={editingTenant.name_tenant || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg text-sm" />
-                  </div>
+               <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">RUC</label>
+                  <input name="ruc" value={editingTenant.ruc || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg text-sm" />
+               </div>
+               
+               <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Nombre Empresa</label>
+                  <input name="name_tenant" value={editingTenant.name_tenant || ''} onChange={handleInputChange} required className="w-full px-3 py-2 border rounded-lg text-sm" />
+               </div>
+               <div>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">Razón Social (Opcional)</label>
+                  <input name="razon_social" value={editingTenant.razon_social || ''} onChange={handleInputChange} className="w-full px-3 py-2 border rounded-lg text-sm" />
                </div>
                
                <div>

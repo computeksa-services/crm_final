@@ -85,11 +85,25 @@ const ClientCompaniesList: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleEdit = (e: React.MouseEvent, company: ClientCompany) => {
+  const handleEdit = async (e: React.MouseEvent, company: ClientCompany) => {
     e.stopPropagation();
-    setEditingCompany(company);
-    setIsEditMode(true);
-    setIsModalOpen(true);
+    try {
+      // Fetch a full, detailed record to ensure all fields are populated
+      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/detail?id_client_company=${company.id_client_company}&id_tenant=${user?.id_tenant}&id_user=${user?.id_user}`);
+      if (!response.ok) throw new Error('Failed to fetch company details');
+      const detailedCompany = await response.json();
+      
+      setEditingCompany(detailedCompany[0] || company); // Fallback to list data if fetch fails
+      setIsEditMode(true);
+      setIsModalOpen(true);
+    } catch (error) {
+      console.error("Error fetching company details for edit:", error);
+      setToast({ message: 'No se pudieron cargar los detalles completos de la empresa.', type: 'error' });
+      // Fallback: Open modal with potentially incomplete data from the list
+      setEditingCompany(company);
+      setIsEditMode(true);
+      setIsModalOpen(true);
+    }
   };
 
   const handleModalSuccess = async () => {
@@ -361,7 +375,7 @@ const ClientCompaniesList: React.FC = () => {
         <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm min-w-[200px]">
           <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
           <div className="flex items-center gap-1 flex-wrap">
-            <button onClick={() => handleGroupingChange(grouping[0] === 'country_name' ? [] : ['country_name'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'country_name' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-globe"></i> País</button>
+            <button onClick={() => handleGroupingChange(grouping[0] === 'country_name' ? [] : ['country_name'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'country_name' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-globe"></i> País</button>      
             <button onClick={() => handleGroupingChange(grouping[0] === 'city' ? [] : ['city'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'city' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-city"></i> Ciudad</button>
             <button onClick={() => handleGroupingChange(grouping[0] === 'company_type_name' ? [] : ['company_type_name'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'company_type_name' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-building"></i> Tipo</button>
             <button onClick={() => handleGroupingChange(grouping[0] === 'labels' ? [] : ['labels'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'labels' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-tags"></i> Etiquetas</button>

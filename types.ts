@@ -10,6 +10,7 @@ export interface Tenant {
   id_tenant: string;
   ruc: string;
   name_tenant: string;
+  razon_social?: string;
   country: string;
   city: string;
   address: string;
@@ -96,6 +97,7 @@ export interface ClientCompany {
   id_type: 'RUC' | 'CI' | 'PASAPORTE' | 'IDENTIFICACION DEL EXTERIOR' | 'OTRO';
   id_number: string;
   name_company: string;
+  razon_social?: string;
   industry?: string;
   address?: string;
   city?: string;
