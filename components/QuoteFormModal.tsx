@@ -4,8 +4,8 @@ import { Quote, ClientCompany, ClientContact } from '../types';
 import Toast from './Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
-import CompanyFormModal from './CompanyFormModal';
-import ContactFormModal from './ContactFormModal';
+import CompanyFormModal from '../pages/clients/CompanyFormModal';
+import ContactFormModal from '../pages/clients/ContactFormModal';
 
 interface QuoteFormModalProps {
   isOpen: boolean;

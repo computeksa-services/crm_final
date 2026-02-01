@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { Quote, ClientCompany, ClientContact, QuoteStatus, Deal, UserDecision, CustomStatus, DealChannel } from '../types';
-import { apiFetch } from '../services/apiClient';
-import Toast from '../components/Toast';
-import CompanyFormModal from '../components/CompanyFormModal';
-import ContactFormModal from '../components/ContactFormModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { Quote, ClientCompany, ClientContact, QuoteStatus, Deal, UserDecision, CustomStatus, DealChannel } from '../../types';
+import { apiFetch } from '../../services/apiClient';
+import Toast from '../../components/Toast';
+import CompanyFormModal from '../clients/CompanyFormModal';
+import ContactFormModal from '../clients/ContactFormModal';
 
 const QuoteCreate: React.FC = () => {
   const navigate = useNavigate();

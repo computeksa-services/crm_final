@@ -12,27 +12,28 @@ import LoginPage from './pages/LoginPage';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Dashboard from './pages/Dashboard';
-import QuotesList from './pages/QuotesList';
-import QuoteDetail from './pages/QuoteDetail';
+import QuotesList from './pages/quotes/QuotesList';
+import QuoteDetail from './pages/quotes/QuoteDetail';
 import Calendar from './pages/Calendar';
-import UserProfile from './pages/UserProfile';
-import UsersList from './pages/UsersList';
-import CompaniesList from './pages/CompaniesList'; // Tenants
-import ClientCompaniesList from './pages/ClientCompaniesList';
-import ClientCompanyDetail from './pages/ClientCompanyDetail';
-import ClientContactsList from './pages/ClientContactsList';
-import ClientContactDetail from './pages/ClientContactDetail';
-import DealsList from './pages/DealsList';
-import DealDetail from './pages/DealDetail';
-import DealCreate from './pages/DealCreate';
+import UserProfile from './pages/users/UserProfile';
+import UsersList from './pages/users/UsersList';
+import CompaniesList from './pages/clients/CompaniesList'; // Tenants
+import ClientCompaniesList from './pages/clients/ClientCompaniesList';
+import ClientCompanyDetail from './pages/clients/ClientCompanyDetail';
+import ClientContactsList from './pages/clients/ClientContactsList';
+import ClientContactDetail from './pages/clients/ClientContactDetail';
+import DealsList from './pages/deals/DealsList';
+import DealDetail from './pages/deals/DealDetail';
+import DealCreate from './pages/deals/DealCreate';
 import ProductsList from './pages/ProductsList';
 import SettingsPage from './pages/SettingsPage';
-import QuoteCreate from './pages/QuoteCreate'; // RUTA CORREGIDA
-import FinancialsList from './pages/FinancialsList';
-import FinancialForm from './pages/FinancialForm';
-import FinancialDetail from './pages/FinancialDetail';
+import QuoteCreate from './pages/quotes/QuoteCreate'; // RUTA CORREGIDA
+import FinancialsList from './pages/financials/FinancialsList';
+import FinancialForm from './pages/financials/FinancialForm';
+import FinancialDetail from './pages/financials/FinancialDetail';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import MarketingCenter from './pages/MarketingCenter';
+import FollowUpsPage from './pages/FollowUpsPage';
 
 // Marketing Pages
 import MarketingDashboard from './components/pages_marketing/Dashboard';
@@ -97,6 +98,7 @@ const App: React.FC = () => {
               <Route path="client-companies/:id" element={<ClientCompanyDetail />} />
               <Route path="client-contacts" element={<ClientContactsList />} />
               <Route path="client-contacts/:id" element={<ClientContactDetail />} />
+              <Route path="followups" element={<FollowUpsPage />} />
               <Route path="products" element={<ProductsList />} />
               <Route path="settings" element={<SettingsPage />} />
               

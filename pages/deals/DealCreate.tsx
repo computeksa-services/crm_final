@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useDataCache } from '../contexts/DataCacheContext';
-import { Deal, ClientCompany, ClientContact, User } from '../types';
-import { apiFetch } from '../services/apiClient';
-import Toast from '../components/Toast';
-import CompanyFormModal from './clients/CompanyFormModal';
-import ContactFormModal from './clients/ContactFormModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
+import { Deal, ClientCompany, ClientContact, User } from '../../types';
+import { apiFetch } from '../../services/apiClient';
+import Toast from '../../components/Toast';
+import CompanyFormModal from '../clients/CompanyFormModal';
+import ContactFormModal from '../clients/ContactFormModal';
 
 const DealCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -61,16 +61,22 @@ const DealCreate: React.FC = () => {
     const defaultInterest = cachedDealInterests.find(i => i.is_default) || cachedDealInterests[0];
     const defaultChannel = cachedDealChannels.find(c => c.is_default) || cachedDealChannels[0];
 
-    // 2. Leer parámetros de la URL
+    // 2. Leer parámetros de la URL y del state
     const queryParams = new URLSearchParams(location.search);
-    const clientCompanyId = queryParams.get('clientCompanyId');
-    const contactId = queryParams.get('contactId');
+    const stateData = location.state as any;
+    
+    // Priorizar state sobre query params
+    const clientCompanyId = stateData?.companyId || queryParams.get('clientCompanyId');
+    const contactId = stateData?.contactId || queryParams.get('contactId');
+    const contactName = stateData?.contactName;
+    const companyName = stateData?.companyName;
+    const isConversionMode = stateData?.is_conversion || false;
 
     // 3. Construir estado inicial en un solo paso
     const initialState: Partial<Deal> = {
-      nombre_trato: '',
+      nombre_trato: contactName ? `Trato - ${contactName}` : '',
       valor_trato: '',
-      descripcion: '',
+      descripcion: companyName ? `Oportunidad de negocio con ${companyName}` : '',
       id_deal_status: defaultStatus?.id_status,
       id_interest: defaultInterest?.id_interest,
       channel: defaultChannel?.id_channel,
@@ -80,14 +86,14 @@ const DealCreate: React.FC = () => {
     };
 
     if (clientCompanyId && contactId) {
-      setIsConversion(true);
+      setIsConversion(isConversionMode);
       initialState.id_client_company = clientCompanyId;
       initialState.id_contact = contactId;
     }
 
     setDeal(initialState);
 
-  }, [cacheLoading, user, location.search, cachedDealStatuses, cachedDealInterests, cachedDealChannels]);
+  }, [cacheLoading, user, location.search, location.state, cachedDealStatuses, cachedDealInterests, cachedDealChannels]);
   
   // Filtrar contactos de forma reactiva
   const filteredContacts = useMemo(() => {

@@ -168,8 +168,7 @@ const SettingsDealChannels: React.FC = () => {
 
       <div className="flex justify-between items-center mb-6">
         <div>
-          <h3 className="text-lg font-bold text-slate-800">Canales</h3>
-          <p className="text-sm text-slate-500">Define los canales de origen para tus tratos.</p>
+          <p className="text-sm text-slate-500">Define los canales de origen de tus tratos (redes sociales, web, referidos, etc.). Permite rastrear qué fuentes generan más oportunidades de negocio.</p>
         </div>
         <div className="flex items-center gap-3">
           {orderChanged && (
@@ -223,21 +222,22 @@ const SettingsDealChannels: React.FC = () => {
                     <span className="block font-bold text-base" style={{ color: ch.color }}>
                       {ch.name}
                     </span>
-                    {ch.is_default && <span className="text-xs text-emerald-600 font-semibold">Default</span>}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button
                     onClick={() => handleEdit(ch)}
-                    className="w-9 h-9 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                    title="Editar"
                   >
-                    <i className="fa-solid fa-pen"></i>
+                    <i className="fa-solid fa-pen-to-square"></i>
                   </button>
                   <button
                     onClick={() => handleDelete(ch.id_channel)}
-                    className="w-9 h-9 rounded-lg border border-red-200 text-red-500 hover:bg-red-50"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                    title="Eliminar"
                   >
-                    <i className="fa-solid fa-trash"></i>
+                    <i className="fa-solid fa-trash-can"></i>
                   </button>
                 </div>
               </div>

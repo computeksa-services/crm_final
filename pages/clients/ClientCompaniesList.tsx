@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useDataCache } from '../contexts/DataCacheContext';
-import { ClientCompany } from '../types';
-import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
-import CompanyFormModal from '../components/CompanyFormModal';
-import { apiFetch } from '../services/apiClient';
+import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
+import { ClientCompany } from '../../types';
+import Toast from '../../components/Toast';
+import ConfirmModal from '../../components/ConfirmModal';
+import ShareModal from '../../components/ShareModal';
+import CompanyFormModal from './CompanyFormModal';
+import { apiFetch } from '../../services/apiClient';
 import {
   useReactTable,
   getCoreRowModel,
@@ -51,6 +52,11 @@ const ClientCompaniesList: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingCompany, setEditingCompany] = useState<Partial<ClientCompany> | null>(null);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareCompanyId, setShareCompanyId] = useState<string | null>(null);
+  const [shareCompanyName, setShareCompanyName] = useState<string>('');
+  const [shareCompanyCreator, setShareCompanyCreator] = useState<string>('');
+  const [shareCompanyCollaborators, setShareCompanyCollaborators] = useState<any[]>([]);
   const [confirmState, setConfirmState] = useState({ 
     isOpen: false, title: '', message: '', onConfirm: () => {}, isDestructive: false 
   });
@@ -76,13 +82,74 @@ const ClientCompaniesList: React.FC = () => {
   }, []);
 
   const getInitials = (name: string = '') => {
-    return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() || '?';
+    const trimmed = name.trim();
+    if (!trimmed) return '?';
+    
+    // Si tiene espacio, tomar primera letra de cada palabra
+    if (trimmed.includes(' ')) {
+      return trimmed.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    }
+    
+    // Si no tiene espacio, tomar primeras 2 letras
+    return trimmed.substring(0, 2).toUpperCase();
+  };
+
+  const getAvatarColor = (name: string = '') => {
+    const colors = [
+      { bg: '#F0E6E6', text: '#A67C7C' },    // Rojo suave
+      { bg: '#F5EAF0', text: '#B397AA' },    // Rosa suave
+      { bg: '#EDE4F5', text: '#9B7DB0' },    // Púrpura suave
+      { bg: '#E8E0F0', text: '#8B7BA3' },    // Índigo suave
+      { bg: '#E1E8F5', text: '#7A8FB5' },    // Azul suave
+      { bg: '#DFF0ED', text: '#7BA89C' },    // Teal suave
+      { bg: '#E9F0E8', text: '#7FA08' },     // Verde suave
+      { bg: '#EEF2E7', text: '#92A680' },    // Verde claro suave
+      { bg: '#F5F2E1', text: '#B8AC5B' },    // Amarillo suave
+      { bg: '#F7EFEA', text: '#B88263' },    // Naranja suave
+      { bg: '#EFE8E4', text: '#8B7B6F' },    // Marrón suave
+      { bg: '#E8E8E8', text: '#707070' },    // Gris suave
+    ];
+
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = ((hash << 5) - hash) + name.charCodeAt(i);
+      hash = hash & hash;
+    }
+    
+    return colors[Math.abs(hash) % colors.length];
   };
 
   const handleAddNew = () => {
-    setEditingCompany(undefined);
+    setEditingCompany(null);
     setIsEditMode(false);
     setIsModalOpen(true);
+  };
+
+  const openShareModal = async (company: ClientCompany) => {
+    setShareCompanyId(company.id_client_company || null);
+    setShareCompanyName((company as any).name_company || (company as any).company_name || company.name || '');
+    setShareCompanyCreator((company as any).created_by_name || '');
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/companies/share?id_client_company=${company.id_client_company}`);
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : [];
+      const list = Array.isArray(data) ? data : (data.users || []);
+      const mapped = list.map((u: any) => {
+        const level = (u.permission_level || '').toUpperCase();
+        return {
+          id_user: u.id_user,
+          name: u.name_user || u.name || u.full_name || u.email || 'Usuario',
+          avatar: u.avatar_url || u.avatar || null,
+          permission_level: level === 'NONE' ? 'BLOCKED' : level,
+          rol_user: u.rol_user,
+          is_owner: u.is_owner
+        };
+      });
+      setShareCompanyCollaborators(mapped);
+    } catch {
+      setShareCompanyCollaborators([]);
+    }
+    setShareModalOpen(true);
   };
 
   const handleEdit = async (e: React.MouseEvent, company: ClientCompany) => {
@@ -175,9 +242,9 @@ const ClientCompaniesList: React.FC = () => {
   const tableData = useMemo(() => {
     if (grouping.length > 0 && grouping[0] === 'labels') {
       return companies.flatMap((company) => {
-        const ids = Array.isArray(company.labels) ? company.labels : [];
+        const ids = Array.isArray((company as any).labels) ? (company as any).labels : [];
         if (ids.length === 0) return [{ ...company, __f_label: '(Sin etiqueta)' }];
-        return ids.map(id => ({ ...company, __f_label: id }));
+        return ids.map((id: string) => ({ ...company, __f_label: id }));
       });
     }
     return companies;
@@ -186,51 +253,19 @@ const ClientCompaniesList: React.FC = () => {
   // --- PASO 2: COLUMNAS ---
   const columns = useMemo<ColumnDef<any>[]>(() => [
     {
-      accessorKey: 'country_name',
-      header: 'País',
-      size: 120,
-      cell: ({ row, getValue, column }) => {
-        if (row.getIsGrouped() && grouping[0] === column.id) {
-          return (
-            <div className="flex items-center gap-3">
-              <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
-              <span className="font-bold text-slate-700 uppercase tracking-tight">{getValue() as string || 'No asignado'}</span>
-              <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
-            </div>
-          );
-        }
-        return row.getIsGrouped() ? null : <span className="text-slate-600 text-sm font-medium">{getValue() as string || '-'}</span>;
-      },
-    },
-    {
-      accessorKey: 'city',
-      header: 'Ciudad',
-      size: 120,
-      cell: ({ row, getValue, column }) => {
-        if (row.getIsGrouped() && grouping[0] === column.id) {
-          return (
-            <div className="flex items-center gap-3">
-              <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
-              <span className="font-bold text-slate-700 uppercase tracking-tight">{getValue() as string || 'No asignado'}</span>
-              <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
-            </div>
-          );
-        }
-        return row.getIsGrouped() ? null : <span className="text-slate-600 text-sm font-medium">{getValue() as string || '-'}</span>;
-      },
-    },
-    {
       accessorKey: 'name_company',
       header: 'Empresa',
       size: 420,
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) return null;
+        const companyName = getValue() as string;
+        const avatarColor = getAvatarColor(companyName);
         return (
           <div className="flex items-start gap-3 py-1">
-            <div className="w-8 h-8 flex-shrink-0 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-[10px] border border-indigo-100 shadow-sm">
-              {getInitials(getValue() as string)}
+            <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center font-bold text-[10px] border shadow-sm" style={{ backgroundColor: avatarColor.bg, color: avatarColor.text, borderColor: avatarColor.text }}>
+              {getInitials(companyName)}
             </div>
-            <span className="font-bold text-slate-800 text-sm tracking-tight break-words">{getValue() as string}</span>
+            <span className="font-bold text-slate-800 text-sm tracking-tight break-words">{companyName}</span>
           </div>
         );
       },
@@ -270,7 +305,7 @@ const ClientCompaniesList: React.FC = () => {
       header: 'Etiquetas',
       size: 240,
       // EL CAMBIO CLAVE: El accessor cambia según si estamos agrupando o no
-      accessorFn: (row) => (grouping[0] === 'labels' ? row.__f_label : row.labels),
+      accessorFn: (row) => (grouping[0] === 'labels' ? (row as any).__f_label : (row as any).labels),
       cell: ({ row, column, getValue }) => {
         if (row.getIsGrouped() && grouping[0] === column.id) {
           const labelId = getValue() as string;
@@ -295,7 +330,7 @@ const ClientCompaniesList: React.FC = () => {
         
         if (row.getIsGrouped()) return null;
 
-        const labelIds: string[] = Array.isArray(row.original.labels) ? row.original.labels : [];
+        const labelIds: string[] = Array.isArray((row.original as any).labels) ? (row.original as any).labels : [];
         if (labelIds.length === 0) return <span className="text-slate-400 text-sm py-1">-</span>;
         return (
           <div className="flex flex-wrap gap-1">
@@ -310,6 +345,23 @@ const ClientCompaniesList: React.FC = () => {
             })}
           </div>
         );
+      },
+    },
+    {
+      accessorKey: 'country_name',
+      header: 'País',
+      size: 120,
+      cell: ({ row, getValue, column }) => {
+        if (row.getIsGrouped() && grouping[0] === column.id) {
+          return (
+            <div className="flex items-center gap-3">
+              <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+              <span className="font-bold text-slate-700 uppercase tracking-tight">{getValue() as string || 'No asignado'}</span>
+              <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
+            </div>
+          );
+        }
+        return row.getIsGrouped() ? null : <span className="text-slate-600 text-sm font-medium">{getValue() as string || '-'}</span>;
       },
     },
     {
@@ -338,6 +390,7 @@ const ClientCompaniesList: React.FC = () => {
         return (
           <div className="flex items-center justify-end gap-1">
             <button onClick={(e) => handleEdit(e, row.original)} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
+            <button onClick={(e) => { e.stopPropagation(); openShareModal(row.original); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
             <button onClick={(e) => handleDelete(e, row.original.id_client_company)} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-trash text-[10px]"></i></button>
           </div>
         );
@@ -376,7 +429,6 @@ const ClientCompaniesList: React.FC = () => {
           <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
           <div className="flex items-center gap-1 flex-wrap">
             <button onClick={() => handleGroupingChange(grouping[0] === 'country_name' ? [] : ['country_name'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'country_name' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-globe"></i> País</button>      
-            <button onClick={() => handleGroupingChange(grouping[0] === 'city' ? [] : ['city'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'city' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-city"></i> Ciudad</button>
             <button onClick={() => handleGroupingChange(grouping[0] === 'company_type_name' ? [] : ['company_type_name'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'company_type_name' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-building"></i> Tipo</button>
             <button onClick={() => handleGroupingChange(grouping[0] === 'labels' ? [] : ['labels'])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping[0] === 'labels' ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}><i className="fa-solid fa-tags"></i> Etiquetas</button>
           </div>
@@ -429,6 +481,18 @@ const ClientCompaniesList: React.FC = () => {
       </div>
 
       <CompanyFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} mode={isEditMode ? 'edit' : 'create'} initialData={editingCompany || undefined} onSuccess={handleModalSuccess} />
+      {shareModalOpen && shareCompanyId && (
+        <ShareModal
+          entity="company"
+          id={shareCompanyId}
+          entityName={shareCompanyName || `Empresa #${shareCompanyId}`}
+          creatorName={shareCompanyCreator}
+          isOpen={shareModalOpen}
+          onClose={() => { setShareModalOpen(false); setShareCompanyId(null); setShareCompanyName(''); setShareCompanyCreator(''); setShareCompanyCollaborators([]); }}
+          onShared={() => setToast({ message: 'Asignaciones actualizadas.', type: 'success' })}
+          currentCollaborators={shareCompanyCollaborators}
+        />
+      )}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />
     </div>

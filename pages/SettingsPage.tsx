@@ -4,8 +4,9 @@ import SettingsQuoteStatuses from '../components/SettingsQuoteStatuses';
 import SettingsProductTypes from '../components/SettingsProductTypes';
 import SettingsDealInterests from '../components/SettingsDealInterests';
 import SettingsDealChannels from '../components/SettingsDealChannels';
+import SettingsCompanyLabels from '../components/SettingsCompanyLabels';
 
-type SettingsTab = 'dealStatuses' | 'quoteStatuses' | 'productTypes' | 'dealInterests' | 'dealChannels';
+type SettingsTab = 'dealStatuses' | 'quoteStatuses' | 'productTypes' | 'dealInterests' | 'dealChannels' | 'companyLabels';
 
 // Configuración del menú para iterar limpiamente
 const MENU_ITEMS: { id: SettingsTab; label: string; icon: string; description: string }[] = [
@@ -39,6 +40,12 @@ const MENU_ITEMS: { id: SettingsTab; label: string; icon: string; description: s
     icon: 'fa-solid fa-tags', 
     description: 'Categorización de inventario.' 
   },
+  { 
+    id: 'companyLabels', 
+    label: 'Etiquetas de Empresas', 
+    icon: 'fa-solid fa-tag', 
+    description: 'Organización de clientes.' 
+  },
 ];
 
 const STORAGE_KEY = 'settings-active-tab';
@@ -46,7 +53,7 @@ const STORAGE_KEY = 'settings-active-tab';
 const SettingsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
     const saved = localStorage.getItem(STORAGE_KEY) as SettingsTab | null;
-    return saved && ['dealStatuses','quoteStatuses','productTypes','dealInterests','dealChannels'].includes(saved)
+    return saved && ['dealStatuses','quoteStatuses','productTypes','dealInterests','dealChannels','companyLabels'].includes(saved)
       ? saved
       : 'dealStatuses';
   });
@@ -68,6 +75,8 @@ const SettingsPage: React.FC = () => {
         return <SettingsDealInterests />;
       case 'dealChannels':
         return <SettingsDealChannels />;
+      case 'companyLabels':
+        return <SettingsCompanyLabels />;
       default:
         return null;
     }
@@ -96,21 +105,16 @@ const SettingsPage: React.FC = () => {
               <button
                 key={item.id}
                 onClick={() => handleTabChange(item.id)}
-                className={`flex-shrink-0 px-6 py-4 flex items-center gap-3 border-b-2 transition-all ${
+                className={`flex-shrink-0 px-6 py-3 flex items-center gap-3 border-b-2 transition-all ${
                   isActive
                     ? 'border-brand-600 text-brand-700 bg-brand-50/30'
                     : 'border-transparent text-slate-600 hover:text-slate-800 hover:bg-slate-50'
                 }`}
               >
                 <i className={`${item.icon} ${isActive ? 'text-brand-600' : 'text-slate-400'}`}></i>
-                <div className="text-left">
-                  <div className={`text-sm font-bold whitespace-nowrap ${isActive ? 'text-brand-700' : 'text-slate-700'}`}>
-                    {item.label}
-                  </div>
-                  <div className={`text-xs ${isActive ? 'text-brand-600/70' : 'text-slate-400'}`}>
-                    {item.description}
-                  </div>
-                </div>
+                <span className={`text-sm font-semibold whitespace-nowrap ${isActive ? 'text-brand-700' : 'text-slate-700'}`}>
+                  {item.label}
+                </span>
               </button>
             );
           })}

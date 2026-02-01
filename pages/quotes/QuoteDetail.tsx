@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { Quote, QuoteItem, UserDecision, Product, QuoteStatus, PdfVersion, ProductType } from '../types';
-import { apiFetch } from '../services/apiClient';
-import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
-import ShareModal from '../components/ShareModal';
-import QuoteFormModal from '../components/QuoteFormModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { Quote, QuoteItem, UserDecision, Product, QuoteStatus, PdfVersion, ProductType } from '../../types';
+import { apiFetch } from '../../services/apiClient';
+import Toast from '../../components/Toast';
+import ConfirmModal from '../../components/ConfirmModal';
+import ShareModal from '../../components/ShareModal';
+import QuoteFormModal from '../../components/QuoteFormModal';
 
 // --- TIPOS EXTENDIDOS ---
 interface Attachment {
@@ -41,6 +41,37 @@ interface QuoteExtended extends Quote {
   archivos_adjuntos?: Attachment[];
   sent_history?: SentLog[];
 }
+
+const getAvatarColor = (name: string = '') => {
+  const colors = [
+    { bg: '#F0E6E6', text: '#A67C7C' },
+    { bg: '#F5EAF0', text: '#B397AA' },
+    { bg: '#EDE4F5', text: '#9B7DB0' },
+    { bg: '#E8E0F0', text: '#8B7BA3' },
+    { bg: '#E1E8F5', text: '#7A8FB5' },
+    { bg: '#DFF0ED', text: '#7BA89C' },
+    { bg: '#E9F0E8', text: '#7FA08A' },
+    { bg: '#EEF2E7', text: '#92A680' },
+    { bg: '#F5F2E1', text: '#B8AC5B' },
+    { bg: '#F7EFEA', text: '#B88263' },
+    { bg: '#EFE8E4', text: '#8B7B6F' },
+    { bg: '#E8E8E8', text: '#707070' },
+  ];
+
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = ((hash << 5) - hash) + name.charCodeAt(i);
+    hash = hash & hash;
+  }
+
+  return colors[Math.abs(hash) % colors.length];
+};
+
+const getInitials = (name: string = '', max = 2) => {
+  const parts = name.trim().split(' ').filter(Boolean);
+  const initials = parts.map(p => p[0]).join('').toUpperCase();
+  return initials.substring(0, max) || 'U';
+};
 
 // --- HELPER: Selector de Estado ---
 const StatusSelector: React.FC<{
@@ -135,6 +166,7 @@ const QuoteDetail: React.FC = () => {
   // Modales
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
+  const [shareCollaborators, setShareCollaborators] = useState<any[]>([]);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   // Historial: vista rápida/detallada
@@ -212,6 +244,20 @@ const QuoteDetail: React.FC = () => {
 
       if (q) {
         setQuote(q);
+        
+        // Load collaborators from response
+        if (q?.collaborators && Array.isArray(q.collaborators)) {
+          const mapped = q.collaborators.map((u: any) => ({
+            id_user: u.id_user,
+            name: u.name || u.name_user || u.full_name || u.email || 'Usuario',
+            avatar: u.avatar || u.avatar_url || null,
+            permission_level: (u.permission_level || '').toUpperCase() === 'NONE' ? 'BLOCKED' : u.permission_level,
+            rol_user: u.rol_user,
+            is_owner: u.is_owner
+          }));
+          setShareCollaborators(mapped);
+        }
+        
         // Mantener el orden original de los items, solo actualizar datos
         setItems(prevItems => {
           if (!q.items || q.items.length === 0) return q.items || [];
@@ -735,6 +781,31 @@ const QuoteDetail: React.FC = () => {
     });
   };
 
+  const openShareModal = async () => {
+    if (!quote) return;
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/share?id_cotizacion=${quote.id_cotizacion}`);
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : [];
+      const list = Array.isArray(data) ? data : (data.users || []);
+      const mapped = list
+        .map((u: any) => {
+          const level = (u.permission_level || '').toUpperCase();
+          return {
+          id_user: u.id_user,
+          name: u.name_user || u.name || u.full_name || u.email || 'Usuario',
+          avatar: u.avatar_url || u.avatar || null,
+          permission_level: level === 'NONE' ? 'BLOCKED' : level,
+          rol_user: u.rol_user
+        };
+      });
+      setShareCollaborators(mapped);
+    } catch {
+      setShareCollaborators([]);
+    }
+    setIsShareOpen(true);
+  };
+
   const handleDecisionChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
     if(!quote || !user) return;
     const newDecision = e.target.value as UserDecision;
@@ -822,7 +893,7 @@ const QuoteDetail: React.FC = () => {
                     {canEdit && (
                         <>
                             <button onClick={() => navigate(`/app/quotes/edit?id=${quote.id_cotizacion}`)} className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:border-brand-200 hover:bg-brand-50 transition-all shadow-sm"><i className="fa-solid fa-pen"></i> Editar</button>
-                            <button onClick={() => setIsShareOpen(true)} className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"><i className="fa-solid fa-share-nodes"></i> Compartir</button>
+                            <button onClick={openShareModal} className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"><i className="fa-solid fa-share-nodes"></i> Compartir</button>
                         </>
                     )}
                 </div>
@@ -843,7 +914,15 @@ const QuoteDetail: React.FC = () => {
                 </div>
                 <div className="p-6 space-y-5">
                     <div className="flex items-start gap-3 group">
-                        <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center shrink-0 border border-blue-100"><i className="fa-solid fa-building"></i></div>
+                        {(() => {
+                          const companyName = quote.company_detail?.name || 'Empresa';
+                          const color = getAvatarColor(companyName);
+                          return (
+                            <div className="w-10 h-10 rounded-none flex items-center justify-center shrink-0 border" style={{ backgroundColor: color.bg, color: color.text, borderColor: color.text }}>
+                              {getInitials(companyName)}
+                            </div>
+                          );
+                        })()}
                         <div className="min-w-0">
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Empresa</p>
                             <Link to={`/app/client-companies/${quote.id_client_company}`} className="font-bold text-slate-800 text-sm hover:text-blue-600 hover:underline block truncate">{quote.company_detail?.name || 'Empresa desconocida'}</Link>
@@ -854,7 +933,15 @@ const QuoteDetail: React.FC = () => {
                     <div className="h-px bg-slate-50 w-full"></div>
                     {quote.id_contact && (
                         <div className="flex items-start gap-3 group">
-                            <div className="w-10 h-10 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center shrink-0 border border-slate-200"><i className="fa-solid fa-user"></i></div>
+                            {(() => {
+                              const contactName = quote.contact_detail?.full_name || 'Contacto';
+                              const color = getAvatarColor(contactName);
+                              return (
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 border" style={{ backgroundColor: color.bg, color: color.text, borderColor: color.text }}>
+                                  {getInitials(contactName)}
+                                </div>
+                              );
+                            })()}
                             <div className="min-w-0">
                                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Contacto</p>
                                 <Link to={`/app/client-contacts/${quote.id_contact}`} className="font-bold text-slate-800 text-sm hover:text-brand-600 hover:underline block truncate">{quote.contact_detail?.full_name || 'Sin nombre'}</Link>
@@ -975,6 +1062,69 @@ const QuoteDetail: React.FC = () => {
                     </div>
                  </div>
             )}
+
+            {/* Asignaciones */}
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-white flex justify-between items-center gap-3">
+                <div className="flex items-center gap-3">
+                  <span className="w-2 h-6 bg-indigo-500 rounded-full"></span>
+                  <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Asignaciones</h3>
+                </div>
+                <button
+                  onClick={openShareModal}
+                  disabled={!canEdit}
+                  className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-colors flex items-center gap-1 ${
+                    canEdit
+                    ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                    : 'text-slate-300 cursor-not-allowed'
+                  }`}
+                >
+                  <i className="fa-solid fa-plus"></i>Asignar
+                </button>
+              </div>
+              <div className="p-4">
+                {(quote as any).collaborators && (quote as any).collaborators.length > 0 ? (
+                  <div className="space-y-2">
+                    {(quote as any).collaborators.map((collaborator: any) => (
+                      <div key={collaborator.id_user} className="flex items-center justify-between text-xs p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {collaborator.avatar ? (
+                            <img src={collaborator.avatar} alt={collaborator.name} className="w-6 h-6 rounded-full border border-slate-200" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
+                              {(collaborator.name || 'U').charAt(0)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-medium text-slate-700 truncate flex items-center gap-2">
+                              {collaborator.name}
+                              {(collaborator.rol_user || '').toLowerCase() === 'admin' && (
+                                <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] text-amber-500 leading-none align-middle" title="Control total por admin">
+                                  <i className="fa-solid fa-star"></i>
+                                </span>
+                              )}
+                              {(collaborator.permission_level || '').toUpperCase() === 'OWNER' || collaborator.is_owner ? (
+                                <span className="text-[10px] text-slate-400">(Creador)</span>
+                              ) : null}
+                            </p>
+                            <p className="text-slate-400 truncate">
+                              {(() => {
+                                const level = (collaborator.permission_level || '').toUpperCase();
+                                if (level === 'OWNER' || level === 'EDIT') return 'Asignación principal';
+                                if (level === 'VIEW') return 'Asignación secundaria';
+                                return 'Sin asignación';
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 text-center py-2">Sin asignaciones</p>
+                )}
+              </div>
+            </div>
         </div>
 
         {/* COLUMNA DERECHA (Contenido Principal) */}
@@ -1536,7 +1686,16 @@ const QuoteDetail: React.FC = () => {
       <ConfirmModal {...confirmState} onClose={() => setConfirmState({...confirmState, isOpen: false})} />
       
       {isShareOpen && quote && (
-        <ShareModal entity="quotes" id={quote.id_cotizacion} isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} onShared={() => setToast({ message: 'Compartido.', type: 'success' })} />
+        <ShareModal 
+          entity="quotes" 
+          id={quote.id_cotizacion} 
+          entityName={quote.nombre_cotizacion || `Cotización #${quote.formatted_no_cotizacion || quote.id_cotizacion}`}
+          creatorName={quote.creator_name || (quote as any).created_by_name || ''}
+          isOpen={isShareOpen} 
+          onClose={() => { setIsShareOpen(false); }} 
+          onShared={() => { setToast({ message: 'Compartido.', type: 'success' }); fetchData(); }}
+          currentCollaborators={shareCollaborators}
+        />
       )}
 
       {quote && (

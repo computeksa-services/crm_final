@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useDealFilters } from '../contexts/DealFiltersContext';
-import { Deal, ClientCompany, DealInterest } from '../types';
-import { apiFetch } from '../services/apiClient';
-import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
-import ShareModal from '../components/ShareModal';
-import DealEditModal from '../components/DealEditModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { useDealFilters } from '../../contexts/DealFiltersContext';
+import { Deal, ClientCompany, DealInterest } from '../../types';
+import { apiFetch } from '../../services/apiClient';
+import Toast from '../../components/Toast';
+import ConfirmModal from '../../components/ConfirmModal';
+import ShareModal from '../../components/ShareModal';
+import DealEditModal from '../../components/DealEditModal';
 import {
   useReactTable,
   getCoreRowModel,
@@ -216,6 +216,9 @@ const DealsList: React.FC = () => {
   const [selectedDealForEdit, setSelectedDealForEdit] = useState<Deal | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareDealId, setShareDealId] = useState<string | null>(null);
+  const [shareDealName, setShareDealName] = useState<string>('');
+  const [shareDealCreator, setShareDealCreator] = useState<string>('');
+  const [shareDealCollaborators, setShareDealCollaborators] = useState<any[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, isDestructive: false });
 
@@ -296,6 +299,33 @@ const DealsList: React.FC = () => {
     } catch (e) { setToast({ message: 'Error de conexión', type: 'error' }); }
     finally { setLoading(false); }
   }, [user, setContextDeals, setContextDealStatuses]);
+
+  const openShareModal = async (deal: Deal) => {
+    setShareDealId(deal.id_trato);
+    setShareDealName(deal.nombre_trato || '');
+    setShareDealCreator(deal.owner_name || '');
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share?id_trato=${deal.id_trato}`);
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : [];
+      const list = Array.isArray(data) ? data : (data.users || []);
+      const mapped = list.map((u: any) => {
+        const level = (u.permission_level || '').toUpperCase();
+        return {
+          id_user: u.id_user,
+          name: u.name_user || u.name || u.full_name || u.email || 'Usuario',
+          avatar: u.avatar_url || u.avatar || null,
+          permission_level: level === 'NONE' ? 'BLOCKED' : level,
+          rol_user: u.rol_user,
+          is_owner: u.is_owner
+        };
+      });
+      setShareDealCollaborators(mapped);
+    } catch {
+      setShareDealCollaborators([]);
+    }
+    setShareModalOpen(true);
+  };
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -549,7 +579,7 @@ const DealsList: React.FC = () => {
       cell: ({ row }) => row.getIsGrouped() ? null : (
         <div className="flex items-center justify-end gap-1">
           <button onClick={(e) => { e.stopPropagation(); handleEdit(row.original); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
-          <button onClick={(e) => { e.stopPropagation(); setShareDealId(row.original.id_trato); setShareModalOpen(true); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
+          <button onClick={(e) => { e.stopPropagation(); openShareModal(row.original); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
           <button onClick={(e) => { e.stopPropagation(); handleDelete(row.original.id_trato); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-trash text-[10px]"></i></button>
         </div>
       )
@@ -828,7 +858,7 @@ const DealsList: React.FC = () => {
       )}
 
       {shareModalOpen && shareDealId && (
-        <ShareModal entity="deal" id={shareDealId} isOpen={shareModalOpen} onClose={() => { setShareModalOpen(false); setShareDealId(null); }} onShared={() => fetchData()} />
+        <ShareModal entity="deal" id={shareDealId} entityName={shareDealName || `Trato #${shareDealId}`} creatorName={shareDealCreator} isOpen={shareModalOpen} onClose={() => { setShareModalOpen(false); setShareDealId(null); setShareDealName(''); setShareDealCreator(''); setShareDealCollaborators([]); }} onShared={() => { setToast({ message: 'Asignaciones actualizadas.', type: 'success' }); fetchData(); }} currentCollaborators={shareDealCollaborators} />
       )}
 
       {/* Deal Edit Modal - creation-style modal for editing */}

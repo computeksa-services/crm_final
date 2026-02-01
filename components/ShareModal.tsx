@@ -1,179 +1,386 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
 
-type PermissionLevel = 'VIEW' | 'EDIT';
+type PermissionLevel = 'VIEW' | 'EDIT' | 'BLOCKED';
 
 interface ShareModalProps {
-  entity: 'deal' | 'quotes';
+  entity: 'deal' | 'quotes' | 'company' | 'contact';
   id: string; // id_trato or id_cotizacion
+  entityName?: string;
+  creatorName?: string;
   isOpen: boolean;
   onClose: () => void;
   onShared?: () => void;
-  excludeUserIds?: string[]; // usuarios que ya tienen permisos o no deben mostrarse
+  currentCollaborators?: Array<{ id_user: string; name: string; permission_level: string; avatar?: string; rol_user?: string; is_owner?: boolean }>; // colaboradores actuales
 }
 
-const ShareModal: React.FC<ShareModalProps> = ({ entity, id, isOpen, onClose, onShared, excludeUserIds = [] }) => {
+const ShareModal: React.FC<ShareModalProps> = ({ 
+  entity, 
+  id, 
+  entityName,
+  creatorName,
+  isOpen, 
+  onClose, 
+  onShared, 
+  currentCollaborators = []
+}) => {
   const { user } = useAuth();
-  const [users, setUsers] = useState<Array<{ id_user: string; name_user: string }>>([]);
-  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [level, setLevel] = useState<PermissionLevel>('VIEW');
+  const [collaborators, setCollaborators] = useState<Array<{ id_user: string; name: string; permission_level: PermissionLevel; avatar?: string; rol_user?: string; isOwner?: boolean }>>([]);
+  const [collaboratorPermissions, setCollaboratorPermissions] = useState<Record<string, PermissionLevel>>({});
+  const [initialPermissions, setInitialPermissions] = useState<Record<string, PermissionLevel>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const lastFetchKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const loadUsers = async () => {
+    const loadData = async () => {
       if (!isOpen || !user?.id_tenant || !user?.id_user) return;
+      const fetchKey = `${entity}:${id}`;
+      if (lastFetchKeyRef.current === fetchKey) return;
+      lastFetchKeyRef.current = fetchKey;
+      setLoading(true);
       try {
-        const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
-        const text = await res.text();
-        const data = text ? JSON.parse(text) : [];
-        // Filtrar: no mostrar al propio usuario ni los excluidos
-        const filtered = Array.isArray(data)
-          ? data.filter((u: { id_user: string }) => u.id_user !== user.id_user && !excludeUserIds.includes(u.id_user))
-          : [];
-        setUsers(filtered);
-        setSelectedUserIds([]);
-      } catch {
-        setUsers([]);
+        const resolvedCollaborators = currentCollaborators.map(collab => {
+          const level = (collab.permission_level || '').toString().toUpperCase();
+          const isOwner = level === 'OWNER' || !!collab.is_owner;
+          return {
+            id_user: collab.id_user,
+            name: collab.name,
+            permission_level: (isOwner || level === 'EDIT'
+              ? 'EDIT'
+              : (level === 'BLOCKED' || level === 'NONE')
+                ? 'BLOCKED'
+                : 'VIEW') as PermissionLevel,
+            avatar: collab.avatar,
+            rol_user: collab.rol_user,
+            isOwner
+          };
+        });
+
+        let merged = [...resolvedCollaborators];
+        try {
+          const usersRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+          if (usersRes.ok) {
+            const usersData = await usersRes.json();
+            const activeUsers = Array.isArray(usersData)
+              ? usersData.filter((u: any) => u.status_user !== 'Inactivo')
+              : [];
+            const existingIds = new Set(merged.map(c => c.id_user));
+            activeUsers.forEach((u: any) => {
+              if (existingIds.has(u.id_user)) return;
+              merged.push({
+                id_user: u.id_user,
+                name: u.name_user || u.name || u.full_name || u.email || 'Usuario',
+                permission_level: 'BLOCKED',
+                avatar: u.avatar_url || u.avatar || null,
+                rol_user: u.rol_user,
+                isOwner: false
+              });
+            });
+          }
+        } catch {}
+
+        const permissionRank = (p: PermissionLevel) => (p === 'EDIT' ? 0 : p === 'VIEW' ? 1 : 2);
+        merged = merged.sort((a, b) => {
+          if (a.isOwner !== b.isOwner) return Number(b.isOwner) - Number(a.isOwner);
+          return permissionRank(a.permission_level) - permissionRank(b.permission_level);
+        });
+
+        setCollaborators(merged);
+
+        const perms: Record<string, PermissionLevel> = {};
+        merged.forEach(collab => {
+          const level = (collab.permission_level || '').toString().toUpperCase();
+          perms[collab.id_user] = (collab.isOwner || level === 'EDIT'
+            ? 'EDIT'
+            : (level === 'BLOCKED' || level === 'NONE')
+              ? 'BLOCKED'
+              : 'VIEW') as PermissionLevel;
+        });
+        setCollaboratorPermissions(perms);
+        setInitialPermissions(perms);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
       }
     };
-    loadUsers();
-  }, [isOpen, user]);
+    loadData();
+  }, [isOpen, user?.id_tenant, user?.id_user, entity, id, currentCollaborators]);
 
-  const toggleUserSelection = (userId: string) => {
-    setSelectedUserIds(prev =>
-      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
-    );
+  useEffect(() => {
+    if (!isOpen) {
+      lastFetchKeyRef.current = null;
+    }
+  }, [isOpen]);
+
+  const handleChangePermission = (userId: string, permission: PermissionLevel) => {
+    setCollaboratorPermissions(prev => ({
+      ...prev,
+      [userId]: permission
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user?.id_tenant || selectedUserIds.length === 0) return;
+    if (!user?.id_tenant) return;
     setSubmitting(true);
-    
+
     try {
-      // Compartir con todos los usuarios seleccionados
-      const sharePromises = selectedUserIds.map(targetUserId => {
-        const url = entity === 'deal'
+      if (entity === 'quotes' || entity === 'deal' || entity === 'company' || entity === 'contact') {
+        const permissions = Object.entries(collaboratorPermissions).map(([userId, permission]) => ({
+          id_user: userId,
+          permission_level: permission === 'BLOCKED' ? 'NONE' : permission
+        }));
+
+        const endpoint = entity === 'deal'
           ? `${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share`
-          : `${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/share`;
+          : entity === 'quotes'
+            ? `${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/share`
+            : entity === 'company'
+              ? `${import.meta.env.VITE_WEBHOOK_URL}/api/companies/share`
+              : `${import.meta.env.VITE_WEBHOOK_URL}/api/contacts/share`;
+
         const payload = entity === 'deal'
-          ? { id_tenant: user.id_tenant, id_trato: id, id_user_target: targetUserId, permission_level: level }
-          : { id_tenant: user.id_tenant, id_cotizacion: id, id_user_target: targetUserId, permission_level: level };
-        
-        return apiFetch(url, {
+          ? { id_trato: id, permissions }
+          : entity === 'quotes'
+            ? { id_cotizacion: id, permissions }
+            : entity === 'company'
+              ? { id_client_company: id, permissions }
+              : { id_contact: id, permissions };
+
+        const res = await apiFetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         });
-      });
 
-      const results = await Promise.all(sharePromises);
-      const hasErrors = results.some(res => !res.ok);
-      
-      if (hasErrors) {
-        throw new Error('Error al compartir con algunos usuarios.');
+        if (!res.ok) throw new Error('Error al actualizar permisos.');
+      } else {
+        const promises: Promise<Response>[] = [];
+
+        // 1. Actualizar permisos de colaboradores existentes (solo si hubo cambios)
+        Object.entries(collaboratorPermissions).forEach(([userId, permission]) => {
+          const collab = collaborators.find(c => c.id_user === userId);
+          if (collab?.isOwner) return;
+          const initial = initialPermissions[userId];
+          if (permission === initial) return;
+
+          if (permission === 'BLOCKED') {
+            const deleteUrl = entity === 'deal'
+              ? `${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share/delete`
+              : `${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/share/delete`;
+            const deletePayload = entity === 'deal'
+              ? { id_tenant: user.id_tenant, id_trato: id, id_user: userId }
+              : { id_tenant: user.id_tenant, id_cotizacion: id, id_user: userId };
+
+            promises.push(apiFetch(deleteUrl, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(deletePayload),
+            }));
+            return;
+          }
+
+          const url = entity === 'deal'
+            ? `${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share`
+            : `${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/share`;
+          const payload = entity === 'deal'
+            ? { id_tenant: user.id_tenant, id_trato: id, id_user_target: userId, permission_level: permission }
+            : { id_tenant: user.id_tenant, id_cotizacion: id, id_user_target: userId, permission_level: permission };
+
+          promises.push(apiFetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          }));
+        });
+
+        if (promises.length > 0) {
+          const results = await Promise.all(promises);
+          const hasErrors = results.some(res => !res.ok);
+
+          if (hasErrors) {
+            throw new Error('Error al actualizar permisos.');
+          }
+        }
       }
 
       onShared && onShared();
       onClose();
     } catch (e) {
       console.error(e);
-      onClose();
     } finally {
       setSubmitting(false);
     }
   };
 
   const getEntityLabel = () => {
-    return entity === 'deal' ? 'Trato' : 'Cotización';
+    if (entity === 'deal') return 'Trato';
+    if (entity === 'quotes') return 'Cotización';
+    if (entity === 'company') return 'Empresa';
+    return 'Contacto';
   };
+
+  const hasPermissionChanges = Object.keys(collaboratorPermissions).some((userId) => {
+    const current = collaboratorPermissions[userId];
+    const initial = initialPermissions[userId];
+    return current !== initial;
+  });
+
+  const hasChanges = hasPermissionChanges;
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden">
-        <div className="px-6 py-4 border-b bg-slate-50 flex justify-between items-center">
-          <h2 className="text-lg font-bold text-slate-800">COMPARTIR {getEntityLabel().toUpperCase()}</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><i className="fa-solid fa-times"></i></button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Multi-select para usuarios */}
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-2 uppercase">Usuario</label>
-            <div className="border rounded-lg bg-white p-3 min-h-24 max-h-48 overflow-y-auto">
-              {users.length === 0 ? (
-                <p className="text-sm text-slate-400 italic">No hay usuarios disponibles</p>
-              ) : (
-                <div className="space-y-2">
-                  {users.map(u => (
-                    <label key={u.id_user} className="flex items-center p-2 hover:bg-slate-50 rounded cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={selectedUserIds.includes(u.id_user)}
-                        onChange={() => toggleUserSelection(u.id_user)}
-                        className="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500"
-                      />
-                      <span className="ml-3 text-sm text-slate-700">{u.name_user}</span>
-                    </label>
-                  ))}
-                </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="px-6 py-4 border-b border-slate-200 bg-white flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+              <i className="fa-solid fa-share-nodes text-sm"></i>
+            </span>
+            <div>
+              <h2 className="text-lg font-bold text-slate-800">Asignar {getEntityLabel()}</h2>
+              {entityName && (
+                <p className="text-xs text-slate-500 truncate max-w-[420px]">{entityName}</p>
+              )}
+              {creatorName && (
+                <p className="text-[11px] text-slate-400">Creado por: {creatorName}</p>
               )}
             </div>
-            {selectedUserIds.length > 0 && (
-              <p className="text-xs text-slate-500 mt-2">
-                Puedes elegir varios usuarios (Ctrl/Cmd + clic).
-              </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+            <i className="fa-solid fa-times text-lg"></i>
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* COLABORADORES ACTUALES */}
+            {Object.keys(collaboratorPermissions).length > 0 && (
+              <div>
+                <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                  <i className="fa-solid fa-users text-indigo-600"></i>
+                  Asignaciones
+                </h3>
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="grid grid-cols-[1fr_120px_120px_120px] bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    <div className="px-4 py-2">Colaborador</div>
+                    <div className="px-4 py-2 text-center">Principal</div>
+                    <div className="px-4 py-2 text-center">Secundario</div>
+                    <div className="px-4 py-2 text-center">Sin asignación</div>
+                  </div>
+                  {Object.entries(collaboratorPermissions).map(([userId, permission]) => {
+                    const collab = collaborators.find(c => c.id_user === userId);
+                    const isAdmin = (collab?.rol_user || '').toLowerCase() === 'admin';
+                    const isOwner = !!collab?.isOwner;
+                    return (
+                      <div key={userId} className="grid grid-cols-[1fr_120px_120px_120px] items-center border-t border-slate-100">
+                        <div className="px-4 py-3 flex items-center gap-3 min-w-0">
+                          {collab?.avatar ? (
+                            <img src={collab.avatar} alt={collab.name} className="w-7 h-7 rounded-full border border-slate-200 object-cover shrink-0" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
+                              {(collab?.name || 'U').charAt(0)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-700 truncate flex items-center gap-2">
+                              {collab?.name || userId}
+                              {isAdmin && (
+                                <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] text-amber-500 leading-none align-middle" title="Permiso total por admin">
+                                  <i className="fa-solid fa-star"></i>
+                                </span>
+                              )}
+                              {isOwner && (
+                                <span className="text-[10px] text-slate-400">(Creador)</span>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="px-4 py-3 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => handleChangePermission(userId, 'EDIT')}
+                            disabled={isOwner}
+                            className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all ${
+                              permission === 'EDIT'
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:border-emerald-200 hover:text-emerald-600'
+                            } ${isOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          >
+                            <i className="fa-solid fa-pen"></i>
+                          </button>
+                        </div>
+                        <div className="px-4 py-3 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => handleChangePermission(userId, 'VIEW')}
+                            disabled={isOwner}
+                            className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all ${
+                              permission === 'VIEW'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-200 hover:text-blue-600'
+                            } ${isOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          >
+                            <i className="fa-solid fa-eye"></i>
+                          </button>
+                        </div>
+                        <div className="px-4 py-3 flex justify-center">
+                          <button
+                            type="button"
+                            onClick={() => handleChangePermission(userId, 'BLOCKED')}
+                            disabled={isOwner}
+                            className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all ${
+                              permission === 'BLOCKED'
+                                ? 'bg-red-600 text-white'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:border-red-200 hover:text-red-600'
+                            } ${isOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          >
+                            <i className="fa-solid fa-lock"></i>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {Object.keys(collaboratorPermissions).length === 0 && (
+              <div className="text-center py-8">
+                <i className="fa-solid fa-users text-4xl text-slate-200 mb-2"></i>
+                <p className="text-slate-400 text-sm">No hay usuarios asignados</p>
+              </div>
             )}
           </div>
 
-          {/* Selección de permisos */}
-          <div>
-            <label className="block text-xs font-bold text-slate-500 mb-3 uppercase">Permiso</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setLevel('VIEW')}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                  level === 'VIEW'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                Solo ver
-              </button>
-              <button
-                type="button"
-                onClick={() => setLevel('EDIT')}
-                className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                  level === 'EDIT'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                Puede editar
-              </button>
-            </div>
-          </div>
-
-          {/* Botones de acción */}
-          <div className="flex justify-end space-x-2 border-t pt-4">
+          <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 flex justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 font-medium"
+              className="px-5 py-2.5 rounded-lg text-slate-600 font-bold text-sm hover:bg-slate-200 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={submitting || selectedUserIds.length === 0}
-              className="px-4 py-2 rounded-lg bg-brand-600 text-white hover:bg-brand-700 shadow-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              disabled={submitting || loading || !hasChanges}
+              className="px-6 py-2.5 rounded-lg bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {submitting && <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>}
-              Compartir
+              {submitting ? (
+                <>
+                  <i className="fa-solid fa-circle-notch fa-spin"></i>
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <i className="fa-solid fa-check"></i>
+                  Guardar Cambios
+                </>
+              )}
             </button>
           </div>
         </form>

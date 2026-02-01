@@ -180,8 +180,7 @@ const SettingsDealInterests: React.FC = () => {
 
       <div className="flex justify-between items-center mb-6">
         <div>
-            <h3 className="text-lg font-bold text-slate-800">Niveles de Interés</h3>
-            <p className="text-sm text-slate-500">Arrastra los elementos para cambiar su prioridad.</p>
+            <p className="text-sm text-slate-500">Clasifica tus tratos según la probabilidad de cierre (frío, tibio, caliente). El orden determina la prioridad visual en listados y reportes.</p>
         </div>
         <div className="flex items-center gap-3">
             {orderChanged && (

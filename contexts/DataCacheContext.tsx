@@ -1,29 +1,22 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { apiFetch } from '../services/apiClient';
-import type { ClientCompany, Product, User, Tenant, DealStatus, QuoteStatus, ProductType, DealInterest, DealChannel, FinancialTransaction } from '../types';
+import type { ClientCompany, ClientContact, Product, User, Tenant, DealStatus, QuoteStatus, ProductType, DealInterest, DealChannel, FinancialTransaction } from '../types';
 
 // --- TIPOS ---
-type Contact = {
-  id_contact: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  email_contact?: string;
-  position?: string;
-  phone?: string;
-  id_client_company?: string;
-  id_company?: string;
-  company_id?: string;
-  es_principal?: boolean;
-  is_main?: boolean;
-};
+interface CompanyLabel {
+  id_label: string;
+  name: string;
+  color: string;
+  total_empresas: number | string;
+}
 
 type DataCacheState = {
   // Datos
   companies: ClientCompany[];
   companyLabelsMap: Record<string, { name: string; color?: string }>;
-  contacts: Contact[];
+  companyLabels: CompanyLabel[];
+  contacts: ClientContact[];
   products: Product[];
   users: User[];
   tenants: Tenant[];
@@ -33,6 +26,8 @@ type DataCacheState = {
   dealInterests: DealInterest[];
   dealChannels: DealChannel[];
   financialsCache: Record<string, { result: any; lastUpdated: number }>;
+  countries: { id: string; name: string }[];
+  companyTypes: { id: string; name: string }[];
   
   // Estado de carga
   loading: boolean;
@@ -49,11 +44,13 @@ type DataCacheState = {
   invalidateProductTypes: () => Promise<void>;
   invalidateDealInterests: () => Promise<void>;
   invalidateDealChannels: () => Promise<void>;
+  invalidateCompanyLabels: () => Promise<void>;
   invalidateFinancials: (params: { start?: string; end?: string; include_open?: boolean }) => Promise<void>;
   invalidateAll: () => Promise<void>;
+  invalidateCountries: () => Promise<void>;
   
   // Métodos auxiliares
-  getContactsByCompany: (companyId: string | number) => Contact[];
+  getContactsByCompany: (companyId: string | number) => ClientContact[];
   getCompanyById: (companyId: string | number) => ClientCompany | undefined;
   getProductById: (productId: string | number) => Product | undefined;
   getUserById: (userId: string | number) => User | undefined;
@@ -66,7 +63,8 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
   const [companyLabelsMap, setCompanyLabelsMap] = useState<Record<string, { name: string; color?: string }>>({});
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [companyLabels, setCompanyLabels] = useState<CompanyLabel[]>([]);
+  const [contacts, setContacts] = useState<ClientContact[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
@@ -75,6 +73,8 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [dealInterests, setDealInterests] = useState<DealInterest[]>([]);
   const [dealChannels, setDealChannels] = useState<DealChannel[]>([]);
+  const [companyTypes, setCompanyTypes] = useState<{ id: string; name: string }[]>([]);
+  const [countries, setCountries] = useState<{ id: string; name: string }[]>([]);
   const [financialsCache, setFinancialsCache] = useState<Record<string, { result: any; lastUpdated: number }>>({});
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -120,6 +120,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         const { 
           companies: cachedCompanies, 
           companyLabelsMap: cachedCompanyLabelsMap,
+          companyLabels: cachedCompanyLabels,
           contacts: cachedContacts, 
           products: cachedProducts, 
           users: cachedUsers, 
@@ -137,11 +138,13 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           quoteStatuses: Array.isArray(cachedQuoteStatuses) ? cachedQuoteStatuses.length : 0,
           productTypes: Array.isArray(cachedProductTypes) ? cachedProductTypes.length : 0,
           dealInterests: Array.isArray(cachedDealInterests) ? cachedDealInterests.length : 0,
-          dealChannels: Array.isArray(cachedDealChannels) ? cachedDealChannels.length : 0
+          dealChannels: Array.isArray(cachedDealChannels) ? cachedDealChannels.length : 0,
+          companyLabels: Array.isArray(cachedCompanyLabels) ? cachedCompanyLabels.length : 0
         });
         
         setCompanies(Array.isArray(cachedCompanies) ? cachedCompanies : []);
         setCompanyLabelsMap(cachedCompanyLabelsMap || {});
+        setCompanyLabels(Array.isArray(cachedCompanyLabels) ? cachedCompanyLabels : []);
         setContacts(Array.isArray(cachedContacts) ? cachedContacts : []);
         setProducts(Array.isArray(cachedProducts) ? cachedProducts : []);
         setUsers(Array.isArray(cachedUsers) ? cachedUsers : []);
@@ -177,7 +180,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     };
     try {
-      const [companiesRes, contactsRes, productsRes, usersRes, tenantsRes, dealStatusesRes, quoteStatusesRes, productTypesRes, dealInterestsRes, dealChannelsRes] = await Promise.all([
+      const [companiesRes, contactsRes, productsRes, usersRes, tenantsRes, dealStatusesRes, quoteStatusesRes, productTypesRes, dealInterestsRes, dealChannelsRes, companyLabelsRes, companyTypesRes, countriesRes] = await Promise.all([
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products`),
@@ -189,7 +192,10 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${user.id_tenant}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/interests/deals?id_tenant=${user.id_tenant}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channels/deals?id_tenant=${user.id_tenant}`)
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channels/deals?id_tenant=${user.id_tenant}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/labels?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
       ]);
       
       console.log('✅ DataCache: Respuestas recibidas', {
@@ -200,7 +206,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         dealChannelsOk: dealChannelsRes.ok
       });
 
-      const [companiesData, contactsData, productsData, usersData, tenantsData, dealStatusesData, quoteStatusesData, productTypesData, dealInterestsData, dealChannelsData] = await Promise.all([
+      const [companiesData, contactsData, productsData, usersData, tenantsData, dealStatusesData, quoteStatusesData, productTypesData, dealInterestsData, dealChannelsData, companyLabelsData, companyTypesData, countriesData] = await Promise.all([
         companiesRes.ok ? safeJson(companiesRes, []) : [],
         contactsRes.ok ? safeJson(contactsRes, []) : [],
         productsRes.ok ? safeJson(productsRes, []) : [],
@@ -210,7 +216,10 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         quoteStatusesRes.ok ? safeJson(quoteStatusesRes, []) : [],
         productTypesRes.ok ? safeJson(productTypesRes, []) : [],
         dealInterestsRes.ok ? safeJson(dealInterestsRes, []) : [],
-        dealChannelsRes.ok ? safeJson(dealChannelsRes, []) : []
+        dealChannelsRes.ok ? safeJson(dealChannelsRes, []) : [],
+        companyLabelsRes.ok ? safeJson(companyLabelsRes, []) : [],
+        companyTypesRes.ok ? safeJson(companyTypesRes, []) : [],
+        countriesRes.ok ? safeJson(countriesRes, []) : []
       ]);
 
       // Soportar unified_response { dictionary, rows } y el array envolviendo
@@ -224,6 +233,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const productTypesArray = Array.isArray(productTypesData) ? productTypesData.filter((item: any) => item.id_product_type || item.product_type_name) : [];
       const dealInterestsArray = Array.isArray(dealInterestsData) ? dealInterestsData.filter((item: any) => item.id_interest || item.interest_name) : [];
       const dealChannelsArray = Array.isArray(dealChannelsData) ? dealChannelsData.filter((item: any) => item.id_channel || item.channel_name) : [];
+      const companyLabelsArray = Array.isArray(companyLabelsData) ? companyLabelsData.filter((item: any) => item.id_label || item.name) : [];
 
       console.log('📊 DataCache: Datos parseados desde API', {
         dealStatusesData,
@@ -231,11 +241,14 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         quoteStatusesArray: quoteStatusesArray.length,
         productTypesArray: productTypesArray.length,
         dealInterestsArray: dealInterestsArray.length,
-        dealChannelsArray: dealChannelsArray.length
+        dealChannelsArray: dealChannelsArray.length,
+        companyLabelsArray: companyLabelsArray.length
       });
 
       setCompanies(companiesArray);
       setCompanyLabelsMap(labelsMap);
+      setCompanyLabels(companyLabelsArray);
+      console.log('🏷️ DataCache: Etiquetas parseadas', { labelsMap, companyLabelsArray });
       setContacts(contactsArray);
       setProducts(productsArray);
       setUsers(usersArray);
@@ -245,6 +258,16 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setProductTypes(productTypesArray);
       setDealInterests(dealInterestsArray);
       setDealChannels(dealChannelsArray);
+      // Properly map companyTypes
+      const companyTypesArray = Array.isArray(companyTypesData)
+        ? companyTypesData.map((t: any) => ({ id: t.id_company_type || t.id || t.name, name: t.name }))
+        : [];
+      setCompanyTypes(companyTypesArray);
+      // Properly map countries
+      const countriesArray = Array.isArray(countriesData)
+        ? countriesData.map((c: any) => ({ id: c.id_country || c.id || c.name, name: c.name }))
+        : [];
+      setCountries(countriesArray);
       
       console.log('📦 DataCache: Datos cargados desde API', {
         companies: companiesArray.length,
@@ -254,7 +277,10 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         quoteStatuses: quoteStatusesArray.length,
         productTypes: productTypesArray.length,
         dealInterests: dealInterestsArray.length,
-        dealChannels: dealChannelsArray.length
+        dealChannels: dealChannelsArray.length,
+        companyLabels: companyLabelsArray.length,
+        companyTypes: companyTypesArray,
+        countries: countriesArray
       });
       
       // 3. Guardar en localStorage para próxima carga
@@ -262,6 +288,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         localStorage.setItem(cachedKey, JSON.stringify({ 
           companies: companiesArray, 
           companyLabelsMap: labelsMap,
+          companyLabels: companyLabelsArray,
           contacts: contactsArray,
           products: productsArray,
           users: usersArray,
@@ -271,6 +298,8 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           productTypes: productTypesArray,
           dealInterests: dealInterestsArray,
           dealChannels: dealChannelsArray,
+          companyTypes: companyTypesArray,
+          countries: countriesArray,
           financialsCache,
           meta: { id_tenant: user.id_tenant, id_user: user.id_user },
           timestamp: Date.now()
@@ -522,6 +551,24 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } catch (error) {}
   }, [user]);
 
+  const invalidateCompanyLabels = useCallback(async () => {
+    if (!user?.id_tenant || !user?.id_user) return;
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/labels?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      if (res.ok) {
+        const data = await res.json();
+        const array = Array.isArray(data) ? data.filter((item: any) => item.id_label || item.name) : [];
+        setCompanyLabels(array);
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
+        try {
+          const cached = localStorage.getItem(cachedKey);
+          const parsed = cached ? JSON.parse(cached) : {};
+          localStorage.setItem(cachedKey, JSON.stringify({ ...parsed, companyLabels: array }));
+        } catch (e) {}
+      }
+    } catch (error) {}
+  }, [user]);
+
   const invalidateFinancials = useCallback(async (params: { start?: string; end?: string; include_open?: boolean }) => {
     if (!user?.id_tenant) return;
     try {
@@ -585,9 +632,33 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     return users.find(u => String(u.id_user) === String(userId));
   }, [users]);
 
+    const invalidateCountries = useCallback(async () => {
+      if (!user?.id_tenant || !user?.id_user) return;
+      try {
+        const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        if (res.ok) {
+          const data = await res.json();
+          const countriesArray = Array.isArray(data)
+            ? data.map((c: any) => ({ id: c.id_country || c.id || c.name, name: c.name }))
+            : [];
+          setCountries(countriesArray);
+          // Guardar en localStorage
+          const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
+          try {
+            const cached = localStorage.getItem(cachedKey);
+            const parsed = cached ? JSON.parse(cached) : {};
+            localStorage.setItem(cachedKey, JSON.stringify({ 
+              ...parsed,
+              countries: countriesArray 
+            }));
+          } catch (e) {}
+        }
+      } catch (error) {}
+    }, [user]);
   const value: DataCacheState = {
     companies,
     companyLabelsMap,
+    companyLabels,
     contacts,
     products,
     users,
@@ -597,6 +668,8 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     productTypes,
     dealInterests,
     dealChannels,
+    companyTypes,
+    countries,
     financialsCache,
     loading,
     loaded,
@@ -610,6 +683,8 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     invalidateProductTypes,
     invalidateDealInterests,
     invalidateDealChannels,
+    invalidateCompanyLabels,
+    invalidateCountries,
     invalidateFinancials,
     invalidateAll,
     getContactsByCompany,

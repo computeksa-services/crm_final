@@ -11,6 +11,15 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
+  // Estado para modo oscuro (persistido en localStorage)
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    try {
+      const saved = localStorage.getItem('theme-dark');
+      return saved !== null ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
+  });
   // Estado para controlar sidebar en Desktop (contraído/expandido) - con persistencia en localStorage
   const [isDesktopSidebarOpen, setIsDesktopSidebarOpen] = useState(() => {
     try {
@@ -38,6 +47,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   useEffect(() => {
     localStorage.setItem('sidebar-desktop-open', JSON.stringify(isDesktopSidebarOpen));
   }, [isDesktopSidebarOpen]);
+
+  // Aplicar modo oscuro a nivel de documento
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode);
+    localStorage.setItem('theme-dark', JSON.stringify(isDarkMode));
+  }, [isDarkMode]);
 
   // Cerrar sidebar móvil cuando se cambia a desktop (rotación de dispositivo)
   useEffect(() => {
@@ -116,7 +131,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans">
       
       {/* --- MOBILE OVERLAY (Solo visible en móvil cuando el menú está abierto) --- */}
       {isMobileSidebarOpen && (
@@ -130,14 +145,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <aside 
         className={`
           fixed md:static inset-y-0 left-0 z-50
-          bg-slate-900 text-white border-r border-slate-800
+          bg-slate-900 dark:bg-neutral-900 text-white border-r border-slate-800 dark:border-neutral-800
           flex flex-col transition-all duration-300 ease-in-out shadow-xl overflow-hidden
           ${isMobileSidebarOpen ? 'translate-x-0 w-52' : '-translate-x-full md:translate-x-0'}
           ${isDesktopSidebarOpen ? 'md:w-52' : 'md:w-16'}
         `}
       >
         {/* Logo Area */}
-        <div className={`h-16 flex items-center border-b border-slate-200 bg-white transition-all duration-300 ${isDesktopSidebarOpen ? 'px-4' : 'px-0 justify-center'}`}>
+        <div className={`h-16 flex items-center border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-all duration-300 ${isDesktopSidebarOpen ? 'px-4' : 'px-0 justify-center'}`}>
            <div 
              className={`flex items-center gap-3 cursor-pointer overflow-hidden w-full ${isDesktopSidebarOpen ? '' : 'justify-center'}`}
              onClick={() => navigate('/app/dashboard')}
@@ -145,9 +160,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <img src="/logo.png" alt="COMPUTEKSA" className={`object-contain transition-all duration-300 ${isDesktopSidebarOpen ? 'h-10 w-10' : 'h-8 w-8'}`}/>
               <div className={`transition-all duration-300 ${!isDesktopSidebarOpen ? 'md:opacity-0 md:w-0 overflow-hidden' : 'overflow-visible'}`}>
                 <div className="flex flex-col leading-tight">
-                  <span className="font-bold text-sm tracking-tight text-slate-800">CRM</span>
+                  <span className="font-bold text-sm tracking-tight text-slate-800 dark:text-slate-100">CRM</span>
                   <span className="font-bold text-sm tracking-tight text-brand-600">COMPUTEKSA</span>
-                  <span className="text-[10px] text-slate-400 font-medium tracking-widest uppercase">Workspace</span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium tracking-widest uppercase">Workspace</span>
                 </div>
               </div>
            </div>
@@ -232,16 +247,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* --- LOGOUT CONFIRMATION MODAL --- */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
             <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
               <i className="fa-solid fa-sign-out-alt text-red-600 text-xl"></i>
             </div>
-            <h2 className="text-lg font-bold text-slate-800 text-center mb-2">¿Cerrar Sesión?</h2>
-            <p className="text-sm text-slate-600 text-center mb-6">¿Estás seguro de que deseas cerrar tu sesión?</p>
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 text-center mb-2">¿Cerrar Sesión?</h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400 text-center mb-6">¿Estás seguro de que deseas cerrar tu sesión?</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setShowLogoutConfirm(false)}
-                className="flex-1 py-2 px-4 border border-slate-300 rounded-lg text-slate-700 font-semibold hover:bg-slate-50 transition"
+                className="flex-1 py-2 px-4 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
               >
                 Cancelar
               </button>
@@ -260,12 +275,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         
         {/* HEADER */}
-        <header className="h-12 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-5 z-20 shrink-0">
+        <header className="h-12 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 md:px-5 z-20 shrink-0">
           <div className="flex items-center gap-4">
               {/* Botón Hamburger (Móvil) */}
               <button 
                 onClick={() => setIsMobileSidebarOpen(true)} 
-                className="md:hidden text-slate-500 hover:text-slate-700 p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                className="md:hidden text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-white p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               >
                 <i className="fa-solid fa-bars text-xl"></i>
               </button>
@@ -273,7 +288,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               {/* Botón Toggle (Desktop) */}
               <button 
                 onClick={() => setIsDesktopSidebarOpen(!isDesktopSidebarOpen)} 
-                className="hidden md:flex items-center justify-center w-8 h-8 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-all"
+                className="hidden md:flex items-center justify-center w-8 h-8 text-slate-400 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-slate-800 rounded-lg transition-all"
               >
                 <i className={`fa-solid fa-indent text-lg transition-transform ${!isDesktopSidebarOpen ? 'rotate-180' : ''}`}></i>
               </button>
@@ -283,16 +298,18 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 {(() => {
                   const pathSegments = location.pathname.split('/').filter(Boolean);
                   const lastSegment = pathSegments[pathSegments.length - 1] || 'dashboard';
+                  // Si es la página de seguimientos, mostrar solo "Seguimiento"
+                  if (location.pathname === '/app/followups') {
+                    return <span className="text-slate-900 dark:text-slate-100 font-bold text-base">Seguimiento</span>;
+                  }
                   const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'settings', 'calendar', 'dashboard', 'new', 'edit', 'marketing'];
-                  
                   let breadcrumbs: { label: string; path: string; isActive: boolean }[] = [];
-                  
+                  // ...existing code...
                   // Si es "edit" (e.g., /app/quotes/edit?id=xxx) → mostrar Colección > Nombre > Edición
                   if (lastSegment === 'edit' && pathSegments.length > 1) {
                     const collectionKey = pathSegments[pathSegments.length - 2];
                     const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                     const collectionPath = `/app/${collectionKey}`;
-                    
                     breadcrumbs = [
                       { label: collectionName, path: collectionPath, isActive: false },
                       { label: location.state?.breadcrumb || 'Edición', path: location.pathname, isActive: true }
@@ -303,7 +320,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     const collectionKey = pathSegments[pathSegments.length - 2];
                     const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                     const collectionPath = `/app/${collectionKey}`;
-                    
                     breadcrumbs = [
                       { label: collectionName, path: collectionPath, isActive: false },
                       { label: location.state?.breadcrumb || 'Detalle', path: location.pathname, isActive: true }
@@ -314,7 +330,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     const collectionKey = pathSegments[pathSegments.length - 2];
                     const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                     const collectionPath = `/app/${collectionKey}`;
-                    
                     breadcrumbs = [
                       { label: collectionName, path: collectionPath, isActive: false },
                       { label: 'Nuevo', path: location.pathname, isActive: true }
@@ -325,7 +340,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     const pageName = PAGE_NAMES[lastSegment] || lastSegment.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                     breadcrumbs = [{ label: pageName, path: location.pathname, isActive: true }];
                   }
-
                   return breadcrumbs.map((crumb, idx) => (
                     <React.Fragment key={crumb.path}>
                       {idx > 0 && (
@@ -334,11 +348,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                         </span>
                       )}
                       {crumb.isActive ? (
-                        <span className="text-slate-900 font-bold text-base">{crumb.label}</span>
+                        <span className="text-slate-900 dark:text-slate-100 font-bold text-base">{crumb.label}</span>
                       ) : (
                         <Link 
                           to={crumb.path} 
-                          className="text-brand-600 font-semibold text-base px-2 py-1 rounded-md hover:bg-brand-50 hover:text-brand-700 transition-all cursor-pointer duration-200 ease-in-out"
+                          className="text-brand-600 font-semibold text-base px-2 py-1 rounded-md hover:bg-brand-50 dark:hover:bg-slate-800 hover:text-brand-700 transition-all cursor-pointer duration-200 ease-in-out"
                         >
                           {crumb.label}
                         </Link>
@@ -349,10 +363,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </div>
           </div>
           
-          <div className="flex items-center space-x-4 md:space-x-6">
+          <div className="flex items-center space-x-3 md:space-x-5">
              {/* Indicador de carga del caché */}
              {cacheLoading && (
-               <div className="flex items-center gap-2 text-xs text-slate-500">
+               <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
                  <div className="animate-spin">
                    <i className="fa-solid fa-circle-notch text-brand-500"></i>
                  </div>
@@ -363,19 +377,29 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
              {/* Tenant Info visible junto al avatar */}
              {user?.name_tenant && (
                <div className="flex flex-col items-end">
-                  <span className="text-sm font-bold text-slate-700 uppercase tracking-wider flex items-center">
+                  <span className="text-sm font-bold text-slate-700 dark:text-slate-200 uppercase tracking-wider flex items-center">
                       {user?.name_tenant}
                       <i className="fa-solid fa-circle-check text-brand-500 ml-1.5 text-[10px]"></i>
                   </span>
-                  <span className="text-[10px] text-slate-400">Plan Enterprise</span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500">Plan Enterprise</span>
                </div>
              )}
+
+             {/* Toggle modo oscuro */}
+             <button
+               onClick={() => setIsDarkMode((prev) => !prev)}
+               className="flex items-center justify-center w-9 h-9 rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+               title={isDarkMode ? 'Modo claro' : 'Modo oscuro'}
+               aria-label={isDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+             >
+               <i className={`fa-solid ${isDarkMode ? 'fa-sun text-amber-400' : 'fa-moon text-slate-500 dark:text-slate-300'}`}></i>
+             </button>
              
              {/* User dropdown */}
              <div className="relative" ref={userMenuRef}>
                <button
                  onClick={() => setUserMenuOpen((open) => !open)}
-                 className="flex items-center gap-2 hover:bg-slate-50 p-1.5 pr-3 rounded-full border border-transparent hover:border-slate-200 transition-all"
+                 className="flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 pr-3 rounded-full border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all"
                >
                   <img 
                       src={getImageUrl(user?.avatar_url) || "https://ui-avatars.com/api/?name=User&background=random"} 
@@ -390,24 +414,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       }}
                   />
                   <div className="hidden sm:flex flex-col items-start leading-tight">
-                    <span className="text-xs font-semibold text-slate-800 max-w-[140px] line-clamp-2">{user?.name_user || 'Usuario'}</span>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 max-w-[140px] line-clamp-2">{user?.name_user || 'Usuario'}</span>
                   </div>
-                  <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}></i>
+                  <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 dark:text-slate-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}></i>
                </button>
 
                {userMenuOpen && (
-                 <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-2">
+                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 py-2">
                    <Link
                      to="/app/profile"
                      onClick={() => setUserMenuOpen(false)}
-                     className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                     className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
                    >
                      <i className="fa-regular fa-user"></i>
                      Ver perfil
                    </Link>
                    <button
                      onClick={handleLogout}
-                     className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                     className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50/60 dark:hover:bg-red-900/20"
                    >
                      <i className="fa-solid fa-arrow-right-from-bracket"></i>
                      Cerrar sesión
@@ -419,7 +443,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </header>
 
         {/* CONTENT SCROLLABLE AREA */}
-        <main className="flex-1 overflow-y-auto bg-slate-50/50 p-2 md:p-4 scroll-smooth">
+        <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/60 p-2 md:p-4 scroll-smooth">
           <div className="w-full">
              {children}
           </div>

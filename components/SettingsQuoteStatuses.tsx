@@ -306,8 +306,7 @@ const SettingsQuoteStatuses: React.FC = () => {
 
       <div className="flex justify-between items-center mb-6">
         <div>
-            <h3 className="text-lg font-bold text-slate-800">Estados de Cotización</h3>
-            <p className="text-sm text-slate-500">Arrastra los estados entre categorías para cambiar su comportamiento.</p>
+            <p className="text-sm text-slate-500">Gestiona el ciclo de vida de tus cotizaciones (borrador, enviada, aprobada, rechazada). Arrastra estados entre categorías para cambiar su comportamiento en el sistema.</p>
         </div>
         <div className="flex items-center gap-2">
           {orderChanged && (

@@ -120,19 +120,91 @@ export interface ClientCompany {
 
 // 4. CLIENT CONTACT (La persona de contacto)
 export interface ClientContact {
+      category_color?: string;
+      category_icon?: string;
+      status_category_label?: string;
+      last_management_date?: string;
+      last_management_desc?: string;
+    company_details?: {
+      id: string;
+      name: string;
+      city?: string;
+      created_by?: string;
+    };
   id_contact: string;
+  id_entity?: string; // Desde API unificado
   id_tenant: string;
+  entity_type: 'CONTACT';
   id_client_company?: string;
-  name_company?: string; // Nombre de empresa entregado por backend en list
-  client_company_name?: string; // Helper
+  name_company?: string;
+  client_company_name?: string;
   created_by?: string;
-  access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend
-  first_name: string;
+  access_level?: 'VIEW' | 'EDIT';
+  first_name?: string; // Desde API: usa 'title'
+  title?: string; // Nuevo campo del API
   last_name?: string;
-  email: string;
+  subtitle?: string; // Nombre de empresa desde API
+  email?: string;
   phone?: string;
   position?: string;
+  contact_status?: 'LEAD' | 'ACTIVE' | 'DORMANT';
+  next_contact_date?: string | null;
+  next_action_desc?: string;
+  last_contact_date?: string;
+  last_note?: string | null; // Último comentario/nota
+  assigned_user_name?: string;
+  company_labels?: string[];
+  last_interaction_description?: string;
+  owner_avatar?: string;
+  owner_name?: string;
+  last_interactor_name?: string;
+  days_inactive?: number;
+  total_interactions?: string;
+  current_status_name?: string; // Nuevo: nombre del estado
+  current_status_color?: string; // Nuevo: color del estado
+  current_status_icon?: string; // Nuevo: icono del estado
+  status_category?: 'LEAD' | 'ACTIVE' | 'DORMANT'; // Nuevo: categoría del estado
 }
+
+// NUEVA INTERFAZ PARA TRATOS EN EL PANEL DE SEGUIMIENTO
+export interface DealFollowUpItem {
+    category_color?: string;
+    category_icon?: string;
+    status_category_label?: string;
+    last_management_date?: string;
+    last_management_desc?: string;
+  id_entity: string; // ID del trato desde el backend
+  id_trato?: string; // Compatibilidad
+  id_tenant?: string;
+  entity_type: 'DEAL';
+  title: string; // Nombre del trato
+  nombre_trato?: string; // Compatibilidad
+  subtitle?: string; // Nombre de la empresa
+  valor_trato?: number | string;
+  client_company_name?: string;
+  contact_full_name?: string;
+  email?: string; // Email del contacto principal
+  phone?: string; // Teléfono del contacto principal
+  owner_name?: string;
+  owner_avatar?: string;
+  next_contact_date?: string | null;
+  next_action_desc?: string;
+  last_note?: string | null;
+  last_contact_date?: string;
+  days_inactive?: number;
+  total_interactions?: string;
+  is_high_priority?: boolean;
+  current_status_name: string;
+  current_status_color: string;
+  current_status_icon?: string; // Opcional: icon del estado
+  status_category: 'DRAFT' | 'PROGRESS' | 'WON' | 'LOST' | 'LEAD';
+  id_client_company?: string;
+  id_contact?: string;
+  id_status?: string;
+}
+
+// TIPO DE UNIÓN PARA EL PANEL DE SEGUIMIENTO
+export type FollowUpItem = ClientContact | DealFollowUpItem;
 
 // 5. PRODUCT (Catálogo de Productos/Servicios)
 export interface Product {
@@ -159,62 +231,98 @@ export interface CustomStatus {
 }
 
 // 7. TRATOS (DEALS)
+
+// Estructura para un item del timeline unificado
+export interface UnifiedTimelineItem {
+  id: string;
+  type: 'NOTE' | 'CALL' | 'MEETING' | 'EMAIL' | 'SYSTEM' | 'QUOTE_SENT';
+  date_fmt: string;
+  date_raw: string;
+  user_name: string;
+  description: string;
+  next_action?: string | null;
+  user_avatar: string;
+  is_deal_interaction: boolean;
+}
+
 export interface Deal {
   id_trato: string;
-  id_tenant: string;
-  id_user_owner: string; // Propietario del trato (legacy, usar id_user)
-  id_user: string; // Propietario del trato
-  id_client_company: string;
-  id_contact: string;
-  id_deal_status: string;
-  id_interest: string;
   nombre_trato: string;
-  valor_trato: number | string; // Puede venir como "$1,000.00" o number
-  fecha_creacion?: string; // ISO Date String
-  created_at?: string; // ISO Date String (nuevo formato backend)
-  created_at_fmt?: string; // Fecha formateada "12/12/2025 20:24"
-  updated_at?: string; // ISO Date String (última actualización)
-  fecha_cierre_esperada?: string; // ISO Date String
+  valor_numeric?: string;
+  valor_trato?: number | string;
+  id_tenant: string;
+  owner_id: string;
+  channel?: string | null;
+  deal_description?: string;
+  created_at_fmt: string;
+  updated_at_fmt: string;
+
+  estado_actual: {
+    id: string;
+    icon: string;
+    name: string;
+    color: string;
+    category: string;
+  };
+
+  interes_actual: {
+    id: string;
+    icon: string;
+    name: string;
+    color: string;
+  };
+
+  owner_details: {
+    name: string;
+    email: string;
+    avatar: string;
+  };
+
+  empresa_cliente: {
+    id: string;
+    city: string;
+    name: string;
+    email: string;
+    phone: string;
+    address: string;
+  };
+
+  contacto_cliente: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    position: string;
+  };
+
+  catalogo_estados: DealStatus[];
+  catalogo_intereses: DealInterest[];
+
+  // A mantener por si se usan en otras partes
+  id_user_owner?: string;
+  id_user?: string;
+  id_client_company?: string;
+  id_contact?: string;
+  id_deal_status?: string;
+  id_interest?: string;
   descripcion?: string;
-  created_by?: string; // ID del usuario que creó el trato
-  access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend
-  
-  // Campos derivados (JOINs en el backend)
+  access_level?: 'VIEW' | 'EDIT';
+
+  // El nuevo timeline
+  timeline_unificado: UnifiedTimelineItem[];
+
+  // Campos que pueden seguir llegando o usados en UI
   client_company_name?: string;
-  contact_name?: string; // Legacy
-  contact_full_name?: string; // Nuevo formato "Pablo Luna"
+  contact_full_name?: string;
+  owner_name?: string;
+  owner_avatar?: string;
   contact_email?: string;
   contact_phone?: string;
-  owner_name?: string; // Nombre del propietario
-  owner_avatar?: string; // Avatar del propietario
-  estado?: string; // Nombre del estado del trato (legacy)
-  estado_nombre?: string; // Nuevo formato backend
-  estado_color?: string; // Color del estado del trato
-  estado_icon?: string; // Icono del estado del trato
-  interes?: string; // Nombre del nivel de interés (legacy)
-  interes_nombre?: string; // Nuevo formato backend
-  interes_color?: string; // Color del nivel de interés
-  interes_icon?: string; // Icono del nivel de interés
-
-  id_channel?: string;
-  channel_nombre?: string;
-  channel_color?: string;
-  channel_icon?: string;
-  
-  // Historial de cotizaciones enviadas
-  historial_cotizaciones?: Array<{
-    id_sent?: string;
-    fecha_envio?: string; // DD/MM/YYYY HH24:MI
-    enviado_por?: string; // Nombre del usuario
-    enviado_a?: string; // Email destinatario
-    copia_a?: string | null; // CC (puede ser null)
-    asunto?: string | null; // Asunto (puede ser null)
-    metodo?: string; // 'EMAIL', etc
-    politica?: string | null; // 'CORPORATE' | 'INDIVIDUAL' (puede ser null)
-    version_numero?: number;
-    nombre_cotizacion?: string;
-    no_cotizacion_fmt?: string; // Formato "0002"
-  }>;
+  contact_position?: string;
+  interes_icon?: string;
+  interes_color?: string;
+  interes_nombre?: string;
+  updated_at?: string;
 }
 
 export interface DealPermission {

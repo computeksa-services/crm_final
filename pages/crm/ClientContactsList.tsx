@@ -1,14 +1,14 @@
+// Eliminado. Usar pages/clients/ClientContactsList.tsx
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useDataCache } from '../contexts/DataCacheContext';
-import ContactsImportExportModal from '../components/ContactsImportExportModal';
-import { ClientContact } from '../types';
-import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
-import ContactFormModal from './clients/ContactFormModal';
-import StartFollowUpModal from '../components/StartFollowUpModal';
-import { apiFetch } from '../services/apiClient';
+import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
+import { ClientContact } from '../../types';
+import Toast from '../../components/Toast';
+import ConfirmModal from '../../components/ConfirmModal';
+import ContactFormModal from '../clients/ContactFormModal';
+import StartFollowUpModal from '../../components/StartFollowUpModal';
+import { apiFetch } from '../../services/apiClient';
 import {
   useReactTable,
   getCoreRowModel,
@@ -31,7 +31,7 @@ const ClientContactsList: React.FC = () => {
   const { contacts: cachedContacts, loading: cacheLoading, invalidateContacts } = useDataCache();
   
   // --- ESTADOS DE DATOS ---
-    // Eliminado. Usar pages/clients/ClientContactsList.tsx
+  const contacts = useMemo(() => cachedContacts.filter(c => c && c.id_contact), [cachedContacts]);
   const loading = cacheLoading;
   
   // --- ESTADOS DE LA TABLA ---
@@ -51,7 +51,6 @@ const ClientContactsList: React.FC = () => {
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isImportExportOpen, setIsImportExportOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingContact, setEditingContact] = useState<Partial<ClientContact> | undefined>(undefined);
   const [confirmState, setConfirmState] = useState({ 
@@ -414,22 +413,12 @@ const ClientContactsList: React.FC = () => {
             </div>
         </div>
         
-        <div className="flex gap-2 order-1 lg:order-3 w-full sm:w-auto">
-          <button 
-            onClick={handleAddNew} 
-            className={`px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center justify-center gap-2 ${(!loading && contacts.length === 0) ? 'mx-auto sm:mx-0' : ''}`}
-          >
-              <i className="fa-solid fa-plus"></i> Nuevo Contacto
-          </button>
-          <button
-            onClick={() => setIsImportExportOpen(true)}
-            className="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-bold hover:bg-sky-700 shadow-sm border border-sky-700 transition-all flex items-center justify-center gap-2"
-          >
-            <i className="fa-solid fa-file-arrow-down"></i> Importar/Exportar
-          </button>
-        </div>
-        {/* Modal de Importación/Exportación */}
-        <ContactsImportExportModal open={isImportExportOpen} onClose={() => setIsImportExportOpen(false)} />
+        <button 
+          onClick={handleAddNew} 
+          className={`order-1 lg:order-3 w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center justify-center gap-2 ${(!loading && contacts.length === 0) ? 'mx-auto sm:mx-0' : ''}`}
+        >
+            <i className="fa-solid fa-plus"></i> Nuevo Contacto
+        </button>
       </div>
 
       {/* Área de la Tabla */}

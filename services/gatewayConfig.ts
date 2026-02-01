@@ -56,6 +56,7 @@ export const GATEWAY_CONFIG = {
       UPDATE: buildFullUrl('/api/deals/update'),
       DELETE: buildFullUrl('/api/deals/delete'),
       BY_COMPANY: buildFullUrl('/api/deals/by_company'),
+      HISTORY: buildFullUrl('/api/deals/history'),
     },
     
     // Quotes/Cotizaciones
@@ -91,6 +92,7 @@ export const GATEWAY_CONFIG = {
       CONTACTS_LIST: buildFullUrl('/api/clients/contacts'),
       CONTACTS_DETAIL: buildFullUrl('/api/clients/contacts/detail'),
       COMPANIES_CONTACTS_DETAIL: buildFullUrl('/api/clients/companies_contacts/detail'),
+      CONTACTS_HISTORY: buildFullUrl('/api/clients/contacts/history'),
     },
     
     // Productos
@@ -125,6 +127,10 @@ export const GATEWAY_CONFIG = {
     PRODUCTS_SELECTED: buildFullUrl('/api/products-selected'),
     QUOTE_ITEMS_UPDATE: buildFullUrl('/api/quote-items/update'),
     QUOTE_ITEMS_DELETE: buildFullUrl('/api/quote-items/delete'),
+    INTERACTIONS_CREATE: buildFullUrl('/api/crm/interactions/create'),
+    INTERACTIONS_HISTORY: buildFullUrl('/api/crm/interactions/history'),
+    LABELS_TENANT: buildFullUrl('/api/clients/companies/labels'),
+    CONTACTS_IMPORT: buildFullUrl('/api/crm/contacts/import'),
   }
 };
 

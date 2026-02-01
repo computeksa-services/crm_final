@@ -1,14 +1,15 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useDataCache } from '../contexts/DataCacheContext';
-import ContactsImportExportModal from '../components/ContactsImportExportModal';
-import { ClientContact } from '../types';
-import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
-import ContactFormModal from './clients/ContactFormModal';
-import StartFollowUpModal from '../components/StartFollowUpModal';
-import { apiFetch } from '../services/apiClient';
+import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
+import ContactsImportExportModal from '../../components/ContactsImportExportModal';
+import { ClientContact } from '../../types';
+import Toast from '../../components/Toast';
+import ConfirmModal from '../../components/ConfirmModal';
+import ShareModal from '../../components/ShareModal';
+import ContactFormModal from './ContactFormModal';
+import StartFollowUpModal from '../../components/StartFollowUpModal';
+import { apiFetch } from '../../services/apiClient';
 import {
   useReactTable,
   getCoreRowModel,
@@ -31,7 +32,7 @@ const ClientContactsList: React.FC = () => {
   const { contacts: cachedContacts, loading: cacheLoading, invalidateContacts } = useDataCache();
   
   // --- ESTADOS DE DATOS ---
-    // Eliminado. Usar pages/clients/ClientContactsList.tsx
+  const contacts = useMemo(() => cachedContacts.filter(c => c && c.id_contact), [cachedContacts]);
   const loading = cacheLoading;
   
   // --- ESTADOS DE LA TABLA ---
@@ -54,6 +55,11 @@ const ClientContactsList: React.FC = () => {
   const [isImportExportOpen, setIsImportExportOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingContact, setEditingContact] = useState<Partial<ClientContact> | undefined>(undefined);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareContactId, setShareContactId] = useState<string | null>(null);
+  const [shareContactName, setShareContactName] = useState<string>('');
+  const [shareContactCreator, setShareContactCreator] = useState<string>('');
+  const [shareContactCollaborators, setShareContactCollaborators] = useState<any[]>([]);
   const [confirmState, setConfirmState] = useState({ 
     isOpen: false, 
     title: '', 
@@ -90,6 +96,31 @@ const ClientContactsList: React.FC = () => {
     const f = first?.charAt(0) || '';
     const l = last?.charAt(0) || '';
     return (f + l).toUpperCase() || '?';
+  };
+
+  const getAvatarColor = (name: string = '') => {
+    const colors = [
+      { bg: '#F0E6E6', text: '#A67C7C' },    // Rojo suave
+      { bg: '#F5EAF0', text: '#B397AA' },    // Rosa suave
+      { bg: '#EDE4F5', text: '#9B7DB0' },    // Púrpura suave
+      { bg: '#E8E0F0', text: '#8B7BA3' },    // Índigo suave
+      { bg: '#E1E8F5', text: '#7A8FB5' },    // Azul suave
+      { bg: '#DFF0ED', text: '#7BA89C' },    // Teal suave
+      { bg: '#E9F0E8', text: '#7FA08' },     // Verde suave
+      { bg: '#EEF2E7', text: '#92A680' },    // Verde claro suave
+      { bg: '#F5F2E1', text: '#B8AC5B' },    // Amarillo suave
+      { bg: '#F7EFEA', text: '#B88263' },    // Naranja suave
+      { bg: '#EFE8E4', text: '#8B7B6F' },    // Marrón suave
+      { bg: '#E8E8E8', text: '#707070' },    // Gris suave
+    ];
+
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = ((hash << 5) - hash) + name.charCodeAt(i);
+      hash = hash & hash;
+    }
+    
+    return colors[Math.abs(hash) % colors.length];
   };
 
   const getFollowUpStatus = (nextDateStr?: string | null) => {
@@ -139,6 +170,33 @@ const ClientContactsList: React.FC = () => {
     setEditingContact(contact);
     setIsEditMode(true);
     setIsModalOpen(true);
+  };
+
+  const openShareModal = async (contact: ClientContact) => {
+    setShareContactId(contact.id_contact || null);
+    setShareContactName((contact as any).full_name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || '');
+    setShareContactCreator((contact as any).created_by_name || '');
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/contacts/share?id_contact=${contact.id_contact}`);
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : [];
+      const list = Array.isArray(data) ? data : (data.users || []);
+      const mapped = list.map((u: any) => {
+        const level = (u.permission_level || '').toUpperCase();
+        return {
+          id_user: u.id_user,
+          name: u.name_user || u.name || u.full_name || u.email || 'Usuario',
+          avatar: u.avatar_url || u.avatar || null,
+          permission_level: level === 'NONE' ? 'BLOCKED' : level,
+          rol_user: u.rol_user,
+          is_owner: u.is_owner
+        };
+      });
+      setShareContactCollaborators(mapped);
+    } catch {
+      setShareContactCollaborators([]);
+    }
+    setShareModalOpen(true);
   };
 
   const handleModalSuccess = async () => {
@@ -219,9 +277,11 @@ const ClientContactsList: React.FC = () => {
       cell: ({ row }) => {
         if (row.getIsGrouped()) return null;
         const c = row.original;
+        const contactName = `${c.first_name || ''} ${c.last_name || ''}`;
+        const color = getAvatarColor(contactName);
         return (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-[10px] border border-slate-200 shadow-sm">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[10px] border shadow-sm flex-shrink-0" style={{ backgroundColor: color.bg, color: color.text, borderColor: color.text }}>
               {getInitials(c.first_name, c.last_name)}
             </div>
             <span className="font-semibold text-slate-800">{`${c.last_name} ${c.first_name || ''}`}</span>
@@ -256,12 +316,20 @@ const ClientContactsList: React.FC = () => {
         }
         return (
           <div className="flex items-start gap-3 py-1">
-            <div className="w-8 h-8 flex-shrink-0 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-[10px] border border-indigo-100 shadow-sm">
-              {((row.original as any).name_company || 'SIN EMPRESA').split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '?'}
-            </div>
-            <span className="font-bold text-slate-800 text-sm tracking-tight break-words">
-              {((row.original as any).name_company) || 'SIN EMPRESA'}
-            </span>
+            {(() => {
+              const companyName = (row.original as any).name_company || 'SIN EMPRESA';
+              const color = getAvatarColor(companyName);
+              return (
+                <>
+                  <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center font-bold text-[10px] border shadow-sm" style={{ backgroundColor: color.bg, color: color.text, borderColor: color.text }}>
+                    {companyName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '?'}
+                  </div>
+                  <span className="font-bold text-slate-800 text-sm tracking-tight break-words">
+                    {companyName}
+                  </span>
+                </>
+              );
+            })()}
           </div>
         );
       },
@@ -350,6 +418,13 @@ const ClientContactsList: React.FC = () => {
               <i className="fa-solid fa-pen text-[10px]"></i>
             </button>
             <button 
+              onClick={(e) => { e.stopPropagation(); openShareModal(row.original); }} 
+              className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"
+              title="Asignar"
+            >
+              <i className="fa-solid fa-user-plus text-[10px]"></i>
+            </button>
+            <button 
               onClick={(e) => handleDelete(e, row.original.id_contact)} 
               className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"
               title="Eliminar"
@@ -425,10 +500,10 @@ const ClientContactsList: React.FC = () => {
             onClick={() => setIsImportExportOpen(true)}
             className="px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-bold hover:bg-sky-700 shadow-sm border border-sky-700 transition-all flex items-center justify-center gap-2"
           >
-            <i className="fa-solid fa-file-arrow-down"></i> Importar/Exportar
+            <i className="fa-solid fa-file-arrow-up"></i> Importar
           </button>
         </div>
-        {/* Modal de Importación/Exportación */}
+        {/* Modal de Importación */}
         <ContactsImportExportModal open={isImportExportOpen} onClose={() => setIsImportExportOpen(false)} />
       </div>
 
@@ -622,6 +697,19 @@ const ClientContactsList: React.FC = () => {
                 invalidateContacts();
                 setToast({ message: 'Seguimiento iniciado.', type: 'success' });
             }}
+        />
+      )}
+
+      {shareModalOpen && shareContactId && (
+        <ShareModal
+          entity="contact"
+          id={shareContactId}
+          entityName={shareContactName || `Contacto #${shareContactId}`}
+          creatorName={shareContactCreator}
+          isOpen={shareModalOpen}
+          onClose={() => { setShareModalOpen(false); setShareContactId(null); setShareContactName(''); setShareContactCreator(''); setShareContactCollaborators([]); }}
+          onShared={() => setToast({ message: 'Asignaciones actualizadas.', type: 'success' })}
+          currentCollaborators={shareContactCollaborators}
         />
       )}
 

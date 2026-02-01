@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useDataCache } from '../contexts/DataCacheContext';
-import { financialService } from '../services/financials.service';
-import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
-import CollectionModal from '../components/CollectionModal';
-import type { FinancialTransaction } from '../types';
+import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
+import { financialService } from '../../services/financials.service';
+import Toast from '../../components/Toast';
+import ConfirmModal from '../../components/ConfirmModal';
+import CollectionModal from '../../components/CollectionModal';
+import type { FinancialTransaction } from '../../types';
 import {
   useReactTable,
   getCoreRowModel,

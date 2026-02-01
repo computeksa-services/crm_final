@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { Quote, ClientCompany, ClientContact, QuoteStatus } from '../types';
-import { apiFetch } from '../services/apiClient';
-import Toast from '../components/Toast';
-import ShareModal from '../components/ShareModal';
-import ConfirmModal from '../components/ConfirmModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { Quote, ClientCompany, ClientContact, QuoteStatus } from '../../types';
+import { apiFetch } from '../../services/apiClient';
+import Toast from '../../components/Toast';
+import ShareModal from '../../components/ShareModal';
+import ConfirmModal from '../../components/ConfirmModal';
 import {
   useReactTable,
   getCoreRowModel,
@@ -204,6 +204,8 @@ const QuotesList: React.FC = () => {
   // --- MODALS ---
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [shareQuoteId, setShareQuoteId] = useState<string | null>(null);
+  const [shareQuote, setShareQuote] = useState<Quote | null>(null);
+  const [shareCollaborators, setShareCollaborators] = useState<any[]>([]);
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title: string; message: string; isDestructive?: boolean; onConfirm?: () => void }>({ isOpen: false, title: '', message: '' });
 
   // --- FETCH DATA ---
@@ -297,6 +299,32 @@ const QuotesList: React.FC = () => {
         setFilteredContacts([]);
     }
     setIsModalOpen(true);
+  };
+
+  const openShareModal = async (quote: Quote) => {
+    setShareQuoteId(quote.id_cotizacion as string);
+    setShareQuote(quote);
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/share?id_cotizacion=${quote.id_cotizacion}`);
+      const text = await res.text();
+      const data = text ? JSON.parse(text) : [];
+      const list = Array.isArray(data) ? data : (data.users || []);
+      const mapped = list
+        .map((u: any) => {
+          const level = (u.permission_level || '').toUpperCase();
+          return {
+          id_user: u.id_user,
+          name: u.name_user || u.name || u.full_name || u.email || 'Usuario',
+          avatar: u.avatar_url || u.avatar || null,
+          permission_level: level === 'NONE' ? 'BLOCKED' : level,
+          rol_user: u.rol_user
+        };
+      });
+      setShareCollaborators(mapped);
+    } catch {
+      setShareCollaborators([]);
+    }
+    setIsShareOpen(true);
   };
 
   const handleInlineUpdate = async (quote: Quote, updates: Partial<Quote>) => {
@@ -538,7 +566,7 @@ const QuotesList: React.FC = () => {
                     {canEdit && (
                         <>
                             <button onClick={(e) => { e.stopPropagation(); navigate(`/app/quotes/edit?id=${q.id_cotizacion}`); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
-                            <button onClick={(e) => { e.stopPropagation(); setShareQuoteId(q.id_cotizacion); setIsShareOpen(true); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
+                            <button onClick={(e) => { e.stopPropagation(); openShareModal(q); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
                         </>
                     )}
                     {canDelete && (
@@ -803,7 +831,18 @@ const QuotesList: React.FC = () => {
       )}
 
       {confirmState.isOpen && <ConfirmModal {...confirmState} onConfirm={confirmState.onConfirm || (() => {})} onClose={() => setConfirmState(p => ({...p, isOpen: false}))} />}
-      {isShareOpen && shareQuoteId && <ShareModal entity="quotes" id={shareQuoteId} isOpen={isShareOpen} onClose={() => { setIsShareOpen(false); setShareQuoteId(null); }} onShared={() => setToast({ message: 'Compartido.', type: 'success' })} />}
+      {isShareOpen && shareQuoteId && (
+        <ShareModal 
+          entity="quotes" 
+          id={shareQuoteId} 
+          entityName={shareQuote?.nombre_cotizacion || `Cotización #${shareQuoteId}`}
+          creatorName={shareQuote?.created_by_name || ''}
+          isOpen={isShareOpen} 
+          onClose={() => { setIsShareOpen(false); setShareQuoteId(null); setShareQuote(null); setShareCollaborators([]); }} 
+          onShared={() => setToast({ message: 'Compartido.', type: 'success' })}
+          currentCollaborators={shareCollaborators}
+        />
+      )}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
     </div>
   );

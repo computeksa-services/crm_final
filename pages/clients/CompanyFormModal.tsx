@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { ClientCompany } from '../types';
-import Toast from './Toast';
-import { useAuth } from '../contexts/AuthContext';
-import { apiFetch } from '../services/apiClient';
+import { ClientCompany } from '../../types';
+import Toast from '../../components/Toast';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiFetch } from '../../services/apiClient';
+import { useDataCache } from '../../contexts/DataCacheContext';
+import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
 
 interface CompanyFormModalProps {
   isOpen: boolean;
@@ -26,9 +28,8 @@ const labelClasses = "text-[10px] font-black text-slate-400 uppercase tracking-w
 const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mode, initialData, onSuccess }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [countries, setCountries] = useState<{ id: string; name: string }[]>([]);
-  const [companyTypes, setCompanyTypes] = useState<{ id: string; name: string }[]>([]);
-  const [companyLabels, setCompanyLabels] = useState<CompanyLabel[]>([]);
+  const { countries = [], companyTypes = [], companyLabelsMap } = useDataCache();
+  // Las etiquetas ahora vienen del cache (companyLabelsMap)
   const [customLabels, setCustomLabels] = useState<CompanyLabel[]>([]);
   const [formData, setFormData] = useState<Partial<ClientCompany>>({});
   
@@ -67,47 +68,32 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
     return resultado === parseInt(cedula[9]);
   };
 
-  const fetchData = useCallback(async () => {
-    if (!user?.id_tenant || !user?.id_user) return;
-    try {
-      const [resCountries, resTypes, resLabels] = await Promise.all([
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/labels?id_tenant=${user.id_tenant}&id_user=${user.id_user}${mode === 'edit' ? `&id_client_company=${initialData?.id_client_company}` : ''}`)
-      ]);
-
-      if (resCountries.ok) {
-        const data = await resCountries.json();
-        setCountries(data.map((i: any) => ({ id: i.id_country || i.id || i.name, name: i.name })));
-      }
-      if (resTypes.ok) {
-        const data = await resTypes.json();
-        setCompanyTypes(data.map((i: any) => ({ id: i.id_company_type || i.id_company_types || i.id || i.name, name: i.name })));
-      }
-      if (resLabels.ok) setCompanyLabels(await resLabels.json());
-    } catch (e) { console.error(e); }
-  }, [user, mode, initialData]);
+  // No fetchData: las etiquetas se obtienen del cache
 
   useEffect(() => {
     if (!isOpen) return;
-    fetchData();
     if (mode === 'edit' && initialData) {
-      setFormData({ ...initialData, labels: (initialData as any).labels || [] });
+      setFormData({
+        ...initialData,
+        labels: Array.isArray(initialData.labels)
+          ? initialData.labels.map(resolveLabel)
+          : []
+      });
     } else {
-      setFormData({ 
-        id_type: 'RUC', 
-        id_country: 'EC', 
+      setFormData({
+        id_type: '',
+        id_country: 'EC',
         labels: [],
         id_number: '', name_company: '', razon_social: '', city: '', address: ''
       });
     }
     setLabelMenuOpen(false); // Resetear estado del menú al abrir modal
-  }, [isOpen, mode, initialData, fetchData]);
+  }, [isOpen, mode, initialData]);
 
   const resolveLabel = (label: any): CompanyLabel => {
     const id = typeof label === 'string' ? label : (label.id_label || label.id || '');
-    const found = [...companyLabels, ...customLabels].find(l => l.id_label === id);
-    return { id_label: id, name: found?.name || label.name || id, color: found?.color || label.color };
+    const found = companyLabelsMap[id] || customLabels.find(l => l.id_label === id);
+    return { id_label: id, name: found?.name || label.name || id, color: found?.color };
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -119,7 +105,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
     if (!formData.name_company?.trim()) return setToast({ message: 'Nombre requerido', type: 'error' });
     
     const idNum = formData.id_number?.trim() || '';
-    if (idNum) {
+    if (idNum && formData.id_type) {
       if (formData.id_type === 'RUC') {
         if (!/^\d{13}$/.test(idNum) || !idNum.endsWith('001')) 
           return setToast({ message: 'RUC inválido: 13 dígitos y terminar en 001', type: 'error' });
@@ -131,25 +117,28 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
     setSubmitting(true);
     try {
       const labelsArray = ((formData.labels as any[]) || []).map(resolveLabel);
-      const finalLabelIds: string[] = [];
-
-      for (const lbl of labelsArray) {
-        if (lbl.id_label.startsWith('temp_')) {
+      // Crear/obtener id_label y filtrar vacíos
+      const finalLabelIds: string[] = await Promise.all(labelsArray.map(async (lbl) => {
+        if (lbl.id_label && lbl.id_label.startsWith('temp_')) {
           const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/labels`, {
             method: 'POST',
             body: JSON.stringify({ name: lbl.name, color: '#3B82F6', id_tenant: user?.id_tenant, id_user: user?.id_user })
           });
           const created = await res.json();
-          finalLabelIds.push((Array.isArray(created) ? created[0] : created).id_label);
-        } else {
-          finalLabelIds.push(lbl.id_label);
+          return (Array.isArray(created) ? created[0] : created).id_label;
         }
-      }
+        return lbl.id_label || '';
+      }));
+      // Filtrar ids vacíos y falsy (incluye strings vacíos)
+      const filteredLabelIds = finalLabelIds.filter(id => id && String(id).trim() !== '');
 
       const endpoint = mode === 'edit' ? 'update' : '';
+      // Solo incluir id_type si el usuario lo seleccionó
+      const payload = { ...formData, labels: filteredLabelIds, id_tenant: user?.id_tenant, id_user: user?.id_user };
+      if (!payload.id_type) delete payload.id_type;
       const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/${endpoint}`, {
         method: 'POST',
-        body: JSON.stringify({ ...formData, labels: finalLabelIds, id_tenant: user?.id_tenant, id_user: user?.id_user })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) throw new Error("Error al guardar la empresa");
@@ -221,7 +210,8 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
             </div>
             <div className="col-span-6 md:col-span-3">
               <label className={labelClasses}>Tipo ID</label>
-              <select name="id_type" value={formData.id_type || 'RUC'} onChange={handleInputChange} className={inputClasses}>
+              <select name="id_type" value={formData.id_type || ''} onChange={handleInputChange} className={inputClasses}>
+                <option value="">Seleccionar...</option>
                 <option value="RUC">RUC</option>
                 <option value="CI">Cédula</option>
                 <option value="PASAPORTE">Pasaporte</option>
@@ -239,12 +229,15 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
             <div>
               <label className={labelClasses}>País <span className="text-red-500">*</span></label>
               <select name="id_country" required value={formData.id_country || ''} onChange={handleInputChange} className={inputClasses}>
-                {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value="">Seleccionar...</option>
+                {countries && countries.length > 0
+                  ? countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                  : null}
               </select>
             </div>
             <div>
-              <label className={labelClasses}>Ciudad <span className="text-red-500">*</span></label>
-              <input name="city" required value={formData.city || ''} onChange={handleInputChange} className={inputClasses} placeholder="Quito" />
+              <label className={labelClasses}>Ciudad</label>
+              <input name="city" value={formData.city || ''} onChange={handleInputChange} className={inputClasses} placeholder="Quito" />
             </div>
             <div>
               <label className={labelClasses}>Teléfono</label>
@@ -276,10 +269,14 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
                 className={`${inputClasses} flex flex-wrap gap-1 items-center min-h-[42px] cursor-text`}
                 onClick={() => setLabelMenuOpen(true)}
               >
-                {((formData.labels as any[]) || []).map(l => {
+                {((formData.labels as any[]) || []).map((l, idx) => {
                   const label = resolveLabel(l);
+                  // Always use a unique, non-empty key
+                  const key = label.id_label || `${label.name}_${idx}`;
+                  // Fallback color if missing
+                  const color = label.color || '#3B82F6';
                   return (
-                    <span key={label.id_label} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold border" style={{ backgroundColor: `${label.color}15`, color: label.color, borderColor: `${label.color}30` }}>
+                    <span key={key} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-bold border" style={{ backgroundColor: `${color}15`, color: color, borderColor: `${color}30` }}>
                       {label.name}
                       <button type="button" onClick={(e) => {
                         e.stopPropagation();
@@ -303,26 +300,44 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
               {labelMenuOpen && (
                 <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-slate-200 rounded-xl shadow-2xl z-[100] max-h-52 overflow-y-auto p-1.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
                   {(() => {
-                    const filtered = [...companyLabels, ...customLabels].filter(l => 
-                      l.name.toLowerCase().includes(labelQuery.toLowerCase()) && 
-                      !((formData.labels as any[]) || []).some(sl => resolveLabel(sl).id_label === l.id_label)
-                    );
+                    const filtered = [
+                      ...Object.entries(companyLabelsMap).map(([id_label, v]) => ({ id_label, name: v.name, color: v.color })),
+                      ...customLabels
+                    ]
+                      .filter(l => 
+                        l.id_label &&
+                        l.name &&
+                        l.name.toLowerCase().includes(labelQuery.toLowerCase()) &&
+                        !((formData.labels as any[]) || []).some(sl => resolveLabel(sl).id_label === l.id_label)
+                      );
 
                     return (
                       <>
-                        {filtered.map(l => (
-                          <button key={l.id_label} type="button" onClick={() => {
-                            setFormData(prev => ({ ...prev, labels: [...(prev.labels as any[]), l] }));
-                            setLabelQuery('');
-                            setLabelMenuOpen(false); // Cierra al seleccionar
-                          }} className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-lg flex items-center gap-2 text-sm font-bold text-slate-700 transition-colors">
-                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: l.color }}></span> {l.name}
-                          </button>
-                        ))}
+                        {filtered.map((l, idx) => {
+                          // Always use a unique, non-empty key
+                          const key = l.id_label || `${l.name}_${idx}`;
+                          const color = l.color || '#3B82F6';
+                          return (
+                            <button key={key} type="button" onClick={() => {
+                              console.log('Seleccionar etiqueta', l);
+                              setFormData(prev => {
+                                const prevLabels = (prev.labels as any[]) || [];
+                                // Evita duplicados por id_label
+                                if (prevLabels.some(x => resolveLabel(x).id_label === l.id_label)) return prev;
+                                return { ...prev, labels: [...prevLabels, l] };
+                              });
+                              setLabelQuery('');
+                              setTimeout(() => setLabelMenuOpen(false), 100); // Cierra después de agregar
+                            }} className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded-lg flex items-center gap-2 text-sm font-bold text-slate-700 transition-colors">
+                              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></span> {l.name}
+                            </button>
+                          );
+                        })}
                         
                         {labelQuery && (
                           <button type="button" onClick={() => {
                             const nl = { id_label: `temp_${Date.now()}`, name: labelQuery, color: '#3B82F6' };
+                            if (!nl.id_label || !nl.name) return;
                             setCustomLabels(p => [...p, nl]);
                             setFormData(prev => ({ ...prev, labels: [...(prev.labels as any[]), nl] }));
                             setLabelQuery('');

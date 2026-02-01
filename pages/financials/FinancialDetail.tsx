@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
-import CollectionModal from '../components/CollectionModal';
-import { useAuth } from '../contexts/AuthContext';
-import { apiFetch } from '../services/apiClient';
-import { financialService } from '../services/financials.service';
-import type { FinancialTransaction } from '../types';
+import Toast from '../../components/Toast';
+import ConfirmModal from '../../components/ConfirmModal';
+import CollectionModal from '../../components/CollectionModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiFetch } from '../../services/apiClient';
+import { financialService } from '../../services/financials.service';
+import type { FinancialTransaction } from '../../types';
 
 // --- HELPERS ---
 

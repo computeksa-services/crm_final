@@ -12,6 +12,7 @@ export const NAV_GROUPS = [
     items: [
       { label: 'Dashboard', path: '/app/dashboard', icon: 'fa-chart-pie', roles: ['superadmin', 'admin', 'usuario'] },
       { label: 'Calendario', path: '/app/calendar', icon: 'fa-calendar-days', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Seguimiento', path: '/app/followups', icon: 'fa-rocket', roles: ['superadmin', 'admin', 'usuario'] },
     ]
   },
   {

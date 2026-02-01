@@ -1,13 +1,14 @@
-import React, { useEffect, useState, useCallback } from 'react';
+﻿import React, { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { ClientCompany, ClientContact } from '../types';
-import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
-import CompanyMap from '../components/CompanyMap';
-import CompanyFormModal from '../components/CompanyFormModal';
-import { apiFetch } from '../services/apiClient';
+import { useAuth } from '../../contexts/AuthContext';
+import { ClientCompany, ClientContact } from '../../types';
+import Toast from '../../components/Toast';
+import ConfirmModal from '../../components/ConfirmModal';
+import ShareModal from '../../components/ShareModal';
+import CompanyMap from './CompanyMap';
+import CompanyFormModal from './CompanyFormModal';
+import { apiFetch } from '../../services/apiClient';
 
 const ClientCompanyDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -22,12 +23,9 @@ const ClientCompanyDetail: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
-  // --- ESTADOS COMPARTIR (SHARE) ---
+  // --- ESTADOS ASIGNAR ---
   const [shareModalOpen, setShareModalOpen] = useState(false);
-  const [shareUsers, setShareUsers] = useState<{ id_user: string; name_user: string; email_user: string; status_user?: string }[]>([]);
-  const [shareTargets, setShareTargets] = useState<string[]>([]); // Array de IDs seleccionados
-  const [sharePermission, setSharePermission] = useState<'VIEW' | 'EDIT'>('VIEW');
-  const [shareSubmitting, setShareSubmitting] = useState(false);
+  const [shareCollaborators, setShareCollaborators] = useState<any[]>([]);
 
   // --- ESTADO EDICIÓN EMPRESA ---
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
@@ -87,7 +85,23 @@ const ClientCompanyDetail: React.FC = () => {
       }
 
       setCompany(companyObj);
-      setContacts(Array.isArray(companyObj.contacts) ? companyObj.contacts : []);
+      const contactsSource = Array.isArray(companyObj.contacts_list)
+        ? companyObj.contacts_list
+        : Array.isArray(companyObj.contacts)
+          ? companyObj.contacts
+          : [];
+      setContacts(contactsSource);
+      if (Array.isArray(companyObj.collaborators)) {
+        const mapped = companyObj.collaborators.map((u: any) => ({
+          id_user: u.id_user,
+          name: u.name || u.name_user || u.full_name || u.email || 'Usuario',
+          avatar: u.avatar || u.avatar_url || null,
+          permission_level: (u.permission_level || '').toUpperCase() === 'NONE' ? 'BLOCKED' : u.permission_level,
+          rol_user: u.rol_user,
+          is_owner: u.is_owner
+        }));
+        setShareCollaborators(mapped);
+      }
 
       // Actualizar breadcrumb con el nombre de la empresa
       navigate(location.pathname, {
@@ -108,6 +122,13 @@ const ClientCompanyDetail: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if ((location.state as any)?.openShare && company) {
+      openShareModal();
+      navigate(location.pathname, { state: { breadcrumb: (location.state as any)?.breadcrumb }, replace: true });
+    }
+  }, [company, location.pathname, location.state, navigate]);
 
   // Cargar países desde API
   useEffect(() => {
@@ -152,6 +173,44 @@ const ClientCompanyDetail: React.FC = () => {
     return `https://${url}`;
   };
 
+  const getInitials = (name: string = '') => {
+    const trimmed = name.trim();
+    if (!trimmed) return '?';
+    
+    // Si tiene espacio, tomar primera letra de cada palabra
+    if (trimmed.includes(' ')) {
+      return trimmed.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+    }
+    
+    // Si no tiene espacio, tomar primeras 2 letras
+    return trimmed.substring(0, 2).toUpperCase();
+  };
+
+  const getAvatarColor = (name: string = '') => {
+    const colors = [
+      { bg: '#F0E6E6', text: '#A67C7C' },    // Rojo suave
+      { bg: '#F5EAF0', text: '#B397AA' },    // Rosa suave
+      { bg: '#EDE4F5', text: '#9B7DB0' },    // Púrpura suave
+      { bg: '#E8E0F0', text: '#8B7BA3' },    // Índigo suave
+      { bg: '#E1E8F5', text: '#7A8FB5' },    // Azul suave
+      { bg: '#DFF0ED', text: '#7BA89C' },    // Teal suave
+      { bg: '#E9F0E8', text: '#7FA08' },     // Verde suave
+      { bg: '#EEF2E7', text: '#92A680' },    // Verde claro suave
+      { bg: '#F5F2E1', text: '#B8AC5B' },    // Amarillo suave
+      { bg: '#F7EFEA', text: '#B88263' },    // Naranja suave
+      { bg: '#EFE8E4', text: '#8B7B6F' },    // Marrón suave
+      { bg: '#E8E8E8', text: '#707070' },    // Gris suave
+    ];
+
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+      hash = ((hash << 5) - hash) + name.charCodeAt(i);
+      hash = hash & hash;
+    }
+    
+    return colors[Math.abs(hash) % colors.length];
+  };
+
   const formatDateTime = (iso?: string) => {
     if (!iso) return '';
     const [date, time = ''] = iso.split('T');
@@ -160,11 +219,11 @@ const ClientCompanyDetail: React.FC = () => {
 
   // --- HANDLERS EMPRESA (Edit/Update) ---
   const openEditCompany = () => {
-    if (!canEditCompany) {
+    if (!canEditCompany || !company) {
       setToast({ message: 'No tienes permisos para editar esta empresa.', type: 'error' });
       return;
     }
-    setEditingCompany(company || undefined);
+    setEditingCompany(company as Partial<ClientCompany>);
     setIsCompanyModalOpen(true);
   };
 
@@ -268,64 +327,57 @@ const ClientCompanyDetail: React.FC = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setEditingContact(prev => (prev ? { ...prev, [name]: value } : null));
+    setEditingContact((prev: Partial<ClientContact> | null) => (prev ? { ...prev, [name]: value } : null));
   };
 
-  // --- HANDLERS COMPARTIR (Nueva Lógica de UI) ---
+  // --- HANDLERS ASIGNAR ---
+  const refreshShareCollaborators = useCallback(async () => {
+    if (!user?.id_tenant || !company?.id_client_company) return;
+    try {
+      const shareRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/companies/share?id_client_company=${company.id_client_company}`);
+      const shareText = await shareRes.text();
+      const shareData = shareText ? JSON.parse(shareText) : [];
+      const shareList = Array.isArray(shareData) ? shareData : (shareData.users || []);
+      const mapped = shareList.map((u: any) => {
+        const level = (u.permission_level || '').toUpperCase();
+        return {
+          id_user: u.id_user,
+          name: u.name_user || u.name || u.full_name || u.email || 'Usuario',
+          avatar: u.avatar_url || u.avatar || null,
+          permission_level: level === 'NONE' ? 'BLOCKED' : level,
+          rol_user: u.rol_user,
+          is_owner: u.is_owner
+        };
+      });
+      setShareCollaborators(mapped);
+    } catch {
+      setShareCollaborators([]);
+    }
+  }, [company?.id_client_company, user?.id_tenant]);
+
+  const refreshCompanyCollaborators = useCallback(async () => {
+    if (!company?.id_client_company || !user?.id_tenant || !user?.id_user) return;
+    try {
+      const companyResponse = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/detail?id_client_company=${company.id_client_company}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      if (!companyResponse.ok) return;
+      const companyText = await companyResponse.text();
+      const parsed = companyText ? JSON.parse(companyText) : null;
+      const companyObj: any = Array.isArray(parsed)
+        ? (parsed.find((c: any) => c?.id_client_company === company.id_client_company) ?? parsed[0] ?? null)
+        : parsed;
+      const collaborators = Array.isArray(companyObj?.collaborators) ? companyObj.collaborators : [];
+      setCompany(prev => (prev ? ({ ...(prev as any), collaborators } as any) : prev));
+    } catch {
+      // keep current state on error
+    }
+  }, [company?.id_client_company, user?.id_tenant, user?.id_user]);
+
   const openShareModal = async () => {
-    if (!user?.id_tenant) return;
-    try {
-      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
-      if (!res.ok) throw new Error('Error');
-      const data = await res.json();
-      const activos = Array.isArray(data)
-        ? data.filter((u: any) => u.status_user !== 'Inactivo' && u.id_user !== user.id_user)
-        : [];
-      setShareUsers(activos);
-      setShareTargets([]);
-      setSharePermission('VIEW');
-      setShareModalOpen(true);
-    } catch (e: any) {
-      setToast({ message: 'Error al cargar usuarios.', type: 'error' });
+    if (!user?.id_tenant || !company?.id_client_company) return;
+    if (!shareCollaborators.length) {
+      await refreshShareCollaborators();
     }
-  };
-
-  // Función para seleccionar/deseleccionar usuarios (Checkbox logic)
-  const toggleShareTarget = (userId: string) => {
-    setShareTargets(prev =>
-        prev.includes(userId)
-        ? prev.filter(id => id !== userId) // Quitar si ya está
-        : [...prev, userId] // Agregar si no está
-    );
-  };
-
-  const handleShareCompany = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!company || !user?.id_tenant || shareTargets.length === 0) {
-      setToast({ message: 'Selecciona al menos un usuario.', type: 'error' });
-      return;
-    }
-    setShareSubmitting(true);
-    try {
-      const requests = shareTargets.map(target =>
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/companies/share`, {
-          method: 'POST',
-          body: JSON.stringify({
-            id_client_company: company.id_client_company,
-            id_user_target: target,
-            id_tenant: user.id_tenant,
-            permission_level: sharePermission,
-          }),
-        })
-      );
-      await Promise.all(requests);
-      setToast({ message: 'Empresa compartida.', type: 'success' });
-      setShareModalOpen(false);
-    } catch (error: any) {
-      setToast({ message: 'Error al compartir.', type: 'error' });
-    } finally {
-      setShareSubmitting(false);
-    }
+    setShareModalOpen(true);
   };
 
   // --- RENDER ---
@@ -356,8 +408,8 @@ const ClientCompanyDetail: React.FC = () => {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex items-center gap-5">
-                <div className="w-16 h-16 bg-white border border-slate-200 rounded-xl flex items-center justify-center shadow-sm text-indigo-600 text-3xl">
-                    <i className="fa-solid fa-building"></i>
+                <div className="w-16 h-16 flex-shrink-0 flex items-center justify-center font-bold text-[14px] shadow-sm" style={{ backgroundColor: getAvatarColor(company.name_company).bg, color: getAvatarColor(company.name_company).text, border: `2px solid ${getAvatarColor(company.name_company).text}` }}>
+                    {getInitials(company.name_company)}
                 </div>
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 tracking-tight">{company.name_company}</h1>
@@ -400,16 +452,16 @@ const ClientCompanyDetail: React.FC = () => {
                 </button>
               )}
               <button
-                  onClick={openShareModal}
-                  disabled={!canShare}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                      canShare 
-                      ? 'bg-white border border-slate-200 text-slate-700 hover:border-brand-300 hover:text-brand-600 shadow-sm' 
-                      : 'bg-slate-50 text-slate-400 cursor-not-allowed border border-slate-100'
-                  }`}
+                onClick={openShareModal}
+                disabled={!canShare}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  canShare 
+                  ? 'bg-white border border-slate-200 text-slate-700 hover:border-brand-300 hover:text-brand-600 shadow-sm' 
+                  : 'bg-slate-50 text-slate-400 cursor-not-allowed border border-slate-100'
+                }`}
               >
-                  <i className="fa-solid fa-share-nodes"></i>
-                  Compartir
+                <i className="fa-solid fa-user-plus"></i>
+                Asignar
               </button>
             </div>
         </div>
@@ -419,9 +471,10 @@ const ClientCompanyDetail: React.FC = () => {
         
         {/* Detalles Empresa */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Información Clave</h3>
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center gap-3">
+                <span className="w-2 h-6 bg-blue-500 rounded-full"></span>
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Información Clave</h3>
             </div>
             <div className="p-6 space-y-5">
                 {company.razon_social && (
@@ -523,9 +576,72 @@ const ClientCompanyDetail: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400 mb-1">Creado el</p>
-                    <p className="text-sm text-slate-700">{formatDateTime(company.created_at) || '—'}</p>
+                    <p className="text-sm text-slate-700">{formatDateTime((company as any).created_at) || '—'}</p>
                   </div>
                 </div>
+            </div>
+          </div>
+
+          {/* Asignaciones */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 bg-white flex justify-between items-center gap-3">
+              <div className="flex items-center gap-3">
+                <span className="w-2 h-6 bg-indigo-500 rounded-full"></span>
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Asignaciones</h3>
+              </div>
+              <button
+                onClick={openShareModal}
+                disabled={!canShare}
+                className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-colors flex items-center gap-1 ${
+                  canShare
+                  ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
+                  : 'text-slate-300 cursor-not-allowed'
+                }`}
+              >
+                <i className="fa-solid fa-plus"></i>Asignar
+              </button>
+            </div>
+            <div className="p-4">
+              {(company as any).collaborators && (company as any).collaborators.length > 0 ? (
+                <div className="space-y-2">
+                  {(company as any).collaborators.map((collaborator: any) => (
+                    <div key={collaborator.id_user} className="flex items-center justify-between text-xs p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                      <div className="flex items-center gap-2 min-w-0">
+                        {collaborator.avatar ? (
+                          <img src={collaborator.avatar} alt={collaborator.name} className="w-6 h-6 rounded-full border border-slate-200" />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
+                            {(collaborator.name || 'U').charAt(0)}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-medium text-slate-700 truncate flex items-center gap-2">
+                            {collaborator.name}
+                            {(collaborator.rol_user || '').toLowerCase() === 'admin' && (
+                              <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] text-amber-500 leading-none align-middle" title="Control total por admin">
+                                <i className="fa-solid fa-star"></i>
+                              </span>
+                            )}
+                            {(collaborator.permission_level || '').toUpperCase() === 'OWNER' || collaborator.is_owner ? (
+                              <span className="text-[10px] text-slate-400">(Creador)</span>
+                            ) : null}
+                          </p>
+                          <p className="text-slate-400 truncate">
+                            {(() => {
+                              const level = (collaborator.permission_level || '').toUpperCase();
+                              if (level === 'OWNER' || level === 'EDIT') return 'Asignación principal';
+                              if (level === 'VIEW') return 'Asignación secundaria';
+                              return 'Sin asignación';
+                            })()}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-400 text-center py-2">Sin asignaciones</p>
+              )}
             </div>
           </div>
         </div>
@@ -533,12 +649,15 @@ const ClientCompanyDetail: React.FC = () => {
         {/* Lista Contactos */}
         <div className="lg:col-span-2 space-y-6">
           {/* Contactos */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[400px]">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col min-h-[400px]">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-                <h3 className="font-bold text-slate-800 flex items-center gap-2">
-                    <i className="fa-solid fa-users text-slate-400"></i> Contactos
-                    <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{contacts.length}</span>
-                </h3>
+                <div className="flex items-center gap-3">
+                    <span className="w-2 h-6 bg-emerald-500 rounded-full"></span>
+                    <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <i className="fa-solid fa-users text-slate-400"></i> Contactos
+                        <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{contacts.length}</span>
+                    </h3>
+                </div>
                 <button 
                     onClick={handleAddContact} 
                     disabled={!canEditCompany}
@@ -576,10 +695,16 @@ const ClientCompanyDetail: React.FC = () => {
                                     >
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-500 border border-slate-200">
-                                                    {(contact.first_name || 'C').charAt(0)}{(contact.last_name || '').charAt(0)}
-                                                </div>
-                                                <span className="font-medium text-slate-700">{contact.first_name} {contact.last_name}</span>
+                                              {(() => {
+                                                const contactName = contact.full_name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || 'Contacto';
+                                                const color = getAvatarColor(contactName);
+                                                return (
+                                                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border" style={{ backgroundColor: color.bg, color: color.text, borderColor: color.text }}>
+                                                    {getInitials(contactName)}
+                                                  </div>
+                                                );
+                                              })()}
+                                              <span className="font-medium text-slate-700">{contact.full_name || `${contact.first_name || ''} ${contact.last_name || ''}`.trim() || '—'}</span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-sm text-slate-600">{contact.position || '-'}</td>
@@ -615,9 +740,10 @@ const ClientCompanyDetail: React.FC = () => {
           </div>
 
           {/* Mapa */}
-          <div className={`bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative ${(shareModalOpen || isCompanyModalOpen || isModalOpen) ? 'z-0' : ''}`}>
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+          <div className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative ${(shareModalOpen || isCompanyModalOpen || isModalOpen) ? 'z-0' : ''}`}>
+            <div className="px-6 py-4 border-b border-slate-100 bg-white flex items-center gap-3">
+                <span className="w-2 h-6 bg-purple-500 rounded-full"></span>
+                <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
                     <i className="fa-solid fa-map"></i> Ubicación
                 </h3>
             </div>
@@ -633,109 +759,21 @@ const ClientCompanyDetail: React.FC = () => {
         </div>
       </div>
 
-      {/* SHARE MODAL MEJORADO (Estilo de la imagen) */}
-      {shareModalOpen && createPortal(
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 transition-opacity">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
-            
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-                <h2 className="font-bold text-lg text-slate-800 uppercase tracking-wide">Compartir Empresa</h2>
-                <button onClick={() => setShareModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                    <i className="fa-solid fa-times text-lg"></i>
-                </button>
-            </div>
-
-            <form className="p-6 space-y-6" onSubmit={handleShareCompany}>
-              
-              {/* LISTA DE USUARIOS (CHECKBOXES) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Usuario</label>
-                <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-xl p-2 space-y-1 custom-scrollbar">
-                    {shareUsers.length === 0 ? (
-                        <p className="text-sm text-slate-400 text-center py-4">No hay usuarios disponibles.</p>
-                    ) : (
-                        shareUsers.map(u => {
-                            const isSelected = shareTargets.includes(u.id_user);
-                            return (
-                                <div 
-                                    key={u.id_user} 
-                                    onClick={() => toggleShareTarget(u.id_user)}
-                                    className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all border ${
-                                        isSelected 
-                                        ? 'bg-brand-50 border-brand-200' 
-                                        : 'hover:bg-slate-50 border-transparent'
-                                    }`}
-                                >
-                                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${
-                                        isSelected 
-                                        ? 'bg-brand-600 border-brand-600 text-white' 
-                                        : 'bg-white border-slate-300'
-                                    }`}>
-                                        {isSelected && <i className="fa-solid fa-check text-xs"></i>}
-                                    </div>
-                                    <div>
-                                        <p className={`text-sm font-medium ${isSelected ? 'text-brand-900' : 'text-slate-700'}`}>
-                                            {u.name_user}
-                                        </p>
-                                        <p className="text-xs text-slate-400">{u.email_user}</p>
-                                    </div>
-                                </div>
-                            );
-                        })
-                    )}
-                </div>
-              </div>
-
-              {/* PERMISOS (SEGMENTED CONTROL) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Permiso</label>
-                <div className="flex p-1 bg-slate-100 rounded-xl">
-                  <button
-                    type="button"
-                    onClick={() => setSharePermission('VIEW')}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
-                        sharePermission === 'VIEW' 
-                        ? 'bg-blue-600 text-white shadow-sm' 
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    Solo ver
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSharePermission('EDIT')}
-                    className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
-                        sharePermission === 'EDIT' 
-                        ? 'bg-blue-600 text-white shadow-sm' 
-                        : 'text-slate-500 hover:text-slate-700'
-                    }`}
-                  >
-                    Puede editar
-                  </button>
-                </div>
-              </div>
-
-              {/* FOOTER */}
-              <div className="flex justify-end gap-3 pt-2">
-                <button 
-                    type="button" 
-                    onClick={() => setShareModalOpen(false)} 
-                    className="px-5 py-2.5 rounded-xl text-slate-500 font-bold hover:bg-slate-50 transition-colors"
-                >
-                    Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={shareSubmitting || shareTargets.length === 0}
-                  className="px-6 py-2.5 rounded-xl bg-brand-600 text-white font-bold hover:bg-brand-700 shadow-lg shadow-brand-200 transition-all disabled:opacity-50 disabled:shadow-none"
-                >
-                  {shareSubmitting ? <i className="fa-solid fa-circle-notch fa-spin"></i> : 'Compartir'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>,
-        document.body
+      {shareModalOpen && company && (
+        <ShareModal
+          entity="company"
+          id={company.id_client_company}
+          entityName={company.name_company || company.name || `Empresa #${company.id_client_company}`}
+          creatorName={(company as any).created_by_name || ''}
+          isOpen={shareModalOpen}
+          onClose={() => { setShareModalOpen(false); }}
+          onShared={() => {
+            setToast({ message: 'Asignaciones actualizadas.', type: 'success' });
+            refreshShareCollaborators();
+            refreshCompanyCollaborators();
+          }}
+          currentCollaborators={shareCollaborators}
+        />
       )}
 
       {/* MODAL EDITAR EMPRESA */}
@@ -749,8 +787,8 @@ const ClientCompanyDetail: React.FC = () => {
 
       {/* MODAL DE CONTACTO (Mismo estilo que lista) */}
       {isModalOpen && editingContact && createPortal(
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col">
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-opacity">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col m-4">
             <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
               <h2 className="text-lg font-bold text-slate-800">{isEditMode ? 'Editar Contacto' : 'Nuevo Contacto'}</h2>
               <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">

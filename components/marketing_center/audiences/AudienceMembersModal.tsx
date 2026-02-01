@@ -190,7 +190,7 @@ interface Props {
 }
 
 const AudienceMembersModal: React.FC<Props> = ({ isOpen, onClose, listId, listName, tenantId, userId, isNewList }) => {
-  const { quoteStatuses, products } = useDataCache();
+  const { quoteStatuses, products, countries, companyTypes } = useDataCache();
   const [activeTab, setActiveTab] = useState<'MEMBERS' | 'ADD'>(isNewList ? 'ADD' : 'MEMBERS');
   
   // Datos
@@ -281,38 +281,13 @@ useEffect(() => {
 
   const fetchFilterOptions = async () => {
     try {
-      // Usar los mismos endpoints que CompanyFormModal.tsx
-      const [countriesRes, companytypesRes, labelsRes] = await Promise.all([
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${tenantId}&id_user=${userId}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${tenantId}&id_user=${userId}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/labels?id_tenant=${tenantId}&id_user=${userId}`)
-      ]);
-
-      let countries: FilterOption[] = [];
-      let categories: FilterOption[] = [];
+      // Usar cache para countries y companyTypes
       let tags: FilterOption[] = [];
       let productsList: FilterOption[] = [];
       let quoteStatusesList: FilterOption[] = [];
 
-      // Parse countries
-      if (countriesRes.ok) {
-        const countryData = await countriesRes.json();
-        countries = Array.isArray(countryData) ? countryData.map((c: any) => ({
-          value: c.id_country || c.id || c.name,
-          label: c.name
-        })) : [];
-      }
-
-      // Parse company types
-      if (companytypesRes.ok) {
-        const typeData = await companytypesRes.json();
-        categories = Array.isArray(typeData) ? typeData.map((t: any) => ({
-          value: t.id_company_type || t.id || t.name,
-          label: t.name
-        })) : [];
-      }
-
       // Etiquetas desde API
+      const labelsRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/labels?id_tenant=${tenantId}&id_user=${userId}`);
       if (labelsRes.ok) {
         const labelsData = await labelsRes.json();
         tags = Array.isArray(labelsData)
@@ -339,10 +314,14 @@ useEffect(() => {
         }));
       }
 
+      // Use cached countries and companyTypes
+      const countriesOptions: FilterOption[] = (countries || []).map(c => ({ value: c.id, label: c.name }));
+      const categoriesOptions: FilterOption[] = (companyTypes || []).map(t => ({ value: t.id, label: t.name }));
+
       setFilterOptions({
-        categories,
+        categories: categoriesOptions,
         tags,
-        countries,
+        countries: countriesOptions,
         products: productsList,
         quoteStatuses: quoteStatusesList
       });

@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { useGoogleLogin } from '@react-oauth/google';
-import { microsoftClientId, oauthRedirectUri } from '../services/oauthConfig';
-import { User } from '../types';
-import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
-import { getImageUrl } from '../utils/imageUtils';
-import { apiFetch } from '../services/apiClient';
-import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
+import { microsoftClientId, oauthRedirectUri } from '../../services/oauthConfig';
+import { User } from '../../types';
+import Toast from '../../components/Toast';
+import ConfirmModal from '../../components/ConfirmModal';
+import { getImageUrl } from '../../utils/imageUtils';
+import { apiFetch } from '../../services/apiClient';
+import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
 
 const UserProfile: React.FC = () => {
   const { user } = useAuth(); // Obtener usuario del contexto

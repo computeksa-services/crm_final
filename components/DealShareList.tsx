@@ -14,6 +14,8 @@ interface SharedUser {
 interface DealShareListProps {
   id_trato: string;
   refreshTrigger?: number;
+  compact?: boolean;
+  onEmptyAction?: () => void;
 }
 
 const DealShareList: React.FC<DealShareListProps> = ({ id_trato, refreshTrigger = 0 }) => {

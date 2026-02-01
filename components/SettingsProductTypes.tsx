@@ -104,8 +104,7 @@ const SettingsProductTypes: React.FC = () => {
 
       <div className="flex justify-between items-center mb-6">
         <div>
-            <h3 className="text-lg font-bold text-slate-800">Tipos de Producto</h3>
-            <p className="text-sm text-slate-500">Categoriza tu inventario.</p>
+            <p className="text-sm text-slate-500">Agrupa tus productos y servicios en categorías (hardware, software, consultoría, etc.). Facilita la organización del catálogo y el análisis de ventas por tipo.</p>
         </div>
         <button 
             onClick={handleAddNew} 

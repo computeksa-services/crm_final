@@ -1,11 +1,11 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { useDataCache } from '../contexts/DataCacheContext';
-import { financialService } from '../services/financials.service';
-import Toast from '../components/Toast';
-import { apiFetch } from '../services/apiClient';
-import type { ClientCompany, FinancialTransaction, Quote } from '../types';
+import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
+import { financialService } from '../../services/financials.service';
+import Toast from '../../components/Toast';
+import { apiFetch } from '../../services/apiClient';
+import type { ClientCompany, FinancialTransaction, Quote } from '../../types';
 
 // --- HELPERS ---
 const formatCurrency = (val: number | string) => {

@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { useDataCache } from '../contexts/DataCacheContext';
-import { Tenant } from '../types';
-import Toast from '../components/Toast';
-import ConfirmModal from '../components/ConfirmModal';
-import { getImageUrl } from '../utils/imageUtils';
-import { apiFetch } from '../services/apiClient';
-import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
-import { handleApiResponse } from '../utils/apiResponseHandler';
+import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
+import { Tenant } from '../../types';
+import Toast from '../../components/Toast';
+import ConfirmModal from '../../components/ConfirmModal';
+import { getImageUrl } from '../../utils/imageUtils';
+import { apiFetch } from '../../services/apiClient';
+import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
+import { handleApiResponse } from '../../utils/apiResponseHandler';
 
 const CompaniesList: React.FC = () => {
   const { user } = useAuth();

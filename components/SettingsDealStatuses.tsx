@@ -238,9 +238,9 @@ const SettingsDealStatuses: React.FC = () => {
       onDragStart={() => handleDragStart(globalIndex)}
       onDragOver={(e) => handleDragOver(e, globalIndex)}
       onDragEnd={handleDragEnd}
-      className={`group flex items-start justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all cursor-grab active:cursor-grabbing overflow-hidden ${isDragging ? 'opacity-50 scale-95' : ''}`}
+      className={`group flex items-center justify-between p-3 bg-white rounded-lg border border-slate-200 hover:border-slate-300 hover:shadow-sm transition-all cursor-grab active:cursor-grabbing ${isDragging ? 'opacity-50 scale-95' : ''}`}
     >
-      <div className="flex items-center gap-3 min-w-0 flex-1">
+      <div className="flex items-center gap-3 min-w-0">
         <div className="text-slate-300 group-hover:text-slate-500">
           <i className="fa-solid fa-grip-vertical text-sm"></i>
         </div>
@@ -251,19 +251,19 @@ const SettingsDealStatuses: React.FC = () => {
         >
           <i className={status.icon}></i>
           {status.notify_client && (
-            <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[8px] w-4 h-4 flex items-center justify-center rounded-full shadow-sm" title="Notifica al cliente">
+            <span className="absolute -top-1 -right-1 bg-gradient-to-br from-blue-500 to-blue-600 text-white text-[9px] w-5 h-5 flex items-center justify-center rounded-full shadow-lg border-2 border-white animate-pulse" title="Notifica al cliente por correo">
                 <i className="fa-solid fa-envelope"></i>
             </span>
           )}
         </div>
         <div className="min-w-0">
-          <span className="block font-bold text-sm leading-5" style={{ color: status.color }}>
+          <span className="block font-bold text-sm leading-5 truncate" style={{ color: status.color }}>
             {status.name}
           </span>
         </div>
       </div>
 
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2">
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button onClick={() => handleEdit(status)} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors">
           <i className="fa-solid fa-pen-to-square text-xs"></i>
         </button>
@@ -282,8 +282,7 @@ const SettingsDealStatuses: React.FC = () => {
 
       <div className="flex justify-between items-center mb-6">
         <div>
-            <h3 className="text-lg font-bold text-slate-800">Estados del Pipeline</h3>
-            <p className="text-sm text-slate-500">Configura el flujo de ventas y notificaciones.</p>
+            <p className="text-sm text-slate-500">Define las etapas del pipeline de ventas. Cada estado representa un paso en el proceso comercial y puede configurarse para enviar notificaciones automáticas al cliente.</p>
         </div>
         <div className="flex items-center gap-2">
           {orderChanged && (
@@ -302,7 +301,7 @@ const SettingsDealStatuses: React.FC = () => {
           <i className="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i> <p>No hay estados configurados.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           {/* Renderizado de columnas usando los arrays filtrados */}
           {['DRAFT', 'PROGRESS', 'PAUSED', 'WON', 'LOST'].map(cat => {
              const list = cat === 'DRAFT' ? draftStatuses : cat === 'PROGRESS' ? progressStatuses : cat === 'PAUSED' ? pausedStatuses : cat === 'WON' ? wonStatuses : lostStatuses;
@@ -315,15 +314,15 @@ const SettingsDealStatuses: React.FC = () => {
                  key={cat}
                  onDragOver={(e) => handleDragOverCategory(e)}
                  onDrop={(e) => handleDropOnCategory(e, cat)}
-                 className={`bg-white rounded-2xl shadow-sm border-2 border-${colors[cat]}-200 overflow-hidden`}
+                 className={`bg-white rounded-xl shadow-sm border-2 border-${colors[cat]}-200 overflow-hidden flex flex-col`}
                >
-                 <div className={`bg-gradient-to-r from-${colors[cat]}-500 to-${colors[cat]}-600 p-4 text-white`}>
-                   <div className="flex items-center gap-2 mb-1">
-                     <i className={`fa-solid ${icons[cat]}`}></i>
-                     <h4 className="font-bold text-sm uppercase tracking-wide">{titles[cat]}</h4>
+                 <div className={`bg-gradient-to-r from-${colors[cat]}-500 to-${colors[cat]}-600 p-3 text-white flex-shrink-0`}>
+                   <div className="flex items-center gap-2">
+                     <i className={`fa-solid ${icons[cat]} text-sm`}></i>
+                     <h4 className="font-bold text-xs uppercase tracking-wide">{titles[cat]}</h4>
                    </div>
                  </div>
-                 <div className="p-3 space-y-2 min-h-[200px]">
+                 <div className="p-2 space-y-2 min-h-[150px] flex-1 overflow-auto">
                    {list.map(status => renderStatusCard(status))}
                  </div>
                </div>

@@ -1,8 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { ClientContact, ClientCompany } from '../types';
-import Toast from '../components/Toast';import { apiFetch } from '../services/apiClient';import ConfirmModal from '../components/ConfirmModal';import ContactFormModal from '../components/ContactFormModal';
+import { useAuth } from '../../contexts/AuthContext';
+import { ClientContact, ClientCompany } from '../../types';
+import Toast from '../../components/Toast';
+import { apiFetch } from '../../services/apiClient';
+import ConfirmModal from '../../components/ConfirmModal';
+import ContactFormModal from '../clients/ContactFormModal';
+import NewInteractionForm from '../../components/NewInteractionForm';
+// import InteractionTimeline from '../../components/InteractionTimeline';
 
 const ClientContactDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +20,33 @@ const ClientContactDetail: React.FC = () => {
   const [company, setCompany] = useState<ClientCompany | null>(null);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [refreshTimelineKey, setRefreshTimelineKey] = useState(0);
+  const [isTimelineVisible, setIsTimelineVisible] = useState(true);
+  const [history, setHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+    // --- HISTORIAL DE INTERACCIONES (como en deals) ---
+    const fetchHistory = useCallback(async () => {
+      if (!contact?.id_contact || !user) return;
+      setLoadingHistory(true);
+      try {
+        const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts/history?id_contact=${contact.id_contact}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`;
+        const response = await apiFetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          setHistory(Array.isArray(data) ? data : []);
+        } else {
+          setHistory([]);
+        }
+      } catch (error) {
+        setHistory([]);
+      } finally {
+        setLoadingHistory(false);
+      }
+    }, [contact?.id_contact, user]);
+
+    useEffect(() => {
+      fetchHistory();
+    }, [fetchHistory, refreshTimelineKey]);
   
   // Compartir
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -192,10 +224,6 @@ const ClientContactDetail: React.FC = () => {
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 relative overflow-hidden">
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div className="flex items-center gap-5">
-                <button onClick={() => navigate(-1)} className="text-slate-400 hover:text-slate-600 transition-colors">
-                    <i className="fa-solid fa-arrow-left text-xl"></i>
-                </button>
-                
                 <div className="w-20 h-20 bg-gradient-to-br from-slate-100 to-slate-200 rounded-full flex items-center justify-center text-slate-500 font-bold text-3xl border-4 border-white shadow-sm">
                     {contact.first_name.charAt(0)}{contact.last_name?.charAt(0)}
                 </div>
@@ -263,6 +291,31 @@ const ClientContactDetail: React.FC = () => {
             </div>
           </div>
           
+          {contact.next_contact_date && (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                  <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Seguimiento Activo</h3>
+              </div>
+              <div className="p-6 space-y-5">
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">Fecha Próximo Contacto</p>
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                      <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><i className="fa-solid fa-calendar-check"></i></div>
+                      {new Date(contact.next_contact_date).toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' })}
+                  </div>
+                </div>
+                
+                <div>
+                  <p className="text-xs text-slate-400 mb-1">Siguiente Acción</p>
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                      <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-600 flex items-center justify-center shrink-0"><i className="fa-solid fa-clipboard-list"></i></div>
+                      {contact.next_action_desc || 'No especificada'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {company && (
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center gap-4 hover:border-brand-200 transition-colors cursor-pointer group" onClick={() => navigate(`/app/client-companies/${company.id_client_company}`)}>
                  <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 text-xl shrink-0 group-hover:bg-indigo-100 transition-colors">
@@ -280,19 +333,123 @@ const ClientContactDetail: React.FC = () => {
 
         {/* Right Column: Timeline / Activity */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 min-h-[400px] flex flex-col">
-             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-                <h3 className="font-bold text-slate-800">Historial de Interacciones</h3>
-                <span className="bg-slate-100 text-slate-500 text-xs px-2 py-1 rounded-full">Próximamente</span>
-             </div>
-             
-             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                    <i className="fa-solid fa-timeline text-3xl text-slate-300"></i>
-                </div>
-                <h4 className="font-bold text-slate-700">Sin actividad reciente</h4>
-                <p className="text-sm text-slate-500 max-w-xs mt-2">Aquí podrás ver correos, llamadas y reuniones asociadas a {contact.first_name}.</p>
-             </div>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col">
+            <NewInteractionForm 
+              contactId={contact.id_contact} 
+              onSuccess={() => {
+                setToast({ message: 'Actividad registrada.', type: 'success' });
+                setRefreshTimelineKey(prev => prev + 1);
+                setIsTimelineVisible(true);
+              }} 
+            />
+
+            <div 
+              className="px-6 py-4 border-b border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
+              onClick={() => setIsTimelineVisible(!isTimelineVisible)}
+            >
+              <h3 className="font-bold text-slate-800">Historial de Interacciones</h3>
+              <button className="text-slate-500 hover:text-slate-700 p-1">
+                <i className={`fa-solid fa-chevron-down text-sm transition-transform duration-200 ${isTimelineVisible ? '' : '-rotate-90'}`}></i>
+              </button>
+            </div>
+
+              {isTimelineVisible && (
+                loadingHistory ? (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                    <i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500"></i>
+                  </div>
+                ) : history.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                    <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
+                      <i className="fa-solid fa-comments text-3xl text-slate-300"></i>
+                    </div>
+                    <h4 className="font-bold text-slate-700">Aún no hay actividad registrada</h4>
+                    <p className="text-sm text-slate-500 max-w-xs mt-2">
+                      ¡Inicia el seguimiento registrando tu primera gestión!
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flow-root p-6">
+                    <ul className="-mb-8">
+                      {history.map((item, idx) => {
+                        const interactionType = item.type || item.interaction_type;
+                        const isLast = idx === history.length - 1;
+                        let icon = 'fa-solid fa-note-sticky', iconColor = 'text-blue-400', bg = 'bg-gray-50', typeLabel = 'NOTA';
+                        if (interactionType === 'CALL') { icon = 'fa-solid fa-phone'; iconColor = 'text-green-500'; bg = 'bg-sky-50'; typeLabel = 'LLAMADA'; }
+                        if (interactionType === 'MEETING') { icon = 'fa-solid fa-handshake'; iconColor = 'text-purple-500'; bg = 'bg-purple-50'; typeLabel = 'REUNIÓN'; }
+                        if (interactionType === 'EMAIL') { icon = 'fa-solid fa-envelope'; iconColor = 'text-amber-500'; bg = 'bg-amber-50'; typeLabel = 'EMAIL'; }
+                        if (interactionType === 'SYSTEM') { icon = 'fa-solid fa-robot'; iconColor = 'text-slate-400'; bg = 'bg-slate-100'; typeLabel = 'SISTEMA'; }
+                        return (
+                          <li key={item.id_interaction}>
+                            <div className="relative pb-8">
+                              {!isLast && (
+                                <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-slate-200" aria-hidden="true" />
+                              )}
+                              <div className="flex items-start gap-3">
+                                {/* Avatar/Icono */}
+                                <div className="relative w-9 h-9">
+                                  <img
+                                    src={item.user_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.user_name || 'S')}&background=random`}
+                                    alt="avatar"
+                                    className="w-9 h-9 rounded-full border border-slate-200 object-cover absolute top-0 left-0 z-0"
+                                  />
+                                  <span className={`absolute bottom-0 right-0 w-5 h-5 rounded-full flex items-center justify-center text-xs border-2 border-white bg-slate-100 z-10 ${iconColor}`}
+                                    title={typeLabel}
+                                  >
+                                    <i className={`${icon}`}></i>
+                                  </span>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-bold text-slate-800 text-sm truncate">
+                                      {item.user_name || 'Sistema'}
+                                    </span>
+                                    <span className="text-xs text-slate-400">{item.date_fmt || (item.created_at && new Date(item.created_at).toLocaleString('es-ES', { dateStyle: 'medium', timeStyle: 'short' }))}</span>
+                                    <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase border ${
+                                      interactionType === 'CALL' ? 'bg-green-50 text-green-600 border-green-100' :
+                                      interactionType === 'MEETING' ? 'bg-purple-50 text-purple-600 border-purple-100' :
+                                      interactionType === 'EMAIL' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                                      interactionType === 'SYSTEM' ? 'bg-slate-100 text-slate-400 border-slate-200' :
+                                      'bg-blue-50 text-blue-600 border-blue-100'
+                                    }`}>
+                                      {typeLabel}
+                                    </span>
+                                    {item.is_deal_interaction !== undefined && (
+                                      <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${item.is_deal_interaction ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-blue-50 text-blue-600 border border-blue-100'}`}>
+                                        {item.is_deal_interaction ? 'FASE TRATO' : 'FASE PROSPECCIÓN'}
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="mt-1">
+                                    {interactionType === 'SYSTEM' ? (
+                                      <div className="italic text-slate-400 text-[14px] flex items-center gap-2">
+                                        <i className="fa-solid fa-gear"></i>
+                                        {item.description}
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <div className="text-slate-700 text-[15px] whitespace-pre-line">{item.description}</div>
+                                        {(item.next_action_desc || item.next_contact_date) && (
+                                          <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
+                                            <i className="fa-solid fa-arrow-right text-slate-400"></i>
+                                            <span className="font-semibold">Siguiente acción:</span>
+                                            {item.next_action_desc && <span>{item.next_action_desc}</span>}
+                                            {item.next_contact_date && <span className="ml-2">({new Date(item.next_contact_date).toLocaleDateString('es-EC', { day: '2-digit', month: '2-digit', year: 'numeric' })})</span>}
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )
+              )}
           </div>
         </div>
       </div>

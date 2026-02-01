@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { ClientContact, ClientCompany } from '../types';
-import Toast from './Toast';
-import { useAuth } from '../contexts/AuthContext';
-import { apiFetch } from '../services/apiClient';
+import { ClientContact, ClientCompany } from '../../types';
+import Toast from '../../components/Toast';
+import { useAuth } from '../../contexts/AuthContext';
+import { apiFetch } from '../../services/apiClient';
 
 interface ContactFormModalProps {
   isOpen: boolean;
