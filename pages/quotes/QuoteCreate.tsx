@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
 import { Quote, ClientCompany, ClientContact, QuoteStatus, Deal, UserDecision, CustomStatus, DealChannel } from '../../types';
 import { apiFetch } from '../../services/apiClient';
 import Toast from '../../components/Toast';
@@ -11,16 +12,20 @@ const QuoteCreate: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { 
+    companies, 
+    contacts, 
+    quoteStatuses, 
+    dealStatuses, 
+    dealInterests, 
+    dealChannels,
+    loading: cacheLoading,
+    invalidateCompanies,
+    invalidateContacts
+  } = useDataCache();
   
-  // --- ESTADOS DE DATOS ---
-  const [companies, setCompanies] = useState<ClientCompany[]>([]);
-  const [contacts, setContacts] = useState<ClientContact[]>([]);
+  // --- ESTADOS DE DATOS (Solo deals no está en cache) ---
   const [deals, setDeals] = useState<Deal[]>([]);
-  // Aunque ya no seleccionamos estado manualmente, cargamos los status por si necesitamos lógica interna
-  const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]); 
-  const [dealStatuses, setDealStatuses] = useState<CustomStatus[]>([]);
-  const [interestStatuses, setInterestStatuses] = useState<CustomStatus[]>([]);
-  const [dealChannels, setDealChannels] = useState<DealChannel[]>([]);
   
   // --- ESTADOS DEL FORMULARIO ---
   const [quote, setQuote] = useState<Partial<Quote>>({});
@@ -32,6 +37,7 @@ const QuoteCreate: React.FC = () => {
   
   // --- ESTADOS DE UI ---
   const [createNewDeal, setCreateNewDeal] = useState(false);
+  const [isLinkingDeal, setIsLinkingDeal] = useState(false); // Controla si está activo el vinculador
   const [isLoading, setIsLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -58,62 +64,21 @@ const QuoteCreate: React.FC = () => {
 
     try {
       setIsLoading(true);
-      const endpoints = [
-        `clients/companies?id_tenant=${tenantId}&id_user=${userId}`,
-        `clients/contacts?id_tenant=${tenantId}&id_user=${userId}`,
-        `statuses/quotes?id_tenant=${tenantId}&id_user=${userId}`,
-        `deals?id_tenant=${tenantId}&id_user=${userId}`,
-        `statuses/deals?id_tenant=${tenantId}&id_user=${userId}`,
-        `statuses/interests?id_tenant=${tenantId}&id_user=${userId}`,
-        `channel?id_tenant=${tenantId}&id_user=${userId}`
-      ];
-
-      const responses = await Promise.all(
-        endpoints.map(ep => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/${ep}`))
-      );
-
-      const data = await Promise.all(responses.map(async (res, index) => {
-        try {
-          if (!res.ok) {
-            // Si es 404 o cualquier error, devolver array vacío
-            return [];
+      
+      // Si viene dealId en URL, cargar solo ese deal específico
+      // Sino, no cargar deals aún (se cargarán on-demand cuando se necesiten)
+      if (dealId) {
+        const dealsRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals?id_tenant=${tenantId}&id_user=${userId}`);
+        let dealsData: Deal[] = [];
+        
+        if (dealsRes.ok) {
+          const text = await dealsRes.text();
+          if (text && text.trim() !== '' && text !== 'null') {
+            dealsData = JSON.parse(text);
           }
-          const text = await res.text();
-          if (!text || text.trim() === '' || text === 'null') {
-            return [];
-          }
-          return JSON.parse(text);
-        } catch (e) {
-          console.error(`Error parsing response from ${endpoints[index]}:`, e);
-          return [];
         }
-      }));
-
-      const [
-        companiesData, contactsData, statusesData, dealsData, 
-        dealStatusesData, interestStatusesData, channelsData
-      ] = data;
-
-      // Parsear companiesData para soportar unified_response.rows
-      let companiesArray: any[] = [];
-      if (Array.isArray(companiesData)) {
-        const unified = companiesData.find(item => item && typeof item === 'object' && 'unified_response' in item);
-        if (unified?.unified_response?.rows && Array.isArray(unified.unified_response.rows)) {
-          companiesArray = unified.unified_response.rows;
-        } else {
-          companiesArray = companiesData;
-        }
-      } else if (companiesData?.unified_response?.rows && Array.isArray(companiesData.unified_response.rows)) {
-        companiesArray = companiesData.unified_response.rows;
+        setDeals(dealsData);
       }
-
-      setCompanies(companiesArray);
-      setContacts(contactsData);
-      setQuoteStatuses(statusesData);
-      setDeals(dealsData);
-      setDealStatuses(dealStatusesData);
-      setInterestStatuses(interestStatusesData);
-      setDealChannels(channelsData);
 
       // Si hay id de cotización, cargar datos para edición
       if (quoteId) {
@@ -129,13 +94,13 @@ const QuoteCreate: React.FC = () => {
             ? q.condicion_pago
             : (q.condicion_pago ? 'OTRO' : 'Contado'));
           if (q.id_client_company) {
-            setFilteredContacts(contactsData.filter((c: ClientContact) => String(c.id_client_company) === String(q.id_client_company)));
+            setFilteredContacts(contacts.filter((c: ClientContact) => String(c.id_client_company) === String(q.id_client_company)));
           }
         }
       } else {
         // Valores por defecto para nueva cotización
-        const defaultInterest = interestStatusesData.find((s: CustomStatus) => s.is_default) || interestStatusesData[0];
-        const defaultChannel = channelsData.find((c: DealChannel) => c.is_default) || channelsData[0];
+        const defaultInterest = dealInterests.find((s) => s.is_default) || dealInterests[0];
+        const defaultChannel = dealChannels.find((c) => c.is_default) || dealChannels[0];
         const initialQuote: Partial<Quote> = {
           nombre_cotizacion: dealName ? `Cotización para ${dealName}` : '',
           id_trato: dealId || '',
@@ -162,8 +127,8 @@ const QuoteCreate: React.FC = () => {
             : (initialQuote.condicion_pago ? 'OTRO' : 'Contado')
         );
         if (initialQuote.id_client_company) {
-          setFilteredContacts(contactsData.filter((c: ClientContact) => String(c.id_client_company) === String(initialQuote.id_client_company)));
-          setFilteredDeals(dealsData.filter((d: Deal) => String(d.id_client_company) === String(initialQuote.id_client_company)));
+          setFilteredContacts(contacts.filter((c: ClientContact) => String(c.id_client_company) === String(initialQuote.id_client_company)));
+          setFilteredDeals(deals.filter((d: Deal) => String(d.id_client_company) === String(initialQuote.id_client_company)));
         }
         // Inicializar Nuevo Trato
         setNewDeal({
@@ -178,7 +143,7 @@ const QuoteCreate: React.FC = () => {
           descripcion: ''
         });
         // Si no hay trato en URL y no hay tratos disponibles, forzar creación
-        if (!dealId && dealsData.length === 0) {
+        if (!dealId && deals.length === 0) {
           setCreateNewDeal(true);
         }
       }
@@ -188,7 +153,7 @@ const QuoteCreate: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [user, location.search]);
+  }, [user, location.search, companies, contacts, quoteStatuses, dealStatuses, dealInterests, dealChannels]);
 
   useEffect(() => {
     fetchData();
@@ -255,7 +220,23 @@ const QuoteCreate: React.FC = () => {
   );
 
   // --- HANDLERS ---
-
+  // Cargar deals on-demand cuando el usuario abre el dropdown
+  const handleDealDropdownOpen = async () => {
+    if (deals.length === 0 && user?.id_tenant && user?.id_user) {
+      try {
+        const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        if (res.ok) {
+          const text = await res.text();
+          if (text && text.trim() !== '' && text !== 'null') {
+            const dealsData = JSON.parse(text);
+            setDeals(dealsData);
+          }
+        }
+      } catch (e) {
+        console.error('Error loading deals:', e);
+      }
+    }
+  };
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     if (name === 'correos_adicionales') {
@@ -344,8 +325,8 @@ const QuoteCreate: React.FC = () => {
     setNewDeal((prev: any) => ({ ...prev, [name]: value }));
   };
 
-  const handleCompanyCreated = (newCompany: ClientCompany) => {
-    setCompanies(prev => [...prev, newCompany]);
+  const handleCompanyCreated = async (newCompany: ClientCompany) => {
+    await invalidateCompanies();
     setQuote(prev => ({ ...prev, id_client_company: newCompany.id_client_company, id_contact: '' }));
     setNewDeal((prev: any) => ({ ...prev, id_client_company: newCompany.id_client_company, id_contact: '' }));
     setFilteredContacts(contacts.filter(c => String(c.id_client_company) === String(newCompany.id_client_company)));
@@ -353,10 +334,10 @@ const QuoteCreate: React.FC = () => {
     setToast({ message: 'Empresa creada exitosamente.', type: 'success' });
   };
 
-  const handleContactCreated = (newContact: ClientContact) => {
-    setContacts(prev => [...prev, newContact]);
+  const handleContactCreated = async (newContact: ClientContact) => {
+    await invalidateContacts();
     if (newContact.id_client_company && String(newContact.id_client_company) === String(quote.id_client_company)) {
-      setFilteredContacts(prev => [...prev, newContact]);
+      setFilteredContacts(contacts.filter(c => String(c.id_client_company) === String(quote.id_client_company)));
     }
     setQuote(prev => ({ ...prev, id_contact: newContact.id_contact }));
     setNewDeal((prev: any) => ({ ...prev, id_contact: newContact.id_contact }));
@@ -776,6 +757,41 @@ const QuoteCreate: React.FC = () => {
                     </div>
                     <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1.5">Correos en copia (CC)</label>
+                        
+                        {/* Sugerencias de contactos de la empresa */}
+                        {quote.id_contact && filteredContacts.length > 0 && (() => {
+                          const currentEmails = (quote.correos_adicionales || '').split(',').map(v => v.trim()).filter(Boolean);
+                          const availableContacts = filteredContacts.filter(c => 
+                            c.email && 
+                            String(c.id_contact) !== String(quote.id_contact) &&
+                            !currentEmails.includes(c.email)
+                          );
+                          
+                          if (availableContacts.length === 0) return null;
+                          
+                          return (
+                            <div className="mb-2 flex flex-wrap gap-2">
+                              <span className="text-[10px] text-slate-400 uppercase font-bold">Sugerencias:</span>
+                              {availableContacts.map(contact => (
+                                <button
+                                  key={contact.id_contact}
+                                  type="button"
+                                  onClick={() => {
+                                    if (contact.email) {
+                                      const current = (quote.correos_adicionales || '').split(',').map(v => v.trim()).filter(Boolean);
+                                      setQuote(prev => ({ ...prev, correos_adicionales: [...current, contact.email].join(',') }));
+                                    }
+                                  }}
+                                  className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-full px-2 py-1 text-xs font-medium transition-colors border border-indigo-200"
+                                >
+                                  <i className="fa-solid fa-plus text-[9px]"></i>
+                                  {contact.first_name} {contact.last_name}
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
+
                         <div className="flex flex-wrap gap-2 mb-2">
                           {(quote.correos_adicionales || '').split(',').map((email, idx) => {
                             const trimmed = email.trim();
@@ -844,97 +860,123 @@ const QuoteCreate: React.FC = () => {
                    </div>
                 ) : (
                     <div className="space-y-4">
-                        <div className="flex bg-slate-100 p-1 rounded-lg w-full">
-                            <button
-                                onClick={() => { setCreateNewDeal(false); setQuote(p => ({...p, id_trato: ''})); }}
-                                className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all ${!createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                Trato Existente
-                            </button>
-                            <button
-                                onClick={() => { setCreateNewDeal(true); setQuote(p => ({...p, id_trato: ''})); }}
-                                className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all ${createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                            >
-                                Nuevo Trato
-                            </button>
-                        </div>
+                        {/* TOGGLE: Vincular a Trato */}
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                            <input
+                                type="checkbox"
+                                checked={isLinkingDeal}
+                                onChange={(e) => {
+                                  setIsLinkingDeal(e.target.checked);
+                                  if (!e.target.checked) {
+                                    setQuote(p => ({...p, id_trato: ''}));
+                                    setCreateNewDeal(false);
+                                  }
+                                }}
+                                className="w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500 cursor-pointer"
+                            />
+                            <span className="text-sm font-semibold text-slate-700 group-hover:text-slate-900">Vincular a un Trato</span>
+                        </label>
 
-                        {!createNewDeal ? (
-                            (!filteredDeals || filteredDeals.length === 0) ? (
-                              <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs text-slate-500 text-center">
-                                No hay tratos existentes para esta empresa.
-                              </div>
-                            ) : (
-                              <div className="relative">
-                                <label className="block text-xs font-bold text-slate-600 mb-1.5">Trato Abierto</label>
-                                <select 
-                                  name="id_trato" 
-                                  value={quote.id_trato || ''} 
-                                  onChange={handleInputChange} 
-                                  className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none text-sm"
-                                >
-                                  <option value="">-- Ninguno --</option>
-                                  {filteredDeals.map(d => <option key={d.id_trato} value={d.id_trato}>{d.nombre_trato}</option>)}
-                                </select>
-                                <i className="fa-solid fa-chevron-down absolute right-3 top-9 text-slate-400 text-xs pointer-events-none"></i>
-                              </div>
-                            )
-                        ) : (
-                            <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-600 mb-1.5">Nombre <span className="text-red-500">*</span></label>
-                                    <input
-                                        name="nombre_trato"
-                                        value={newDeal.nombre_trato || ''}
-                                        onChange={handleNewDealChange}
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
-                                        placeholder="Auto-generado..."
-                                    />
+                        {/* OPCIONES: Solo mostrar si está activado */}
+                        {isLinkingDeal && (
+                            <div className="space-y-4">
+                                {/* TABS: Trato Existente vs Nuevo Trato */}
+                                <div className="flex bg-slate-100 p-1 rounded-lg w-full">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setCreateNewDeal(false); setQuote(p => ({...p, id_trato: ''})); }}
+                                        className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all ${!createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        Trato Existente
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setCreateNewDeal(true); setQuote(p => ({...p, id_trato: ''})); }}
+                                        className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all ${createNewDeal ? 'bg-white text-brand-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                                    >
+                                        Nuevo Trato
+                                    </button>
                                 </div>
-                                
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-600 mb-1.5">Interés <span className="text-red-500">*</span></label>
-                                    <div className="relative">
-                                        <select
-                                            name="id_interest"
-                                            value={newDeal.id_interest || ''}
-                                            onChange={handleNewDealChange}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
+
+                                {/* SELECT TRATO EXISTENTE */}
+                                {!createNewDeal ? (
+                                    (!filteredDeals || filteredDeals.length === 0) ? (
+                                      <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 text-xs text-slate-500 text-center">
+                                        No hay tratos existentes para esta empresa.
+                                      </div>
+                                    ) : (
+                                      <div className="relative">
+                                        <label className="block text-xs font-bold text-slate-600 mb-1.5">Trato Abierto</label>
+                                        <select 
+                                          name="id_trato" 
+                                          value={quote.id_trato || ''} 
+                                          onChange={handleInputChange}
+                                          onFocus={handleDealDropdownOpen}
+                                          className="w-full px-3 py-2 border border-slate-300 rounded-lg bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none text-sm"
                                         >
-                                            <option value="">-- Seleccionar --</option>
-                                            {interestStatuses.map((opt: any) => (
-                                                <option key={opt.id_status || opt.id_interest} value={opt.id_status || opt.id_interest}>
-                                                    {opt.name}
-                                                </option>
-                                            ))}
+                                          <option value="">-- Seleccionar Trato --</option>
+                                          {filteredDeals.map((d, idx) => <option key={`${d.id_trato}-${idx}`} value={d.id_trato}>{d.nombre_trato}</option>)}
                                         </select>
-                                        <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-slate-400 text-xs pointer-events-none"></i>
+                                        <i className="fa-solid fa-chevron-down absolute right-3 top-9 text-slate-400 text-xs pointer-events-none"></i>
+                                      </div>
+                                    )
+                                ) : (
+                                    <div className="bg-slate-50 rounded-lg p-4 border border-slate-200 space-y-3">
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-1.5">Nombre <span className="text-red-500">*</span></label>
+                                            <input
+                                                name="nombre_trato"
+                                                value={newDeal.nombre_trato || ''}
+                                                onChange={handleNewDealChange}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                                                placeholder="Auto-generado..."
+                                            />
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-1.5">Interés <span className="text-red-500">*</span></label>
+                                            <div className="relative">
+                                                <select
+                                                    name="id_interest"
+                                                    value={newDeal.id_interest || ''}
+                                                    onChange={handleNewDealChange}
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
+                                                >
+                                                    <option value="">-- Seleccionar --</option>
+                                                    {dealInterests.map((opt: any) => (
+                                                        <option key={opt.id_status || opt.id_interest} value={opt.id_status || opt.id_interest}>
+                                                            {opt.name}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-slate-400 text-xs pointer-events-none"></i>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-xs font-bold text-slate-600 mb-1.5">Canal <span className="text-red-500">*</span></label>
+                                            <div className="relative">
+                                                <select
+                                                    name="id_channel"
+                                                    value={newDeal.id_channel || ''}
+                                                    onChange={handleNewDealChange}
+                                                    className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
+                                                >
+                                                    <option value="">-- Seleccionar --</option>
+                                                    {dealChannels.map((opt: any) => (
+                                                        <option key={opt.id_channel} value={opt.id_channel}>{opt.name}</option>
+                                                    ))}
+                                                </select>
+                                                <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-slate-400 text-xs pointer-events-none"></i>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-600 mb-1.5">Canal <span className="text-red-500">*</span></label>
-                                    <div className="relative">
-                                        <select
-                                            name="id_channel"
-                                            value={newDeal.id_channel || ''}
-                                            onChange={handleNewDealChange}
-                                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none"
-                                        >
-                                            <option value="">-- Seleccionar --</option>
-                                            {dealChannels.map((opt: any) => (
-                                                <option key={opt.id_channel} value={opt.id_channel}>{opt.name}</option>
-                                            ))}
-                                        </select>
-                                        <i className="fa-solid fa-chevron-down absolute right-3 top-3 text-slate-400 text-xs pointer-events-none"></i>
-                                    </div>
-                                </div>
+                                )}
                             </div>
                         )}
                     </div>
                 )}
             </div>
-
         </div>
       </div>
 
