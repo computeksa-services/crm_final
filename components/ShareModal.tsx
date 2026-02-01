@@ -235,7 +235,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="px-6 py-4 border-b border-slate-200 bg-white flex justify-between items-center">
           <div className="flex items-center gap-3">
             <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
@@ -289,11 +289,6 @@ const ShareModal: React.FC<ShareModalProps> = ({
                           <div className="min-w-0">
                             <p className="text-sm font-medium text-slate-700 truncate flex items-center gap-2">
                               {collab?.name || userId}
-                              {isAdmin && (
-                                <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] text-amber-500 leading-none align-middle" title="Permiso total por admin">
-                                  <i className="fa-solid fa-star"></i>
-                                </span>
-                              )}
                               {isOwner && (
                                 <span className="text-[10px] text-slate-400">(Creador)</span>
                               )}

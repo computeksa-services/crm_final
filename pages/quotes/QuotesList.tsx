@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
 import { Quote, ClientCompany, ClientContact, QuoteStatus } from '../../types';
 import { apiFetch } from '../../services/apiClient';
 import Toast from '../../components/Toast';
@@ -172,17 +173,15 @@ const InlineBadgeSelector: React.FC<{
 const QuotesList: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { users } = useDataCache(); // ⬅️ Obtener usuarios de cache
   
   // --- DATA STATE ---
   const [quotes, setQuotes] = useState<Quote[]>([]);
-  const [companies, setCompanies] = useState<ClientCompany[]>([]);
-  const [contacts, setContacts] = useState<ClientContact[]>([]);
-  const [quoteStatuses, setQuoteStatuses] = useState<QuoteStatus[]>([]);
   const [metadata, setMetadata] = useState<{ statuses: QuoteStatus[] } | null>(null);
   const [loading, setLoading] = useState(true);
 
   // --- TABLE STATE ---
-  const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }]);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   const [grouping, setGrouping] = useState<GroupingState>(() => {
@@ -196,10 +195,6 @@ const QuotesList: React.FC = () => {
   const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingQuote, setEditingQuote] = useState<Partial<Quote> | null>(null);
-  const [filteredContacts, setFilteredContacts] = useState<ClientContact[]>([]);
-  const [submitting, setSubmitting] = useState(false);
   
   // --- MODALS ---
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -215,47 +210,34 @@ const QuotesList: React.FC = () => {
     setLoading(true);
 
     try {
-      const [quotesRes, companiesRes, contactsRes, statusesRes] = await Promise.all([
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes`)
-      ]);
-      
-      const parse = async (res: Response) => { const t = await res.text(); return t ? JSON.parse(t) : []; };
+      const quotesRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`);
       
       if (!quotesRes.ok && quotesRes.status !== 404) throw new Error('Error al cargar cotizaciones');
       
-      const quotesData = await parse(quotesRes);
-      const statusesData = await parse(statusesRes);
+      const text = await quotesRes.text();
+      const data = text ? JSON.parse(text) : null;
       
-      // Extraer respuesta maestra: { quotes: [...], metadata: { statuses: [...] } }
-      if (quotesData && quotesData.quotes && quotesData.metadata) {
-        setQuotes(quotesData.quotes);
-        setMetadata(quotesData.metadata);
-        setQuoteStatuses(quotesData.metadata.statuses || []);
-      } else if (Array.isArray(quotesData)) {
-        // Fallback si es array directo
-        setQuotes(quotesData);
+      // Estructura esperada: [{ response: { quotes: [...], metadata: { statuses: [...] } } }]
+      if (Array.isArray(data) && data[0]?.response) {
+        const response = data[0].response;
+        setQuotes(response.quotes || []);
+        setMetadata(response.metadata || null);
+      } else if (data?.quotes && data?.metadata) {
+        // Fallback: { quotes: [...], metadata: {...} }
+        setQuotes(data.quotes);
+        setMetadata(data.metadata);
+      } else if (Array.isArray(data)) {
+        // Fallback: array directo
+        setQuotes(data);
       }
-      
-      // Cargar estados desde el endpoint dedicado
-      if (Array.isArray(statusesData) && statusesData.length > 0) {
-        setQuoteStatuses(statusesData);
-        if (!metadata) {
-          setMetadata({ statuses: statusesData });
-        }
-      }
-      
-      setCompanies(await parse(companiesRes));
-      setContacts(await parse(contactsRes));
 
     } catch (e) {
+      console.error('Error al cargar cotizaciones:', e);
       setToast({ message: 'Error al cargar datos.', type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [user?.id_tenant, user?.id_user, metadata]);
+  }, [user?.id_tenant, user?.id_user]);
 
   useEffect(() => {
     fetchData();
@@ -280,7 +262,7 @@ const QuotesList: React.FC = () => {
     quotes.forEach(quote => {
         let val = (quote as any)[columnId];
         if (columnId === 'id_quote_status') {
-            const status = (metadata?.statuses || quoteStatuses).find(s => s.id_status === val);
+            const status = (metadata?.statuses || []).find(s => s.id_status === val);
             val = status ? status.name : 'Desconocido';
         }
         if (!val) val = '(Vacío)';
@@ -290,17 +272,6 @@ const QuotesList: React.FC = () => {
   };
 
   // --- ACTIONS HANDLERS ---
-  const handleEdit = (quote: Quote) => {
-    setEditingQuote(quote);
-    // Filtrar contactos para el modal de edición
-    if (quote.id_client_company) {
-        setFilteredContacts(contacts.filter(c => c.id_client_company === quote.id_client_company));
-    } else {
-        setFilteredContacts([]);
-    }
-    setIsModalOpen(true);
-  };
-
   const openShareModal = async (quote: Quote) => {
     setShareQuoteId(quote.id_cotizacion as string);
     setShareQuote(quote);
@@ -337,7 +308,7 @@ const QuotesList: React.FC = () => {
     
     const isStatusChange = updates.id_quote_status && updates.id_quote_status !== quote.id_quote_status;
     const targetStatus = isStatusChange
-      ? (metadata?.statuses || quoteStatuses).find((s) => s.id_status === updates.id_quote_status)
+      ? (metadata?.statuses || []).find((s) => s.id_status === updates.id_quote_status)
       : undefined;
 
     const runUpdate = async () => {
@@ -405,41 +376,6 @@ const QuotesList: React.FC = () => {
     });
   };
 
-  // Función para manejar cambios en el form de edición
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    const isCompanyChange = name === 'id_client_company';
-    
-    if (isCompanyChange) {
-        setFilteredContacts(contacts.filter(c => c.id_client_company === value));
-        setEditingQuote(prev => (prev ? { ...prev, [name]: value, id_contact: '' } : null));
-    } else {
-        setEditingQuote(prev => (prev ? { ...prev, [name]: value } : null));
-    }
-  };
-
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingQuote || !user) return;
-    setSubmitting(true);
-    try {
-        const payload = { ...editingQuote, id_tenant: user.id_tenant, id_user: user.id_user, is_private: !!editingQuote.is_private };
-        const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/update`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error();
-        setToast({ message: 'Cotización actualizada.', type: 'success' });
-        setIsModalOpen(false);
-        fetchData();
-    } catch {
-        setToast({ message: 'Error al guardar.', type: 'error' });
-    } finally {
-        setSubmitting(false);
-    }
-  };
-
   // --- COLUMNS DEFINITION ---
   const columns = useMemo<ColumnDef<Quote>[]>(() => [
     {
@@ -451,7 +387,7 @@ const QuotesList: React.FC = () => {
             // CORRECCIÓN: Renderizar cabecera de grupo solo si estamos agrupando por estado
             if (row.getIsGrouped()) {
                 if (grouping.includes(column.id)) {
-                    const status = (metadata?.statuses || quoteStatuses).find(s => s.id_status === getValue());
+                    const status = (metadata?.statuses || []).find(s => s.id_status === getValue());
                     return renderGroupCell(row, status?.name || 'Desconocido');
                 }
                 return null;
@@ -459,14 +395,14 @@ const QuotesList: React.FC = () => {
             return (
                 <InlineBadgeSelector 
                     valueId={getValue() as number}
-                    items={(metadata?.statuses || quoteStatuses).map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon }))}
+                    items={(metadata?.statuses || []).map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon }))}
                     onSelect={(id) => handleInlineUpdate(row.original, { id_quote_status: String(id) })}
                     disabled={!(row.original.access_level === 'EDIT' || user?.rol_user === 'admin')}
                 />
             );
         },
         filterFn: (row, id, filterValue: string[]) => {
-             const status = (metadata?.statuses || quoteStatuses).find(s => s.id_status === row.getValue(id));
+             const status = (metadata?.statuses || []).find(s => s.id_status === row.getValue(id));
              const statusName = status ? status.name : 'Desconocido';
              return filterValue.length === 0 || filterValue.includes(statusName);
         }
@@ -475,28 +411,48 @@ const QuotesList: React.FC = () => {
         accessorKey: 'formatted_no_cotizacion',
         header: 'Nro.',
         size: 80,
+        enableColumnFilter: false,
         cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="font-bold text-brand-600 text-xs">{getValue() as string}</span>
     },
     {
         accessorKey: 'nombre_cotizacion',
         header: 'Nombre',
         size: 200,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-slate-700 text-sm font-medium">{getValue() as string}</span>
+        minSize: 150,
+        maxSize: 250,
+        cell: ({ getValue, row }) => {
+            if (row.getIsGrouped()) return null;
+            const nombre = getValue() as string;
+            return (
+                <div className="overflow-hidden" style={{ maxWidth: '250px' }}>
+                    <span 
+                        className="text-slate-700 text-sm font-medium block truncate" 
+                        title={nombre}
+                    >
+                        {nombre}
+                    </span>
+                </div>
+            );
+        }
     },
     {
       accessorKey: 'client_company_name',
       header: 'Cliente',
       size: 220,
+      minSize: 180,
+      maxSize: 250,
       enableColumnFilter: true,
       cell: ({ row, getValue, column }) => {
         // CORRECCIÓN PRINCIPAL: Solo renderizar grupo si ESTA columna es la agrupada
         if (row.getIsGrouped()) {
             return grouping.includes(column.id) ? renderGroupCell(row, getValue() as string || 'Sin Cliente') : null;
         }
+        const companyName = getValue() as string;
+        const contactName = row.original.contact_full_name || 'Sin contacto';
         return (
-            <div className="flex flex-col">
-                <span className="font-bold text-slate-700 text-xs uppercase">{getValue() as string}</span>
-                <span className="text-[11px] text-slate-400">{row.original.contact_full_name || 'Sin contacto'}</span>
+            <div className="flex flex-col overflow-hidden" style={{ maxWidth: '250px' }}>
+                <span className="font-bold text-slate-700 text-xs uppercase truncate" title={companyName}>{companyName}</span>
+                <span className="text-[11px] text-slate-400 truncate" title={contactName}>{contactName}</span>
             </div>
         );
       }
@@ -509,26 +465,91 @@ const QuotesList: React.FC = () => {
         cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="font-mono font-bold text-slate-700 text-xs bg-slate-50 px-2 py-1 rounded border border-slate-100">{formatCurrency(getValue() as string)}</span>
     },
     {
-        accessorKey: 'created_by_name',
-        header: 'Owner',
-        size: 150,
+        accessorKey: 'collaborators',
+        header: 'Colaboradores',
+        size: 200,
         enableColumnFilter: true,
-        cell: ({ row, getValue, column }) => {
-            // CORRECCIÓN: Renderizar cabecera solo si es la columna agrupada
-            if (row.getIsGrouped()) {
-                return grouping.includes(column.id) ? renderGroupCell(row, getValue() as string) : null;
-            }
+        filterFn: (row, id, filterValue: string[]) => {
+            const collaborators = (row.original as any).collaborators || [];
+            if (filterValue.length === 0) return true;
+            return collaborators.some((collab: any) => {
+                const user = users.find((u: any) => u.id_user === collab.id);
+                const userName = user?.name_user || '';
+                return filterValue.some(filter => userName.toLowerCase().includes(filter.toLowerCase()));
+            });
+        },
+        cell: ({ row, column }) => {
+            if (row.getIsGrouped()) return null;
+            
+            const collaborators = (row.original as any).collaborators || [];
+            if (collaborators.length === 0) return <span className="text-xs text-slate-400">Sin asignar</span>;
+            
+            // Ordenar: Creador primero, luego Principal (EDIT), luego Secundario (VIEW)
+            const sorted = [...collaborators].sort((a, b) => {
+                if (a.is_owner !== b.is_owner) return b.is_owner ? 1 : -1;
+                const levelOrder = { EDIT: 1, VIEW: 2, BLOCKED: 3 };
+                return (levelOrder[a.access_level as keyof typeof levelOrder] || 3) - (levelOrder[b.access_level as keyof typeof levelOrder] || 3);
+            });
+            
             return (
-                <div className="flex items-center gap-2">
-                    <img src={row.original.created_by_avatar || `https://ui-avatars.com/api/?name=${getValue()}`} className="w-5 h-5 rounded-full border border-slate-200" alt="" />
-                    <span className="text-xs text-slate-600 font-medium">{getValue() as string}</span>
+                <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                    {sorted.map((collab: any, idx: number) => {
+                        const user = users.find(u => u.id_user === collab.id);
+                        const avatarUrl = user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=random`;
+                        const userName = user?.name_user || 'Usuario';
+                        const isOwner = collab.is_owner;
+                        const isPrincipal = collab.access_level === 'EDIT' && !isOwner;
+                        const isSecondary = collab.access_level === 'VIEW';
+                        
+                        // Determinar estilo según nivel
+                        let borderColor = 'border-slate-200';
+                        let badgeIcon = null;
+                        let tooltipLevel = '';
+                        
+                        if (isOwner) {
+                            borderColor = 'border-amber-400 shadow-amber-200';
+                            badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-amber-400 rounded-full flex items-center justify-center"><i className="fa-solid fa-star text-white text-[6px]"></i></div>;
+                            tooltipLevel = 'Creador';
+                        } else if (isPrincipal) {
+                            borderColor = 'border-indigo-400 shadow-indigo-200';
+                            badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-indigo-500 rounded-full flex items-center justify-center"><i className="fa-solid fa-crown text-white text-[6px]"></i></div>;
+                            tooltipLevel = 'Principal';
+                        } else if (isSecondary) {
+                            borderColor = 'border-slate-300';
+                            badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-slate-400 rounded-full flex items-center justify-center"><i className="fa-solid fa-eye text-white text-[6px]"></i></div>;
+                            tooltipLevel = 'Secundario';
+                        }
+                        
+                        return (
+                            <div
+                                key={collab.id || idx}
+                                className="relative inline-block group/avatar"
+                            >
+                                <div className="relative cursor-pointer">
+                                    <img 
+                                        src={avatarUrl} 
+                                        alt={userName}
+                                        className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-125 hover:z-10 shadow-sm ${borderColor}`}
+                                    />
+                                    {badgeIcon}
+                                    {/* Tooltip solo en hover del avatar */}
+                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                                        <div className="font-bold">{userName}</div>
+                                        <div className={`text-[9px] ${isOwner ? 'text-amber-300' : isPrincipal ? 'text-indigo-300' : 'text-slate-300'}`}>
+                                            {tooltipLevel}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             );
         }
     },
     {
       accessorKey: 'fecha_emision',
-      header: 'Fecha Emisión',
+      header: 'Emisión',
       size: 120,
       filterFn: dateRangeFilter,
       cell: ({ row }) => {
@@ -547,9 +568,47 @@ const QuotesList: React.FC = () => {
         let fecha = row.original.created_at_fmt;
         if (!fecha && row.original.created_at) {
           const d = new Date(row.original.created_at);
-          fecha = d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          fecha = d.toLocaleDateString();
+        }
+        // Si viene con hora desde el backend, extraer solo la fecha
+        if (fecha && fecha.includes(' ')) {
+          fecha = fecha.split(' ')[0];
         }
         return <span className="text-xs text-slate-500">{fecha}</span>;
+      }
+    },
+    {
+      accessorKey: 'days_inactive',
+      header: 'Inactivo',
+      size: 120,
+      enableColumnFilter: false,
+      cell: ({ row }) => {
+        if (row.getIsGrouped()) return null;
+        const days = row.original.days_inactive;
+        if (days === undefined || days === null) return <span className="text-xs text-slate-400 italic">N/A</span>;
+        
+        // Colores según días de inactividad
+        let colorClass = 'text-slate-600';
+        let bgClass = 'bg-slate-100';
+        if (days > 30) {
+          colorClass = 'text-red-600';
+          bgClass = 'bg-red-50';
+        } else if (days > 15) {
+          colorClass = 'text-amber-600';
+          bgClass = 'bg-amber-50';
+        } else if (days > 7) {
+          colorClass = 'text-yellow-600';
+          bgClass = 'bg-yellow-50';
+        } else {
+          colorClass = 'text-emerald-600';
+          bgClass = 'bg-emerald-50';
+        }
+        
+        return (
+          <span className={`text-xs font-bold px-2 py-1 rounded ${bgClass} ${colorClass}`}>
+            {days} {days === 1 ? 'día' : 'días'}
+          </span>
+        );
       }
     },
     {
@@ -576,7 +635,7 @@ const QuotesList: React.FC = () => {
             );
         }
     }
-  ], [quoteStatuses, grouping, metadata]);
+  ], [grouping, metadata, users]);
 
   const table = useReactTable({
     data: quotes,
@@ -754,82 +813,6 @@ const QuotesList: React.FC = () => {
           </div>
       </div>
 
-      {isModalOpen && editingQuote && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
-              <h2 className="text-lg font-bold text-slate-800">Editar Cotización</h2>
-              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-colors">
-                  <i className="fa-solid fa-times"></i>
-              </button>
-            </div>
-            <form onSubmit={handleFormSubmit} className="overflow-y-auto p-6 space-y-5">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre de la Cotización</label>
-                <input name="nombre_cotizacion" required value={editingQuote.nombre_cotizacion || ''} onChange={handleInputChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Estado</label>
-                    <select name="id_quote_status" required value={editingQuote.id_quote_status || ''} onChange={handleInputChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 outline-none">
-                    <option value="">-- Estado --</option>
-                    {(metadata?.statuses || quoteStatuses).map(s => <option key={s.id_status} value={s.id_status}>{s.name}</option>)}
-                    </select>
-                 </div>
-                 <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Empresa</label>
-                    <select name="id_client_company" required value={editingQuote.id_client_company || ''} onChange={handleInputChange} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 outline-none">
-                    <option value="">-- Empresa --</option>
-                    {companies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
-                    </select>
-                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Contacto Principal</label>
-                <select name="id_contact" required value={editingQuote.id_contact || ''} onChange={handleInputChange} disabled={!editingQuote.id_client_company} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-brand-500 outline-none disabled:bg-slate-100 disabled:text-slate-400">
-                  <option value="">-- Seleccionar Contacto --</option>
-                  {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{`${c.first_name} ${c.last_name || ''}`}</option>)}
-                </select>
-              </div>
-              <div className="pt-2">
-                 <h3 className="text-sm font-bold text-slate-800 mb-3 flex items-center"><i className="fa-solid fa-list-check mr-2 text-brand-500"></i> Condiciones</h3>
-                 <div className="grid grid-cols-3 gap-3">
-                    <div>
-                    <label className="block text-[10px] font-bold text-slate-400 mb-1">Tiempo Entrega</label>
-                    <input name="tiempo_entrega" value={editingQuote.tiempo_entrega || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" />
-                    </div>
-                    <div>
-                    <label className="block text-[10px] font-bold text-slate-400 mb-1">Garantía</label>
-                    <input name="garantia" value={editingQuote.garantia || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" />
-                    </div>
-                    <div>
-                    <label className="block text-[10px] font-bold text-slate-400 mb-1">Validez</label>
-                    <input name="validez_oferta" value={editingQuote.validez_oferta || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm" />
-                    </div>
-                 </div>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Mensaje (Opcional)</label>
-                <textarea name="mensaje" value={editingQuote.mensaje || ''} onChange={handleInputChange} rows={2} className="w-full px-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none resize-none"></textarea>
-              </div>
-              <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-start gap-3">
-                <input type="checkbox" id="is_private_edit" name="is_private" checked={editingQuote.is_private || false} onChange={(e) => setEditingQuote({ ...(editingQuote || {}), is_private: e.target.checked })} className="mt-1 w-4 h-4 text-brand-600 border-gray-300 rounded focus:ring-brand-500" />
-                <label htmlFor="is_private_edit" className="cursor-pointer">
-                  <div className="text-sm font-bold text-amber-800">Cotización Privada</div>
-                  <div className="text-xs text-amber-700/70 mt-0.5">Solo visible para ti y administradores.</div>
-                </label>
-              </div>
-              <div className="flex justify-end pt-4 gap-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all">Cancelar</button>
-                <button type="submit" disabled={submitting} className="px-5 py-2.5 rounded-xl bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-200 font-medium flex items-center transition-all disabled:opacity-70">
-                  {submitting ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-check mr-2"></i>} Guardar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {confirmState.isOpen && <ConfirmModal {...confirmState} onConfirm={confirmState.onConfirm || (() => {})} onClose={() => setConfirmState(p => ({...p, isOpen: false}))} />}
       {isShareOpen && shareQuoteId && (
         <ShareModal 
@@ -839,7 +822,10 @@ const QuotesList: React.FC = () => {
           creatorName={shareQuote?.created_by_name || ''}
           isOpen={isShareOpen} 
           onClose={() => { setIsShareOpen(false); setShareQuoteId(null); setShareQuote(null); setShareCollaborators([]); }} 
-          onShared={() => setToast({ message: 'Compartido.', type: 'success' })}
+          onShared={() => { 
+            setToast({ message: 'Compartido.', type: 'success' }); 
+            fetchData(); // Refrescar datos después de cambiar permisos
+          }}
           currentCollaborators={shareCollaborators}
         />
       )}

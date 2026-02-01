@@ -383,6 +383,7 @@ export interface Quote {
   deal_name?: string; // Nuevo formato backend
   access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend
   created_by?: string; // ID del usuario creador
+  days_inactive?: number; // Días sin actividad desde el último envío
 
   // Nuevos campos desde la respuesta optimizada de detail endpoint
   items?: QuoteItem[]; // Artículos de la cotización

@@ -53,7 +53,7 @@ export const GATEWAY_CONFIG = {
       LIST: buildFullUrl('/api/deals'),
       DETAIL: buildFullUrl('/api/deals/detail'),
       CREATE: buildFullUrl('/api/deals'),
-      UPDATE: buildFullUrl('/api/deals/update'),
+      UPDATE: buildFullUrl('/api/v1/deals/update'),
       DELETE: buildFullUrl('/api/deals/delete'),
       BY_COMPANY: buildFullUrl('/api/deals/by_company'),
       HISTORY: buildFullUrl('/api/deals/history'),

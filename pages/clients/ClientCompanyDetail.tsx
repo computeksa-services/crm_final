@@ -604,7 +604,16 @@ const ClientCompanyDetail: React.FC = () => {
             <div className="p-4">
               {(company as any).collaborators && (company as any).collaborators.length > 0 ? (
                 <div className="space-y-2">
-                  {(company as any).collaborators.map((collaborator: any) => (
+                  {[...(company as any).collaborators].sort((a: any, b: any) => {
+                    const getOrder = (collab: any) => {
+                      const level = (collab.permission_level || '').toUpperCase();
+                      if (level === 'OWNER' || collab.is_owner) return 0; // Creador primero
+                      if (level === 'EDIT') return 1; // Principal segundo
+                      if (level === 'VIEW') return 2; // Secundaria tercero
+                      return 3; // Sin asignación al final
+                    };
+                    return getOrder(a) - getOrder(b);
+                  }).map((collaborator: any) => (
                     <div key={collaborator.id_user} className="flex items-center justify-between text-xs p-2 rounded-lg hover:bg-slate-50 transition-colors">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         {collaborator.avatar ? (

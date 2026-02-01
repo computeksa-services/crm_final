@@ -6,6 +6,7 @@ import { format, parseISO } from 'date-fns';
 import { useDataCache } from '../contexts/DataCacheContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
+import { GATEWAY_CONFIG } from '../services/gatewayConfig';
 
 interface DealFollowUpCardProps {
   deal: DealFollowUpItem;
@@ -41,7 +42,7 @@ const DealFollowUpCard: React.FC<DealFollowUpCardProps> = ({ deal, onManageClick
     const handleStatusChange = async (newStatusId: string) => {
         setIsStatusDropdownOpen(false);
         try {
-            await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/updatev2`, {
+            await apiFetch(GATEWAY_CONFIG.API.DEALS.UPDATE, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

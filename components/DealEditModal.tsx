@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
+import { GATEWAY_CONFIG } from '../services/gatewayConfig';
 import { Deal, ClientCompany, ClientContact, CustomStatus, DealChannel } from '../types';
 import Toast from './Toast';
 import CompanyFormModal from '../pages/clients/CompanyFormModal';
@@ -244,7 +245,7 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
         fecha_cierre_esperada: deal.fecha_cierre_esperada,
       };
       
-      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/updatev2`, { 
+      const res = await apiFetch(GATEWAY_CONFIG.API.DEALS.UPDATE, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify(payload) 
