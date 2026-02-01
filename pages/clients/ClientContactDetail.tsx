@@ -9,7 +9,6 @@ import ContactFormModal from './ContactFormModal';
 import ShareModal from '../../components/ShareModal';
 import NewInteractionForm from '../../components/NewInteractionForm';
 import ContactHistoryTimeline from '../../components/ContactHistoryTimeline';
-import ReassignModal from '../../components/ReassignModal';
 
 const ClientContactDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -37,22 +36,6 @@ const ClientContactDetail: React.FC = () => {
   const contactAccess: 'VIEW' | 'EDIT' = (contact?.access_level as any) || (user?.rol_user === 'admin' || isOwnerContact || isOwnerCompany ? 'EDIT' : 'VIEW');
   const canShare = (user?.rol_user === 'admin' || isOwnerContact || isOwnerCompany) && contactAccess === 'EDIT';
 
-  // Reasignar
-  const [showReassignModal, setShowReassignModal] = useState(false);
-  const [users, setUsers] = useState<any[]>([]);
-  const fetchUsers = async () => {
-    if (!user?.id_tenant) return;
-    try {
-      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
-      if (!res.ok) throw new Error('Error cargando usuarios');
-      const data = await res.json();
-      setUsers(Array.isArray(data) ? data : []);
-    } catch {}
-  };
-  const openReassignModal = async () => {
-    await fetchUsers();
-    setShowReassignModal(true);
-  };
 
   // --- CARGA DE DATOS ---
   const fetchData = useCallback(async () => {
@@ -250,13 +233,6 @@ const ClientContactDetail: React.FC = () => {
                     <i className="fa-solid fa-pen-to-square"></i>
                     Editar
                   </button>
-                  <button
-                    onClick={openReassignModal}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-white border border-amber-200 text-amber-600 hover:border-amber-400 hover:text-amber-700 shadow-sm"
-                  >
-                    <i className="fa-solid fa-arrow-right-arrow-left"></i>
-                    Reasignar
-                  </button>
                 </>
               )}
                 <button
@@ -272,20 +248,6 @@ const ClientContactDetail: React.FC = () => {
                   Asignar
                 </button>
             </div>
-              {/* MODAL REASIGNAR */}
-              {showReassignModal && contact && (
-                <ReassignModal
-                  isOpen={showReassignModal}
-                  onClose={() => setShowReassignModal(false)}
-                  onSuccess={() => {
-                    setShowReassignModal(false);
-                    fetchData();
-                    setToast({ message: 'Responsable actualizado.', type: 'success' });
-                  }}
-                  contact={contact}
-                  users={users}
-                />
-              )}
         </div>
       </div>
 
@@ -352,23 +314,6 @@ const ClientContactDetail: React.FC = () => {
                   <div>
                     <p className="text-xs text-slate-400 mb-1">Último Contacto</p>
                     <p className="text-sm font-medium text-slate-700">{new Date(contact.last_contact_date).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' })}</p>
-                  </div>
-                )}
-                {(contact as any).owner_details && (
-                  <div className="border-t border-slate-100 pt-3">
-                    <p className="text-xs text-slate-400 mb-2">Responsable</p>
-                    <div className="flex items-center gap-2">
-                      {(contact as any).owner_details.avatar ? (
-                        <img src={(contact as any).owner_details.avatar} alt="Owner" className="w-8 h-8 rounded-full border border-slate-200" />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
-                          {((contact as any).owner_details.name || 'U').charAt(0)}
-                        </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-slate-700 truncate">{(contact as any).owner_details.name}</p>
-                      </div>
-                    </div>
                   </div>
                 )}
               </div>
@@ -441,7 +386,7 @@ const ClientContactDetail: React.FC = () => {
                   : 'text-slate-300 cursor-not-allowed'
                 }`}
               >
-                <i className="fa-solid fa-plus"></i>Asignar
+                <i className="fa-solid fa-gear"></i>Gestionar
               </button>
             </div>
             <div className="p-4">
@@ -449,7 +394,7 @@ const ClientContactDetail: React.FC = () => {
                 <div className="space-y-2">
                   {(contact as any).collaborators.map((collaborator: any) => (
                     <div key={collaborator.id_user} className="flex items-center justify-between text-xs p-2 rounded-lg hover:bg-slate-50 transition-colors">
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         {collaborator.avatar ? (
                           <img src={collaborator.avatar} alt={collaborator.name} className="w-6 h-6 rounded-full border border-slate-200" />
                         ) : (
@@ -457,7 +402,7 @@ const ClientContactDetail: React.FC = () => {
                             {(collaborator.name || 'U').charAt(0)}
                           </div>
                         )}
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="font-medium text-slate-700 truncate flex items-center gap-2">
                             {collaborator.name}
                             {(collaborator.rol_user || '').toLowerCase() === 'admin' && (
@@ -465,19 +410,56 @@ const ClientContactDetail: React.FC = () => {
                                 <i className="fa-solid fa-star"></i>
                               </span>
                             )}
-                            {(collaborator.permission_level || '').toUpperCase() === 'OWNER' || collaborator.is_owner ? (
-                              <span className="text-[10px] text-slate-400">(Creador)</span>
-                            ) : null}
-                          </p>
-                          <p className="text-slate-400 truncate">
-                            {(() => {
-                              const level = (collaborator.permission_level || '').toUpperCase();
-                              if (level === 'OWNER' || level === 'EDIT') return 'Asignación principal';
-                              if (level === 'VIEW') return 'Asignación secundaria';
-                              return 'Sin asignación';
-                            })()}
                           </p>
                         </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 justify-end">
+                        {(() => {
+                          const level = (collaborator.permission_level || '').toUpperCase();
+                          if (level === 'OWNER') {
+                            return (
+                              <>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 inline-flex items-center gap-1">
+                                  <i className="fa-solid fa-crown text-[9px]"></i>Principal
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 inline-flex items-center gap-1">
+                                  <i className="fa-solid fa-star text-[9px]"></i>Creador
+                                </span>
+                              </>
+                            );
+                          }
+                          if (collaborator.is_owner) {
+                            return (
+                              <>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 inline-flex items-center gap-1">
+                                  <i className="fa-solid fa-crown text-[9px]"></i>Principal
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 inline-flex items-center gap-1">
+                                  <i className="fa-solid fa-star text-[9px]"></i>Creador
+                                </span>
+                              </>
+                            );
+                          }
+                          if (level === 'EDIT') {
+                            return (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 inline-flex items-center gap-1">
+                                <i className="fa-solid fa-crown text-[9px]"></i>Principal
+                              </span>
+                            );
+                          }
+                          if (level === 'VIEW') {
+                            return (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 inline-flex items-center gap-1">
+                                <i className="fa-solid fa-user text-[9px]"></i>Secundaria
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-400 border border-slate-200 inline-flex items-center gap-1">
+                              <i className="fa-regular fa-circle text-[9px]"></i>Sin asignación
+                            </span>
+                          );
+                        })()}
                       </div>
                     </div>
                   ))}

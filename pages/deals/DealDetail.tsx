@@ -470,7 +470,7 @@ const DealDetail: React.FC = () => {
                           : 'text-slate-300 cursor-not-allowed'
                         }`}
                       >
-                        <i className="fa-solid fa-plus"></i>Asignar
+                        <i className="fa-solid fa-gear"></i>Gestionar
                       </button>
                     </div>
                     <div className="p-4">
@@ -478,7 +478,7 @@ const DealDetail: React.FC = () => {
                         <div className="space-y-2">
                           {(deal as any).collaborators.map((collaborator: any) => (
                             <div key={collaborator.id_user} className="flex items-center justify-between text-xs p-2 rounded-lg hover:bg-slate-50 transition-colors">
-                              <div className="flex items-center gap-2 min-w-0">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
                                 {collaborator.avatar ? (
                                   <img src={collaborator.avatar} alt={collaborator.name} className="w-6 h-6 rounded-full border border-slate-200" />
                                 ) : (
@@ -486,7 +486,7 @@ const DealDetail: React.FC = () => {
                                     {(collaborator.name || 'U').charAt(0)}
                                   </div>
                                 )}
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                   <p className="font-medium text-slate-700 truncate flex items-center gap-2">
                                     {collaborator.name}
                                     {(collaborator.rol_user || '').toLowerCase() === 'admin' && (
@@ -494,19 +494,56 @@ const DealDetail: React.FC = () => {
                                         <i className="fa-solid fa-star"></i>
                                       </span>
                                     )}
-                                    {(collaborator.permission_level || '').toUpperCase() === 'OWNER' || collaborator.is_owner ? (
-                                      <span className="text-[10px] text-slate-400">(Creador)</span>
-                                    ) : null}
-                                  </p>
-                                  <p className="text-slate-400 truncate">
-                                    {(() => {
-                                      const level = (collaborator.permission_level || '').toUpperCase();
-                                      if (level === 'OWNER' || level === 'EDIT') return 'Asignación principal';
-                                      if (level === 'VIEW') return 'Asignación secundaria';
-                                      return 'Sin asignación';
-                                    })()}
                                   </p>
                                 </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5 justify-end">
+                                {(() => {
+                                  const level = (collaborator.permission_level || '').toUpperCase();
+                                  if (level === 'OWNER') {
+                                    return (
+                                      <>
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 inline-flex items-center gap-1">
+                                          <i className="fa-solid fa-crown text-[9px]"></i>Principal
+                                        </span>
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 inline-flex items-center gap-1">
+                                          <i className="fa-solid fa-star text-[9px]"></i>Creador
+                                        </span>
+                                      </>
+                                    );
+                                  }
+                                  if (collaborator.is_owner) {
+                                    return (
+                                      <>
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 inline-flex items-center gap-1">
+                                          <i className="fa-solid fa-crown text-[9px]"></i>Principal
+                                        </span>
+                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 inline-flex items-center gap-1">
+                                          <i className="fa-solid fa-star text-[9px]"></i>Creador
+                                        </span>
+                                      </>
+                                    );
+                                  }
+                                  if (level === 'EDIT') {
+                                    return (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 inline-flex items-center gap-1">
+                                        <i className="fa-solid fa-crown text-[9px]"></i>Principal
+                                      </span>
+                                    );
+                                  }
+                                  if (level === 'VIEW') {
+                                    return (
+                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 inline-flex items-center gap-1">
+                                        <i className="fa-solid fa-user text-[9px]"></i>Secundaria
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-400 border border-slate-200 inline-flex items-center gap-1">
+                                      <i className="fa-regular fa-circle text-[9px]"></i>Sin asignación
+                                    </span>
+                                  );
+                                })()}
                               </div>
                             </div>
                           ))}
