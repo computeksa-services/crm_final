@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useDataCache } from '../contexts/DataCacheContext';
@@ -35,7 +36,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
   const [userMenuOpen, setUserMenuOpen] = useState(false);
-  
+  const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
+  const userMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+
   const { user, logout } = useAuth();
   const { loading: cacheLoading } = useDataCache();
   const location = useLocation();
@@ -54,18 +57,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     localStorage.setItem('theme-dark', JSON.stringify(isDarkMode));
   }, [isDarkMode]);
 
-  // Cerrar sidebar móvil cuando se cambia a desktop (rotación de dispositivo)
+  // Calcular posición del dropdown cuando se abre
   useEffect(() => {
-    const handleResize = () => {
-      // Si la pantalla es >= 768px (breakpoint md de Tailwind) y el sidebar móvil está abierto, cerrarlo
-      if (window.innerWidth >= 768 && isMobileSidebarOpen) {
-        setIsMobileSidebarOpen(false);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isMobileSidebarOpen]);
+    if (userMenuOpen && userMenuButtonRef.current) {
+      const rect = userMenuButtonRef.current.getBoundingClientRect();
+      setMenuPosition({
+        top: rect.bottom + 8,
+        right: window.innerWidth - rect.right
+      });
+    }
+  }, [userMenuOpen]);
 
   const handleLogout = () => {
     setUserMenuOpen(false);
@@ -77,9 +78,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate('/login');
   };
 
+  // Cerrar dropdown cuando se hace clic fuera (solo el botón del avatar)
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+      // Solo cerrar si el click está fuera del botón avatar
+      if (userMenuButtonRef.current && !userMenuButtonRef.current.contains(event.target as Node)) {
         setUserMenuOpen(false);
       }
     };
@@ -131,7 +134,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-600 overflow-hidden font-sans">
       
       {/* --- MOBILE OVERLAY (Solo visible en móvil cuando el menú está abierto) --- */}
       {isMobileSidebarOpen && (
@@ -152,7 +155,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         `}
       >
         {/* Logo Area */}
-        <div className={`h-16 flex items-center border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 transition-all duration-300 ${isDesktopSidebarOpen ? 'px-4' : 'px-0 justify-center'}`}>
+        <div className={`h-16 flex items-center border-b border-slate-200 dark:border-slate-500 bg-white dark:bg-slate-500 transition-all duration-300 ${isDesktopSidebarOpen ? 'px-4' : 'px-0 justify-center'}`}>
            <div 
              className={`flex items-center gap-3 cursor-pointer overflow-hidden w-full ${isDesktopSidebarOpen ? '' : 'justify-center'}`}
              onClick={() => navigate('/app/dashboard')}
@@ -247,7 +250,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* --- LOGOUT CONFIRMATION MODAL --- */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
+          <div className="bg-white dark:bg-slate-500 rounded-xl shadow-xl p-6 max-w-sm w-full mx-4">
             <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
               <i className="fa-solid fa-sign-out-alt text-red-600 text-xl"></i>
             </div>
@@ -275,7 +278,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         
         {/* HEADER */}
-        <header className="h-12 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 md:px-5 z-20 shrink-0">
+        <header className="h-12 bg-white dark:bg-slate-500 border-b border-slate-200 dark:border-slate-400 flex items-center justify-between px-3 md:px-5 z-20 shrink-0">
           <div className="flex items-center gap-4">
               {/* Botón Hamburger (Móvil) */}
               <button 
@@ -384,20 +387,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <span className="text-[10px] text-slate-400 dark:text-slate-500">Plan Enterprise</span>
                </div>
              )}
-
-             {/* Toggle modo oscuro */}
-             <button
-               onClick={() => setIsDarkMode((prev) => !prev)}
-               className="flex items-center justify-center w-9 h-9 rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
-               title={isDarkMode ? 'Modo claro' : 'Modo oscuro'}
-               aria-label={isDarkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-             >
-               <i className={`fa-solid ${isDarkMode ? 'fa-sun text-amber-400' : 'fa-moon text-slate-500 dark:text-slate-300'}`}></i>
-             </button>
              
              {/* User dropdown */}
              <div className="relative" ref={userMenuRef}>
                <button
+                 ref={userMenuButtonRef}
                  onClick={() => setUserMenuOpen((open) => !open)}
                  className="flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 pr-3 rounded-full border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all"
                >
@@ -406,48 +400,68 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       alt="User" 
                       className="w-8 h-8 rounded-full shadow-sm"
                       referrerPolicy="no-referrer"
-                      onLoad={() => console.log('✅ Avatar header cargado:', getImageUrl(user?.avatar_url))}
-                      onError={(e) => {
-                        console.error('❌ Error cargando avatar header');
-                        console.error('   URL original:', user?.avatar_url);
-                        console.error('   URL procesada:', getImageUrl(user?.avatar_url));
-                      }}
                   />
                   <div className="hidden sm:flex flex-col items-start leading-tight">
                     <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 max-w-[140px] line-clamp-2">{user?.name_user || 'Usuario'}</span>
                   </div>
                   <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 dark:text-slate-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}></i>
                </button>
-
-               {userMenuOpen && (
-                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg z-50 py-2">
-                   <Link
-                     to="/app/profile"
-                     onClick={() => setUserMenuOpen(false)}
-                     className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                   >
-                     <i className="fa-regular fa-user"></i>
-                     Ver perfil
-                   </Link>
-                   <button
-                     onClick={handleLogout}
-                     className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50/60 dark:hover:bg-red-900/20"
-                   >
-                     <i className="fa-solid fa-arrow-right-from-bracket"></i>
-                     Cerrar sesión
-                   </button>
-                 </div>
-               )}
              </div>
           </div>
         </header>
 
         {/* CONTENT SCROLLABLE AREA */}
-        <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/60 p-1 md:p-2 scroll-smooth">
+        <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-600/60 p-1 md:p-2 scroll-smooth">
           <div className="w-full h-full">
              {children}
           </div>
         </main>
+
+        {/* USER DROPDOWN PORTAL */}
+        {userMenuOpen && menuPosition && createPortal(
+          <div 
+            onMouseDown={(e) => e.stopPropagation()}
+            className="fixed w-48 bg-white dark:bg-slate-500 border border-slate-200 dark:border-slate-400 rounded-xl shadow-xl py-2 z-[99999] pointer-events-auto"
+            style={{ 
+              top: `${menuPosition.top}px`, 
+              right: `${menuPosition.right}px`,
+              pointerEvents: 'auto'
+            }}
+          >
+            <Link
+              to="/app/profile"
+              onClick={() => setUserMenuOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+            >
+              <i className="fa-regular fa-user"></i>
+              Ver perfil
+            </Link>
+            <div className="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsDarkMode((prev) => !prev);
+                setUserMenuOpen(false);
+              }}
+              className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+              style={{ pointerEvents: 'auto' }}
+            >
+              <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'}`}></i>
+              {isDarkMode ? 'Modo claro' : 'Modo oscuro'}
+            </button>
+            <div className="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50/60 dark:hover:bg-red-900/20 cursor-pointer"
+              style={{ pointerEvents: 'auto' }}
+            >
+              <i className="fa-solid fa-arrow-right-from-bracket"></i>
+              Cerrar sesión
+            </button>
+          </div>,
+          document.body
+        )}
       </div>
     </div>
   );

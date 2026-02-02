@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { FollowUpItem } from '../types';
 import { apiFetch } from '../services/apiClient';
-import { format, parseISO, isBefore, isToday, startOfDay } from 'date-fns';
+import { format, parseISO, isBefore, isToday, startOfDay, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { 
   Phone, Mail, MessageSquare, Briefcase, ChevronRight, 
   LoaderCircle, User, LayoutGrid, List, 
   ArrowRightLeft, Rocket, Calendar, Search,
-  AlertCircle, CheckCircle2, Clock, History, Building2
+  AlertCircle, CheckCircle2, Clock, History, Building2, Handshake
 } from 'lucide-react';
 import LogActionModal from '../components/LogActionModal';
 import ReassignModal from '../components/ReassignModal';
@@ -21,8 +21,9 @@ const UnifiedFollowUpCard: React.FC<{
   item: FollowUpItem, 
   onManage: (item: FollowUpItem) => void,
   onTransfer: (item: FollowUpItem) => void,
-  isAdmin: boolean 
-}> = ({ item, onManage, onTransfer, isAdmin }) => {
+  isAdmin: boolean,
+  cachedUsers: any[]
+}> = ({ item, onManage, onTransfer, isAdmin, cachedUsers }) => {
     const navigate = useNavigate();
     const isDeal = item.entity_type === 'DEAL';
     
@@ -81,38 +82,111 @@ const UnifiedFollowUpCard: React.FC<{
                             </p>
                         </div>
                     </div>
-                    <img 
-                        src={item.owner_avatar || `https://ui-avatars.com/api/?name=${item.owner_name}&background=random`} 
-                        className="w-10 h-10 rounded-full border-2 border-white shadow-sm shrink-0" 
-                        title={`Responsable: ${item.owner_name}`}
-                    />
+                    {/* Colaboradores */}
+                    <div className="flex items-center -space-x-2 shrink-0">
+                        {(() => {
+                            const collaborators = item.collaborators || [];
+                            if (collaborators.length === 0) return null;
+                            
+                            // Ordenar: Owner primero, luego EDIT, luego VIEW
+                            const sorted = [...collaborators].sort((a, b) => {
+                                const levelOrder = { OWNER: 1, EDIT: 2, VIEW: 3, BLOCKED: 4 };
+                                return (levelOrder[a.access_level as keyof typeof levelOrder] || 4) - (levelOrder[b.access_level as keyof typeof levelOrder] || 4);
+                            });
+                            
+                            // Invertir para que en el renderizado con -space-x el último (OWNER) quede al frente
+                            return sorted.slice(0, 4).reverse().map((collab: any, idx: number) => {
+                                const user = cachedUsers.find(u => u.id_user === collab.id);
+                                const avatarUrl = user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=random`;
+                                const userName = user?.name_user || 'Usuario';
+                                const isOwner = collab.access_level === 'OWNER';
+                                const isPrincipal = collab.access_level === 'EDIT';
+                                const isSecondary = collab.access_level === 'VIEW';
+                                
+                                let borderColor = 'border-white';
+                                let badgeIcon = null;
+                                let tooltipText = userName;
+                                
+                                if (isOwner) {
+                                    borderColor = 'border-amber-400';
+                                    badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-star text-white text-[6px]"></i></div>;
+                                    tooltipText = `${userName} (Creador)`;
+                                } else if (isPrincipal) {
+                                    borderColor = 'border-indigo-400';
+                                    badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-crown text-white text-[6px]"></i></div>;
+                                    tooltipText = `${userName} (Principal)`;
+                                } else if (isSecondary) {
+                                    borderColor = 'border-slate-300';
+                                    badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-slate-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-eye text-white text-[6px]"></i></div>;
+                                    tooltipText = `${userName} (Secundario)`;
+                                }
+                                
+                                return (
+                                    <div key={collab.id || idx} className="relative group/collab" title={tooltipText}>
+                                        <div className="relative transition-all group-hover/collab:scale-125 group-hover/collab:z-30">
+                                            <img 
+                                                src={avatarUrl} 
+                                                alt={userName}
+                                                className={`w-8 h-8 rounded-full border-2 shadow-sm ${borderColor} bg-white relative`}
+                                            />
+                                            {badgeIcon}
+                                        </div>
+                                    </div>
+                                );
+                            });
+                        })()}
+                        {item.collaborators && item.collaborators.length > 4 && (
+                            <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center shadow-sm hover:scale-110 transition-all hover:z-20" title={`+${item.collaborators.length - 4} más`}>
+                                <span className="text-[9px] font-black text-slate-500">+{item.collaborators.length - 4}</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 {/* 3. El ANTES y El DESPUÉS */}
                 <div className="p-5 space-y-4 flex-grow bg-white">
                     <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
                         <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1">
-                                <History size={10} /> Última Actividad
-                                {/* Channel badge if present */}
-                                {item.last_management_channel_name && (
-                                    <span
-                                        className="ml-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase"
+                            <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-black text-slate-400 uppercase flex items-center gap-1">
+                                    <History size={10} /> Última Actividad
+                                </span>
+                                {/* Channel icon only */}
+                                {item.last_management_channel_icon && (
+                                    <div
+                                        className="flex items-center justify-center w-5 h-5 rounded-full"
                                         style={{
                                             backgroundColor: item.last_management_channel_color || '#e5e7eb',
-                                            color: '#fff',
                                         }}
-                                        title={item.last_management_channel_name}
+                                        title={item.last_management_channel_name || 'Canal de contacto'}
                                     >
-                                        {item.last_management_channel_icon && (
-                                            <i className={`${item.last_management_channel_icon} text-xs`} />
-                                        )}
-                                        {item.last_management_channel_name}
+                                        <i className={`${item.last_management_channel_icon} text-white text-[9px]`} />
+                                    </div>
+                                )}
+                                {/* Time ago */}
+                                {item.last_management_date && (
+                                    <span className="text-[9px] font-bold text-slate-500">
+                                        hace {formatDistanceToNow(parseISO(item.last_management_date), { locale: es, addSuffix: false })}
                                     </span>
                                 )}
-                            </span>
-                            <span className="text-[9px] font-bold text-slate-400">
-                                {item.last_management_date ? format(parseISO(item.last_management_date), "dd MMM", { locale: es }) : '--'}
-                            </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                {item.last_management_user_id && (() => {
+                                    const lastUser = cachedUsers.find(u => u.id_user === item.last_management_user_id);
+                                    const lastUserAvatar = lastUser?.avatar_url || `https://ui-avatars.com/api/?name=${lastUser?.name_user || 'U'}&background=random`;
+                                    const lastUserName = lastUser?.name_user || 'Usuario';
+                                    return (
+                                        <img 
+                                            src={lastUserAvatar} 
+                                            alt={lastUserName}
+                                            title={`Gestionado por: ${lastUserName}`}
+                                            className="w-5 h-5 rounded-full border border-slate-200 shadow-sm"
+                                        />
+                                    );
+                                })()}
+                                <span className="text-[9px] font-bold text-slate-400">
+                                    {item.last_management_date ? format(parseISO(item.last_management_date), "dd MMM", { locale: es }) : '--'}
+                                </span>
+                            </div>
                         </div>
                         <p className="text-[12px] text-slate-600 italic line-clamp-2 leading-relaxed">
                             {item.last_management_desc ? `"${item.last_management_desc}"` : 'No hay registros previos de gestión.'}
@@ -165,10 +239,10 @@ const UnifiedFollowUpCard: React.FC<{
                                     companyName: item.subtitle || item.name_company
                                 } 
                             })}
-                            className="p-2.5 bg-white border border-slate-200 rounded-xl text-emerald-500 hover:bg-emerald-500 hover:text-white shadow-sm transition-all"
+                            className="p-2.5 bg-gradient-to-br from-amber-400 to-yellow-500 border border-amber-300 rounded-xl text-white hover:from-amber-500 hover:to-yellow-600 shadow-md shadow-amber-100 transition-all hover:scale-105"
                             title="Convertir a Trato"
                         >
-                            <Rocket size={16}/>
+                            <Handshake size={16}/>
                         </button>
                     )}
                 </div>
@@ -176,7 +250,7 @@ const UnifiedFollowUpCard: React.FC<{
                     onClick={() => onManage(item)} 
                     className="flex-1 py-2.5 bg-brand-600 text-white rounded-xl text-xs font-black uppercase hover:bg-brand-700 transition-all flex items-center justify-center gap-1.5 shadow-md shadow-brand-100 active:scale-[0.97]"
                 >
-                    Gestionar<ChevronRight size={16}/>
+                    Seguimiento<ChevronRight size={16}/>
                 </button>
             </div>
         </div>
@@ -299,7 +373,8 @@ const FollowUpsPage: React.FC = () => {
                                                 item={item} 
                                                 onManage={setManagingItem} 
                                                 onTransfer={setTransferItem} 
-                                                isAdmin={user?.rol_user === 'admin'} 
+                                                isAdmin={user?.rol_user === 'admin'}
+                                                cachedUsers={cachedUsers} 
                                             />
                                         </div>
                                     ))}
@@ -312,7 +387,7 @@ const FollowUpsPage: React.FC = () => {
                                 <th className="px-6 py-6">Entidad / Empresa</th>
                                 <th className="px-6 py-6">Estado del Pipeline</th>
                                 <th className="px-6 py-6">Próxima Acción</th>
-                                <th className="px-6 py-6">Responsable</th>
+                                <th className="px-6 py-6">Equipo</th>
                                 <th className="px-6 py-6 text-right">Gestión</th>
                             </tr>
                         </thead>
@@ -351,9 +426,68 @@ const FollowUpsPage: React.FC = () => {
                                             {item.next_contact_date ? format(parseISO(item.next_contact_date), "dd 'de' MMMM", { locale: es }) : '--'}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-5 flex items-center gap-3">
-                                        <img src={item.owner_avatar} className="w-8 h-8 rounded-full border border-slate-100 shadow-sm" />
-                                        <span className="text-[11px] font-bold text-slate-600">{item.owner_name}</span>
+                                    <td className="px-6 py-5">
+                                        <div className="flex items-center -space-x-2">
+                                            {(() => {
+                                                const collaborators = item.collaborators || [];
+                                                if (collaborators.length === 0) return <span className="text-xs text-slate-400">Sin asignar</span>;
+                                                
+                                                // Ordenar: Owner primero, luego EDIT, luego VIEW
+                                                const sorted = [...collaborators].sort((a, b) => {
+                                                    const levelOrder = { OWNER: 1, EDIT: 2, VIEW: 3, BLOCKED: 4 };
+                                                    return (levelOrder[a.access_level as keyof typeof levelOrder] || 4) - (levelOrder[b.access_level as keyof typeof levelOrder] || 4);
+                                                });
+                                                
+                                                return (
+                                                    <>
+                                                        {sorted.slice(0, 4).reverse().map((collab: any, idx: number) => {
+                                                            const user = cachedUsers.find(u => u.id_user === collab.id);
+                                                            const avatarUrl = user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=random`;
+                                                            const userName = user?.name_user || 'Usuario';
+                                                            const isOwner = collab.access_level === 'OWNER';
+                                                            const isPrincipal = collab.access_level === 'EDIT';
+                                                            const isSecondary = collab.access_level === 'VIEW';
+                                                            
+                                                            let borderColor = 'border-white';
+                                                            let badgeIcon = null;
+                                                            let tooltipText = userName;
+                                                            
+                                                            if (isOwner) {
+                                                                borderColor = 'border-amber-400';
+                                                                badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-star text-white text-[5px]"></i></div>;
+                                                                tooltipText = `${userName} (Creador)`;
+                                                            } else if (isPrincipal) {
+                                                                borderColor = 'border-indigo-400';
+                                                                badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-indigo-500 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-crown text-white text-[5px]"></i></div>;
+                                                                tooltipText = `${userName} (Principal)`;
+                                                            } else if (isSecondary) {
+                                                                borderColor = 'border-slate-300';
+                                                                badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-slate-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-eye text-white text-[5px]"></i></div>;
+                                                                tooltipText = `${userName} (Secundario)`;
+                                                            }
+                                                            
+                                                            return (
+                                                                <div key={collab.id || idx} className="relative group/collab" title={tooltipText}>
+                                                                    <div className="relative transition-all group-hover/collab:scale-125 group-hover/collab:z-30">
+                                                                        <img 
+                                                                            src={avatarUrl} 
+                                                                            alt={userName}
+                                                                            className={`w-7 h-7 rounded-full border-2 shadow-sm ${borderColor} bg-white relative`}
+                                                                        />
+                                                                        {badgeIcon}
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                        {sorted.length > 4 && (
+                                                            <div className="w-7 h-7 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center shadow-sm hover:scale-125 transition-all hover:z-20" title={`+${sorted.length - 4} más`}>
+                                                                <span className="text-[8px] font-black text-slate-500">+{sorted.length - 4}</span>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-5 text-right">
                                         <button onClick={() => setManagingItem(item)} className="p-3 text-brand-600 hover:bg-brand-50 rounded-2xl transition-all active:scale-90"><ChevronRight size={24}/></button>

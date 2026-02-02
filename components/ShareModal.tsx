@@ -235,19 +235,19 @@ const ShareModal: React.FC<ShareModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="px-4 sm:px-6 py-4 border-b border-slate-200 bg-white flex justify-between items-start gap-3">
+      <div className="bg-white dark:bg-slate-500 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-400 bg-white dark:bg-slate-500 flex justify-between items-start gap-3">
           <div className="flex items-start gap-3 min-w-0">
             <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
               <i className="fa-solid fa-share-nodes text-sm"></i>
             </span>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-bold text-slate-800">Asignar {getEntityLabel()}</h2>
+              <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100">Asignar {getEntityLabel()}</h2>
               {entityName && (
-                <p className="text-xs text-slate-500 truncate max-w-[300px] sm:max-w-[420px]">{entityName}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[300px] sm:max-w-[420px]">{entityName}</p>
               )}
               {creatorName && (
-                <p className="text-[11px] text-slate-400">Creado por: {creatorName}</p>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500">Creado por: {creatorName}</p>
               )}
             </div>
           </div>
@@ -266,8 +266,8 @@ const ShareModal: React.FC<ShareModalProps> = ({
                   Asignaciones
                 </h3>
                 {/* VISTA DESKTOP - TABLA */}
-                <div className="hidden sm:block border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="grid grid-cols-[1fr_100px_100px_100px] bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <div className="hidden sm:block border border-slate-200 dark:border-slate-600 rounded-xl overflow-hidden">
+                  <div className="grid grid-cols-[1fr_100px_100px_100px] bg-slate-50 dark:bg-slate-400 text-[11px] font-bold text-slate-500 dark:text-slate-900 uppercase tracking-wider">
                     <div className="px-4 py-2">Colaborador</div>
                     <div className="px-2 py-2 text-center">Principal</div>
                     <div className="px-2 py-2 text-center">Secundario</div>
@@ -278,7 +278,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
                     const isAdmin = (collab?.rol_user || '').toLowerCase() === 'admin';
                     const isOwner = !!collab?.isOwner;
                     return (
-                      <div key={userId} className="grid grid-cols-[1fr_100px_100px_100px] items-center border-t border-slate-100">
+                      <div key={userId} className="grid grid-cols-[1fr_100px_100px_100px] items-center border-t border-slate-100 dark:border-slate-700">
                         <div className="px-4 py-3 flex items-center gap-3 min-w-0">
                           {collab?.avatar ? (
                             <img src={collab.avatar} alt={collab.name} className="w-7 h-7 rounded-full border border-slate-200 object-cover shrink-0" />
@@ -288,7 +288,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
                             </div>
                           )}
                           <div className="min-w-0">
-                            <p className="text-sm font-medium text-slate-700 truncate flex items-center gap-2">
+                            <p className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate flex items-center gap-2">
                               {collab?.name || userId}
                               {isOwner && (
                                 <span className="text-[10px] text-slate-400">(Creador)</span>
@@ -349,7 +349,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
                     const collab = collaborators.find(c => c.id_user === userId);
                     const isOwner = !!collab?.isOwner;
                     return (
-                      <div key={userId} className="border border-slate-200 rounded-lg p-4 space-y-3">
+                      <div key={userId} className="border border-slate-200 dark:border-slate-400 rounded-lg p-4 space-y-3 bg-white dark:bg-slate-400">
                         <div className="flex items-center gap-3 min-w-0">
                           {collab?.avatar ? (
                             <img src={collab.avatar} alt={collab.name} className="w-8 h-8 rounded-full border border-slate-200 object-cover shrink-0" />
@@ -423,11 +423,11 @@ const ShareModal: React.FC<ShareModalProps> = ({
             )}
           </div>
 
-          <div className="border-t border-slate-200 bg-slate-50 px-4 sm:px-6 py-3 sm:py-4 flex justify-end gap-2 sm:gap-3">
+          <div className="border-t border-slate-200 dark:border-slate-400 bg-slate-50 dark:bg-slate-400 px-4 sm:px-6 py-3 sm:py-4 flex justify-end gap-2 sm:gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg text-slate-600 font-bold text-sm hover:bg-slate-200 transition-colors"
+              className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg text-slate-600 dark:text-slate-300 font-bold text-sm hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               Cancelar
             </button>

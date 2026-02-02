@@ -252,30 +252,30 @@ const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-600 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
           <img src="/logo.png" alt="COMPUTEKSA 360" className="h-16 w-auto" />
         </div>
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900">
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 dark:text-slate-100">
           Iniciar Sesión
         </h2>
-        <p className="mt-2 text-center text-sm text-slate-600">
+        <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
           Accede a tu espacio de trabajo en <span className="font-bold text-brand-600">CRM Computeksa</span>
         </p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow-xl shadow-slate-200 sm:rounded-xl sm:px-10 border border-slate-100">
+        <div className="bg-white dark:bg-slate-500 py-8 px-4 shadow-xl shadow-slate-200 dark:shadow-slate-700 sm:rounded-xl sm:px-10 border border-slate-100 dark:border-slate-400">
           
           {error && (
-            <div className="mb-6 rounded-md bg-red-50 p-4 animate-fade-in">
+            <div className="mb-6 rounded-md bg-red-50 dark:bg-red-900/20 p-4 animate-fade-in border dark:border-red-800">
               <div className="flex">
                 <div className="flex-shrink-0">
                   <i className="fa-solid fa-circle-exclamation text-red-400"></i>
                 </div>
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">{error}</h3>
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-300">{error}</h3>
                 </div>
               </div>
             </div>
@@ -287,7 +287,7 @@ const LoginPage: React.FC = () => {
               type="button"
               disabled={!enabledProviders.google || !!loadingProvider}
               onClick={() => googleLogin()}
-              className={`w-full inline-flex items-center justify-center gap-3 py-2.5 px-4 border border-slate-200 rounded-lg shadow-sm bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition ${loadingProvider === 'google' ? 'opacity-70 cursor-wait' : ''} ${!enabledProviders.google ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`w-full inline-flex items-center justify-center gap-3 py-2.5 px-4 border border-slate-200 dark:border-slate-400 rounded-lg shadow-sm bg-white dark:bg-slate-400 text-sm font-semibold text-slate-700 dark:text-slate-900 hover:bg-slate-50 dark:hover:bg-slate-300 transition ${loadingProvider === 'google' ? 'opacity-70 cursor-wait' : ''} ${!enabledProviders.google ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {loadingProvider === 'google' ? (
                 <i className="fa-solid fa-circle-notch fa-spin text-slate-400"></i>
@@ -302,7 +302,7 @@ const LoginPage: React.FC = () => {
               type="button"
               disabled={!enabledProviders.microsoft || !!loadingProvider}
               onClick={handleMicrosoftLogin}
-              className={`w-full inline-flex items-center justify-center gap-3 py-2.5 px-4 border border-slate-200 rounded-lg shadow-sm bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 transition ${loadingProvider === 'microsoft' ? 'opacity-70 cursor-wait' : ''} ${!enabledProviders.microsoft ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`w-full inline-flex items-center justify-center gap-3 py-2.5 px-4 border border-slate-200 dark:border-slate-400 rounded-lg shadow-sm bg-white dark:bg-slate-400 text-sm font-semibold text-slate-700 dark:text-slate-900 hover:bg-slate-50 dark:hover:bg-slate-300 transition ${loadingProvider === 'microsoft' ? 'opacity-70 cursor-wait' : ''} ${!enabledProviders.microsoft ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {loadingProvider === 'microsoft' ? (
                  <i className="fa-solid fa-circle-notch fa-spin text-slate-400"></i>

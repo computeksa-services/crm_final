@@ -227,7 +227,7 @@ const DealCreate: React.FC = () => {
     <div className="w-full bg-slate-50 min-h-screen animate-fade-in">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <div className="sticky top-0 z-40 bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center justify-between shadow-sm">
+      <div className="sticky top-0 z-40 bg-white dark:bg-slate-500 border-b border-slate-200 dark:border-slate-400 px-4 md:px-6 py-3 flex items-center justify-between shadow-sm">
          <div className="flex items-center gap-4">
              <button onClick={() => navigate(-1)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full transition-colors">
                  <i className="fa-solid fa-arrow-left text-lg"></i>
@@ -249,13 +249,13 @@ const DealCreate: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 items-start">
               
               {/* COL 1: INFO */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-5">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2 flex items-center gap-2">
+              <div className="bg-white dark:bg-slate-600 rounded-xl shadow-sm border border-slate-200 dark:border-slate-500 p-5 flex flex-col gap-5">
+                  <h3 className="text-xs font-bold text-slate-400 dark:text-slate-200 uppercase tracking-wider border-b dark:border-slate-500 pb-2 flex items-center gap-2">
                       <i className="fa-solid fa-file-invoice text-indigo-500"></i> Información
                   </h3>
                   <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Nombre del Trato *</label>
-                      <input name="nombre_trato" value={deal.nombre_trato || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Ej. Venta de Servidores" />
+                      <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">Nombre del Trato *</label>
+                      <input name="nombre_trato" value={deal.nombre_trato || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-300 dark:bg-slate-400 dark:text-slate-900 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Ej. Venta de Servidores" />
                   </div>
                   <div>
                       <label className="block text-xs font-bold text-slate-600 mb-1.5">Valor Estimado</label>
@@ -271,13 +271,13 @@ const DealCreate: React.FC = () => {
               </div>
 
               {/* COL 2: CLIENTE */}
-              <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5 flex flex-col gap-5">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider border-b pb-2 flex items-center gap-2">
+              <div className="bg-white dark:bg-slate-600 rounded-xl shadow-sm border border-slate-200 dark:border-slate-500 p-5 flex flex-col gap-5">
+                  <h3 className="text-xs font-bold text-slate-400 dark:text-slate-200 uppercase tracking-wider border-b dark:border-slate-500 pb-2 flex items-center gap-2">
                       <i className="fa-solid fa-building-user text-indigo-500"></i> Cliente
                   </h3>
                   <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1.5">Empresa *</label>
-                      <select name="id_client_company" value={deal.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-100 disabled:text-slate-500" disabled={cacheLoading || isConversion}>
+                      <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1.5">Empresa *</label>
+                      <select name="id_client_company" value={deal.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 dark:border-slate-300 rounded-lg text-sm bg-white dark:bg-slate-400 dark:text-slate-900 focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-100 dark:disabled:bg-slate-500 disabled:text-slate-500 dark:disabled:text-slate-700" disabled={cacheLoading || isConversion}>
                           <option value="">{cacheLoading ? 'Cargando...' : '-- Seleccionar Empresa --'}</option>
                           <option value="__ADD_NEW_COMPANY__" className="font-bold text-emerald-600 bg-emerald-50">+ Nueva Empresa</option>
                           {cachedCompanies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}

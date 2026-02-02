@@ -12,11 +12,11 @@
 
 .dark {
   color: #e5e7eb;
-  background-color: #121212;
-  --app-bg: #121212;
+  background-color: #1e1e1e;
+  --app-bg: #1e1e1e;
   --app-text: #e5e7eb;
-  --app-card: #1a1a1a;
-  --app-border: #2a2a2a;
+  --app-card: #2d2d30;
+  --app-border: #3a3a3a;
   --app-muted: #a3a3a3;
   --app-muted-2: #7a7a7a;
 }
@@ -32,22 +32,22 @@ body {
 }
 
 /* Overrides globales para modo oscuro en clases comunes de Tailwind */
-.dark .bg-white { background-color: var(--app-card) !important; }
-.dark .bg-white\/95 { background-color: rgba(26, 26, 26, 0.95) !important; }
-.dark .bg-white\/90 { background-color: rgba(26, 26, 26, 0.9) !important; }
-.dark .bg-white\/80 { background-color: rgba(26, 26, 26, 0.8) !important; }
-.dark .bg-white\/70 { background-color: rgba(26, 26, 26, 0.7) !important; }
-.dark .bg-white\/60 { background-color: rgba(26, 26, 26, 0.6) !important; }
-.dark .bg-white\/50 { background-color: rgba(26, 26, 26, 0.5) !important; }
-.dark .bg-white\/40 { background-color: rgba(26, 26, 26, 0.4) !important; }
-.dark .bg-white\/30 { background-color: rgba(26, 26, 26, 0.3) !important; }
-.dark .bg-white\/20 { background-color: rgba(26, 26, 26, 0.2) !important; }
-.dark .bg-white\/10 { background-color: rgba(26, 26, 26, 0.1) !important; }
-.dark .bg-slate-50 { background-color: #171717 !important; }
-.dark .bg-slate-50\/90 { background-color: rgba(23, 23, 23, 0.9) !important; }
-.dark .bg-slate-50\/80 { background-color: rgba(23, 23, 23, 0.8) !important; }
-.dark .bg-slate-50\/70 { background-color: rgba(23, 23, 23, 0.7) !important; }
-.dark .bg-slate-50\/60 { background-color: rgba(23, 23, 23, 0.6) !important; }
+.dark .bg-white { background-color: #2d2d30 !important; }
+.dark .bg-white\/95 { background-color: rgba(45, 45, 48, 0.95) !important; }
+.dark .bg-white\/90 { background-color: rgba(45, 45, 48, 0.9) !important; }
+.dark .bg-white\/80 { background-color: rgba(45, 45, 48, 0.8) !important; }
+.dark .bg-white\/70 { background-color: rgba(45, 45, 48, 0.7) !important; }
+.dark .bg-white\/60 { background-color: rgba(45, 45, 48, 0.6) !important; }
+.dark .bg-white\/50 { background-color: rgba(45, 45, 48, 0.5) !important; }
+.dark .bg-white\/40 { background-color: rgba(45, 45, 48, 0.4) !important; }
+.dark .bg-white\/30 { background-color: rgba(45, 45, 48, 0.3) !important; }
+.dark .bg-white\/20 { background-color: rgba(45, 45, 48, 0.2) !important; }
+.dark .bg-white\/10 { background-color: rgba(45, 45, 48, 0.1) !important; }
+.dark .bg-slate-50 { background-color: #1e1e1e !important; }
+.dark .bg-slate-50\/90 { background-color: rgba(30, 30, 30, 0.9) !important; }
+.dark .bg-slate-50\/80 { background-color: rgba(30, 30, 30, 0.8) !important; }
+.dark .bg-slate-50\/70 { background-color: rgba(30, 30, 30, 0.7) !important; }
+.dark .bg-slate-50\/60 { background-color: rgba(30, 30, 30, 0.6) !important; }
 .dark .bg-slate-50\/50 { background-color: rgba(23, 23, 23, 0.7) !important; }
 .dark .bg-slate-50\/40 { background-color: rgba(23, 23, 23, 0.4) !important; }
 .dark .bg-slate-50\/30 { background-color: rgba(23, 23, 23, 0.3) !important; }
