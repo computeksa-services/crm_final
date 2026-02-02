@@ -139,7 +139,7 @@ const InlineBadgeSelector: React.FC<{
                     )}
                     
                     {/* Estado actual (deshabilitado) */}
-                    <div className="py-0.5 bg-slate-50 border-y border-slate-200">
+                    <div className="py-0.5 bg-slate-50 dark:bg-slate-400 border-y border-slate-200 dark:border-slate-500">
                         <div className="w-full px-2 py-1 flex items-center gap-1.5 opacity-60 cursor-not-allowed">
                             <div className="w-5 h-5 rounded flex items-center justify-center" style={{ backgroundColor: `${current?.color}20`, color: current?.color }}>
                                 <i className={`${current?.icon || 'fa-solid fa-tag'} text-[9px]`}></i>

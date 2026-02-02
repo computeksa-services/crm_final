@@ -81,8 +81,8 @@ const Avatar: React.FC<AvatarProps> = ({
           />
           {/* Mostrar spinner mientras carga */}
           {!imageLoaded && (
-            <div className="absolute inset-0 flex items-center justify-center bg-slate-200 rounded-full">
-              <i className="fa-solid fa-circle-notch fa-spin text-slate-400 text-xs"></i>
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-200 dark:bg-slate-400 rounded-full">
+              <i className="fa-solid fa-circle-notch fa-spin text-slate-400 dark:text-slate-600 text-xs"></i>
             </div>
           )}
         </>
@@ -90,7 +90,7 @@ const Avatar: React.FC<AvatarProps> = ({
       
       {/* Indicador online */}
       {showOnlineIndicator && (
-        <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
+        <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-500 rounded-full"></span>
       )}
     </div>
   );

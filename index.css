@@ -81,3 +81,14 @@ body {
 .dark .border-slate-200 { border-color: #262626 !important; }
 .dark .border-slate-300 { border-color: #2f2f2f !important; }
 .dark .border-slate-100 { border-color: #1f1f1f !important; }
+
+/* Avatar Badge Dark Mode Support */
+div[style*="--avatar-dark"] {
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.dark div[style*="--avatar-dark"] {
+  background-color: var(--avatar-dark) !important;
+  color: var(--avatar-dark-text) !important;
+  border-color: var(--avatar-dark-text) !important;
+}

@@ -437,7 +437,7 @@ const ProductsList: React.FC = () => {
                       setViewMode('grid');
                       localStorage.setItem('productListViewMode', 'grid');
                     }}
-                    className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-slate-100 text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
+                    className={`p-2 rounded-md transition-all ${viewMode === 'grid' ? 'bg-slate-100 dark:bg-slate-400 text-slate-800 dark:text-slate-900 shadow-sm' : 'text-slate-400 dark:text-slate-300 hover:text-slate-600 dark:hover:text-slate-200'}`}
                     title="Vista Galería"
                 >
                     <i className="fa-solid fa-border-all"></i>
@@ -451,7 +451,7 @@ const ProductsList: React.FC = () => {
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="bg-white dark:bg-slate-500 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-400 flex flex-col md:flex-row gap-4 items-center justify-between">
          <div className="relative w-full md:w-96">
             <span className="absolute left-3 top-2.5 text-slate-400">
                 <i className="fa-solid fa-magnifying-glass"></i>

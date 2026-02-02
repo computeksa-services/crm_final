@@ -9,6 +9,7 @@ import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
 import ContactFormModal from './ContactFormModal';
 import StartFollowUpModal from '../../components/StartFollowUpModal';
+import { AvatarBadge } from '../../components/AvatarBadge';
 import { apiFetch } from '../../services/apiClient';
 import {
   useReactTable,
@@ -278,13 +279,14 @@ const ClientContactsList: React.FC = () => {
         if (row.getIsGrouped()) return null;
         const c = row.original;
         const contactName = `${c.first_name || ''} ${c.last_name || ''}`;
-        const color = getAvatarColor(contactName);
         return (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-[10px] border shadow-sm flex-shrink-0" style={{ backgroundColor: color.bg, color: color.text, borderColor: color.text }}>
-              {getInitials(c.first_name, c.last_name)}
-            </div>
-            <span className="font-semibold text-slate-800">{`${c.last_name} ${c.first_name || ''}`}</span>
+            <AvatarBadge
+              initials={getInitials(c.first_name, c.last_name)}
+              name={contactName}
+              size="sm"
+            />
+            <span className="font-semibold text-slate-700 dark:text-slate-300">{`${c.last_name} ${c.first_name || ''}`}</span>
           </div>
         );
       },
@@ -305,10 +307,10 @@ const ClientContactsList: React.FC = () => {
               {/* Ícono de flecha que rota (chevron) en lugar del botón más/menos pesado */}
               <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
               
-              <span className="font-bold text-slate-700 uppercase tracking-tight">
+              <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-tight">
                 {((row.subRows?.[0]?.original as any)?.name_company) || 'SIN EMPRESA'}
               </span>
-              <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">
+              <span className="bg-slate-200 dark:bg-slate-400 text-slate-600 dark:text-slate-900 px-2 py-0.5 rounded-full text-[10px] font-bold">
                 {row.subRows.length}
               </span>
             </div>
@@ -318,13 +320,15 @@ const ClientContactsList: React.FC = () => {
           <div className="flex items-start gap-3 py-1">
             {(() => {
               const companyName = (row.original as any).name_company || 'SIN EMPRESA';
-              const color = getAvatarColor(companyName);
+              const companyInitials = companyName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '?';
               return (
                 <>
-                  <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center font-bold text-[10px] border shadow-sm" style={{ backgroundColor: color.bg, color: color.text, borderColor: color.text }}>
-                    {companyName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '?'}
-                  </div>
-                  <span className="font-bold text-slate-800 text-sm tracking-tight break-words">
+                  <AvatarBadge
+                    initials={companyInitials}
+                    name={companyName}
+                    size="sm"
+                  />
+                  <span className="font-bold text-slate-800 dark:text-slate-300 text-sm tracking-tight break-words">
                     {companyName}
                   </span>
                 </>

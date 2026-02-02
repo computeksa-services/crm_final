@@ -686,7 +686,6 @@ const DealDetail: React.FC = () => {
                     <span className="w-2 h-6 bg-emerald-500 rounded-full"></span>
                     <div>
                         <h3 className="font-bold text-slate-800 text-sm">Detalles</h3>
-                        <p className="text-xs text-slate-500">Información general</p>
                     </div>
                   </div>
                 </div>
@@ -830,7 +829,6 @@ const DealDetail: React.FC = () => {
                                 Cotizaciones 
                                 <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full text-xs">{quotes.length}</span>
                             </h3>
-                            <p className="text-xs text-slate-500">Documentos financieros</p>
                         </div>
                     </div>
                     {canEdit && (
@@ -905,7 +903,6 @@ const DealDetail: React.FC = () => {
                     <span className="w-2 h-6 bg-slate-500 rounded-full"></span>
                     <div>
                         <h3 className="font-bold text-slate-800 text-sm">Historial de Envíos</h3>
-                        <p className="text-xs text-slate-500">Registro de documentos enviados por email.</p>
                     </div>
                   </div>
                   {emailHistory.length > 0 && (

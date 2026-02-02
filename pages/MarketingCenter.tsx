@@ -62,16 +62,16 @@ const MarketingCenter: React.FC = () => {
   const getNavLinkClass = (isActive: boolean) => `
     flex items-center justify-center px-3 py-2 rounded-lg text-sm font-semibold transition-all border
     ${isActive
-      ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-sm ring-1 ring-blue-100'
-      : 'bg-white text-slate-500 border-slate-200 hover:border-slate-300 hover:text-slate-700 hover:bg-slate-50'
+      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700 shadow-sm ring-1 ring-blue-100 dark:ring-blue-800'
+      : 'bg-white dark:bg-slate-500 text-slate-500 dark:text-slate-200 border-slate-200 dark:border-slate-400 hover:border-slate-300 dark:hover:border-slate-300 hover:text-slate-700 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-400'
     }
   `;
 
   return (
-    <div className="flex flex-col h-full w-full bg-slate-50 overflow-y-auto">
+    <div className="flex flex-col h-full w-full bg-slate-50 dark:bg-slate-600 overflow-y-auto">
       
       {/* HEADER COMPACTO */}
-      <div className="bg-white border-b border-slate-200 shrink-0">
+      <div className="bg-white dark:bg-slate-500 border-b border-slate-200 dark:border-slate-400 shrink-0">
         <div className="w-full px-4 md:px-6 py-3">
           
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

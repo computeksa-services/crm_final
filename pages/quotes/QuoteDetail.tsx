@@ -962,7 +962,6 @@ const QuoteDetail: React.FC = () => {
                         <span className="w-2 h-6 bg-pink-500 rounded-full"></span>
                         <div>
                             <h3 className="font-bold text-slate-800 text-sm">Archivos Adjuntos</h3>
-                            <p className="text-xs text-slate-500">Documentos de soporte</p>
                         </div>
                     </div>
                     {canEdit && (

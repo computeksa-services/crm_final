@@ -318,7 +318,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
                             className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all ${
                               permission === 'VIEW'
                                 ? 'bg-blue-600 text-white'
-                                : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-200 hover:text-blue-600'
+                                : 'bg-white dark:bg-slate-400 border border-slate-200 dark:border-slate-500 text-slate-600 dark:text-slate-900 hover:border-blue-200 dark:hover:border-blue-300 hover:text-blue-600 dark:hover:text-blue-600'
                             } ${isOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
                           >
                             <i className="fa-solid fa-eye"></i>
@@ -332,7 +332,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
                             className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all ${
                               permission === 'BLOCKED'
                                 ? 'bg-red-600 text-white'
-                                : 'bg-white border border-slate-200 text-slate-600 hover:border-red-200 hover:text-red-600'
+                                : 'bg-white dark:bg-slate-400 border border-slate-200 dark:border-slate-500 text-slate-600 dark:text-slate-900 hover:border-red-200 dark:hover:border-red-300 hover:text-red-600 dark:hover:text-red-600'
                             } ${isOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
                           >
                             <i className="fa-solid fa-lock"></i>
