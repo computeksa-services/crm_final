@@ -236,28 +236,28 @@ const ShareModal: React.FC<ShareModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="px-6 py-4 border-b border-slate-200 bg-white flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center">
+        <div className="px-4 sm:px-6 py-4 border-b border-slate-200 bg-white flex justify-between items-start gap-3">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
               <i className="fa-solid fa-share-nodes text-sm"></i>
             </span>
-            <div>
-              <h2 className="text-lg font-bold text-slate-800">Asignar {getEntityLabel()}</h2>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-slate-800">Asignar {getEntityLabel()}</h2>
               {entityName && (
-                <p className="text-xs text-slate-500 truncate max-w-[420px]">{entityName}</p>
+                <p className="text-xs text-slate-500 truncate max-w-[300px] sm:max-w-[420px]">{entityName}</p>
               )}
               {creatorName && (
                 <p className="text-[11px] text-slate-400">Creado por: {creatorName}</p>
               )}
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors flex-shrink-0">
             <i className="fa-solid fa-times text-lg"></i>
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
             {/* COLABORADORES ACTUALES */}
             {Object.keys(collaboratorPermissions).length > 0 && (
               <div>
@@ -265,19 +265,20 @@ const ShareModal: React.FC<ShareModalProps> = ({
                   <i className="fa-solid fa-users text-indigo-600"></i>
                   Asignaciones
                 </h3>
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <div className="grid grid-cols-[1fr_120px_120px_120px] bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                {/* VISTA DESKTOP - TABLA */}
+                <div className="hidden sm:block border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="grid grid-cols-[1fr_100px_100px_100px] bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     <div className="px-4 py-2">Colaborador</div>
-                    <div className="px-4 py-2 text-center">Principal</div>
-                    <div className="px-4 py-2 text-center">Secundario</div>
-                    <div className="px-4 py-2 text-center">Sin asignación</div>
+                    <div className="px-2 py-2 text-center">Principal</div>
+                    <div className="px-2 py-2 text-center">Secundario</div>
+                    <div className="px-2 py-2 text-center">Sin asignación</div>
                   </div>
                   {Object.entries(collaboratorPermissions).map(([userId, permission]) => {
                     const collab = collaborators.find(c => c.id_user === userId);
                     const isAdmin = (collab?.rol_user || '').toLowerCase() === 'admin';
                     const isOwner = !!collab?.isOwner;
                     return (
-                      <div key={userId} className="grid grid-cols-[1fr_120px_120px_120px] items-center border-t border-slate-100">
+                      <div key={userId} className="grid grid-cols-[1fr_100px_100px_100px] items-center border-t border-slate-100">
                         <div className="px-4 py-3 flex items-center gap-3 min-w-0">
                           {collab?.avatar ? (
                             <img src={collab.avatar} alt={collab.name} className="w-7 h-7 rounded-full border border-slate-200 object-cover shrink-0" />
@@ -295,7 +296,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
                             </p>
                           </div>
                         </div>
-                        <div className="px-4 py-3 flex justify-center">
+                        <div className="px-2 py-3 flex justify-center">
                           <button
                             type="button"
                             onClick={() => handleChangePermission(userId, 'EDIT')}
@@ -309,7 +310,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
                             <i className="fa-solid fa-pen"></i>
                           </button>
                         </div>
-                        <div className="px-4 py-3 flex justify-center">
+                        <div className="px-2 py-3 flex justify-center">
                           <button
                             type="button"
                             onClick={() => handleChangePermission(userId, 'VIEW')}
@@ -323,7 +324,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
                             <i className="fa-solid fa-eye"></i>
                           </button>
                         </div>
-                        <div className="px-4 py-3 flex justify-center">
+                        <div className="px-2 py-3 flex justify-center">
                           <button
                             type="button"
                             onClick={() => handleChangePermission(userId, 'BLOCKED')}
@@ -341,6 +342,76 @@ const ShareModal: React.FC<ShareModalProps> = ({
                     );
                   })}
                 </div>
+
+                {/* VISTA MÓVIL - TARJETAS */}
+                <div className="sm:hidden space-y-3">
+                  {Object.entries(collaboratorPermissions).map(([userId, permission]) => {
+                    const collab = collaborators.find(c => c.id_user === userId);
+                    const isOwner = !!collab?.isOwner;
+                    return (
+                      <div key={userId} className="border border-slate-200 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          {collab?.avatar ? (
+                            <img src={collab.avatar} alt={collab.name} className="w-8 h-8 rounded-full border border-slate-200 object-cover shrink-0" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
+                              {(collab?.name || 'U').charAt(0)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-slate-700 truncate">
+                              {collab?.name || userId}
+                            </p>
+                            {isOwner && (
+                              <p className="text-[10px] text-slate-400">Creador</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-between">
+                          <button
+                            type="button"
+                            onClick={() => handleChangePermission(userId, 'EDIT')}
+                            disabled={isOwner}
+                            className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                              permission === 'EDIT'
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:border-emerald-200 hover:text-emerald-600'
+                            } ${isOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          >
+                            <i className="fa-solid fa-pen text-xs"></i>
+                            <span>Editar</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleChangePermission(userId, 'VIEW')}
+                            disabled={isOwner}
+                            className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                              permission === 'VIEW'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:border-blue-200 hover:text-blue-600'
+                            } ${isOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          >
+                            <i className="fa-solid fa-eye text-xs"></i>
+                            <span>Ver</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleChangePermission(userId, 'BLOCKED')}
+                            disabled={isOwner}
+                            className={`flex-1 px-3 py-2 rounded-md text-xs font-bold transition-all flex items-center justify-center gap-1 ${
+                              permission === 'BLOCKED'
+                                ? 'bg-red-600 text-white'
+                                : 'bg-white border border-slate-200 text-slate-600 hover:border-red-200 hover:text-red-600'
+                            } ${isOwner ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          >
+                            <i className="fa-solid fa-lock text-xs"></i>
+                            <span>Bloquear</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
@@ -352,28 +423,29 @@ const ShareModal: React.FC<ShareModalProps> = ({
             )}
           </div>
 
-          <div className="border-t border-slate-200 bg-slate-50 px-6 py-4 flex justify-end gap-3">
+          <div className="border-t border-slate-200 bg-slate-50 px-4 sm:px-6 py-3 sm:py-4 flex justify-end gap-2 sm:gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-5 py-2.5 rounded-lg text-slate-600 font-bold text-sm hover:bg-slate-200 transition-colors"
+              className="px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg text-slate-600 font-bold text-sm hover:bg-slate-200 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={submitting || loading || !hasChanges}
-              className="px-6 py-2.5 rounded-lg bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {submitting ? (
                 <>
                   <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  Guardando...
+                  <span className="hidden sm:inline">Guardando...</span>
                 </>
               ) : (
                 <>
                   <i className="fa-solid fa-check"></i>
-                  Guardar Cambios
+                  <span className="hidden sm:inline">Guardar Cambios</span>
+                  <span className="sm:hidden">Guardar</span>
                 </>
               )}
             </button>
