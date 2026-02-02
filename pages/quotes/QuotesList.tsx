@@ -107,7 +107,7 @@ const InlineBadgeSelector: React.FC<{
                 ref={buttonRef}
                 type="button"
                 onClick={(e) => { e.stopPropagation(); if (!disabled) setIsOpen(!isOpen); }}
-                className={`flex items-center gap-2 px-2 py-1 rounded-lg border text-[11px] font-black uppercase tracking-tight transition-all ${disabled ? 'cursor-default opacity-70' : 'hover:bg-white active:scale-95'}`}
+                className={`flex items-center gap-2 px-2 py-1 rounded-lg border text-[10px] font-black uppercase tracking-tight transition-all whitespace-nowrap ${disabled ? 'cursor-default opacity-70' : 'hover:bg-white active:scale-95'}`}
                 style={{ backgroundColor: `${current?.color}15`, color: current?.color, borderColor: `${current?.color}30` }}
             >
                 {current?.icon && <i className={current.icon}></i>}
@@ -116,54 +116,57 @@ const InlineBadgeSelector: React.FC<{
             </button>
             {isOpen && (
                 <div 
+                    onMouseLeave={() => setIsOpen(false)}
                     className={`absolute z-[100] ${dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'} left-0 w-52 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in ${dropdownPosition === 'top' ? 'slide-in-from-bottom-1' : 'slide-in-from-top-1'}`}
                 >
+                  <div className="max-h-64 overflow-y-auto">
                     {/* Estados arriba del actual */}
                     {itemsAbove.length > 0 && (
-                        <div className="py-1">
+                        <div className="py-0.5">
                             {itemsAbove.map(item => (
                                 <button
                                     key={item.id}
                                     onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
-                                    className="w-full px-3 py-2.5 hover:bg-slate-50 flex items-center gap-3 text-left border-b border-slate-50 last:border-0 transition-colors"
+                                    className="w-full px-2 py-1 hover:bg-slate-50 flex items-center gap-1.5 text-left border-b border-slate-50 last:border-0 transition-colors"
                                 >
-                                    <div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor: `${item.color}20`, color: item.color }}>
-                                        <i className={item.icon || 'fa-solid fa-tag'}></i>
+                                    <div className="w-5 h-5 rounded flex items-center justify-center" style={{ backgroundColor: `${item.color}20`, color: item.color }}>
+                                        <i className={`${item.icon || 'fa-solid fa-tag'} text-[9px]`}></i>
                                     </div>
-                                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
+                                    <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
                                 </button>
                             ))}
                         </div>
                     )}
                     
                     {/* Estado actual (deshabilitado) */}
-                    <div className="py-1 bg-slate-50 border-y border-slate-200">
-                        <div className="w-full px-3 py-2.5 flex items-center gap-3 opacity-60 cursor-not-allowed">
-                            <div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor: `${current?.color}20`, color: current?.color }}>
-                                <i className={current?.icon || 'fa-solid fa-tag'}></i>
+                    <div className="py-0.5 bg-slate-50 border-y border-slate-200">
+                        <div className="w-full px-2 py-1 flex items-center gap-1.5 opacity-60 cursor-not-allowed">
+                            <div className="w-5 h-5 rounded flex items-center justify-center" style={{ backgroundColor: `${current?.color}20`, color: current?.color }}>
+                                <i className={`${current?.icon || 'fa-solid fa-tag'} text-[9px]`}></i>
                             </div>
-                            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">{current?.name || 'S/N'}</span>
-                            <i className="fa-solid fa-check text-[10px] ml-auto text-slate-400"></i>
+                            <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{current?.name || 'S/N'}</span>
+                            <i className="fa-solid fa-check text-[8px] ml-auto text-slate-400"></i>
                         </div>
                     </div>
                     
                     {/* Estados abajo del actual */}
                     {itemsBelow.length > 0 && (
-                        <div className="py-1">
+                        <div className="py-0.5">
                             {itemsBelow.map(item => (
                                 <button
                                     key={item.id}
                                     onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
-                                    className="w-full px-3 py-2.5 hover:bg-slate-50 flex items-center gap-3 text-left border-b border-slate-50 last:border-0 transition-colors"
+                                    className="w-full px-2 py-1 hover:bg-slate-50 flex items-center gap-1.5 text-left border-b border-slate-50 last:border-0 transition-colors"
                                 >
-                                    <div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor: `${item.color}20`, color: item.color }}>
-                                        <i className={item.icon || 'fa-solid fa-tag'}></i>
+                                    <div className="w-5 h-5 rounded flex items-center justify-center" style={{ backgroundColor: `${item.color}20`, color: item.color }}>
+                                        <i className={`${item.icon || 'fa-solid fa-tag'} text-[9px]`}></i>
                                     </div>
-                                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
+                                    <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
                                 </button>
                             ))}
                         </div>
                     )}
+                  </div>
                 </div>
             )}
         </div>
@@ -261,10 +264,30 @@ const QuotesList: React.FC = () => {
     const counts = new Map<string, number>();
     quotes.forEach(quote => {
         let val = (quote as any)[columnId];
+        
+        // Manejo especial para id_quote_status
         if (columnId === 'id_quote_status') {
             const status = (metadata?.statuses || []).find(s => s.id_status === val);
             val = status ? status.name : 'Desconocido';
         }
+        
+        // Manejo especial para collaborators (array de objetos)
+        if (columnId === 'collaborators') {
+            const collaborators = (quote as any).collaborators || [];
+            if (collaborators.length === 0) {
+                counts.set('Sin asignar', (counts.get('Sin asignar') || 0) + 1);
+            } else {
+                collaborators.forEach((collab: any) => {
+                    const user = users.find((u: any) => u.id_user === collab.id);
+                    const userName = user?.name_user || 'Usuario';
+                    counts.set(userName, (counts.get(userName) || 0) + 1);
+                });
+            }
+            return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+        }
+        
+
+        
         if (!val) val = '(Vacío)';
         counts.set(val, (counts.get(val) || 0) + 1);
     });
@@ -416,7 +439,7 @@ const QuotesList: React.FC = () => {
     },
     {
         accessorKey: 'nombre_cotizacion',
-        header: 'Nombre',
+        header: 'Nombre Cotización',
         size: 200,
         minSize: 150,
         maxSize: 250,
@@ -466,9 +489,17 @@ const QuotesList: React.FC = () => {
     },
     {
         accessorKey: 'collaborators',
+        accessorFn: (row) => {
+            const collaborators = (row as any).collaborators || [];
+            return collaborators.map((collab: any) => {
+                const user = users.find((u: any) => u.id_user === collab.id);
+                return user?.name_user || '';
+            }).join(', ');
+        },
         header: 'Colaboradores',
         size: 200,
         enableColumnFilter: true,
+        enableGrouping: true,
         filterFn: (row, id, filterValue: string[]) => {
             const collaborators = (row.original as any).collaborators || [];
             if (filterValue.length === 0) return true;
@@ -478,8 +509,10 @@ const QuotesList: React.FC = () => {
                 return filterValue.some(filter => userName.toLowerCase().includes(filter.toLowerCase()));
             });
         },
-        cell: ({ row, column }) => {
-            if (row.getIsGrouped()) return null;
+        cell: ({ row, column, getValue }) => {
+            if (row.getIsGrouped()) {
+                return grouping.includes(column.id) ? renderGroupCell(row, getValue() as string || 'Sin Colaboradores') : null;
+            }
             
             const collaborators = (row.original as any).collaborators || [];
             if (collaborators.length === 0) return <span className="text-xs text-slate-400">Sin asignar</span>;
@@ -660,7 +693,7 @@ const QuotesList: React.FC = () => {
   });
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
+    <div className="flex flex-col h-[calc(100vh-58px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
       
       {/* TOOLBAR RESPONSIVO MEJORADO */}
       <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3">
@@ -683,7 +716,7 @@ const QuotesList: React.FC = () => {
             {[
               { id: 'client_company_name', label: 'Cliente', icon: 'fa-building' },
               { id: 'id_quote_status', label: 'Estado', icon: 'fa-list-check' },
-              { id: 'created_by_name', label: 'Owner', icon: 'fa-user-tie' }
+              { id: 'collaborators', label: 'Colaboradores', icon: 'fa-user-group' }
             ].map(opt => (
               <button 
                 key={opt.id} 
@@ -731,7 +764,11 @@ const QuotesList: React.FC = () => {
                       </div>
 
                       {activeFilterMenu === header.column.id && (
-                        <div ref={filterMenuRef} className="absolute top-full left-0 mt-1 w-64 bg-white shadow-xl rounded-xl border border-slate-200 z-50 py-3 animate-in fade-in slide-in-from-top-1">
+                        <div 
+                          ref={filterMenuRef} 
+                          onMouseLeave={() => setActiveFilterMenu(null)}
+                          className="absolute top-full left-0 mt-1 w-64 bg-white shadow-xl rounded-xl border border-slate-200 z-50 py-3 animate-in fade-in slide-in-from-top-1"
+                        >
                           {isDate ? (
                             <div className="px-4 space-y-3">
                                 <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Rango de fechas</span>
@@ -802,7 +839,7 @@ const QuotesList: React.FC = () => {
         </table>
       </div>
 
-      <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
+      <div className="bg-slate-50 border-t border-slate-200 px-3 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
           <div className="flex items-center gap-6">
             <span>{quotes.length} REGISTROS</span>
           </div>

@@ -104,7 +104,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           to={item.path}
           onClick={() => setIsMobileSidebarOpen(false)} // Cerrar menú móvil al hacer click
           className={`flex items-center transition-all duration-200 group-hover:bg-slate-800 ${
-            isCollapsed ? 'justify-center px-0 py-2 my-0.5 rounded-lg' : 'px-2 py-2 my-0.5 rounded-lg'
+            isCollapsed ? 'justify-center px-0 py-1.5 rounded-lg' : 'px-2 py-1.5 rounded-lg'
           } ${
             isActive 
               ? 'bg-brand-600 text-white shadow-md' 
@@ -169,8 +169,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
 
         {/* Navigation Items */}
-        <nav className="flex-1 py-4 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
-          <ul className="space-y-1 px-2">
+        <nav className="flex-1 py-2 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+          <ul className="px-2">
             {NAV_GROUPS.map((group, idx) => (
               <div key={idx}>
                 {/* Título de Grupo (Solo si está expandido) */}
@@ -443,8 +443,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </header>
 
         {/* CONTENT SCROLLABLE AREA */}
-        <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/60 p-2 md:p-4 scroll-smooth">
-          <div className="w-full">
+        <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-950/60 p-1 md:p-2 scroll-smooth">
+          <div className="w-full h-full">
              {children}
           </div>
         </main>

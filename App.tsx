@@ -85,6 +85,7 @@ const App: React.FC = () => {
               <Route path="quotes/:id" element={<QuoteDetail />} />
               <Route path="deals" element={<DealFiltersProvider><DealsList /></DealFiltersProvider>} />
               <Route path="deals/new" element={<DealCreate />} />
+              <Route path="deals/edit" element={<DealCreate />} />
               <Route path="deals/:id" element={<DealDetail />} />
               <Route path="financials" element={<FinancialsList />} />
               <Route path="financials/new" element={<FinancialForm />} />

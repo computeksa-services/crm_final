@@ -5,8 +5,8 @@ import Toast from './Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useDataCache } from '../contexts/DataCacheContext';
 import { apiFetch } from '../services/apiClient';
-import CompanyFormModal from './CompanyFormModal';
-import ContactFormModal from './ContactFormModal';
+import CompanyFormModal from '../pages/clients/CompanyFormModal';
+import ContactFormModal from '../pages/clients/ContactFormModal';
 
 interface DealFormModalProps {
   isOpen: boolean;

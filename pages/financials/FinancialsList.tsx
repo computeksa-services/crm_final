@@ -57,30 +57,28 @@ const dateRangeFilter: FilterFn<any> = (row, columnId, value) => {
 
 // --- COMPONENTES UI ---
 
-// 1. KPI Card (Diseño original mantenido)
+// 1. KPI Card (Diseño compacto)
 const KpiCard: React.FC<{ title: string; value: number; icon: string; color: 'blue' | 'green' | 'red' | 'orange'; subtext?: string; }> = ({ title, value, icon, color, subtext }) => {
-  const styles = {
-    blue: 'bg-blue-50 text-blue-700 border-blue-100',
-    green: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    red: 'bg-rose-50 text-rose-700 border-rose-100',
-    orange: 'bg-amber-50 text-amber-700 border-amber-100',
-  };
-  return (
-    <div className={`p-4 rounded-xl border ${styles[color]} flex flex-col justify-between h-full shadow-sm`}>
-      <div className="flex justify-between items-start mb-2">
-        <span className="text-[10px] font-bold uppercase opacity-70 tracking-widest">{title}</span>
-        <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-white bg-opacity-60`}>
-            <i className={`fa-solid ${icon} text-lg`}></i>
+    const styles = {
+        blue: 'bg-blue-50 text-blue-700 border-blue-100',
+        green: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+        red: 'bg-rose-50 text-rose-700 border-rose-100',
+        orange: 'bg-amber-50 text-amber-700 border-amber-100',
+    };
+    return (
+        <div className={`p-3 rounded-lg border ${styles[color]} flex items-center gap-3 shadow-sm`}>
+            <div className={`w-10 h-10 rounded-md flex items-center justify-center bg-white bg-opacity-60`}>
+                <i className={`fa-solid ${icon} text-xl`}></i>
+            </div>
+            <div className="flex-1">
+                <span className="text-[10px] font-bold uppercase opacity-70 tracking-widest">{title}</span>
+                <div className="text-lg font-black font-mono tracking-tight mt-0.5">
+                    ${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </div>
+                {subtext && <div className="text-[10px] opacity-80 font-medium -mt-1">{subtext}</div>}
+            </div>
         </div>
-      </div>
-      <div>
-        <div className="text-2xl font-black font-mono tracking-tight">
-          ${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-        </div>
-        {subtext && <div className="text-[11px] mt-1 opacity-80 font-medium">{subtext}</div>}
-      </div>
-    </div>
-  );
+    );
 };
 
 // 2. Selector de Año y Mes (Mejorado)
@@ -597,13 +595,13 @@ const FinancialsList: React.FC = () => {
   if (!user || (user.rol_user !== 'admin' && user.rol_user !== 'superadmin')) return null;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
+    <div className="flex flex-col h-[calc(100vh-58px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
       
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
       {/* 1. KPIs SECTION (Encima de la tabla) */}
       {kpiSummary && (
-        <div className="p-4 bg-slate-50 border-b border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-4 shrink-0">
+        <div className="p-3 bg-slate-50 border-b border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
           <KpiCard title="Ventas Mes" value={kpiSummary.ventasMes} icon="fa-chart-line" color="blue" subtext="Emitido en periodo" />
           <KpiCard title="Ingresos Reales" value={kpiSummary.cobradoMes} icon="fa-sack-dollar" color="green" subtext="Dinero ingresado a caja" />
           <KpiCard title="Por Cobrar" value={kpiSummary.porCobrarTotal} icon="fa-wallet" color="orange" subtext="Deuda total histórica" />

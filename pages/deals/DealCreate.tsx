@@ -7,6 +7,7 @@ import { apiFetch } from '../../services/apiClient';
 import Toast from '../../components/Toast';
 import CompanyFormModal from '../clients/CompanyFormModal';
 import ContactFormModal from '../clients/ContactFormModal';
+import ShareModal from '../../components/ShareModal';
 
 const DealCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -32,6 +33,8 @@ const DealCreate: React.FC = () => {
 
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [sharePermission, setSharePermission] = useState<'VIEW' | 'EDIT'>('VIEW');
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [createdDealId, setCreatedDealId] = useState<string | null>(null);
   
   // Modal states
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
@@ -56,13 +59,50 @@ const DealCreate: React.FC = () => {
   useEffect(() => {
     if (cacheLoading || !user) return;
 
+    const queryParams = new URLSearchParams(location.search);
+    const dealId = queryParams.get('id');
+
+    // Si hay ID en la URL, es modo edición
+    if (dealId) {
+      const loadDeal = async () => {
+        try {
+          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${dealId}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+          if (res.ok) {
+            const text = await res.text();
+            const parsed = text ? JSON.parse(text) : null;
+            const payload = Array.isArray(parsed) ? (parsed[0] || null) : parsed;
+            if (payload) {
+              setDeal({
+                id_trato: payload.id_trato,
+                nombre_trato: payload.nombre_trato,
+                valor_trato: payload.valor_numeric,
+                descripcion: payload.deal_description,
+                id_client_company: payload.id_client_company,
+                id_contact: payload.id_contact,
+                id_deal_status: payload.estado_actual?.id || payload.id_deal_status,
+                id_interest: payload.interes_actual?.id || payload.id_interest,
+                channel: payload.channel,
+                id_tenant: payload.id_tenant || user.id_tenant,
+                id_user_owner: payload.owner_id,
+                id_user: payload.owner_id
+              });
+              setCreatedDealId(dealId);
+            }
+          }
+        } catch (error) {
+          setToast({ message: 'Error al cargar el trato', type: 'error' });
+        }
+      };
+      loadDeal();
+      return;
+    }
+
     // 1. Obtener valores por defecto
     const defaultStatus = cachedDealStatuses.find(s => s.is_default) || cachedDealStatuses[0];
     const defaultInterest = cachedDealInterests.find(i => i.is_default) || cachedDealInterests[0];
     const defaultChannel = cachedDealChannels.find(c => c.is_default) || cachedDealChannels[0];
 
     // 2. Leer parámetros de la URL y del state
-    const queryParams = new URLSearchParams(location.search);
     const stateData = location.state as any;
     
     // Priorizar state sobre query params
@@ -143,22 +183,30 @@ const DealCreate: React.FC = () => {
       return;
     }
 
+    const queryParams = new URLSearchParams(location.search);
+    const dealId = queryParams.get('id');
+    const isEditMode = !!dealId;
+
     setProcessing(true);
     try {
       const payload = { 
         ...deal, 
-        created_at: new Date().toISOString(),
-        is_conversion: isConversion 
+        ...(isEditMode ? {} : { created_at: new Date().toISOString(), is_conversion: isConversion })
       };
-      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`, { 
-        method: 'POST', 
+      
+      const endpoint = isEditMode 
+        ? `${import.meta.env.VITE_WEBHOOK_URL}/api/v1/deals/update`
+        : `${import.meta.env.VITE_WEBHOOK_URL}/api/deals`;
+      
+      const res = await apiFetch(endpoint, { 
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify(payload) 
       });
       
       if (!res.ok) {
         const text = await res.text();
-        let errorMsg = 'Error al crear el trato';
+        let errorMsg = `Error al ${isEditMode ? 'actualizar' : 'crear'} el trato`;
         try {
           if (text) {
             const err = JSON.parse(text);
@@ -170,28 +218,21 @@ const DealCreate: React.FC = () => {
       
       const text = await res.text();
       const data = text ? JSON.parse(text) : {};
-      const newId = data?.id_trato || data?.id || data?.data?.id_trato;
+      const newId = dealId || data?.id_trato || data?.id || data?.data?.id_trato;
 
-      if (!newId) throw new Error('No se obtuvo el ID del trato creado');
+      if (!newId) throw new Error('No se obtuvo el ID del trato');
 
       await invalidateContacts(); // Invalidar el caché de contactos
 
-      if (selectedUserIds.length > 0) {
-        await Promise.all(selectedUserIds.map(uid => 
-          apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share`, {
-            method: 'POST',
-            body: JSON.stringify({
-              id_tenant: user?.id_tenant,
-              id_trato: newId,
-              id_user_target: uid,
-              permission_level: sharePermission
-            })
-          })
-        ));
+      setCreatedDealId(newId);
+      setToast({ message: `Trato ${isEditMode ? 'actualizado' : 'creado'} correctamente.`, type: 'success' });
+      
+      if (isEditMode) {
+        setTimeout(() => navigate(`/app/deals/${newId}`, { state: { refresh: Date.now() } }), 1000);
+      } else {
+        setShowShareModal(true); // Abrir modal de colaboradores solo en creación
       }
-
-      setToast({ message: 'Trato creado correctamente.', type: 'success' });
-      setTimeout(() => navigate(`/app/deals/${newId}`), 1000);
+      setProcessing(false);
     } catch (e: any) {
       setToast({ message: e.message || 'Error en el proceso', type: 'error' });
       setProcessing(false);
@@ -213,6 +254,10 @@ const DealCreate: React.FC = () => {
     cachedDealChannels.find((c: any) => String(c.id_channel || c.id) === String(deal.channel)), 
     [cachedDealChannels, deal.channel]
   );
+
+  const queryParams = new URLSearchParams(location.search);
+  const dealId = queryParams.get('id');
+  const isEditing = !!dealId;
   
   const selectedCompany = useMemo(() => 
     cachedCompanies.find(c => String(c.id_client_company) === String(deal.id_client_company)), 
@@ -233,25 +278,35 @@ const DealCreate: React.FC = () => {
     <div className="w-full bg-slate-50 min-h-screen animate-fade-in">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <div className="sticky top-0 z-40 bg-white border-b border-slate-200 px-4 md:px-6 py-3 flex items-center justify-between shadow-sm">
-         <div className="flex items-center gap-4">
-             <button onClick={() => navigate(-1)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full transition-colors">
-                 <i className="fa-solid fa-arrow-left text-lg"></i>
-             </button>
-             <h1 className="text-lg md:text-xl font-extrabold text-slate-800">Nuevo Trato</h1>
-         </div>
-         <div className="flex gap-3">
-             <button onClick={() => navigate(-1)} className="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm font-bold hover:bg-slate-50">
-                 Cancelar
-             </button>
-             <button onClick={handleSave} disabled={processing || cacheLoading} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 shadow-md flex items-center gap-2 disabled:opacity-50">
-                 {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
-                 Guardar
-             </button>
-         </div>
-      </div>
-
       <div className="p-4 md:p-6 max-w-[1920px] mx-auto pb-20">
+          
+          {/* Header */}
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6 border-b border-slate-100 pb-4">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800 tracking-tight">{isEditing ? 'Editar Trato' : 'Nuevo Trato'}</h1>
+              <p className="text-sm text-slate-500">
+                {isEditing
+                  ? `Modifique los datos del trato.`
+                  : 'Complete los datos para generar un nuevo registro.'}
+              </p>
+            </div>
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <button
+                onClick={() => navigate(-1)}
+                className="flex-1 md:flex-none px-4 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={processing || cacheLoading}
+                className="flex-1 md:flex-none px-6 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-70 text-sm"
+              >
+                {processing ? <><i className="fa-solid fa-circle-notch fa-spin"></i> Guardando...</> : <><i className="fa-solid fa-check"></i> Guardar</>}
+              </button>
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-6 items-start">
               
               {/* COL 1: INFO */}
@@ -434,33 +489,31 @@ const DealCreate: React.FC = () => {
                     <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
                         <i className="fa-solid fa-users text-indigo-500"></i> Colaboradores
                     </h3>
-                    <span className="bg-indigo-100 text-indigo-600 text-[10px] font-bold px-2 py-0.5 rounded-full">{selectedUserIds.length}</span>
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] font-bold">
-                     <button type="button" onClick={() => setSelectedUserIds(prev => prev.length === availableUsers.length ? [] : availableUsers.map(u => u.id_user))} className="text-indigo-600 hover:underline">
-                        {selectedUserIds.length === availableUsers.length ? 'DESELECCIONAR TODOS' : 'SELECCIONAR TODOS'}
-                     </button>
-                     <div className="flex bg-slate-100 rounded p-0.5">
-                        <button onClick={() => setSharePermission('VIEW')} className={`px-2 py-0.5 rounded ${sharePermission === 'VIEW' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>VER</button>
-                        <button onClick={() => setSharePermission('EDIT')} className={`px-2 py-0.5 rounded ${sharePermission === 'EDIT' ? 'bg-white shadow text-indigo-600' : 'text-slate-500'}`}>EDITAR</button>
-                     </div>
-                  </div>
-
-                  <div className="flex-1 overflow-y-auto max-h-[300px] border border-slate-50 rounded-lg">
-                      {availableUsers.map(u => (
-                          <label key={u.id_user} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 cursor-pointer transition-colors">
-                              <input type="checkbox" checked={selectedUserIds.includes(u.id_user)} onChange={() => setSelectedUserIds(prev => prev.includes(u.id_user) ? prev.filter(id => id !== u.id_user) : [...prev, u.id_user])} className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500" />
-                              <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 uppercase">
-                                  {u.name_user?.charAt(0) || 'U'}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-bold text-slate-700 truncate">{u.name_user}</p>
-                                <p className="text-[10px] text-slate-400 truncate">{u.email_user}</p>
-                              </div>
-                          </label>
-                      ))}
-                      {availableUsers.length === 0 && <p className="text-xs text-slate-400 text-center py-10">No hay otros usuarios disponibles.</p>}
+                  <div className="flex-1 flex flex-col items-center justify-center gap-4 text-center py-8">
+                    <div className="w-16 h-16 rounded-full bg-indigo-50 flex items-center justify-center">
+                      <i className="fa-solid fa-user-plus text-2xl text-indigo-500"></i>
+                    </div>
+                    <div>
+                      <p className="text-sm font-bold text-slate-700 mb-1">Asignar colaboradores</p>
+                      <p className="text-xs text-slate-400">Guarda el trato primero para gestionar permisos</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (createdDealId) {
+                          setShowShareModal(true);
+                        } else {
+                          setToast({ message: 'Guarda el trato primero para asignar colaboradores', type: 'error' });
+                        }
+                      }}
+                      disabled={!createdDealId}
+                      className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      <i className="fa-solid fa-share-nodes"></i>
+                      Gestionar Colaboradores
+                    </button>
                   </div>
               </div>
 
@@ -483,6 +536,31 @@ const DealCreate: React.FC = () => {
         onSuccess={handleContactCreated}
         companies={cachedCompanies}
       />
+
+      {showShareModal && createdDealId && (
+        <ShareModal
+          entity="deal"
+          id={createdDealId}
+          entityName={deal.nombre_trato || 'Trato'}
+          creatorName={user?.name_user || ''}
+          isOpen={showShareModal}
+          onClose={() => {
+            setShowShareModal(false);
+            navigate(`/app/deals/${createdDealId}`);
+          }}
+          onShared={() => {
+            setToast({ message: 'Colaboradores actualizados', type: 'success' });
+          }}
+          currentCollaborators={[{
+            id_user: user?.id_user || '',
+            name: user?.name_user || 'Usuario',
+            permission_level: 'OWNER',
+            avatar: user?.avatar_url,
+            rol_user: user?.rol_user,
+            is_owner: true
+          }]}
+        />
+      )}
     </div>
   );
 };
