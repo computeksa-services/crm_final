@@ -34,9 +34,21 @@ export interface User {
   avatar_url?: string;
   job_title?: string;
   
+  // Owner Flag
+  is_owner?: boolean;
+  
+  // Module Access
+  module_access?: {
+    crm?: boolean;
+    marketing?: boolean;
+    financials?: boolean;
+  };
+  
   // Sync Status
   googleConnected: boolean;
   outlookConnected: boolean;
+  google_connected?: boolean;
+  outlook_connected?: boolean;
 }
 
 // NUEVA INTERFAZ PARA TIPOS DE PRODUCTO

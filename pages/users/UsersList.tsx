@@ -4,6 +4,7 @@ import { useDataCache } from '../../contexts/DataCacheContext';
 import { User, Tenant } from '../../types';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
+import UserModal from '../../components/UserModal';
 import { apiFetch } from '../../services/apiClient';
 import { handleApiResponse } from '../../utils/apiResponseHandler';
 
@@ -11,11 +12,17 @@ const UsersList: React.FC = () => {
   const { user } = useAuth();
   const { users: cachedUsers, tenants: cachedTenants, loading: cacheLoading, invalidateUsers } = useDataCache();
   
+  // Obtener usuario actual con todos los campos (incluido is_owner)
+  const currentUser = useMemo(() => {
+    return cachedUsers.find(u => u.id_user === user?.id_user) || user;
+  }, [cachedUsers, user]);
+  
   // UI & Filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [expandedTenants, setExpandedTenants] = useState<{ [key: string]: boolean }>({});
   
   // Modal & Edición
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,7 +67,13 @@ const UsersList: React.FC = () => {
       rol_user: 'usuario', 
       job_title: '',
       id_tenant: user.rol_user === 'superadmin' && cachedTenants.length > 0 ? cachedTenants[0]?.id_tenant : user.id_tenant,
-      status_user: 'Activo'
+      status_user: 'Activo',
+      is_owner: false,
+      module_access: {
+        crm: true,
+        marketing: false,
+        financials: false
+      }
     });
     setIsEditMode(false);
     setIsModalOpen(true);
@@ -168,11 +181,44 @@ const UsersList: React.FC = () => {
   };
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setEditingUser(prev => (prev ? { ...prev, [name]: value } : null));
+    const { name, value, type } = e.target;
+    
+    // Handle checkboxes
+    if (type === 'checkbox') {
+      const checked = (e.target as HTMLInputElement).checked;
+      
+      // Handle module_access checkboxes
+      if (name.startsWith('module_')) {
+        const moduleName = name.replace('module_', '');
+        setEditingUser(prev => prev ? { 
+          ...prev, 
+          module_access: {
+            ...prev.module_access,
+            [moduleName]: checked
+          }
+        } : null);
+      } else {
+        // Handle other checkboxes like is_owner
+        setEditingUser(prev => prev ? { ...prev, [name]: checked } : null);
+      }
+    } else {
+      // Handle regular inputs
+      setEditingUser(prev => prev ? { ...prev, [name]: value } : null);
+    }
   };
 
   const getTenantName = (id: string) => cachedTenants.find(t => t.id_tenant === id)?.name_tenant || id;
+
+  // Agrupar usuarios por tenant
+  const groupedUsersByTenant = useMemo(() => {
+    const groups: { [key: string]: User[] } = {};
+    filteredUsers.forEach(u => {
+      const tenantId = u.id_tenant || 'sin-tenant';
+      if (!groups[tenantId]) groups[tenantId] = [];
+      groups[tenantId].push(u);
+    });
+    return groups;
+  }, [filteredUsers]);
 
   // Renderizado condicional
   const renderContent = () => {
@@ -212,14 +258,194 @@ const UsersList: React.FC = () => {
         );
     }
 
+    // Vista de Superadmin - Tablas Agrupadas por Empresa (Desplegables)
+    if (user?.rol_user === 'superadmin') {
+      return (
+        <div className="space-y-3">
+          {Object.entries(groupedUsersByTenant).map(([tenantId, users]) => {
+            const tenantData = cachedTenants.find(t => t.id_tenant === tenantId);
+            const isExpanded = expandedTenants[tenantId] !== false; // Por defecto expandido
+            
+            return (
+              <div key={tenantId} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                {/* Header Desplegable */}
+                <button
+                  onClick={() => setExpandedTenants(prev => ({ ...prev, [tenantId]: !prev[tenantId] }))}
+                  className="w-full px-6 py-4 hover:bg-slate-50 transition-colors flex items-center justify-between group"
+                >
+                  <div className="flex items-center gap-3 flex-1 text-left">
+                    <i className={`fa-solid fa-chevron-down text-slate-400 transition-transform duration-300 text-sm ${!isExpanded ? '-rotate-90' : ''}`}></i>
+                    <div className="w-8 h-8 rounded-lg bg-brand-100 text-brand-600 flex items-center justify-center flex-shrink-0">
+                      <i className="fa-solid fa-building text-sm"></i>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-800">{tenantData?.name_tenant || tenantId}</h3>
+                      <p className="text-xs text-slate-400">{users.length} usuario{users.length !== 1 ? 's' : ''}</p>
+                    </div>
+                  </div>
+                  <div className="text-xs font-semibold text-slate-400 group-hover:text-slate-600">
+                    {isExpanded ? 'Contraer' : 'Expandir'}
+                  </div>
+                </button>
+
+                {/* Tabla (Contraible) */}
+                {isExpanded && (
+                  <div className="border-t border-slate-200 overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-black tracking-widest sticky top-0">
+                        <tr>
+                          <th className="px-6 py-3 border-b w-[35%] min-w-[300px]">Usuario</th>
+                          <th className="px-6 py-3 border-b w-[25%] min-w-[200px]">Rol & Estado</th>
+                          <th className="px-6 py-3 border-b w-[25%] min-w-[250px]">Módulos</th>
+                          <th className="px-6 py-3 border-b w-[10%] min-w-[100px]">Conexiones</th>
+                          <th className="px-6 py-3 border-b w-[5%] min-w-[80px] text-right">Acciones</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {users.map((u) => (
+                          <tr 
+                            key={u.id_user} 
+                            onClick={() => handleEdit(u)}
+                            className="hover:bg-slate-50/80 transition-all cursor-pointer group"
+                          >
+                            {/* Usuario Info */}
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="relative flex-shrink-0">
+                                  <img 
+                                    className="h-10 w-10 rounded-full object-cover border-2 border-white shadow-sm" 
+                                    src={u.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name_user)}&background=random&size=100`} 
+                                    alt="" 
+                                  />
+                                  {u.is_owner && (
+                                    <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center shadow-sm border border-white" title="Propietario">
+                                      <i className="fa-solid fa-crown text-white text-[8px]"></i>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-bold text-slate-800 text-sm truncate">{u.name_user}</div>
+                                  <div className="text-xs text-slate-500 truncate">{u.email_user}</div>
+                                  {u.job_title && <div className="text-[10px] text-slate-400 mt-0.5 font-semibold uppercase tracking-wider truncate">{u.job_title}</div>}
+                                </div>
+                              </div>
+                            </td>
+                            
+                            {/* Rol & Estado */}
+                            <td className="px-6 py-4">
+                              <div className="space-y-1.5 flex flex-col">
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold w-fit shadow-sm border-0 ${
+                                    u.rol_user === 'superadmin' ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white' :
+                                    u.rol_user === 'admin' ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white' :
+                                    'bg-gradient-to-r from-slate-500 to-slate-600 text-white'
+                                }`}>
+                                    <i className={`fa-solid ${
+                                      u.rol_user === 'superadmin' ? 'fa-shield-halved' :
+                                      u.rol_user === 'admin' ? 'fa-user-shield' :
+                                      'fa-user'
+                                    } text-[9px]`}></i>
+                                    {u.rol_user === 'admin' ? 'Administrador' : u.rol_user === 'usuario' ? 'Usuario' : u.rol_user}
+                                </span>
+                                <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold w-fit shadow-sm border-0 ${
+                                  u.status_user === 'Activo' 
+                                    ? 'bg-gradient-to-r from-green-500 to-green-600 text-white' 
+                                    : 'bg-gradient-to-r from-red-500 to-red-600 text-white'
+                                }`}>
+                                  <span className="w-2 h-2 rounded-full bg-white opacity-60"></span>
+                                  {u.status_user}
+                                </span>
+                              </div>
+                            </td>
+                            
+                            {/* Módulos */}
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                {u.module_access?.crm && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 text-[9px] font-bold border border-emerald-300 shadow-sm" title="CRM">
+                                    <i className="fa-solid fa-users text-[8px]"></i>
+                                    CRM
+                                  </span>
+                                )}
+                                {u.module_access?.marketing && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-700 text-[9px] font-bold border border-indigo-300 shadow-sm" title="Marketing">
+                                    <i className="fa-solid fa-bullhorn text-[8px]"></i>
+                                    MKT
+                                  </span>
+                                )}
+                                {u.module_access?.financials && (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 text-[9px] font-bold border border-amber-300 shadow-sm" title="Financials">
+                                    <i className="fa-solid fa-dollar-sign text-[8px]"></i>
+                                    FIN
+                                  </span>
+                                )}
+                                {!u.module_access?.crm && !u.module_access?.marketing && !u.module_access?.financials && (
+                                  <span className="text-xs text-slate-400 italic">Sin módulos</span>
+                                )}
+                              </div>
+                            </td>
+                            
+                            {/* Conexiones */}
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-1.5">
+                                {u.google_connected && (
+                                  <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm" title="Google conectado">
+                                    <i className="fa-brands fa-google text-sm" style={{ color: '#4285F4' }}></i>
+                                  </div>
+                                )}
+                                {u.outlook_connected && (
+                                  <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm" title="Outlook conectado">
+                                    <i className="fa-brands fa-microsoft text-sm" style={{ color: '#0078D4' }}></i>
+                                  </div>
+                                )}
+                                {!u.google_connected && !u.outlook_connected && (
+                                  <span className="text-xs text-slate-300 italic">—</span>
+                                )}
+                              </div>
+                            </td>
+                            
+                            {/* Acciones */}
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleEdit(u); }} 
+                                    className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                    title="Editar"
+                                  >
+                                    <i className="fa-solid fa-pen-to-square"></i>
+                                  </button>
+                                  <button 
+                                    onClick={(e) => { e.stopPropagation(); handleDelete(u.id_user); }} 
+                                    className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                    title="Eliminar"
+                                  >
+                                    <i className="fa-solid fa-trash-can"></i>
+                                  </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // Vista de Admin - Tabla
     return (
         <div className="overflow-x-auto min-h-[400px]">
-            <table className="w-full text-left border-collapse">
-              <thead className="bg-slate-50 text-slate-500 uppercase text-xs font-semibold">
+            <table className="w-full text-left border-collapse min-w-[1100px]">
+              <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-black tracking-widest">
                 <tr>
                   <th className="px-6 py-4 border-b">Usuario</th>
-                  <th className="px-6 py-4 border-b">Rol</th>
-                  <th className="px-6 py-4 border-b">Empresa (Tenant)</th>
+                  <th className="px-6 py-4 border-b">Rol & Permisos</th>
+                  <th className="px-6 py-4 border-b">Módulos</th>
+                  <th className="px-6 py-4 border-b">Conexiones</th>
+                  <th className="px-6 py-4 border-b">Empresa</th>
                   <th className="px-6 py-4 border-b">Estado</th>
                   <th className="px-6 py-4 border-b text-right">Acciones</th>
                 </tr>
@@ -231,50 +457,129 @@ const UsersList: React.FC = () => {
                       onClick={() => handleEdit(u)}
                       className="hover:bg-slate-50/80 transition-all cursor-pointer group"
                     >
+                      {/* Usuario Info */}
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-4">
-                          <img 
-                            className="h-10 w-10 rounded-full object-cover border border-slate-200" 
-                            src={u.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name_user)}&background=random&size=100`} 
-                            alt="" 
-                          />
-                          <div>
-                            <div className="font-bold text-slate-800 text-sm">{u.name_user}</div>
-                            <div className="text-xs text-slate-500">{u.email_user}</div>
-                            {u.job_title && <div className="text-[10px] text-slate-400 mt-0.5">{u.job_title}</div>}
+                        <div className="flex items-center gap-3">
+                          <div className="relative">
+                            <img 
+                              className="h-10 w-10 rounded-full object-cover border-2 border-white shadow-sm" 
+                              src={u.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name_user)}&background=random&size=100`} 
+                              alt="" 
+                            />
+                            {u.is_owner && (
+                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center shadow-sm border border-white" title="Propietario">
+                                <i className="fa-solid fa-crown text-white text-[8px]"></i>
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-bold text-slate-800 text-sm truncate">{u.name_user}</div>
+                            <div className="text-xs text-slate-500 truncate">{u.email_user}</div>
+                            {u.job_title && <div className="text-[10px] text-slate-400 mt-0.5 font-semibold uppercase tracking-wider truncate">{u.job_title}</div>}
                           </div>
                         </div>
                       </td>
+                      
+                      {/* Rol & Permisos */}
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border capitalize ${
-                            u.rol_user === 'superadmin' ? 'bg-purple-100 text-purple-700 border-purple-200' :
-                            u.rol_user === 'admin' ? 'bg-blue-100 text-blue-700 border-blue-200' :
-                            'bg-slate-100 text-slate-600 border-slate-200'
-                        }`}>
-                            {u.rol_user}
-                        </span>
+                        <div className="space-y-1">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold capitalize shadow-sm ${
+                              u.rol_user === 'superadmin' ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white' :
+                              u.rol_user === 'admin' ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white' :
+                              'bg-slate-100 text-slate-700'
+                          }`}>
+                              <i className={`fa-solid ${
+                                u.rol_user === 'superadmin' ? 'fa-shield-halved' :
+                                u.rol_user === 'admin' ? 'fa-user-shield' :
+                                'fa-user'
+                              } text-[10px]`}></i>
+                              {u.rol_user}
+                          </span>
+                        </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-slate-600 font-medium">
-                        {u.name_tenant || getTenantName(u.id_tenant)}
+                      
+                      {/* Módulos */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {u.module_access?.crm && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200" title="CRM">
+                              <i className="fa-solid fa-users text-[8px]"></i>
+                              CRM
+                            </span>
+                          )}
+                          {u.module_access?.marketing && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 text-[10px] font-bold border border-purple-200" title="Marketing">
+                              <i className="fa-solid fa-bullhorn text-[8px]"></i>
+                              MKT
+                            </span>
+                          )}
+                          {u.module_access?.financials && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200" title="Financials">
+                              <i className="fa-solid fa-dollar-sign text-[8px]"></i>
+                              FIN
+                            </span>
+                          )}
+                          {!u.module_access?.crm && !u.module_access?.marketing && !u.module_access?.financials && (
+                            <span className="text-xs text-slate-400 italic">Sin acceso</span>
+                          )}
+                        </div>
                       </td>
-                      <td className="px-6 py-4 text-sm">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${
+                      
+                      {/* Conexiones */}
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-1.5">
+                          {u.google_connected && (
+                            <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm" title="Google conectado">
+                              <i className="fa-brands fa-google text-sm" style={{ color: '#4285F4' }}></i>
+                            </div>
+                          )}
+                          {u.outlook_connected && (
+                            <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm" title="Outlook conectado">
+                              <i className="fa-brands fa-microsoft text-sm" style={{ color: '#0078D4' }}></i>
+                            </div>
+                          )}
+                          {!u.google_connected && !u.outlook_connected && (
+                            <span className="text-xs text-slate-300 italic">Sin conexión</span>
+                          )}
+                        </div>
+                      </td>
+                      
+                      {/* Tenant */}
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-slate-700 font-medium truncate max-w-[150px]" title={u.name_tenant || getTenantName(u.id_tenant)}>
+                          {u.name_tenant || getTenantName(u.id_tenant)}
+                        </div>
+                      </td>
+                      
+                      {/* Estado */}
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold shadow-sm ${
                           u.status_user === 'Activo' 
-                            ? 'bg-green-50 text-green-700 border-green-200' 
-                            : 'bg-red-50 text-red-700 border-red-200'
+                            ? 'bg-green-50 text-green-700 border border-green-200' 
+                            : 'bg-red-50 text-red-700 border border-red-200'
                         }`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${u.status_user === 'Activo' ? 'bg-green-500' : 'bg-red-500'}`}></span>
                           {u.status_user}
                         </span>
                       </td>
+                      
+                      {/* Acciones */}
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={(e) => { e.stopPropagation(); handleEdit(u); }} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors">
-                            <i className="fa-solid fa-pen-to-square"></i>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleEdit(u); }} 
+                              className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                              title="Editar"
+                            >
+                              <i className="fa-solid fa-pen-to-square"></i>
                             </button>
                             {user?.rol_user === 'superadmin' && (
-                              <button onClick={(e) => { e.stopPropagation(); handleDelete(u.id_user); }} className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                              <i className="fa-solid fa-trash-can"></i>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleDelete(u.id_user); }} 
+                                className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Eliminar"
+                              >
+                                <i className="fa-solid fa-trash-can"></i>
                               </button>
                             )}
                         </div>
@@ -289,7 +594,7 @@ const UsersList: React.FC = () => {
 
   return (
     <>
-    <div className="max-w-7xl mx-auto space-y-6 animate-fade-in pb-12">
+    <div className="w-full space-y-6 animate-fade-in pb-12 px-6">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -363,137 +668,19 @@ const UsersList: React.FC = () => {
     </div>
 
     {/* Modal */}
-    {isModalOpen && editingUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 transition-opacity">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-white">
-              <h2 className="text-lg font-bold text-slate-800">{isEditMode ? 'Editar Usuario' : 'Nuevo Usuario'}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center transition-colors">
-                  <i className="fa-solid fa-times"></i>
-              </button>
-            </div>
-            
-            <form onSubmit={handleFormSubmit} className="overflow-y-auto p-6 space-y-5">
-              
-              {/* Sección Principal */}
-              <div className="flex flex-col items-center mb-4">
-                  <div className="w-20 h-20 rounded-full bg-slate-100 border-2 border-slate-300 flex items-center justify-center mb-2 overflow-hidden">
-                      {editingUser.avatar_url ? (
-                          <img src={editingUser.avatar_url} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                          <img 
-                            src={`https://ui-avatars.com/api/?name=${encodeURIComponent(editingUser.name_user || 'Usuario')}&background=random&size=128`} 
-                            alt="Avatar generado" 
-                            className="w-full h-full object-cover"
-                          />
-                      )}
-                  </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Nombre Completo</label>
-                  <input 
-                    type="text" 
-                    name="name_user" 
-                    required 
-                    value={editingUser.name_user || ''} 
-                    onChange={handleInputChange} 
-                    disabled={isEditMode && user?.rol_user === 'admin'}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" 
-                    placeholder="Juan Pérez" 
-                  />
-                  {isEditMode && user?.rol_user === 'admin' && (
-                    <p className="text-xs text-slate-400 mt-1 italic">Solo lectura para admins</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Email</label>
-                  <input 
-                    type="email" 
-                    name="email_user" 
-                    required 
-                    value={editingUser.email_user || ''} 
-                    onChange={handleInputChange} 
-                    disabled={isEditMode && user?.rol_user === 'admin'}
-                    className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 transition-all disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed" 
-                    placeholder="juan@empresa.com" 
-                  />
-                  {isEditMode && user?.rol_user === 'admin' && (
-                    <p className="text-xs text-slate-400 mt-1 italic">Solo lectura para admins</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Roles y Estado */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Rol</label>
-                    <div className="relative">
-                        <select name="rol_user" required value={editingUser.rol_user || 'usuario'} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-brand-500 appearance-none">
-                            <option value="usuario">Usuario</option>
-                            <option value="admin">Administrador</option>
-                            {user?.rol_user === 'superadmin' && <option value="superadmin">Superadmin</option>}
-                        </select>
-                        <div className="absolute right-3 top-2.5 text-slate-400 pointer-events-none text-xs"><i className="fa-solid fa-chevron-down"></i></div>
-                    </div>
-                </div>
-                <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Estado</label>
-                    <div className="relative">
-                        <select 
-                          name="status_user" 
-                          required 
-                          value={editingUser.status_user || 'Activo'} 
-                          onChange={handleInputChange} 
-                          disabled={isEditMode && user?.rol_user === 'admin'}
-                          className="w-full px-4 py-2 border border-slate-200 rounded-xl bg-white outline-none focus:ring-2 focus:ring-brand-500 appearance-none disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed"
-                        >
-                            <option value="Activo">Activo</option>
-                            <option value="Inactivo">Inactivo</option>
-                        </select>
-                        <div className="absolute right-3 top-2.5 text-slate-400 pointer-events-none text-xs"><i className="fa-solid fa-chevron-down"></i></div>
-                    </div>
-                    {isEditMode && user?.rol_user === 'admin' && (
-                      <p className="text-xs text-slate-400 mt-1 italic">Solo lectura para admins</p>
-                    )}
-                </div>
-              </div>
-
-              {/* Info Adicional */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Cargo</label>
-                  <input type="text" name="job_title" value={editingUser.job_title || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="Ej. Gerente de Ventas" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Teléfono</label>
-                  <input type="text" name="phone_user" value={editingUser.phone_user || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" placeholder="+593..." />
-                </div>
-              </div>
-
-              {/* Superadmin Tenant Selector */}
-              {user?.rol_user === 'superadmin' && cachedTenants.length > 0 && (
-                <div className="pt-2 border-t border-slate-100">
-                  <label className="block text-xs font-bold text-purple-600 uppercase tracking-wider mb-2">Asignar a Empresa (Tenant)</label>
-                  <select name="id_tenant" required value={editingUser.id_tenant || ''} onChange={handleInputChange} className="w-full px-4 py-2 border border-purple-100 rounded-xl bg-purple-50 outline-none focus:ring-2 focus:ring-purple-500 text-purple-900">
-                    <option value="">-- Seleccionar --</option>
-                    {cachedTenants.map(t => <option key={t.id_tenant} value={t.id_tenant}>{t.name_tenant}</option>)}
-                  </select>
-                </div>
-              )}
-              
-              <div className="flex justify-end pt-4 gap-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all">Cancelar</button>
-                <button type="submit" disabled={submitting} className="px-5 py-2.5 rounded-xl bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-200 font-medium flex items-center transition-all disabled:opacity-70">
-                  {submitting ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-check mr-2"></i>}
-                  Guardar Usuario
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+    <UserModal
+      isOpen={isModalOpen}
+      isEditMode={isEditMode}
+      editingUser={editingUser}
+      submitting={submitting}
+      tenants={cachedTenants}
+      currentUserRole={currentUser?.rol_user || ''}
+      currentUserTenant={currentUser?.id_tenant}
+      currentUserIsOwner={currentUser?.is_owner}
+      onClose={() => setIsModalOpen(false)}
+      onSubmit={handleFormSubmit}
+      onInputChange={handleInputChange}
+    />
 
     {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))} />

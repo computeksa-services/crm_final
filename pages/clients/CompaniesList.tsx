@@ -245,9 +245,228 @@ const CompaniesList: React.FC = () => {
   const triggerFileInput = () => {
     fileInputRef.current?.click();
   };
+
+  const renderContent = () => {
+    if (cacheLoading) {
+      return (
+        <div className="p-12 text-center">
+          <i className="fa-solid fa-circle-notch fa-spin text-4xl text-slate-800 mb-4"></i>
+          <p className="text-slate-500 font-medium">Cargando suscripciones...</p>
+        </div>
+      );
+    }
+
+    if (cachedTenants.length === 0) {
+      return (
+        <div className="p-16 text-center flex flex-col items-center">
+          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
+            <i className="fa-solid fa-building text-3xl text-slate-300"></i>
+          </div>
+          <h3 className="text-lg font-bold text-slate-700">No hay suscripciones</h3>
+          <p className="text-slate-500 max-w-sm mt-1 mb-6">Crea una nueva suscripción para empezar.</p>
+          <button onClick={handleAddNew} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl shadow-md transition-all">
+            Crear Primera Suscripción
+          </button>
+        </div>
+      );
+    }
+
+    const filteredTenants = cachedTenants.filter(t => {
+      const matchesSearch = (t.name_tenant || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                            (t.ruc || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCountry = countryFilter ? t.country === countryFilter : true;
+      return matchesSearch && matchesCountry;
+    });
+
+    if (filteredTenants.length === 0) {
+      return (
+        <div className="p-12 text-center">
+          <i className="fa-solid fa-search text-3xl text-slate-200 mb-4"></i>
+          <p className="text-slate-500">No se encontraron suscripciones con los filtros actuales.</p>
+          <button onClick={() => { setSearchTerm(''); setCountryFilter(''); }} className="text-slate-800 font-medium mt-2 hover:underline">Limpiar filtros</button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse">
+          <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] font-black tracking-widest sticky top-0">
+            <tr>
+              <th className="px-6 py-3 border-b w-[35%] min-w-[300px]">Empresa</th>
+              <th className="px-6 py-3 border-b w-[30%] min-w-[250px]">Ubicación</th>
+              <th className="px-6 py-3 border-b w-[20%] min-w-[200px]">Contacto</th>
+              <th className="px-6 py-3 border-b w-[10%] min-w-[100px]">Website</th>
+              <th className="px-6 py-3 border-b w-[5%] min-w-[80px] text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 bg-white">
+            {filteredTenants.map((tenant) => (
+              <tr 
+                key={tenant.id_tenant} 
+                onClick={() => handleEdit(tenant)}
+                className="hover:bg-slate-50/80 transition-all cursor-pointer group"
+              >
+                {/* Empresa Info */}
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0 border border-slate-200 overflow-hidden">
+                      {tenant.logo_url ? (
+                        <img 
+                          src={getImageUrl(tenant.logo_url) || tenant.logo_url} 
+                          alt={tenant.name_tenant} 
+                          className="w-full h-full object-contain p-1"
+                          onError={(e) => {
+                            const target = e.target as HTMLImageElement;
+                            target.style.display = 'none';
+                            const fallback = target.nextElementSibling;
+                            if (fallback) fallback.classList.remove('hidden');
+                          }}
+                        />
+                      ) : null}
+                      <i className={`fa-solid fa-building text-sm text-slate-400 ${tenant.logo_url ? 'hidden' : ''}`}></i>
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-bold text-slate-800 text-sm truncate">{tenant.name_tenant}</div>
+                      <div className="text-xs text-slate-500 truncate">RUC: {tenant.ruc}</div>
+                      {tenant.razon_social && <div className="text-[10px] text-slate-400 font-semibold uppercase mt-0.5 truncate">{tenant.razon_social}</div>}
+                    </div>
+                  </div>
+                </td>
+                
+                {/* Ubicación */}
+                <td className="px-6 py-4">
+                  <div className="space-y-0.5">
+                    <div className="text-sm font-medium text-slate-700">{tenant.city}</div>
+                    <div className="text-xs text-slate-500">{tenant.country}</div>
+                    {tenant.address && <div className="text-[10px] text-slate-400 truncate">{tenant.address}</div>}
+                  </div>
+                </td>
+                
+                {/* Email/Phone */}
+                <td className="px-6 py-4">
+                  <div className="text-sm text-slate-600">
+                    <div className="text-xs text-slate-400">Email corporativo</div>
+                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      {tenant.corporate_email_address ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                          <i className="fa-solid fa-envelope text-[8px]"></i>
+                          {tenant.corporate_email_address}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 italic">No configurado</span>
+                      )}
+                    </div>
+                  </div>
+                </td>
+                
+                {/* Website */}
+                <td className="px-6 py-4">
+                  {tenant.website ? (
+                    <a 
+                      href={tenant.website} 
+                      onClick={(e) => e.stopPropagation()}
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="text-sm text-slate-800 hover:text-slate-900 hover:underline truncate flex items-center gap-1"
+                    >
+                      <i className="fa-solid fa-link text-xs"></i>
+                      {tenant.website.replace(/^https?:\/\//, '')}
+                    </a>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">—</span>
+                  )}
+                </td>
+                
+                {/* Acciones */}
+                <td className="px-6 py-4 text-right">
+                  <div className="flex items-center justify-end space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleEdit(tenant); }} 
+                      className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                      title="Editar"
+                    >
+                      <i className="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDelete(tenant.id_tenant); }} 
+                      className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Eliminar"
+                    >
+                      <i className="fa-solid fa-trash-can"></i>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
   
   return (
-    <div>
+    <div className="w-full space-y-6 animate-fade-in pb-12 px-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+           <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Suscripciones (Tenants)</h1>
+           <p className="text-slate-500 text-sm mt-1">Administra las empresas que usan la plataforma.</p>
+        </div>
+        <button onClick={handleAddNew} className="bg-slate-800 hover:bg-slate-900 text-white px-5 py-2.5 rounded-xl shadow-lg text-sm font-medium transition-all flex items-center justify-center">
+          <i className="fa-solid fa-building mr-2"></i> Nueva Suscripción
+        </button>
+      </div>
+
+      {/* Filters Bar */}
+      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-4 items-center justify-between">
+         <div className="relative w-full md:w-96">
+            <span className="absolute left-3 top-2.5 text-slate-400">
+                <i className="fa-solid fa-magnifying-glass"></i>
+            </span>
+            <input 
+                type="text"
+                placeholder="Buscar por nombre o RUC..." 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg bg-slate-50 focus:bg-white focus:ring-2 focus:ring-slate-800 focus:border-slate-800 outline-none transition-all text-sm"
+            />
+         </div>
+         
+         <div className="flex items-center gap-2 w-full md:w-auto">
+             <div className="relative w-full md:w-40">
+                <select 
+                    value={countryFilter}
+                    onChange={(e) => setCountryFilter(e.target.value)}
+                    className="w-full pl-3 pr-8 py-2 border border-slate-200 rounded-lg bg-white text-slate-600 text-sm focus:ring-2 focus:ring-slate-800 outline-none appearance-none"
+                >
+                    <option value="">Todos los Países</option>
+                    <option value="Ecuador">Ecuador</option>
+                    <option value="Perú">Perú</option>
+                    <option value="Colombia">Colombia</option>
+                    <option value="Chile">Chile</option>
+                </select>
+                <div className="absolute right-3 top-2.5 text-slate-400 pointer-events-none text-xs">
+                    <i className="fa-solid fa-chevron-down"></i>
+                </div>
+             </div>
+         </div>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden min-h-[400px]">
+        {renderContent()}
+      </div>
+
+      {/* Pagination Footer */}
+      <div className="flex justify-between items-center text-xs text-slate-400 px-2">
+         <span>Mostrando {cachedTenants.filter(t => {
+            const matchesSearch = (t.name_tenant || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                  (t.ruc || '').toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesCountry = countryFilter ? t.country === countryFilter : true;
+            return matchesSearch && matchesCountry;
+          }).length} de {cachedTenants.length} suscripciones</span>
+      </div>
+
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal 
         isOpen={confirmState.isOpen}
@@ -257,86 +476,6 @@ const CompaniesList: React.FC = () => {
         message={confirmState.message}
         isDestructive={confirmState.isDestructive}
       />
-      
-      <div className="flex justify-between items-center mb-6">
-        <div>
-           <h1 className="text-2xl font-bold text-slate-800">Tenants (Suscripciones)</h1>
-           <p className="text-slate-500 text-sm">Administración de empresas que usan la plataforma (Multi-tenant).</p>
-        </div>
-        <button onClick={handleAddNew} className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm">
-          <i className="fa-solid fa-server mr-2"></i> Nuevo Tenant
-        </button>
-      </div>
-
-      {cacheLoading ? (
-        <div className="p-8 text-center text-slate-500">Cargando suscripciones...</div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {cachedTenants.filter(t => {
-            const matchesSearch = (t.name_tenant || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                                  (t.ruc || '').toLowerCase().includes(searchTerm.toLowerCase());
-            const matchesCountry = countryFilter ? t.country === countryFilter : true;
-            return matchesSearch && matchesCountry;
-          }).map((tenant) => (
-            <div 
-              key={tenant.id_tenant} 
-              onClick={() => handleEdit(tenant)}
-              className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col cursor-pointer hover:shadow-md transition-all group relative overflow-hidden"
-            >
-              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <i className="fa-solid fa-building text-6xl text-slate-800"></i>
-              </div>
-
-              <div className="flex items-center mb-4 z-10">
-                {/* 
-                  UPDATED LOGO CONTAINER:
-                  - w-24 h-16: Wider rectangle to fit logos.
-                  - object-contain: Ensures the whole image is visible (no cropping).
-                  - bg-white: Better for PNGs with transparency.
-                */}
-                <div className="w-24 h-16 bg-white rounded-lg flex items-center justify-center overflow-hidden mr-4 border border-slate-200 shadow-sm p-1">
-                  {tenant.logo_url ? (
-                    <img 
-                      src={getImageUrl(tenant.logo_url) || tenant.logo_url} 
-                      alt="Logo" 
-                      className="w-full h-full object-contain"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        target.nextElementSibling?.classList.remove('hidden');
-                      }}
-                    />
-                  ) : null}
-                  <i className={`fa-solid fa-image text-slate-300 text-xl ${tenant.logo_url ? 'hidden' : ''}`}></i>
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg text-slate-800 leading-tight">{tenant.name_tenant}</h3>
-                  {tenant.razon_social && <p className="text-xs text-slate-500">{tenant.razon_social}</p>}
-                  <p className="text-xs text-slate-500">RUC: {tenant.ruc}</p>
-                </div>
-              </div>
-              
-              <div className="space-y-2 text-sm text-slate-600 mb-4 flex-1 z-10">
-                 <div className="flex items-start">
-                   <i className="fa-solid fa-map-pin mt-1 w-5 text-slate-400"></i>
-                   <span>{tenant.city}, {tenant.country}</span>
-                 </div>
-                 {tenant.website && (
-                   <div className="flex items-center">
-                     <i className="fa-solid fa-link w-5 text-slate-400"></i>
-                     <a href={tenant.website} onClick={(e) => e.stopPropagation()} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline truncate">{tenant.website}</a>
-                   </div>
-                 )}
-              </div>
-
-              <div className="pt-4 border-t border-slate-100 flex justify-end space-x-2 z-10">
-                 <button onClick={(e) => { e.stopPropagation(); handleEdit(tenant); }} className="p-2 text-slate-400 hover:text-brand-600"><i className="fa-solid fa-pen"></i></button>
-                 <button onClick={(e) => { e.stopPropagation(); handleDelete(tenant.id_tenant); }} className="p-2 text-slate-400 hover:text-red-600"><i className="fa-solid fa-trash"></i></button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {isModalOpen && editingTenant && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
