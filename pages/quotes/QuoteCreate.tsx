@@ -142,10 +142,6 @@ const QuoteCreate: React.FC = () => {
           id_user: userId,
           descripcion: ''
         });
-        // Si no hay trato en URL y no hay tratos disponibles, forzar creación
-        if (!dealId && deals.length === 0) {
-          setCreateNewDeal(true);
-        }
       }
     } catch (error: any) {
       console.error("Error loading data:", error);
@@ -358,7 +354,7 @@ const QuoteCreate: React.FC = () => {
     }
 
     // El trato es OPCIONAL - solo validar si se está creando uno nuevo
-    if (createNewDeal) {
+    if (isLinkingDeal && createNewDeal) {
       if (!newDeal.nombre_trato || !newDeal.id_interest || !newDeal.id_channel) {
         setToast({ message: 'Para el nuevo trato: Nombre, Interés y Canal son obligatorios.', type: 'error' });
         return;
