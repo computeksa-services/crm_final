@@ -10,12 +10,13 @@ import { handleApiResponse } from '../../utils/apiResponseHandler';
 
 const UsersList: React.FC = () => {
   const { user } = useAuth();
-  const { users: cachedUsers, tenants: cachedTenants, loading: cacheLoading, invalidateUsers } = useDataCache();
+  const { users: cachedUsers, tenants: cachedTenants, loading: cacheLoading, invalidateUsers, currentUser: freshCurrentUser } = useDataCache();
   
   // Obtener usuario actual con todos los campos (incluido is_owner)
+  // Priorizar datos frescos del /api/me
   const currentUser = useMemo(() => {
-    return cachedUsers.find(u => u.id_user === user?.id_user) || user;
-  }, [cachedUsers, user]);
+    return freshCurrentUser || cachedUsers.find(u => u.id_user === user?.id_user) || user;
+  }, [freshCurrentUser, cachedUsers, user]);
   
   // UI & Filtros
   const [searchTerm, setSearchTerm] = useState('');
@@ -187,6 +188,11 @@ const UsersList: React.FC = () => {
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
       
+      // Si es propietario, no permitir desmarcar módulos
+      if (name.startsWith('module_') && editingUser?.is_owner && !checked) {
+        return; // No hacer nada, los módulos no se pueden desmarcar si es propietario
+      }
+      
       // Handle module_access checkboxes
       if (name.startsWith('module_')) {
         const moduleName = name.replace('module_', '');
@@ -197,8 +203,24 @@ const UsersList: React.FC = () => {
             [moduleName]: checked
           }
         } : null);
+      } else if (name === 'is_owner') {
+        // Si se marca como propietario, marcar todos los módulos
+        if (checked) {
+          setEditingUser(prev => prev ? { 
+            ...prev, 
+            [name]: checked,
+            module_access: {
+              crm: true,
+              marketing: true,
+              financials: true
+            }
+          } : null);
+        } else {
+          // Si se desmarcar propietario, solo actualizar el flag
+          setEditingUser(prev => prev ? { ...prev, [name]: checked } : null);
+        }
       } else {
-        // Handle other checkboxes like is_owner
+        // Handle other checkboxes
         setEditingUser(prev => prev ? { ...prev, [name]: checked } : null);
       }
     } else {
@@ -224,9 +246,35 @@ const UsersList: React.FC = () => {
   const renderContent = () => {
     if (cacheLoading) {
         return (
-          <div className="p-12 text-center">
-              <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500 mb-4"></i>
-              <p className="text-slate-500 font-medium">Cargando usuarios...</p>
+          <div className="divide-y divide-slate-100">
+            {/* Skeleton Loader - 3 grupos de usuarios */}
+            {[1, 2, 3].map((groupIndex) => (
+              <div key={groupIndex} className="p-4">
+                {/* Tenant Header Skeleton */}
+                <div className="flex items-center gap-3 mb-3 animate-pulse">
+                  <div className="w-8 h-8 bg-slate-200 rounded-lg"></div>
+                  <div className="h-5 bg-slate-200 rounded w-32"></div>
+                  <div className="h-4 bg-slate-200 rounded w-12"></div>
+                </div>
+                
+                {/* User Rows Skeleton */}
+                {[1, 2].map((rowIndex) => (
+                  <div key={rowIndex} className="flex items-center gap-4 p-3 mb-2 animate-pulse">
+                    <div className="w-10 h-10 bg-slate-200 rounded-full"></div>
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-slate-200 rounded w-40"></div>
+                      <div className="h-3 bg-slate-200 rounded w-56"></div>
+                    </div>
+                    <div className="h-6 bg-slate-200 rounded-full w-24"></div>
+                    <div className="h-6 bg-slate-200 rounded-full w-20"></div>
+                    <div className="flex gap-2">
+                      <div className="w-8 h-8 bg-slate-200 rounded-lg"></div>
+                      <div className="w-8 h-8 bg-slate-200 rounded-lg"></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
         );
     }

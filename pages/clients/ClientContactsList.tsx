@@ -317,7 +317,7 @@ const ClientContactsList: React.FC = () => {
           );
         }
         return (
-          <div className="flex items-start gap-3 py-1">
+          <div className="flex items-center gap-3 py-1">
             {(() => {
               const companyName = (row.original as any).name_company || 'SIN EMPRESA';
               const companyInitials = companyName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '?';
@@ -607,12 +607,33 @@ const ClientContactsList: React.FC = () => {
           </thead>
           <tbody className="bg-white">
             {loading ? (
-              <tr>
-                <td colSpan={columns.length} className="py-24 text-center">
-                   <i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i>
-                   <p className="text-slate-400 text-sm font-medium tracking-wide">Cargando contactos...</p>
-                </td>
-              </tr>
+              <>
+                {/* Skeleton Loader - 8 filas */}
+                {[...Array(8)].map((_, idx) => (
+                  <tr key={idx} className="border-b border-slate-100 animate-pulse">
+                    <td className="px-4 py-1.5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 bg-slate-200 rounded-full"></div>
+                        <div className="space-y-1.5">
+                          <div className="h-3.5 bg-slate-200 rounded w-32"></div>
+                          <div className="h-3 bg-slate-200 rounded w-24"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-1.5"><div className="h-3 bg-slate-200 rounded w-40"></div></td>
+                    <td className="px-4 py-1.5"><div className="h-3 bg-slate-200 rounded w-28"></div></td>
+                    <td className="px-4 py-1.5"><div className="h-3 bg-slate-200 rounded w-24"></div></td>
+                    <td className="px-4 py-1.5"><div className="h-6 bg-slate-200 rounded-full w-20"></div></td>
+                    <td className="px-4 py-1.5">
+                      <div className="flex gap-1.5">
+                        <div className="w-7 h-7 bg-slate-200 rounded"></div>
+                        <div className="w-7 h-7 bg-slate-200 rounded"></div>
+                        <div className="w-7 h-7 bg-slate-200 rounded"></div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </>
             ) : table.getRowModel().rows.length === 0 ? (
               <tr>
                 <td colSpan={columns.length} className="py-20 text-center">
@@ -652,7 +673,7 @@ const ClientContactsList: React.FC = () => {
                     `}
                 >
                   {row.getVisibleCells().map(cell => (
-                    <td key={cell.id} className={`px-4 py-2 border-r border-slate-50 ${isGrouped ? 'py-3' : ''}`}>
+                    <td key={cell.id} className={`px-4 border-r border-slate-50 ${isGrouped ? 'py-3' : 'py-1.5'}`}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}

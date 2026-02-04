@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,11 +40,45 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const userMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { user, logout } = useAuth();
-  const { loading: cacheLoading } = useDataCache();
+  const { loading: cacheLoading, currentUser } = useDataCache();
   const location = useLocation();
   const navigate = useNavigate();
   const userRole = user?.rol_user || 'usuario';
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+
+  // Filtrar items según módulos a los que tiene acceso el usuario
+  const visibleNavGroups = useMemo(() => {
+    if (!user) return NAV_GROUPS;
+
+    // Owner ve todo
+    if (user.rol_user === 'owner') return NAV_GROUPS;
+
+    // Admin ve CRM siempre + módulos que le concedieron
+    if (user.rol_user === 'admin') {
+      return NAV_GROUPS.map(group => ({
+        ...group,
+        items: group.items.filter(item => {
+          // Si el item no tiene módulo, lo mostramos
+          if (!item.module) return true;
+          // CRM siempre lo ve el admin
+          if (item.module === 'crm') return true;
+          // Otros módulos solo si tiene acceso
+          return currentUser?.module_access?.[item.module as keyof typeof currentUser.module_access];
+        })
+      })).filter(group => group.items.length > 0);
+    }
+
+    // Usuario solo ve módulos que le concedieron
+    return NAV_GROUPS.map(group => ({
+      ...group,
+      items: group.items.filter(item => {
+        // Si el item no tiene módulo, lo mostramos
+        if (!item.module) return true;
+        // Solo si tiene acceso al módulo
+        return currentUser?.module_access?.[item.module as keyof typeof currentUser.module_access];
+      })
+    })).filter(group => group.items.length > 0);
+  }, [user, currentUser?.module_access]);
 
   // Guardar estado del sidebar en localStorage cuando cambia
   useEffect(() => {
@@ -174,7 +208,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Navigation Items */}
         <nav className="flex-1 py-2 overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
           <ul className="px-2">
-            {NAV_GROUPS.map((group, idx) => (
+            {visibleNavGroups.map((group, idx) => (
               <div key={idx}>
                 {/* Título de Grupo (Solo si está expandido) */}
                 <h3 className={`px-2 mb-1 mt-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider transition-opacity duration-300 ${(!isDesktopSidebarOpen || !group.title) && 'md:opacity-0 md:hidden'}`}>
@@ -203,7 +237,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 
                 <NavLinkItem item={{ label: 'Ajustes', path: '/app/settings', icon: 'fa-sliders', roles: ['admin', 'superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
                 <NavLinkItem item={{ label: 'Usuarios', path: '/app/users', icon: 'fa-users-cog', roles: ['admin', 'superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
-                <NavLinkItem item={{ label: 'Cartera', path: '/app/financials', icon: 'fa-wallet', roles: ['admin', 'superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
+                {(user?.rol_user === 'superadmin' || currentUser?.module_access?.financials) && (
+                  <NavLinkItem item={{ label: 'Cartera', path: '/app/financials', icon: 'fa-wallet', roles: ['admin', 'superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
+                )}
                 {userRole === 'superadmin' && (
                   <NavLinkItem item={{ label: 'Tenants', path: '/app/companies', icon: 'fa-server', roles: ['superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
                 )}

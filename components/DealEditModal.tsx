@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useDataCache } from '../contexts/DataCacheContext';
 import { apiFetch } from '../services/apiClient';
 import { GATEWAY_CONFIG } from '../services/gatewayConfig';
 import { Deal, ClientCompany, ClientContact, CustomStatus, DealChannel } from '../types';
@@ -22,6 +23,7 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
   onSuccess,
 }) => {
   const { user } = useAuth();
+  const { invalidateContacts, invalidateCompanies } = useDataCache();
   const [deal, setDeal] = useState<Partial<Deal>>({});
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -203,21 +205,23 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
     }
   };
 
-  const handleCompanyCreated = (newCompany: ClientCompany) => {
+  const handleCompanyCreated = async (newCompany: ClientCompany) => {
     setCompanies(prev => [...prev, newCompany]);
     setDeal(prev => ({ ...prev, id_client_company: newCompany.id_client_company, id_contact: '' }));
     setFilteredContacts(contacts.filter((c: ClientContact) => String(c.id_client_company) === String(newCompany.id_client_company)));
     setIsCompanyModalOpen(false);
+    await invalidateCompanies(); // Recargar caché
     setToast({ message: 'Empresa creada exitosamente.', type: 'success' });
   };
 
-  const handleContactCreated = (newContact: ClientContact) => {
+  const handleContactCreated = async (newContact: ClientContact) => {
     setContacts(prev => [...prev, newContact]);
     if (newContact.id_client_company && String(newContact.id_client_company) === String(deal.id_client_company)) {
       setFilteredContacts(prev => [...prev, newContact]);
     }
     setDeal(prev => ({ ...prev, id_contact: newContact.id_contact }));
     setIsContactModalOpen(false);
+    await invalidateContacts(); // Recargar caché
     setToast({ message: 'Contacto creado exitosamente.', type: 'success' });
   };
 

@@ -28,18 +28,39 @@ const UserModal: React.FC<UserModalProps> = ({
   onSubmit,
   onInputChange,
 }) => {
+  // Chequeo temprano de null
+  if (!isOpen || !editingUser) return null;
+  
   // Determinar si puede marcar como propietario
-  // Solo pueden: superadmin O (admin + owner del mismo tenant)
-  const isCreatingNew = !editingUser?.id_user;
+  // Superadmin: puede marcar cualquier admin como propietario
+  // Admin + Owner: solo puede marcar admins del mismo tenant
   const isSameTenant = String(editingUser?.id_tenant) === String(currentUserTenant);
   const isAdminOwner = currentUserRole === 'admin' && currentUserIsOwner === true;
   const isSuperadmin = currentUserRole === 'superadmin';
   
-  const canMarkOwner = Boolean(
-    (isSuperadmin || isAdminOwner) && (isCreatingNew || isSameTenant)
-  );
+  const canMarkOwner = isSuperadmin || (isAdminOwner && isSameTenant);
   
-  if (!isOpen || !editingUser) return null;
+  const handleFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validar que tenga acceso a al menos una herramienta
+    const hasModuleAccess = editingUser?.module_access?.crm || 
+                            editingUser?.module_access?.marketing || 
+                            editingUser?.module_access?.financials;
+    
+    if (!hasModuleAccess) {
+      alert('El usuario debe tener acceso a al menos una herramienta (CRM, Marketing o Financials)');
+      return;
+    }
+    
+    // Validar que si es propietario, debe ser administrador
+    if (editingUser?.is_owner && editingUser?.rol_user !== 'admin') {
+      alert('Solo los Administradores pueden ser marcados como Propietarios');
+      return;
+    }
+    
+    onSubmit(e);
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 transition-opacity">
@@ -56,7 +77,7 @@ const UserModal: React.FC<UserModalProps> = ({
           </button>
         </div>
         
-        <form onSubmit={onSubmit} className="overflow-y-auto px-8 py-6 space-y-6">
+        <form onSubmit={handleFormSubmit} className="overflow-y-auto px-8 py-6 space-y-6">
           {/* Grid de 2 columnas + Avatar */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Columna 1 - Avatar e Info Básica */}
@@ -169,6 +190,39 @@ const UserModal: React.FC<UserModalProps> = ({
                   {currentUserRole === 'superadmin' && <option value="superadmin">Superadmin</option>}
                 </select>
               </div>
+
+              {/* Propietario */}
+              {canMarkOwner && (
+                <div className={`p-3.5 rounded-xl border-2 ${
+                  editingUser.rol_user === 'admin' 
+                    ? 'bg-gradient-to-r from-amber-50 to-amber-100 border-amber-200' 
+                    : 'bg-slate-100 border-slate-300'
+                }`}>
+                  <label className={`flex items-center gap-3 ${editingUser.rol_user === 'admin' ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}>
+                    <input 
+                      type="checkbox" 
+                      name="is_owner" 
+                      checked={editingUser.is_owner || false}
+                      onChange={onInputChange}
+                      disabled={editingUser.rol_user !== 'admin'}
+                      className="w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-1.5">
+                        <i className="fa-solid fa-crown text-amber-600"></i>
+                        <span className={`font-bold text-sm ${editingUser.rol_user === 'admin' ? 'text-amber-900' : 'text-slate-600'}`}>
+                          Marcar como Propietario
+                        </span>
+                      </div>
+                      <p className={`text-xs mt-0.5 ${editingUser.rol_user === 'admin' ? 'text-amber-700' : 'text-slate-500'}`}>
+                        {editingUser.rol_user === 'admin' 
+                          ? 'Acceso completo a todas las funciones' 
+                          : 'Solo Administradores pueden ser Propietarios'}
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              )}
               
               {/* Estado */}
               <div className="space-y-1.5">
@@ -180,8 +234,7 @@ const UserModal: React.FC<UserModalProps> = ({
                   required 
                   value={editingUser.status_user || 'Activo'} 
                   onChange={onInputChange} 
-                  disabled={isEditMode && currentUserRole === 'admin'}
-                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm font-medium disabled:opacity-60"
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none text-sm font-medium"
                 >
                   <option value="Activo">Activo</option>
                   <option value="Inactivo">Inactivo</option>
@@ -210,16 +263,21 @@ const UserModal: React.FC<UserModalProps> = ({
               {/* Módulos */}
               <div className="space-y-2.5 p-4 bg-slate-50 rounded-xl border border-slate-200">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider block">
-                  📦 Módulos Disponibles
+                  📦 Módulos Disponibles {editingUser.is_owner && <span className="text-amber-600">(todos requeridos para propietarios)</span>}
                 </label>
                 <div className="space-y-2">
-                  <label className="flex items-center gap-3 p-2.5 bg-white rounded-lg hover:bg-blue-50 cursor-pointer border border-slate-200 hover:border-blue-300 transition-all">
+                  <label className={`flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 transition-all ${
+                    editingUser.is_owner 
+                      ? 'bg-slate-100 cursor-not-allowed opacity-60' 
+                      : 'bg-white hover:bg-blue-50 cursor-pointer hover:border-blue-300'
+                  }`}>
                     <input 
                       type="checkbox" 
                       name="module_crm" 
                       checked={editingUser.module_access?.crm || false}
                       onChange={onInputChange}
-                      className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                      disabled={editingUser.is_owner}
+                      className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-2 focus:ring-blue-500 cursor-pointer disabled:opacity-60"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -230,13 +288,18 @@ const UserModal: React.FC<UserModalProps> = ({
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 p-2.5 bg-white rounded-lg hover:bg-indigo-50 cursor-pointer border border-slate-200 hover:border-indigo-300 transition-all">
+                  <label className={`flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 transition-all ${
+                    editingUser.is_owner 
+                      ? 'bg-slate-100 cursor-not-allowed opacity-60' 
+                      : 'bg-white hover:bg-indigo-50 cursor-pointer hover:border-indigo-300'
+                  }`}>
                     <input 
                       type="checkbox" 
                       name="module_marketing" 
                       checked={editingUser.module_access?.marketing || false}
                       onChange={onInputChange}
-                      className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                      disabled={editingUser.is_owner}
+                      className="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-2 focus:ring-indigo-500 cursor-pointer disabled:opacity-60"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -247,13 +310,18 @@ const UserModal: React.FC<UserModalProps> = ({
                     </div>
                   </label>
 
-                  <label className="flex items-center gap-3 p-2.5 bg-white rounded-lg hover:bg-amber-50 cursor-pointer border border-slate-200 hover:border-amber-300 transition-all">
+                  <label className={`flex items-center gap-3 p-2.5 rounded-lg border border-slate-200 transition-all ${
+                    editingUser.is_owner 
+                      ? 'bg-slate-100 cursor-not-allowed opacity-60' 
+                      : 'bg-white hover:bg-amber-50 cursor-pointer hover:border-amber-300'
+                  }`}>
                     <input 
                       type="checkbox" 
                       name="module_financials" 
                       checked={editingUser.module_access?.financials || false}
                       onChange={onInputChange}
-                      className="w-4 h-4 text-amber-600 border-slate-300 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer"
+                      disabled={editingUser.is_owner}
+                      className="w-4 h-4 text-amber-600 border-slate-300 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer disabled:opacity-60"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -265,28 +333,6 @@ const UserModal: React.FC<UserModalProps> = ({
                   </label>
                 </div>
               </div>
-
-              {/* Propietario */}
-              {canMarkOwner && (
-                <div className="p-3.5 bg-gradient-to-r from-amber-50 to-amber-100 rounded-xl border-2 border-amber-200">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      name="is_owner" 
-                      checked={editingUser.is_owner || false}
-                      onChange={onInputChange}
-                      className="w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-2 focus:ring-amber-500 cursor-pointer"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <i className="fa-solid fa-crown text-amber-600"></i>
-                        <span className="font-bold text-sm text-amber-900">Marcar como Propietario</span>
-                      </div>
-                      <p className="text-xs text-amber-700 mt-0.5">Acceso completo a todas las funciones</p>
-                    </div>
-                  </label>
-                </div>
-              )}
             </div>
           </div>
 

@@ -261,7 +261,7 @@ const ClientCompaniesList: React.FC = () => {
         const companyName = getValue() as string;
         const avatarColor = getAvatarColor(companyName);
         return (
-          <div className="flex items-start gap-3 py-1">
+          <div className="flex items-center gap-3 py-1">
             <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center font-bold text-[10px] border shadow-sm" style={{ backgroundColor: avatarColor.bg, color: avatarColor.text, borderColor: avatarColor.text }}>
               {getInitials(companyName)}
             </div>
@@ -373,7 +373,7 @@ const ClientCompaniesList: React.FC = () => {
         const avatar = row.original.created_by_avatar;
         const name = getValue() as string || 'Desconocido';
         return (
-          <div className="flex items-start gap-2 py-1">
+          <div className="flex items-center gap-2 py-1">
             {avatar ? <img src={avatar} alt={name} className="w-8 h-8 rounded-full border border-slate-200 object-cover" /> : 
             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 border border-slate-200 font-bold">{getInitials(name)}</div>}
             <span className="text-sm text-slate-600 font-medium">{name}</span>
@@ -454,7 +454,32 @@ const ClientCompaniesList: React.FC = () => {
           </thead>
           <tbody className="bg-white">
             {loading ? (
-              <tr><td colSpan={columns.length} className="py-24 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i><p className="text-slate-400 text-sm font-medium">Cargando empresas...</p></td></tr>
+              <>
+                {/* Skeleton Loader - 8 filas */}
+                {[...Array(8)].map((_, idx) => (
+                  <tr key={idx} className="border-b border-slate-100 animate-pulse">
+                    <td className="px-4 py-1.5">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-slate-200 rounded-lg"></div>
+                        <div className="space-y-1.5">
+                          <div className="h-3.5 bg-slate-200 rounded w-36"></div>
+                          <div className="h-3 bg-slate-200 rounded w-28"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-4 py-1.5"><div className="h-3 bg-slate-200 rounded w-32"></div></td>
+                    <td className="px-4 py-1.5"><div className="h-3 bg-slate-200 rounded w-24"></div></td>
+                    <td className="px-4 py-1.5"><div className="h-3 bg-slate-200 rounded w-20"></div></td>
+                    <td className="px-4 py-1.5"><div className="h-6 bg-slate-200 rounded-full w-24"></div></td>
+                    <td className="px-4 py-1.5">
+                      <div className="flex gap-1.5">
+                        <div className="w-7 h-7 bg-slate-200 rounded"></div>
+                        <div className="w-7 h-7 bg-slate-200 rounded"></div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </>
             ) : table.getRowModel().rows.length === 0 ? (
               <tr><td colSpan={columns.length} className="py-20 text-center"><p className="font-bold text-slate-600">No hay empresas aún</p></td></tr>
             ) : table.getRowModel().rows.map(row => {

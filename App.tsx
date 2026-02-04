@@ -1,11 +1,11 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext'; // Importar
 import { DealFiltersProvider } from './contexts/DealFiltersContext';
-import { DataCacheProvider } from './contexts/DataCacheContext';
+import { DataCacheProvider, useDataCache } from './contexts/DataCacheContext';
 import Layout from './components/Layout';
-import { APP_ROUTES } from './services/routes.config';
+import { APP_ROUTES, MODULE_ROUTES } from './services/routes.config';
 import { googleClientId } from './services/oauthConfig';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
@@ -46,6 +46,18 @@ import MarketingListDetail from './components/pages_marketing/ListDetail';
 // Componente para proteger rutas
 const ProtectedRoute = () => {
   const { user, loading } = useAuth();
+  const { currentUser, loading: cacheLoading } = useDataCache();
+  const location = useLocation();
+
+  const getModuleForPath = (pathname: string) => {
+    const entries = Object.entries(MODULE_ROUTES) as Array<[keyof typeof MODULE_ROUTES, string[]]>;
+    for (const [moduleKey, routes] of entries) {
+      if (routes.some(route => pathname.startsWith(route))) {
+        return moduleKey;
+      }
+    }
+    return null;
+  };
 
   if (loading) {
     return (
@@ -58,6 +70,44 @@ const ProtectedRoute = () => {
         </div>
       </div>
     );
+  }
+
+  if (user && cacheLoading && !currentUser) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin mb-4 inline-block">
+            <i className="fa-solid fa-circle-notch text-brand-600 text-4xl"></i>
+          </div>
+          <p className="text-slate-600">Cargando permisos...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (user) {
+    const moduleKey = getModuleForPath(location.pathname);
+
+    if (moduleKey) {
+      // Owner y superadmin ven todo
+      if (user.rol_user === 'owner' || user.rol_user === 'superadmin') {
+        return <Layout onLogout={() => {}}><Outlet /></Layout>;
+      }
+
+      // Admin ve CRM siempre + módulos concedidos
+      if (user.rol_user === 'admin') {
+        if (moduleKey === 'crm') {
+          return <Layout onLogout={() => {}}><Outlet /></Layout>;
+        }
+
+        const hasAccess = currentUser?.module_access?.[moduleKey];
+        return hasAccess ? <Layout onLogout={() => {}}><Outlet /></Layout> : <Navigate to="/app/dashboard" replace />;
+      }
+
+      // Usuario solo ve módulos concedidos
+      const hasAccess = currentUser?.module_access?.[moduleKey];
+      return hasAccess ? <Layout onLogout={() => {}}><Outlet /></Layout> : <Navigate to="/app/dashboard" replace />;
+    }
   }
 
   return user ? <Layout onLogout={() => {}}><Outlet /></Layout> : <Navigate to="/login" replace />;

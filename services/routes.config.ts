@@ -4,6 +4,26 @@
  */
 
 // ============================================
+// MAPEO DE MÓDULOS A RUTAS
+// Define qué rutas pertenecen a cada módulo
+// ============================================
+export const MODULE_ROUTES = {
+  crm: [
+    '/app/client-companies',
+    '/app/client-contacts',
+    '/app/deals',
+    '/app/quotes',
+    '/app/products',
+  ],
+  marketing: [
+    '/app/marketing',
+  ],
+  financials: [
+    '/app/financials',
+  ]
+};
+
+// ============================================
 // ESTRUCTURA DE NAVEGACIÓN (para el menú sidebar)
 // ============================================
 export const NAV_GROUPS = [
@@ -18,27 +38,27 @@ export const NAV_GROUPS = [
   {
     title: 'Ventas',
     items: [
-      { label: 'Cotizaciones', path: '/app/quotes', icon: 'fa-file-invoice-dollar', roles: ['superadmin', 'admin', 'usuario'] },
-      { label: 'Tratos', path: '/app/deals', icon: 'fa-handshake', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Cotizaciones', path: '/app/quotes', icon: 'fa-file-invoice-dollar', roles: ['superadmin', 'admin', 'usuario'], module: 'crm' },
+      { label: 'Tratos', path: '/app/deals', icon: 'fa-handshake', roles: ['superadmin', 'admin', 'usuario'], module: 'crm' },
     ]
   },
   {
     title: 'Marketing',
     items: [
-      { label: 'Marketing Center', path: '/app/marketing', icon: 'fa-bullseye', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Marketing Center', path: '/app/marketing', icon: 'fa-bullseye', roles: ['superadmin', 'admin', 'usuario'], module: 'marketing' },
     ]
   },
   {
     title: 'Directorio',
     items: [
-      { label: 'Empresas', path: '/app/client-companies', icon: 'fa-building', roles: ['superadmin', 'admin', 'usuario'] },
-      { label: 'Contactos', path: '/app/client-contacts', icon: 'fa-address-book', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Empresas', path: '/app/client-companies', icon: 'fa-building', roles: ['superadmin', 'admin', 'usuario'], module: 'crm' },
+      { label: 'Contactos', path: '/app/client-contacts', icon: 'fa-address-book', roles: ['superadmin', 'admin', 'usuario'], module: 'crm' },
     ]
   },
   {
     title: 'Inventario',
     items: [
-      { label: 'Productos', path: '/app/products', icon: 'fa-box-archive', roles: ['superadmin', 'admin', 'usuario'] },
+      { label: 'Productos', path: '/app/products', icon: 'fa-box-archive', roles: ['superadmin', 'admin', 'usuario'], module: 'crm' },
     ]
   }
 ];

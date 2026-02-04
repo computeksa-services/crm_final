@@ -28,6 +28,7 @@ type DataCacheState = {
   financialsCache: Record<string, { result: any; lastUpdated: number }>;
   countries: { id: string; name: string }[];
   companyTypes: { id: string; name: string }[];
+  currentUser: User | null;
   
   // Estado de carga
   loading: boolean;
@@ -41,7 +42,7 @@ type DataCacheState = {
   invalidateTenants: () => Promise<void>;
   invalidateDealStatuses: () => Promise<void>;
   invalidateQuoteStatuses: () => Promise<void>;
-  invalidateProductTypes: () => Promise<void>;
+  invalidateProductType: () => Promise<void>;
   invalidateDealInterests: () => Promise<void>;
   invalidateDealChannels: () => Promise<void>;
   invalidateCompanyLabels: () => Promise<void>;
@@ -76,6 +77,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [companyTypes, setCompanyTypes] = useState<{ id: string; name: string }[]>([]);
   const [countries, setCountries] = useState<{ id: string; name: string }[]>([]);
   const [financialsCache, setFinancialsCache] = useState<Record<string, { result: any; lastUpdated: number }>>({});
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
@@ -102,6 +104,23 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
 
     return { companiesArray, labelsMap };
+  }, []);
+
+  // --- CARGAR DATOS FRESCOS DEL USUARIO ACTUAL ---
+  const loadCurrentUser = useCallback(async () => {
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/me`);
+      if (res.ok) {
+        const data = await res.json();
+        // La API retorna un array, tomar el primer elemento
+        const userData = Array.isArray(data) ? data[0] : data;
+        if (userData && typeof userData === 'object' && userData.id_user) {
+          setCurrentUser(userData);
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error cargando datos del usuario actual (/api/me)', error);
+    }
   }, []);
 
   // --- CARGA INICIAL ---
@@ -180,7 +199,8 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
     };
     try {
-      const [companiesRes, contactsRes, productsRes, usersRes, tenantsRes, dealStatusesRes, quoteStatusesRes, productTypesRes, dealInterestsRes, dealChannelsRes, companyLabelsRes, companyTypesRes, countriesRes] = await Promise.all([
+      const [currentUserRes, companiesRes, contactsRes, productsRes, usersRes, tenantsRes, dealStatusesRes, quoteStatusesRes, productTypesRes, dealInterestsRes, dealChannelsRes, companyLabelsRes, companyTypesRes, countriesRes] = await Promise.all([
+        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/me`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products`),
@@ -197,6 +217,15 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
       ]);
+      
+      // Procesar currentUser inmediatamente
+      if (currentUserRes.ok) {
+        const currentUserData = await safeJson(currentUserRes, null);
+        const userData = Array.isArray(currentUserData) ? currentUserData[0] : currentUserData;
+        if (userData && typeof userData === 'object' && userData.id_user) {
+          setCurrentUser(userData);
+        }
+      }
       
       console.log('✅ DataCache: Respuestas recibidas', {
         dealStatusesOk: dealStatusesRes.ok,
@@ -671,6 +700,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     companyTypes,
     countries,
     financialsCache,
+    currentUser,
     loading,
     loaded,
     invalidateCompanies,

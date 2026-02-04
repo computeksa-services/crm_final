@@ -23,7 +23,8 @@ const DealCreate: React.FC = () => {
     dealChannels: cachedDealChannels,
     users: cachedUsers,
     loading: cacheLoading,
-    invalidateContacts // Importar la función para invalidar
+    invalidateContacts,
+    invalidateCompanies
   } = useDataCache();
 
   const [deal, setDeal] = useState<Partial<Deal>>({});
@@ -161,19 +162,21 @@ const DealCreate: React.FC = () => {
     }
   };
 
-  const handleCompanyCreated = (newCompany: ClientCompany) => {
+  const handleCompanyCreated = async (newCompany: ClientCompany) => {
     setDeal(prev => ({ ...prev, id_client_company: newCompany.id_client_company, id_contact: '' }));
     setFilteredContacts(cachedContacts.filter(c => String(c.id_client_company) === String(newCompany.id_client_company)));
     setIsCompanyModalOpen(false);
+    await invalidateCompanies(); // Recargar caché
     setToast({ message: 'Empresa creada exitosamente.', type: 'success' });
   };
 
-  const handleContactCreated = (newContact: ClientContact) => {
+  const handleContactCreated = async (newContact: ClientContact) => {
     if (newContact.id_client_company && String(newContact.id_client_company) === String(deal.id_client_company)) {
       setFilteredContacts(prev => [...prev, newContact]);
     }
     setDeal(prev => ({ ...prev, id_contact: newContact.id_contact }));
     setIsContactModalOpen(false);
+    await invalidateContacts(); // Recargar caché para que esté disponible en toda la app
     setToast({ message: 'Contacto creado exitosamente.', type: 'success' });
   };
 
