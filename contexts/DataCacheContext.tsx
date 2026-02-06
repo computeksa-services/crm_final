@@ -61,7 +61,7 @@ const DataCacheContext = createContext<DataCacheState | undefined>(undefined);
 
 export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  
+
   const [companies, setCompanies] = useState<ClientCompany[]>([]);
   const [companyLabelsMap, setCompanyLabelsMap] = useState<Record<string, { name: string; color?: string }>>({});
   const [companyLabels, setCompanyLabels] = useState<CompanyLabel[]>([]);
@@ -81,7 +81,6 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
 
-  // Normaliza una respuesta que puede venir como array envolviendo unified_response o como array plano
   const parseCompaniesPayload = useCallback((payload: any) => {
     const normalized = Array.isArray(payload)
       ? payload.find(item => item && typeof item === 'object' && 'unified_response' in item) ?? payload
@@ -98,51 +97,31 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
       const rows = Array.isArray(ur?.rows) ? ur.rows : [];
       companiesArray = rows.filter((item: any) => item.id_client_company || item.name_company);
-    } else {
-      const arr = Array.isArray(normalized) ? normalized : [];
-      companiesArray = arr.filter((item: any) => item.id_client_company || item.name_company);
+    } else if (Array.isArray(normalized)) {
+      companiesArray = normalized.filter((item: any) => item.id_client_company || item.name_company);
     }
 
     return { companiesArray, labelsMap };
   }, []);
 
-  // --- CARGAR DATOS FRESCOS DEL USUARIO ACTUAL ---
-  const loadCurrentUser = useCallback(async () => {
-    try {
-      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/me`);
-      if (res.ok) {
-        const data = await res.json();
-        // La API retorna un array, tomar el primer elemento
-        const userData = Array.isArray(data) ? data[0] : data;
-        if (userData && typeof userData === 'object' && userData.id_user) {
-          setCurrentUser(userData);
-        }
-      }
-    } catch (error) {
-      console.error('❌ Error cargando datos del usuario actual (/api/me)', error);
-    }
-  }, []);
-
-  // --- CARGA INICIAL ---
   const loadData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
-    
-    // 1. Intentar cargar desde localStorage primero (sin parpadeo)
-    // Limpieza de clave legacy por inquilino sin usuario
+
     try {
       localStorage.removeItem(`cache_${user.id_tenant}`);
     } catch (e) {}
+
     const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
     const cached = localStorage.getItem(cachedKey);
     if (cached) {
       try {
-        const { 
-          companies: cachedCompanies, 
+        const {
+          companies: cachedCompanies,
           companyLabelsMap: cachedCompanyLabelsMap,
           companyLabels: cachedCompanyLabels,
-          contacts: cachedContacts, 
-          products: cachedProducts, 
-          users: cachedUsers, 
+          contacts: cachedContacts,
+          products: cachedProducts,
+          users: cachedUsers,
           tenants: cachedTenants,
           dealStatuses: cachedDealStatuses,
           quoteStatuses: cachedQuoteStatuses,
@@ -151,16 +130,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           dealChannels: cachedDealChannels,
           financialsCache: cachedFinancialsCache
         } = JSON.parse(cached);
-        
-        console.log('📦 DataCache: Cargando desde localStorage', {
-          dealStatuses: Array.isArray(cachedDealStatuses) ? cachedDealStatuses.length : 0,
-          quoteStatuses: Array.isArray(cachedQuoteStatuses) ? cachedQuoteStatuses.length : 0,
-          productTypes: Array.isArray(cachedProductTypes) ? cachedProductTypes.length : 0,
-          dealInterests: Array.isArray(cachedDealInterests) ? cachedDealInterests.length : 0,
-          dealChannels: Array.isArray(cachedDealChannels) ? cachedDealChannels.length : 0,
-          companyLabels: Array.isArray(cachedCompanyLabels) ? cachedCompanyLabels.length : 0
-        });
-        
+
         setCompanies(Array.isArray(cachedCompanies) ? cachedCompanies : []);
         setCompanyLabelsMap(cachedCompanyLabelsMap || {});
         setCompanyLabels(Array.isArray(cachedCompanyLabels) ? cachedCompanyLabels : []);
@@ -175,18 +145,14 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setDealChannels(Array.isArray(cachedDealChannels) ? cachedDealChannels : []);
         setFinancialsCache(cachedFinancialsCache && typeof cachedFinancialsCache === 'object' ? cachedFinancialsCache : {});
         setLoaded(true);
-        // NO mostrar loading si ya tenemos datos en cache
       } catch (e) {
         console.error('❌ Error al parsear cache, limpiando...', e);
         localStorage.removeItem(cachedKey);
       }
     } else {
-      console.log('📦 DataCache: No hay cache, mostrando loading');
-      // Solo mostrar loading si NO hay cache
       setLoading(true);
     }
-    
-    // 2. Sincronizar con API en segundo plano
+
     console.log('🌐 DataCache: Iniciando fetch desde API...');
     const safeJson = async <T = any,>(res: Response, fallback: T): Promise<T> => {
       try {
@@ -198,150 +164,208 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         return fallback;
       }
     };
+
     try {
-      const [currentUserRes, companiesRes, contactsRes, productsRes, usersRes, tenantsRes, dealStatusesRes, quoteStatusesRes, productTypesRes, dealInterestsRes, dealChannelsRes, companyLabelsRes, companyTypesRes, countriesRes] = await Promise.all([
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/me`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        user.rol_user === 'superadmin' 
+      const pathname = window.location.pathname || '';
+      const priorityKeys = new Set<string>(['currentUser']);
+
+      if (pathname.startsWith('/app/deals')) {
+        priorityKeys.add('dealStatuses');
+        priorityKeys.add('dealInterests');
+        priorityKeys.add('dealChannels');
+      } else if (pathname.startsWith('/app/quotes')) {
+        priorityKeys.add('quoteStatuses');
+      } else if (pathname.startsWith('/app/client-companies')) {
+        priorityKeys.add('companies');
+        priorityKeys.add('companyLabels');
+        priorityKeys.add('companyTypes');
+        priorityKeys.add('countries');
+      } else if (pathname.startsWith('/app/client-contacts')) {
+        priorityKeys.add('contacts');
+        priorityKeys.add('companies');
+      } else if (pathname.startsWith('/app/products')) {
+        priorityKeys.add('products');
+        priorityKeys.add('productTypes');
+      } else if (pathname.startsWith('/app/users')) {
+        priorityKeys.add('users');
+      }
+
+      const requests: Record<string, () => Promise<Response>> = {
+        currentUser: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/me`),
+        companies: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        contacts: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        products: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products`),
+        users: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/users?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        tenants: () => user.rol_user === 'superadmin'
           ? apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants?id_user=${user.id_user}`)
           : apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/detail?id_tenant=${user.id_tenant}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${user.id_tenant}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/interests/deals?id_tenant=${user.id_tenant}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channels/deals?id_tenant=${user.id_tenant}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/labels?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
-        apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
-      ]);
-      
-      // Procesar currentUser inmediatamente
-      if (currentUserRes.ok) {
-        const currentUserData = await safeJson(currentUserRes, null);
-        const userData = Array.isArray(currentUserData) ? currentUserData[0] : currentUserData;
-        if (userData && typeof userData === 'object' && userData.id_user) {
-          setCurrentUser(userData);
+        dealStatuses: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/deals?id_tenant=${user.id_tenant}`),
+        quoteStatuses: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/statuses/quotes?id_tenant=${user.id_tenant}`),
+        productTypes: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products_type?id_tenant=${user.id_tenant}`),
+        dealInterests: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/interests/deals?id_tenant=${user.id_tenant}`),
+        dealChannels: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channels/deals?id_tenant=${user.id_tenant}`),
+        companyLabels: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/labels?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        companyTypes: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        countries: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
+      };
+
+      const fetchedData: Record<string, any> = {};
+
+      const applyResponse = async (key: string, res: Response) => {
+        if (!res.ok) return;
+
+        switch (key) {
+          case 'currentUser': {
+            const currentUserData = await safeJson(res, null);
+            const userData = Array.isArray(currentUserData) ? currentUserData[0] : currentUserData;
+            if (userData && typeof userData === 'object' && userData.id_user) {
+              setCurrentUser(userData);
+              fetchedData.currentUser = userData;
+            }
+            break;
+          }
+          case 'companies': {
+            const companiesData = await safeJson(res, []);
+            const { companiesArray, labelsMap } = parseCompaniesPayload(companiesData);
+            setCompanies(companiesArray);
+            setCompanyLabelsMap(labelsMap);
+            fetchedData.companies = companiesArray;
+            fetchedData.companyLabelsMap = labelsMap;
+            break;
+          }
+          case 'contacts': {
+            const contactsData = await safeJson(res, []);
+            const contactsArray = Array.isArray(contactsData) ? contactsData.filter((item: any) => item.id_contact || item.first_name || item.last_name) : [];
+            setContacts(contactsArray);
+            fetchedData.contacts = contactsArray;
+            break;
+          }
+          case 'products': {
+            const productsData = await safeJson(res, []);
+            const productsArray = Array.isArray(productsData) ? productsData.filter((item: any) => item.id_product || item.product_name) : [];
+            setProducts(productsArray);
+            fetchedData.products = productsArray;
+            break;
+          }
+          case 'users': {
+            const usersData = await safeJson(res, []);
+            const usersArray = Array.isArray(usersData) ? usersData.filter((item: any) => item.id_user || item.nombre_user) : [];
+            setUsers(usersArray);
+            fetchedData.users = usersArray;
+            break;
+          }
+          case 'tenants': {
+            const tenantsData = await safeJson(res, []);
+            const tenantsArray = Array.isArray(tenantsData) ? (user.rol_user === 'superadmin' ? tenantsData.filter((item: any) => item.id_tenant || item.tenant_name) : [tenantsData].filter((item: any) => item.id_tenant || item.tenant_name)) : [];
+            setTenants(tenantsArray);
+            fetchedData.tenants = tenantsArray;
+            break;
+          }
+          case 'dealStatuses': {
+            const dealStatusesData = await safeJson(res, []);
+            const dealStatusesArray = Array.isArray(dealStatusesData) ? dealStatusesData.filter((item: any) => item.id_status || item.status_name) : [];
+            setDealStatuses(dealStatusesArray);
+            fetchedData.dealStatuses = dealStatusesArray;
+            break;
+          }
+          case 'quoteStatuses': {
+            const quoteStatusesData = await safeJson(res, []);
+            const quoteStatusesArray = Array.isArray(quoteStatusesData) ? quoteStatusesData.filter((item: any) => item.id_status || item.status_name) : [];
+            setQuoteStatuses(quoteStatusesArray);
+            fetchedData.quoteStatuses = quoteStatusesArray;
+            break;
+          }
+          case 'productTypes': {
+            const productTypesData = await safeJson(res, []);
+            const productTypesArray = Array.isArray(productTypesData) ? productTypesData.filter((item: any) => item.id_product_type || item.product_type_name) : [];
+            setProductTypes(productTypesArray);
+            fetchedData.productTypes = productTypesArray;
+            break;
+          }
+          case 'dealInterests': {
+            const dealInterestsData = await safeJson(res, []);
+            const dealInterestsArray = Array.isArray(dealInterestsData) ? dealInterestsData.filter((item: any) => item.id_interest || item.interest_name) : [];
+            setDealInterests(dealInterestsArray);
+            fetchedData.dealInterests = dealInterestsArray;
+            break;
+          }
+          case 'dealChannels': {
+            const dealChannelsData = await safeJson(res, []);
+            const dealChannelsArray = Array.isArray(dealChannelsData) ? dealChannelsData.filter((item: any) => item.id_channel || item.channel_name) : [];
+            setDealChannels(dealChannelsArray);
+            fetchedData.dealChannels = dealChannelsArray;
+            break;
+          }
+          case 'companyLabels': {
+            const companyLabelsData = await safeJson(res, []);
+            const companyLabelsArray = Array.isArray(companyLabelsData) ? companyLabelsData.filter((item: any) => item.id_label || item.name) : [];
+            setCompanyLabels(companyLabelsArray);
+            fetchedData.companyLabels = companyLabelsArray;
+            break;
+          }
+          case 'companyTypes': {
+            const companyTypesData = await safeJson(res, []);
+            const companyTypesArray = Array.isArray(companyTypesData)
+              ? companyTypesData.map((t: any) => ({ id: t.id_company_type || t.id || t.name, name: t.name }))
+              : [];
+            setCompanyTypes(companyTypesArray);
+            fetchedData.companyTypes = companyTypesArray;
+            break;
+          }
+          case 'countries': {
+            const countriesData = await safeJson(res, []);
+            const countriesArray = Array.isArray(countriesData)
+              ? countriesData.map((c: any) => ({ id: c.id_country || c.id || c.name, name: c.name }))
+              : [];
+            setCountries(countriesArray);
+            fetchedData.countries = countriesArray;
+            break;
+          }
+          default:
+            break;
         }
-      }
-      
-      console.log('✅ DataCache: Respuestas recibidas', {
-        dealStatusesOk: dealStatusesRes.ok,
-        quoteStatusesOk: quoteStatusesRes.ok,
-        productTypesOk: productTypesRes.ok,
-        dealInterestsOk: dealInterestsRes.ok,
-        dealChannelsOk: dealChannelsRes.ok
-      });
+      };
 
-      const [companiesData, contactsData, productsData, usersData, tenantsData, dealStatusesData, quoteStatusesData, productTypesData, dealInterestsData, dealChannelsData, companyLabelsData, companyTypesData, countriesData] = await Promise.all([
-        companiesRes.ok ? safeJson(companiesRes, []) : [],
-        contactsRes.ok ? safeJson(contactsRes, []) : [],
-        productsRes.ok ? safeJson(productsRes, []) : [],
-        usersRes.ok ? safeJson(usersRes, []) : [],
-        tenantsRes.ok ? safeJson(tenantsRes, []) : [],
-        dealStatusesRes.ok ? safeJson(dealStatusesRes, []) : [],
-        quoteStatusesRes.ok ? safeJson(quoteStatusesRes, []) : [],
-        productTypesRes.ok ? safeJson(productTypesRes, []) : [],
-        dealInterestsRes.ok ? safeJson(dealInterestsRes, []) : [],
-        dealChannelsRes.ok ? safeJson(dealChannelsRes, []) : [],
-        companyLabelsRes.ok ? safeJson(companyLabelsRes, []) : [],
-        companyTypesRes.ok ? safeJson(companyTypesRes, []) : [],
-        countriesRes.ok ? safeJson(countriesRes, []) : []
-      ]);
+      const priorityList = Array.from(priorityKeys);
+      await Promise.all(priorityList.map(async (key) => {
+        const res = await requests[key]();
+        await applyResponse(key, res);
+      }));
 
-      // Soportar unified_response { dictionary, rows } y el array envolviendo
-      const { companiesArray, labelsMap } = parseCompaniesPayload(companiesData);
-      const contactsArray = Array.isArray(contactsData) ? contactsData.filter((item: any) => item.id_contact || item.first_name || item.last_name) : [];
-      const productsArray = Array.isArray(productsData) ? productsData.filter((item: any) => item.id_product || item.product_name) : [];
-      const usersArray = Array.isArray(usersData) ? usersData.filter((item: any) => item.id_user || item.nombre_user) : [];
-      const tenantsArray = Array.isArray(tenantsData) ? (user.rol_user === 'superadmin' ? tenantsData.filter((item: any) => item.id_tenant || item.tenant_name) : [tenantsData].filter((item: any) => item.id_tenant || item.tenant_name)) : [];
-      const dealStatusesArray = Array.isArray(dealStatusesData) ? dealStatusesData.filter((item: any) => item.id_status || item.status_name) : [];
-      const quoteStatusesArray = Array.isArray(quoteStatusesData) ? quoteStatusesData.filter((item: any) => item.id_status || item.status_name) : [];
-      const productTypesArray = Array.isArray(productTypesData) ? productTypesData.filter((item: any) => item.id_product_type || item.product_type_name) : [];
-      const dealInterestsArray = Array.isArray(dealInterestsData) ? dealInterestsData.filter((item: any) => item.id_interest || item.interest_name) : [];
-      const dealChannelsArray = Array.isArray(dealChannelsData) ? dealChannelsData.filter((item: any) => item.id_channel || item.channel_name) : [];
-      const companyLabelsArray = Array.isArray(companyLabelsData) ? companyLabelsData.filter((item: any) => item.id_label || item.name) : [];
-
-      console.log('📊 DataCache: Datos parseados desde API', {
-        dealStatusesData,
-        dealStatusesArray: dealStatusesArray.length,
-        quoteStatusesArray: quoteStatusesArray.length,
-        productTypesArray: productTypesArray.length,
-        dealInterestsArray: dealInterestsArray.length,
-        dealChannelsArray: dealChannelsArray.length,
-        companyLabelsArray: companyLabelsArray.length
-      });
-
-      setCompanies(companiesArray);
-      setCompanyLabelsMap(labelsMap);
-      setCompanyLabels(companyLabelsArray);
-      console.log('🏷️ DataCache: Etiquetas parseadas', { labelsMap, companyLabelsArray });
-      setContacts(contactsArray);
-      setProducts(productsArray);
-      setUsers(usersArray);
-      setTenants(tenantsArray);
-      setDealStatuses(dealStatusesArray);
-      setQuoteStatuses(quoteStatusesArray);
-      setProductTypes(productTypesArray);
-      setDealInterests(dealInterestsArray);
-      setDealChannels(dealChannelsArray);
-      // Properly map companyTypes
-      const companyTypesArray = Array.isArray(companyTypesData)
-        ? companyTypesData.map((t: any) => ({ id: t.id_company_type || t.id || t.name, name: t.name }))
-        : [];
-      setCompanyTypes(companyTypesArray);
-      // Properly map countries
-      const countriesArray = Array.isArray(countriesData)
-        ? countriesData.map((c: any) => ({ id: c.id_country || c.id || c.name, name: c.name }))
-        : [];
-      setCountries(countriesArray);
-      
-      console.log('📦 DataCache: Datos cargados desde API', {
-        companies: companiesArray.length,
-        contacts: contactsArray.length,
-        users: usersArray.length,
-        dealStatuses: dealStatusesArray.length,
-        quoteStatuses: quoteStatusesArray.length,
-        productTypes: productTypesArray.length,
-        dealInterests: dealInterestsArray.length,
-        dealChannels: dealChannelsArray.length,
-        companyLabels: companyLabelsArray.length,
-        companyTypes: companyTypesArray,
-        countries: countriesArray
-      });
-      
-      // 3. Guardar en localStorage para próxima carga
-      try {
-        localStorage.setItem(cachedKey, JSON.stringify({ 
-          companies: companiesArray, 
-          companyLabelsMap: labelsMap,
-          companyLabels: companyLabelsArray,
-          contacts: contactsArray,
-          products: productsArray,
-          users: usersArray,
-          tenants: tenantsArray,
-          dealStatuses: dealStatusesArray,
-          quoteStatuses: quoteStatusesArray,
-          productTypes: productTypesArray,
-          dealInterests: dealInterestsArray,
-          dealChannels: dealChannelsArray,
-          companyTypes: companyTypesArray,
-          countries: countriesArray,
-          financialsCache,
-          meta: { id_tenant: user.id_tenant, id_user: user.id_user },
-          timestamp: Date.now()
+      const remainingKeys = Object.keys(requests).filter((key) => !priorityKeys.has(key));
+      void (async () => {
+        await Promise.all(remainingKeys.map(async (key) => {
+          const res = await requests[key]();
+          await applyResponse(key, res);
         }));
-      } catch (e) {
-        // localStorage lleno, ignorar
-      }
-      
-      setLoaded(true);
+
+        try {
+          localStorage.setItem(cachedKey, JSON.stringify({
+            companies: fetchedData.companies ?? companies,
+            companyLabelsMap: fetchedData.companyLabelsMap ?? companyLabelsMap,
+            companyLabels: fetchedData.companyLabels ?? companyLabels,
+            contacts: fetchedData.contacts ?? contacts,
+            products: fetchedData.products ?? products,
+            users: fetchedData.users ?? users,
+            tenants: fetchedData.tenants ?? tenants,
+            dealStatuses: fetchedData.dealStatuses ?? dealStatuses,
+            quoteStatuses: fetchedData.quoteStatuses ?? quoteStatuses,
+            productTypes: fetchedData.productTypes ?? productTypes,
+            dealInterests: fetchedData.dealInterests ?? dealInterests,
+            dealChannels: fetchedData.dealChannels ?? dealChannels,
+            companyTypes: fetchedData.companyTypes ?? companyTypes,
+            countries: fetchedData.countries ?? countries,
+            financialsCache
+          }));
+        } catch (e) {
+          console.error('❌ Error guardando cache en localStorage', e);
+        }
+      })();
     } catch (error) {
-      console.error('❌ DataCache: Error en fetch API', error);
+      console.error('❌ DataCache: Error cargando desde API', error);
     } finally {
       setLoading(false);
+      setLoaded(true);
     }
   }, [user, parseCompaniesPayload]);
 

@@ -10,7 +10,10 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
+  <App />
 );
+
+const loadingElement = document.getElementById('app-loading');
+if (loadingElement) {
+  loadingElement.style.display = 'none';
+}

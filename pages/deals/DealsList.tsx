@@ -9,6 +9,7 @@ import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
 import DealEditModal from '../../components/DealEditModal';
+import { canUserAction, canEditInline } from '../../utils/permissions';
 import {
   useReactTable,
   getCoreRowModel,
@@ -226,8 +227,30 @@ const DealsList: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, isDestructive: false });
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (force = false) => {
     if (!user?.id_tenant || !user?.id_user) return;
+
+    const cacheKey = `deals_list_cache_${user.id_user}`;
+    const now = Date.now();
+    const cacheTtlMs = 2 * 60 * 1000; // 2 minutos
+
+    if (!force) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed?.timestamp && now - parsed.timestamp < cacheTtlMs && Array.isArray(parsed?.deals)) {
+            setDeals(parsed.deals);
+            setContextDeals(parsed.deals);
+            setLoading(false);
+            return;
+          }
+        } catch {
+          localStorage.removeItem(cacheKey);
+        }
+      }
+    }
+
     setLoading(true);
     try {
       const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`);
@@ -279,6 +302,7 @@ const DealsList: React.FC = () => {
       
       setDeals(dealsFromApi);
       setContextDeals(dealsFromApi);
+      localStorage.setItem(cacheKey, JSON.stringify({ deals: dealsFromApi, timestamp: now }));
     } catch (e) { setToast({ message: 'Error de conexión', type: 'error' }); }
     finally { setLoading(false); }
   }, [user, setContextDeals]);
@@ -377,7 +401,7 @@ const DealsList: React.FC = () => {
     setToast({ message: 'Trato actualizado exitosamente.', type: 'success' });
     setIsEditModalOpen(false);
     setSelectedDealForEdit(null);
-    fetchData();
+    fetchData(true);
   };
 
   const handleFormSubmit = async (e: React.FormEvent) => {
@@ -395,7 +419,7 @@ const DealsList: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (res.ok) { setToast({ message: 'Guardado con éxito', type: 'success' }); setIsModalOpen(false); fetchData(); }
+      if (res.ok) { setToast({ message: 'Guardado con éxito', type: 'success' }); setIsModalOpen(false); fetchData(true); }
     } catch { setToast({ message: 'Error al procesar', type: 'error' }); }
     finally { setSubmitting(false); }
   };
@@ -412,6 +436,7 @@ const DealsList: React.FC = () => {
     }
 
     const isStatusChange = updates.id_deal_status && updates.id_deal_status !== deal.id_deal_status;
+    const isInterestChange = updates.id_interest && updates.id_interest !== deal.id_interest;
     const targetStatus = isStatusChange
       ? cachedDealStatuses.find((s) => s.id_status === updates.id_deal_status)
       : undefined;
@@ -425,12 +450,28 @@ const DealsList: React.FC = () => {
             id_tenant: user.id_tenant,
             id_user: user.id_user,
           };
+          console.log('DEBUG: Enviando payload a /api/status/deals:', payload);
           const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
+          const responseText = await res.text();
+          console.log('DEBUG: Respuesta del servidor:', responseText);
           if (!res.ok) throw new Error('No se pudo actualizar el estado del trato');
+        } else if (isInterestChange) {
+          const payload = {
+            ...deal,
+            ...updates,
+            id_tenant: user.id_tenant,
+            id_user: user.id_user,
+          };
+          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/v1/deals/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error('No se pudo actualizar el interés del trato');
         } else {
           await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update`, {
             method: 'POST',
@@ -438,7 +479,7 @@ const DealsList: React.FC = () => {
             body: JSON.stringify({ ...deal, ...updates, id_tenant: user.id_tenant, id_user: user.id_user }),
           });
         }
-        fetchData();
+        fetchData(true);
         setToast({ message: 'Actualizado.', type: 'success' });
       } catch (e) {
         console.error(e);
@@ -475,7 +516,7 @@ const DealsList: React.FC = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id_trato: id, id_tenant: user?.id_tenant, id_user: user?.id_user })
         });
-        fetchData(); setConfirmState(p => ({ ...p, isOpen: false }));
+        fetchData(true); setConfirmState(p => ({ ...p, isOpen: false }));
       }
     });
   };
@@ -490,7 +531,7 @@ const DealsList: React.FC = () => {
           if (grouping[0] === column.id) return renderGroupCell(row, getValue() as string);
           return null;
         }
-        return <InlineBadgeSelector valueId={row.original.id_deal_status || ''} items={cachedDealStatuses.map(s => ({ ...s, id: s.id_status }))} onSelect={id => handleInlineUpdate(row.original, { id_deal_status: id })} disabled={row.original.access_level !== 'EDIT'} />;
+        return <InlineBadgeSelector valueId={row.original.id_deal_status || ''} items={cachedDealStatuses.map(s => ({ ...s, id: s.id_status }))} onSelect={id => handleInlineUpdate(row.original, { id_deal_status: id })} disabled={!canEditInline(user, row.original)} />;
       }
     },
     {
@@ -556,7 +597,7 @@ const DealsList: React.FC = () => {
           if (grouping[0] === column.id) return renderGroupCell(row, getValue() as string);
           return null;
         }
-        return <InlineBadgeSelector valueId={row.original.id_interest || ''} items={cachedDealInterests.map(i => ({ ...i, id: i.id_interest }))} onSelect={id => handleInlineUpdate(row.original, { id_interest: id })} disabled={row.original.access_level !== 'EDIT'} />;
+        return <InlineBadgeSelector valueId={row.original.id_interest || ''} items={cachedDealInterests.map(i => ({ ...i, id: i.id_interest }))} onSelect={id => handleInlineUpdate(row.original, { id_interest: id })} disabled={!canEditInline(user, row.original)} />;
       }
     },
     {
@@ -670,13 +711,27 @@ const DealsList: React.FC = () => {
       id: 'actions',
       header: 'Acciones',
       size: 120,
-      cell: ({ row }) => row.getIsGrouped() ? null : (
-        <div className="flex items-center justify-end gap-1">
-          <button onClick={(e) => { e.stopPropagation(); handleEdit(row.original); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
-          <button onClick={(e) => { e.stopPropagation(); openShareModal(row.original); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
-          <button onClick={(e) => { e.stopPropagation(); handleDelete(row.original.id_trato); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-trash text-[10px]"></i></button>
-        </div>
-      )
+      cell: ({ row }) => {
+        if (row.getIsGrouped()) return null;
+        const deal = row.original;
+        const canEdit = canUserAction(user, deal, 'edit');
+        const canDelete = canUserAction(user, deal, 'delete');
+        const canShare = canUserAction(user, deal, 'share');
+        
+        return (
+          <div className="flex items-center justify-end gap-1">
+            {canEdit && (
+              <button onClick={(e) => { e.stopPropagation(); handleEdit(deal); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
+            )}
+            {canShare && (
+              <button onClick={(e) => { e.stopPropagation(); openShareModal(deal); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
+            )}
+            {canDelete && (
+              <button onClick={(e) => { e.stopPropagation(); handleDelete(deal.id_trato); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-trash text-[10px]"></i></button>
+            )}
+          </div>
+        );
+      }
     }
   ], [cachedDealStatuses, cachedDealInterests, grouping]);
 
@@ -956,7 +1011,7 @@ const DealsList: React.FC = () => {
       )}
 
       {shareModalOpen && shareDealId && (
-        <ShareModal entity="deal" id={shareDealId} entityName={shareDealName || `Trato #${shareDealId}`} creatorName={shareDealCreator} isOpen={shareModalOpen} onClose={() => { setShareModalOpen(false); setShareDealId(null); setShareDealName(''); setShareDealCreator(''); setShareDealCollaborators([]); }} onShared={() => { setToast({ message: 'Asignaciones actualizadas.', type: 'success' }); fetchData(); }} currentCollaborators={shareDealCollaborators} />
+        <ShareModal entity="deal" id={shareDealId} entityName={shareDealName || `Trato #${shareDealId}`} creatorName={shareDealCreator} isOpen={shareModalOpen} onClose={() => { setShareModalOpen(false); setShareDealId(null); setShareDealName(''); setShareDealCreator(''); setShareDealCollaborators([]); }} onShared={() => { setToast({ message: 'Asignaciones actualizadas.', type: 'success' }); fetchData(true); }} currentCollaborators={shareDealCollaborators} />
       )}
 
       {/* Deal Edit Modal - creation-style modal for editing */}

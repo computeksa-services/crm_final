@@ -72,45 +72,42 @@ const ProtectedRoute = () => {
     );
   }
 
-  if (user && cacheLoading && !currentUser) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin mb-4 inline-block">
-            <i className="fa-solid fa-circle-notch text-brand-600 text-4xl"></i>
-          </div>
-          <p className="text-slate-600">Cargando permisos...</p>
-        </div>
-      </div>
-    );
+  if (!user) {
+    return <Navigate to="/login" replace />;
   }
 
-  if (user) {
-    const moduleKey = getModuleForPath(location.pathname);
+  // Si aún está cargando permisos, renderizar de todos modos para evitar delay
+  // La validación se hará cuando currentUser esté disponible
+  const moduleKey = getModuleForPath(location.pathname);
 
-    if (moduleKey) {
-      // Owner y superadmin ven todo
-      if (user.rol_user === 'owner' || user.rol_user === 'superadmin') {
+  if (moduleKey && currentUser) {
+    // Owner y superadmin ven todo
+    if (user.rol_user === 'owner' || user.rol_user === 'superadmin') {
+      return <Layout onLogout={() => {}}><Outlet /></Layout>;
+    }
+
+    // Admin ve CRM siempre + módulos concedidos
+    if (user.rol_user === 'admin') {
+      if (moduleKey === 'crm') {
         return <Layout onLogout={() => {}}><Outlet /></Layout>;
       }
 
-      // Admin ve CRM siempre + módulos concedidos
-      if (user.rol_user === 'admin') {
-        if (moduleKey === 'crm') {
-          return <Layout onLogout={() => {}}><Outlet /></Layout>;
-        }
-
-        const hasAccess = currentUser?.module_access?.[moduleKey];
-        return hasAccess ? <Layout onLogout={() => {}}><Outlet /></Layout> : <Navigate to="/app/dashboard" replace />;
-      }
-
-      // Usuario solo ve módulos concedidos
       const hasAccess = currentUser?.module_access?.[moduleKey];
-      return hasAccess ? <Layout onLogout={() => {}}><Outlet /></Layout> : <Navigate to="/app/dashboard" replace />;
+      if (!hasAccess) {
+        return <Navigate to="/app/dashboard" replace />;
+      }
+    }
+
+    // Usuario solo ve módulos concedidos
+    if (user.rol_user === 'usuario') {
+      const hasAccess = currentUser?.module_access?.[moduleKey];
+      if (!hasAccess) {
+        return <Navigate to="/app/dashboard" replace />;
+      }
     }
   }
 
-  return user ? <Layout onLogout={() => {}}><Outlet /></Layout> : <Navigate to="/login" replace />;
+  return <Layout onLogout={() => {}}><Outlet /></Layout>;
 };
 
 const App: React.FC = () => {

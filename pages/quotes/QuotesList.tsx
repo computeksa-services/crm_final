@@ -7,6 +7,7 @@ import { apiFetch } from '../../services/apiClient';
 import Toast from '../../components/Toast';
 import ShareModal from '../../components/ShareModal';
 import ConfirmModal from '../../components/ConfirmModal';
+import { canUserAction, canEditInline } from '../../utils/permissions';
 import {
   useReactTable,
   getCoreRowModel,
@@ -207,8 +208,29 @@ const QuotesList: React.FC = () => {
   const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title: string; message: string; isDestructive?: boolean; onConfirm?: () => void }>({ isOpen: false, title: '', message: '' });
 
   // --- FETCH DATA ---
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (force = false) => {
     if (!user?.id_tenant || !user?.id_user) return;
+
+    const cacheKey = `quotes_list_cache_${user.id_user}`;
+    const now = Date.now();
+    const cacheTtlMs = 2 * 60 * 1000; // 2 minutos
+
+    if (!force) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed?.timestamp && now - parsed.timestamp < cacheTtlMs && Array.isArray(parsed?.quotes)) {
+            setQuotes(parsed.quotes);
+            setMetadata(parsed.metadata || null);
+            setLoading(false);
+            return;
+          }
+        } catch {
+          localStorage.removeItem(cacheKey);
+        }
+      }
+    }
     
     setLoading(true);
 
@@ -225,13 +247,16 @@ const QuotesList: React.FC = () => {
         const response = data[0].response;
         setQuotes(response.quotes || []);
         setMetadata(response.metadata || null);
+        localStorage.setItem(cacheKey, JSON.stringify({ quotes: response.quotes || [], metadata: response.metadata || null, timestamp: now }));
       } else if (data?.quotes && data?.metadata) {
         // Fallback: { quotes: [...], metadata: {...} }
         setQuotes(data.quotes);
         setMetadata(data.metadata);
+        localStorage.setItem(cacheKey, JSON.stringify({ quotes: data.quotes, metadata: data.metadata, timestamp: now }));
       } else if (Array.isArray(data)) {
         // Fallback: array directo
         setQuotes(data);
+        localStorage.setItem(cacheKey, JSON.stringify({ quotes: data, metadata: null, timestamp: now }));
       }
 
     } catch (e) {
@@ -352,10 +377,10 @@ const QuotesList: React.FC = () => {
           
           if (!res.ok) throw new Error();
           setToast({ message: 'Actualizado correctamente.', type: 'success' });
-          fetchData(); 
+          fetchData(true); 
       } catch {
           setToast({ message: 'Error al actualizar.', type: 'error' });
-          fetchData(); 
+          fetchData(true); 
       }
     };
 
@@ -389,7 +414,7 @@ const QuotesList: React.FC = () => {
                 body: JSON.stringify({ id_cotizacion: id, id_tenant: user?.id_tenant, id_user: user?.id_user }),
             });
             setToast({ message: 'Cotización eliminada.', type: 'success' });
-            fetchData();
+            fetchData(true);
         } catch {
             setToast({ message: 'Error al eliminar.', type: 'error' });
         } finally {
@@ -420,7 +445,7 @@ const QuotesList: React.FC = () => {
                     valueId={getValue() as number}
                     items={(metadata?.statuses || []).map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon }))}
                     onSelect={(id) => handleInlineUpdate(row.original, { id_quote_status: String(id) })}
-                    disabled={!(row.original.access_level === 'EDIT' || user?.rol_user === 'admin')}
+                    disabled={!canEditInline(user, row.original)}
                 />
             );
         },
@@ -651,15 +676,17 @@ const QuotesList: React.FC = () => {
         cell: ({ row }) => {
             if (row.getIsGrouped()) return null;
             const q = row.original;
-            const canEdit = q.access_level === 'EDIT' || user?.rol_user === 'admin';
-            const canDelete = q.created_by === user?.id_user || user?.rol_user === 'admin';
+            const canEdit = canUserAction(user, q, 'edit');
+            const canDelete = canUserAction(user, q, 'delete');
+            const canShare = canUserAction(user, q, 'share');
+            
             return (
                 <div className="flex items-center justify-end gap-1">
                     {canEdit && (
-                        <>
-                            <button onClick={(e) => { e.stopPropagation(); navigate(`/app/quotes/edit?id=${q.id_cotizacion}`); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
-                            <button onClick={(e) => { e.stopPropagation(); openShareModal(q); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
-                        </>
+                        <button onClick={(e) => { e.stopPropagation(); navigate(`/app/quotes/edit?id=${q.id_cotizacion}`); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
+                    )}
+                    {canShare && (
+                        <button onClick={(e) => { e.stopPropagation(); openShareModal(q); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-indigo-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-user-plus text-[10px]"></i></button>
                     )}
                     {canDelete && (
                         <button onClick={(e) => { e.stopPropagation(); handleDelete(q.id_cotizacion); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-trash text-[10px]"></i></button>
@@ -861,7 +888,7 @@ const QuotesList: React.FC = () => {
           onClose={() => { setIsShareOpen(false); setShareQuoteId(null); setShareQuote(null); setShareCollaborators([]); }} 
           onShared={() => { 
             setToast({ message: 'Compartido.', type: 'success' }); 
-            fetchData(); // Refrescar datos después de cambiar permisos
+            fetchData(true); // Refrescar datos después de cambiar permisos
           }}
           currentCollaborators={shareCollaborators}
         />
