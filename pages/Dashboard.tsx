@@ -234,32 +234,35 @@ const Dashboard: React.FC = () => {
                 <>
                     {/* 1. TARJETAS DE KPIs */}
                       {user?.module_access?.crm && metricCards.length > 0 && (
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                                                <div
+                                                    className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-6"
+                                                >
                             {/* Tarjetas comerciales */}
-                            {metricCards.map((stat, idx) => (
-                                <div key={idx} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center hover:shadow-md transition-shadow cursor-default">
-                                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${stat.bg} ${stat.color} mr-4`}>
-                                        <i className={`fa-solid ${stat.icon} text-xl`}></i>
-                                    </div>
-                                    <div>
-                                        <p className="text-sm text-slate-500 font-medium">{stat.label}</p>
-                                        <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
-                                    </div>
-                                </div>
-                            ))}
+                                                        {metricCards.map((stat, idx) => (
+                                                            <div
+                                                                key={idx}
+                                                                className="bg-white h-[170px] flex flex-col items-center justify-center p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-default min-w-0"
+                                                            >
+                                                                <div className={`w-12 h-12 mb-3 rounded-lg flex items-center justify-center ${stat.bg} ${stat.color}`}>
+                                                                    <i className={`fa-solid ${stat.icon} text-xl`}></i>
+                                                                </div>
+                                                                <p className="text-base text-slate-500 font-medium mb-1">{stat.label}</p>
+                                                                <p className="text-3xl font-bold text-slate-800">{stat.value}</p>
+                                                            </div>
+                                                        ))}
                             {/* Métricas de Red */}
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-center items-start hover:shadow-md transition-shadow cursor-default">
-                                <div className="flex items-center gap-3 mb-2">
-                                    <i className="fa-solid fa-network-wired text-xl text-cyan-600"></i>
-                                    <span className="text-sm text-slate-500 font-medium">Empresas</span>
-                                </div>
-                                <p className="text-2xl font-bold text-slate-800 mb-2">{growth.total_empresas || 0}</p>
-                                <div className="flex items-center gap-3">
-                                    <i className="fa-solid fa-address-book text-xl text-fuchsia-600"></i>
-                                    <span className="text-sm text-slate-500 font-medium">Contactos</span>
-                                </div>
-                                <p className="text-2xl font-bold text-slate-800">{growth.total_contactos || 0}</p>
-                            </div>
+                                                        <div className="bg-white h-[170px] flex flex-col items-center justify-center p-6 rounded-xl shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-default min-w-0">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <i className="fa-solid fa-network-wired text-2xl text-cyan-600"></i>
+                                                                <span className="text-base text-slate-500 font-medium">Empresas</span>
+                                                            </div>
+                                                            <p className="text-3xl font-bold text-slate-800 mb-2">{growth.total_empresas || 0}</p>
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <i className="fa-solid fa-address-book text-2xl text-fuchsia-600"></i>
+                                                                <span className="text-base text-slate-500 font-medium">Contactos</span>
+                                                            </div>
+                                                            <p className="text-3xl font-bold text-slate-800">{growth.total_contactos || 0}</p>
+                                                        </div>
                         </div>
                     )}
 
@@ -285,28 +288,56 @@ const Dashboard: React.FC = () => {
                         </div>
 
                         {/* Pipeline */}
-                        {user?.module_access?.crm && (
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
-                                    <i className="fa-solid fa-funnel-dollar text-orange-500"></i> Pipeline Activo
-                                </h2>
-                                {pipeline.length === 0 ? (
-                                    <div className="h-40 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-100 rounded-lg">
-                                        <i className="fa-solid fa-filter text-3xl mb-2 opacity-50"></i>
-                                        <p className="text-sm">El pipeline está vacío</p>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-6">
-                                        {pipeline.map((stage, idx) => (
-                                            <div key={idx} className="flex items-center gap-4">
-                                                <span className="text-sm font-bold text-slate-800">{stage.etapa}</span>
-                                                <span className="text-xs text-slate-500">{stage.cantidad} - ${stage.monto.toLocaleString('es-EC')}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                                                {user?.module_access?.crm && (
+                                                    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col">
+                                                        <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                                            <i className="fa-solid fa-funnel-dollar text-orange-500"></i> Pipeline Activo
+                                                        </h2>
+                                                        {pipeline.length === 0 ? (
+                                                            <div className="h-40 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-100 rounded-lg">
+                                                                <i className="fa-solid fa-filter text-3xl mb-2 opacity-50"></i>
+                                                                <p className="text-sm">El pipeline está vacío</p>
+                                                            </div>
+                                                        ) : (
+                                                            <>
+                                                                {/* Resumen total */}
+                                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Etapas:</span>
+                                                                        <span className="text-base font-bold text-orange-600">{pipeline.length}</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total:</span>
+                                                                        <span className="text-lg font-bold text-emerald-600">
+                                                                            ${pipeline.reduce((acc, s) => acc + (s.monto || 0), 0).toLocaleString('es-EC', { minimumFractionDigits: 2 })}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="divide-y divide-slate-100">
+                                                                    {pipeline.map((stage, idx) => (
+                                                                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2">
+                                                                            <div className="flex items-center gap-2">
+                                                                                <span
+                                                                                    className={`inline-block px-2 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700 border border-orange-200`}
+                                                                                >
+                                                                                    {stage.etapa}
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="flex items-center gap-4">
+                                                                                <span className="text-xs text-slate-500 font-medium">
+                                                                                    <i className="fa-solid fa-handshake text-cyan-500 mr-1"></i> {stage.cantidad}
+                                                                                </span>
+                                                                                <span className="text-sm font-bold text-slate-800">
+                                                                                    ${stage.monto.toLocaleString('es-EC', { minimumFractionDigits: 2 })}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
                     </div>
 
                     {/* 3. HISTORIAL DE VENTAS Y TOP PRODUCTOS (2 COLUMNAS) */}
@@ -378,38 +409,40 @@ const Dashboard: React.FC = () => {
                             )}
 
                             {/* Cotizaciones Recientes */}
-                            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                                <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-                                    <i className="fa-solid fa-file-invoice text-purple-500"></i> Últimas Cotizaciones
-                                </h2>
-                                <div className="space-y-4">
-                                    {recentQuotes.length === 0 ? (
-                                        <p className="text-sm text-slate-400 italic text-center py-4">Sin cotizaciones recientes.</p>
-                                    ) : recentQuotes.map((quote, i) => (
-                                        <div key={i} className="flex justify-between items-start border-b border-slate-50 last:border-0 pb-3 last:pb-0">
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-800 hover:text-blue-600 cursor-pointer transition-colors">
-                                                    {formatQuoteNumber(quote.no_cotizacion)}
-                                                </p>
-                                                <p className="text-xs text-slate-600 truncate max-w-[120px]" title={quote.nombre_cotizacion}>
-                                                    {quote.nombre_cotizacion}
-                                                </p>
-                                                <p className="text-[10px] text-slate-400 mt-0.5">{quote.vendedor}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-sm font-bold text-slate-800">${Number(quote.total).toLocaleString('es-EC')}</p>
-                                                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold inline-block mt-1 ${
-                                                    quote.estado_decision === 'PENDIENTE' ? 'bg-amber-100 text-amber-700' :
-                                                    quote.estado_decision === 'ACEPTADA' ? 'bg-emerald-100 text-emerald-700' :
-                                                    'bg-rose-100 text-rose-700'
-                                                }`}>
-                                                    {quote.estado_decision}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                                                        <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                                                            <h2 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                                                                <i className="fa-solid fa-file-invoice text-purple-500"></i> Últimas Cotizaciones
+                                                            </h2>
+                                                            {recentQuotes.length === 0 ? (
+                                                                <p className="text-sm text-slate-400 italic text-center py-4">Sin cotizaciones recientes.</p>
+                                                            ) : (
+                                                                <div className="divide-y divide-slate-100">
+                                                                    {recentQuotes.map((quote, i) => (
+                                                                        <div key={i} className="flex items-center justify-between py-3">
+                                                                            <div className="flex flex-col min-w-0">
+                                                                                <div className="flex items-center gap-2 mb-0.5">
+                                                                                    <span className="text-xs font-bold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full">
+                                                                                        {formatQuoteNumber(quote.no_cotizacion)}
+                                                                                    </span>
+                                                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                                                                                        quote.estado_decision === 'PENDIENTE' ? 'bg-amber-100 text-amber-700' :
+                                                                                        quote.estado_decision === 'ACEPTADA' ? 'bg-emerald-100 text-emerald-700' :
+                                                                                        'bg-rose-100 text-rose-700'
+                                                                                    }`}>
+                                                                                        {quote.estado_decision}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <span className="text-sm font-bold text-slate-800 truncate max-w-[280px] md:max-w-[340px] lg:max-w-[420px]" title={quote.nombre_cotizacion}>
+                                                                                    {quote.nombre_cotizacion}
+                                                                                </span>
+                                                                                <span className="text-xs text-slate-500 truncate max-w-[120px]">{quote.vendedor}</span>
+                                                                            </div>
+                                                                            <span className="text-base font-bold text-emerald-600 whitespace-nowrap">${Number(quote.total).toLocaleString('es-EC', { minimumFractionDigits: 2 })}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
                         </div>
                     )}
 
@@ -432,13 +465,13 @@ const Dashboard: React.FC = () => {
                                                 />
                                                 {i === 0 && <span className="absolute -top-1 -right-1 text-yellow-500 text-xs"><i className="fa-solid fa-crown"></i></span>}
                                             </div>
-                                            <div className="flex-1">
-                                                <p className="font-bold text-slate-800 text-sm">{vendedor.nombre}</p>
-                                                <span className="text-xs text-slate-500">Cerrados: {vendedor.cerrados}</span>
-                                            </div>
-                                            <div className="text-right">
-                                                <span className="font-bold text-yellow-600 text-lg">${Number(vendedor.monto || 0).toLocaleString('es-EC')}</span>
-                                            </div>
+                                                                                        <div className="flex-1">
+                                                                                            <p className="font-bold text-slate-800 text-sm">{vendedor.nombre}</p>
+                                                                                            <span className="text-xs text-slate-500">Cerrados: {vendedor.cerrados}</span>
+                                                                                        </div>
+                                                                                        <div className="text-right">
+                                                                                              <span className="font-bold text-yellow-600 text-lg">${Number(vendedor.monto || 0).toLocaleString('es-EC', { minimumFractionDigits: 2 })}</span>
+                                                                                        </div>
                                         </li>
                                     ))}
                                 </ul>
