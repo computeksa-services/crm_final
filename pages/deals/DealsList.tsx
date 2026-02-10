@@ -5,6 +5,7 @@ import { useDataCache } from '../../contexts/DataCacheContext';
 import { useDealFilters } from '../../contexts/DealFiltersContext';
 import { Deal, ClientCompany, DealInterest } from '../../types';
 import { apiFetch } from '../../services/apiClient';
+import { GATEWAY_CONFIG } from '../../services/gatewayConfig';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
@@ -212,6 +213,8 @@ const DealsList: React.FC = () => {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
 
   const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
+    // Estado para mostrar/ocultar archivados
+    const [showArchived, setShowArchived] = useState(false);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -291,14 +294,12 @@ const DealsList: React.FC = () => {
               created_at: d.created_at ?? d.fecha_creacion,
               updated_at: d.updated_at ?? d.fecha_actualizacion,
               access_level: d.access_level ?? 'VIEW',
+              archived: typeof d.archived === 'boolean' ? d.archived : Boolean(d.archived),
             }))
         : [];
 
       const dealsFromApi = normalizeDeals(payload.tratos);
       
-      // Debug: ver los datos que llegan
-      console.log('Raw payload.tratos:', payload.tratos);
-      console.log('Normalized deals:', dealsFromApi);
       
       setDeals(dealsFromApi);
       setContextDeals(dealsFromApi);
@@ -450,14 +451,12 @@ const DealsList: React.FC = () => {
             id_tenant: user.id_tenant,
             id_user: user.id_user,
           };
-          console.log('DEBUG: Enviando payload a /api/status/deals:', payload);
           const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
           const responseText = await res.text();
-          console.log('DEBUG: Respuesta del servidor:', responseText);
           if (!res.ok) throw new Error('No se pudo actualizar el estado del trato');
         } else if (isInterestChange) {
           const payload = {
@@ -482,7 +481,6 @@ const DealsList: React.FC = () => {
         fetchData(true);
         setToast({ message: 'Actualizado.', type: 'success' });
       } catch (e) {
-        console.error(e);
         setToast({ message: 'Error al actualizar', type: 'error' });
       }
     };
@@ -717,7 +715,24 @@ const DealsList: React.FC = () => {
         const canEdit = canUserAction(user, deal, 'edit');
         const canDelete = canUserAction(user, deal, 'delete');
         const canShare = canUserAction(user, deal, 'share');
-        
+        const canArchive = true; // Puedes ajustar permisos si es necesario
+
+        // Nueva función para archivar/desarchivar
+        const handleArchive = async (e: React.MouseEvent) => {
+          e.stopPropagation();
+          try {
+            await apiFetch(GATEWAY_CONFIG.API.DEALS.ARCHIVED, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id_trato: deal.id_trato, id_tenant: user?.id_tenant, id_user: user?.id_user, archived: !deal.archived })
+            });
+            fetchData(true);
+            setToast({ message: deal.archived ? 'Trato desarchivado exitosamente.' : 'Trato archivado exitosamente.', type: 'success' });
+          } catch {
+            setToast({ message: deal.archived ? 'Error al desarchivar trato.' : 'Error al archivar trato.', type: 'error' });
+          }
+        };
+
         return (
           <div className="flex items-center justify-end gap-1">
             {canEdit && (
@@ -729,6 +744,12 @@ const DealsList: React.FC = () => {
             {canDelete && (
               <button onClick={(e) => { e.stopPropagation(); handleDelete(deal.id_trato); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-trash text-[10px]"></i></button>
             )}
+            {canArchive && (
+              <button onClick={handleArchive} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-yellow-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all" title={deal.archived ? 'Desarchivar trato' : 'Archivar trato'}>
+                <i className="fa-solid fa-box-archive text-[10px]"></i>
+                <span className="sr-only">{deal.archived ? 'Desarchivar' : 'Archivar'}</span>
+              </button>
+            )}
           </div>
         );
       }
@@ -736,7 +757,9 @@ const DealsList: React.FC = () => {
   ], [cachedDealStatuses, cachedDealInterests, grouping]);
 
   const table = useReactTable({
-    data: deals, columns, state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination },
+    data: useMemo(() => showArchived ? deals.filter(d => d.archived === true) : deals.filter(d => !d.archived), [deals, showArchived]),
+    columns,
+    state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination },
     onSortingChange: setSorting, onColumnFiltersChange: setColumnFilters, onGlobalFilterChange: setGlobalFilter, onGroupingChange: setGrouping, 
     onExpandedChange: (updater) => {
       setExpanded((prev) => {
@@ -794,6 +817,15 @@ const DealsList: React.FC = () => {
         {/* Mobile/Tablet: Order 1 (Arriba). Desktop: Order 3 (Derecha) */}
         <button onClick={() => navigate('/app/deals/new')} className="order-1 lg:order-3 w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center justify-center gap-2">
             <i className="fa-solid fa-plus"></i> Nuevo Trato
+        </button>
+        {/* Botón para mostrar/ocultar archivados */}
+        <button
+          onClick={() => setShowArchived(v => !v)}
+          className={`order-4 w-full sm:w-auto px-4 py-2 rounded-lg text-sm font-bold border transition-all flex items-center justify-center gap-2 ${showArchived ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-yellow-50 hover:text-yellow-700'}`}
+          style={{ minWidth: 120 }}
+        >
+          <i className="fa-solid fa-box-archive"></i>
+          {showArchived ? 'Ver activos' : 'Ver archivados'}
         </button>
       </div>
       {/* FIN TOOLBAR RESPONSIVO */}

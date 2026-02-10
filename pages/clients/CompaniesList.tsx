@@ -310,7 +310,7 @@ const CompaniesList: React.FC = () => {
                 {/* Empresa Info */}
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0 border border-slate-200 overflow-hidden">
+                    <div className="w-12 h-12 bg-slate-100 flex items-center justify-center flex-shrink-0 border border-slate-200 overflow-hidden" style={{ borderRadius: 0 }}>
                       {tenant.logo_url ? (
                         <img 
                           src={getImageUrl(tenant.logo_url) || tenant.logo_url} 
@@ -323,11 +323,15 @@ const CompaniesList: React.FC = () => {
                             if (fallback) fallback.classList.remove('hidden');
                           }}
                         />
-                      ) : null}
+                      ) : (
+                        <span className="font-bold text-black text-lg">
+                          {tenant.name_tenant ? tenant.name_tenant.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : '?'}
+                        </span>
+                      )}
                       <i className={`fa-solid fa-building text-sm text-slate-400 ${tenant.logo_url ? 'hidden' : ''}`}></i>
                     </div>
                     <div className="min-w-0">
-                      <div className="font-bold text-slate-800 text-sm truncate">{tenant.name_tenant}</div>
+                      <div className="font-bold text-black text-sm truncate">{tenant.name_tenant}</div>
                       <div className="text-xs text-slate-500 truncate">RUC: {tenant.ruc}</div>
                       {tenant.razon_social && <div className="text-[10px] text-slate-400 font-semibold uppercase mt-0.5 truncate">{tenant.razon_social}</div>}
                     </div>

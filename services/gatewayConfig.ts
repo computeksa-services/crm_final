@@ -55,6 +55,7 @@ export const GATEWAY_CONFIG = {
       CREATE: buildFullUrl('/api/deals'),
       UPDATE: buildFullUrl('/api/v1/deals/update'),
       DELETE: buildFullUrl('/api/deals/delete'),
+      ARCHIVED: buildFullUrl('/api/v1/deals/archived'),
       BY_COMPANY: buildFullUrl('/api/deals/by_company'),
       HISTORY: buildFullUrl('/api/deals/history'),
     },
@@ -152,4 +153,23 @@ export function buildUrl(baseUrl: string, params?: Record<string, any>): string 
   
   const queryString = query.toString();
   return queryString ? `${baseUrl}?${queryString}` : baseUrl;
+}
+
+// --- DEALS API WRAPPERS ---
+import { apiGet, apiPost } from './apiClient';
+
+export async function getDeals() {
+  return apiGet(GATEWAY_CONFIG.API.DEALS.LIST);
+}
+
+export async function archiveDeal(id_trato: string) {
+  return apiPost(GATEWAY_CONFIG.API.DEALS.ARCHIVED, { id_trato, archivado: true });
+}
+
+export async function deleteDeal(id_trato: string, id_tenant: string, id_user: string) {
+  return apiPost(GATEWAY_CONFIG.API.DEALS.DELETE, { id_trato, id_tenant, id_user });
+}
+
+export async function updateDeal(payload: any) {
+  return apiPost(GATEWAY_CONFIG.API.DEALS.UPDATE, payload);
 }

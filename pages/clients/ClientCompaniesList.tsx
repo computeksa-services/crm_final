@@ -262,10 +262,10 @@ const ClientCompaniesList: React.FC = () => {
         const avatarColor = getAvatarColor(companyName);
         return (
           <div className="flex items-center gap-3 py-1">
-            <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center font-bold text-[10px] border shadow-sm" style={{ backgroundColor: avatarColor.bg, color: avatarColor.text, borderColor: avatarColor.text }}>
+            <div className="w-8 h-8 flex-shrink-0 flex items-center justify-center font-bold text-[10px] border shadow-sm" style={{ backgroundColor: avatarColor.bg, color: '#000', borderColor: avatarColor.text }}>
               {getInitials(companyName)}
             </div>
-            <span className="font-bold text-slate-800 text-sm tracking-tight break-words">{companyName}</span>
+            <span className="font-bold text-black text-sm tracking-tight break-words">{companyName}</span>
           </div>
         );
       },

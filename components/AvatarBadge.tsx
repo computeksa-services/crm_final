@@ -54,9 +54,8 @@ export const AvatarBadge: React.FC<AvatarBadgeProps> = ({
       className={`flex items-center justify-center font-bold border shadow-sm flex-shrink-0 rounded-full transition-colors ${sizeClasses[size]} ${className}`}
       style={{
         backgroundColor: color.light,
-        color: color.lightText,
+        color: '#000',
         borderColor: color.lightText,
-        // CSS variables para dark mode
         '--avatar-dark': color.dark,
         '--avatar-dark-text': color.darkText,
       } as React.CSSProperties & { '--avatar-dark': string; '--avatar-dark-text': string }}

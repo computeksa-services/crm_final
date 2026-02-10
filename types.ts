@@ -258,6 +258,7 @@ export interface UnifiedTimelineItem {
 }
 
 export interface Deal {
+    archived?: boolean;
   id_trato: string;
   nombre_trato: string;
   valor_numeric?: string;

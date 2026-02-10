@@ -285,6 +285,7 @@ const ClientContactsList: React.FC = () => {
               initials={getInitials(c.first_name, c.last_name)}
               name={contactName}
               size="sm"
+              className="rounded-full"
             />
             <span className="font-semibold text-slate-700 dark:text-slate-300">{`${c.last_name} ${c.first_name || ''}`}</span>
           </div>
@@ -327,8 +328,9 @@ const ClientContactsList: React.FC = () => {
                     initials={companyInitials}
                     name={companyName}
                     size="sm"
+                    className="rounded-none"
                   />
-                  <span className="font-bold text-slate-800 dark:text-slate-300 text-sm tracking-tight break-words">
+                  <span className="font-bold text-black text-sm tracking-tight break-words">
                     {companyName}
                   </span>
                 </>
