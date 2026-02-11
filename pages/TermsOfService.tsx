@@ -206,7 +206,7 @@ const TermsOfService: React.FC = () => {
               Si tiene preguntas o inquietudes sobre estos Términos de Servicio, por favor contactenos:
             </p>
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-6">
-              <p className="text-slate-700 mb-2"><strong>Email:</strong> <a href="mailto:legal@computeksa.com" className="text-brand-600 hover:text-brand-700">legal@computeksa.com</a></p>
+              <p className="text-slate-700 mb-2"><strong>Email:</strong> <a href="mailto:legal@crm.computeksa.com" className="text-brand-600 hover:text-brand-700">legal@crm.computeksa.com</a></p>
               <p className="text-slate-700"><strong>Sitio Web:</strong> <a href="https://computeksa.com" target="_blank" rel="noreferrer" className="text-brand-600 hover:text-brand-700">www.computeksa.com</a></p>
             </div>
           </section>
@@ -236,13 +236,13 @@ const TermsOfService: React.FC = () => {
               <h4 className="font-bold text-white mb-4">Empresa</h4>
               <ul className="space-y-2 text-sm">
                 <li><a href="https://computeksa.com" target="_blank" rel="noreferrer" className="hover:text-brand-400">Sitio Web</a></li>
-                <li><a href="mailto:contacto@computeksa.com" className="hover:text-brand-400">Contacto</a></li>
+                <li><a href="mailto:contacto@crm.computeksa.com" className="hover:text-brand-400">Contacto</a></li>
               </ul>
             </div>
             <div>
               <h4 className="font-bold text-white mb-4">Soporte</h4>
               <ul className="space-y-2 text-sm">
-                <li><a href="mailto:soporte@computeksa.com" className="hover:text-brand-400">Soporte</a></li>
+                <li><a href="mailto:soporte@crm.computeksa.com" className="hover:text-brand-400">Soporte</a></li>
               </ul>
             </div>
           </div>

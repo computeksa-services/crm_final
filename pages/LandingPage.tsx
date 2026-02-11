@@ -32,12 +32,8 @@ const LandingPage: React.FC = () => {
       {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-slate-200">
         <div className="flex items-center justify-between px-6 py-4 max-w-7xl mx-auto">
-          <div className="flex items-center space-x-3">
-            <img src="/logo.png" alt="CRM COMPUTEKSA" className="h-10 w-auto" />
-            <div>
-              <div className="text-sm font-bold text-slate-900">CRM COMPUTEKSA</div>
-              <div className="text-xs text-slate-500">Gestión Integral de Negocios B2B</div>
-            </div>
+          <div className="flex items-center">
+            <img src="/logo_large.png" alt="CRM COMPUTEKSA" className="h-12 w-auto" />
           </div>
           <div className="hidden md:flex space-x-8 text-sm font-medium text-slate-600">
             <a href="#plataforma" className="hover:text-brand-600 transition-colors">Plataforma</a>
@@ -60,17 +56,14 @@ const LandingPage: React.FC = () => {
         <div className="max-w-7xl mx-auto px-6 relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
-              <span className="inline-block py-2 px-4 rounded-full bg-brand-500/20 text-brand-300 text-xs font-bold uppercase tracking-wider mb-6 border border-brand-500/30">
-                🚀 CRM con Calendarios Integrados
-              </span>
               <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tight mb-6 leading-tight">
-                CRM COMPUTEKSA
+                CRM by COMPUTEKSA
               </h1>
               <h2 className="text-2xl lg:text-3xl font-bold text-brand-300 mb-8">
                 CRM Potente con Integraciones a Calendarios Google y Microsoft
               </h2>
               <p className="text-xl text-slate-300 mb-10 leading-relaxed max-w-xl">
-                Gestiona clientes, cotizaciones, tratos, facturación y más desde una sola plataforma. 
+                Gestiona clientes, cotizaciones, tratos, cartera y más desde una sola plataforma. 
                 Con conexión integrada a calendarios de Google y Microsoft para sincronizar reuniones y eventos automáticamente.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
@@ -152,7 +145,7 @@ const LandingPage: React.FC = () => {
               </div>
               <h3 className="text-2xl font-bold text-slate-900 mb-4">CRM COMPUTEKSA</h3>
               <p className="text-slate-600 mb-6 leading-relaxed">
-                Gestión centralizada de clientes, cotizaciones, tratos y facturación. Todo en un solo lugar para que 
+                Gestión centralizada de clientes, cotizaciones, tratos y cartera. Todo en un solo lugar para que 
                 tu equipo trabaje de forma coordinada y eficiente.
               </p>
               <ul className="space-y-3">
@@ -166,7 +159,7 @@ const LandingPage: React.FC = () => {
                 </li>
                 <li className="flex items-start">
                   <i className="fa-solid fa-check text-brand-600 mt-1 mr-3 flex-shrink-0"></i>
-                  <span className="text-slate-600">Automatización de cotizaciones y facturación</span>
+                  <span className="text-slate-600">Automatización de cotizaciones y cartera</span>
                 </li>
               </ul>
             </div>
@@ -328,12 +321,12 @@ const LandingPage: React.FC = () => {
               {
                 icon: 'fa-store',
                 title: 'Distribuidores B2B',
-                desc: 'Gestiona múltiples clientes corporativos, cotizaciones y facturación de forma centralizada.'
+                desc: 'Gestiona múltiples clientes corporativos, cotizaciones y cartera de forma centralizada.'
               },
               {
                 icon: 'fa-layer-group',
                 title: 'Agencias & Consultoras',
-                desc: 'Administra proyectos, cotizaciones y facturación de clientes con roles y permisos granulares.'
+                desc: 'Administra proyectos, cotizaciones y cartera de clientes con roles y permisos granulares.'
               },
             ].map((caso, i) => (
               <div key={i} className="bg-slate-800/50 p-8 rounded-xl border border-slate-700 hover:border-brand-600 transition-all">
@@ -419,9 +412,9 @@ const LandingPage: React.FC = () => {
 
           <div className="mt-8 text-center">
             <p className="text-slate-600">O contáctanos directamente:</p>
-            <a href="mailto:soporte@computeksa.com" className="inline-flex items-center gap-2 mt-4 px-6 py-3 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 transition-all">
+            <a href="mailto:ventas@crm.computeksa.com" className="inline-flex items-center gap-2 mt-4 px-6 py-3 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 transition-all">
               <i className="fa-solid fa-envelope text-lg"></i>
-              soporte@computeksa.com
+              ventas@crm.computeksa.com
             </a>
           </div>
         </div>
@@ -468,14 +461,14 @@ const LandingPage: React.FC = () => {
               <ul className="space-y-2 text-sm">
                 <li><a href="#caracteristicas" className="hover:text-brand-400">Características</a></li>
                 <li><a href="#precios" className="hover:text-brand-400">Precios</a></li>
-                <li><a href="mailto:contacto@computeksa.com" className="hover:text-brand-400">Soporte</a></li>
+                <li><a href="mailto:ventas@crm.computeksa.com" className="hover:text-brand-400">Ventas</a></li>
               </ul>
             </div>
             <div>
               <h4 className="font-bold text-white mb-4">Empresa</h4>
               <ul className="space-y-2 text-sm">
                 <li><a href="https://computeksa.com" target="_blank" rel="noreferrer" className="hover:text-brand-400">Sitio Web</a></li>
-                <li><a href="mailto:contacto@computeksa.com" className="hover:text-brand-400">Contacto</a></li>
+                <li><a href="mailto:ventas@crm.computeksa.com" className="hover:text-brand-400">Contacto</a></li>
                 <li><a href="#" className="hover:text-brand-400">Blog</a></li>
               </ul>
             </div>

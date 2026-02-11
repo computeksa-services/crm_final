@@ -255,13 +255,13 @@ const LoginPage: React.FC = () => {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-600 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center">
-          <img src="/logo.png" alt="COMPUTEKSA 360" className="h-16 w-auto" />
+          <img src="/logo.png" alt="CRM COMPUTEKSA" className="h-16 w-auto" />
         </div>
         <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900 dark:text-slate-100">
           Iniciar Sesión
         </h2>
         <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
-          Accede a tu espacio de trabajo en <span className="font-bold text-brand-600">CRM Computeksa</span>
+          Accede a tu espacio de trabajo en <span className="font-bold text-brand-600">CRM COMPUTEKSA</span>
         </p>
       </div>
 

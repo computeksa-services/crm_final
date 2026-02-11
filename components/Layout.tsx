@@ -189,19 +189,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         `}
       >
         {/* Logo Area */}
-        <div className={`h-16 flex items-center border-b border-slate-200 dark:border-slate-500 bg-white dark:bg-slate-500 transition-all duration-300 ${isDesktopSidebarOpen ? 'px-4' : 'px-0 justify-center'}`}>
+        <div className={`flex items-center border-b border-slate-200 dark:border-slate-500 bg-white dark:bg-slate-500 transition-all duration-300 ${isDesktopSidebarOpen ? 'h-20 px-4' : 'h-16 px-0 justify-center'}`}>
            <div 
-             className={`flex items-center gap-3 cursor-pointer overflow-hidden w-full ${isDesktopSidebarOpen ? '' : 'justify-center'}`}
+             className={`flex items-center justify-center cursor-pointer overflow-hidden w-full`}
              onClick={() => navigate('/app/dashboard')}
            >
-              <img src="/logo.png" alt="COMPUTEKSA" className={`object-contain transition-all duration-300 ${isDesktopSidebarOpen ? 'h-10 w-10' : 'h-8 w-8'}`}/>
-              <div className={`transition-all duration-300 ${!isDesktopSidebarOpen ? 'md:opacity-0 md:w-0 overflow-hidden' : 'overflow-visible'}`}>
-                <div className="flex flex-col leading-tight">
-                  <span className="font-bold text-sm tracking-tight text-slate-800 dark:text-slate-100">CRM</span>
-                  <span className="font-bold text-sm tracking-tight text-brand-600">COMPUTEKSA</span>
-                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium tracking-widest uppercase">Workspace</span>
-                </div>
-              </div>
+              <img src={isDesktopSidebarOpen ? "/logo_large.png" : "/logo.png"} alt="COMPUTEKSA" className={`object-contain transition-all duration-300 ${isDesktopSidebarOpen ? 'h-16' : 'h-10 w-10'}`}/>
            </div>
         </div>
 
