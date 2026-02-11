@@ -1,10 +1,30 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+
+const DESKTOP_IMAGES = [
+  { src: '/DESKTOP/DASHBOARD1.png', alt: 'Dashboard General', title: 'Visión Global' },
+  { src: '/DESKTOP/TRATOS.png', alt: 'Gestión de Tratos', title: 'Pipeline de Ventas' },
+  { src: '/DESKTOP/SEGUIMIENTO.png', alt: 'Seguimiento', title: 'Seguimiento Inteligente' },
+  { src: '/DESKTOP/LISTA_CONTACTOS.png', alt: 'Contactos', title: 'Base de Datos' },
+  { src: '/DESKTOP/CAMPAÑAS.png', alt: 'Campañas', title: 'Marketing Integrado' },
+    { src: '/DESKTOP/CALENDARIO.png', alt: 'Calendario', title: 'Calendario Integrado' },
+
+];
+
+const MOBILE_IMAGES = [
+  '/MOBILE/MOBILE_DASHBOARD.png',
+  '/MOBILE/MOBILE_PIPELINE.png',
+  '/MOBILE/MOBILE_SEGUIMIENTO.png',
+  '/MOBILE/MOBILE_CAMPAÑAS.png',
+  '/MOBILE/MOBILE_CARTERA.png',
+  '/MOBILE/MOBILE_REGISTRAR_GESTION.png',
+];
 
 const LandingPage: React.FC = () => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
+  const [activeDesktopImage, setActiveDesktopImage] = useState(0);
 
   // Si el usuario ya está logueado, redirigir a dashboard
   useEffect(() => {
@@ -66,7 +86,7 @@ const LandingPage: React.FC = () => {
                 Gestiona clientes, cotizaciones, tratos, cartera y más desde una sola plataforma. 
                 Con conexión integrada a calendarios de Google y Microsoft para sincronizar reuniones y eventos automáticamente.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4">
+              <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
                 <Link to="/login" className="px-8 py-4 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-bold text-lg transition-all shadow-xl hover:shadow-2xl flex items-center justify-center">
                   Acceder al CRM <i className="fa-solid fa-arrow-right ml-2"></i>
                 </Link>
@@ -75,6 +95,8 @@ const LandingPage: React.FC = () => {
                 </a>
               </div>
 
+              {/* Mobile Preview (Visible only on small screens) */}
+              
               {/* Stats */}
               <div className="grid grid-cols-3 gap-6 mt-16 pt-12 border-t border-slate-700">
                 <div>
@@ -92,32 +114,27 @@ const LandingPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="hidden lg:block relative">
-              <div className="bg-gradient-to-br from-brand-600/20 to-purple-600/20 rounded-2xl p-8 border border-brand-500/30 backdrop-blur">
-                <div className="space-y-4">
-                  <div className="bg-white/10 rounded-lg p-4 border border-white/10">
-                    <div className="text-sm text-slate-300 font-medium mb-2">Dashboard en Tiempo Real</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="h-3 bg-brand-500/40 rounded"></div>
-                      <div className="h-3 bg-purple-500/40 rounded"></div>
-                    </div>
-                  </div>
-                  <div className="bg-white/10 rounded-lg p-4 border border-white/10">
-                    <div className="text-sm text-slate-300 font-medium mb-2">Gestión de Tratos</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="h-3 bg-brand-500/40 rounded"></div>
-                      <div className="h-3 bg-purple-500/40 rounded"></div>
-                    </div>
-                  </div>
-                  <div className="bg-white/10 rounded-lg p-4 border border-white/10">
-                    <div className="text-sm text-slate-300 font-medium mb-2">Cotizaciones Automáticas</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="h-3 bg-brand-500/40 rounded"></div>
-                      <div className="h-3 bg-purple-500/40 rounded"></div>
-                    </div>
-                  </div>
+            <div className="hidden lg:block relative perspective-1000">
+              <div className="relative z-10 bg-slate-800 p-2 rounded-xl shadow-2xl border border-slate-700 transform transition-transform duration-700 hover:scale-[1.02]">
+                <div className="absolute top-0 left-0 right-0 h-6 bg-slate-700 rounded-t-lg flex items-center px-3 gap-1.5 border-b border-slate-600">
+                  <div className="w-2.5 h-2.5 rounded-full bg-red-500"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div>
+                  <div className="w-2.5 h-2.5 rounded-full bg-green-500"></div>
+                </div>
+                <div className="pt-6 bg-slate-900 rounded-lg overflow-hidden">
+                   {/* Imagen de fondo (Desktop) */}
+                   <img src="/DESKTOP/CALENDARIO.png" alt="CRM Calendar" className="w-full h-auto rounded shadow-inner" />
                 </div>
               </div>
+              
+              {/* Floating Mobile Phone - Image only (already has frame) */}
+              <div className="absolute -bottom-16 -right-16 z-20 w-72 transform rotate-[-5deg] hover:rotate-0 transition-transform duration-500 drop-shadow-2xl">
+                 <img src="/MOBILE/MOBILE_SEGUIMIENTO.png" alt="CRM Mobile" className="w-full h-auto object-contain hover:scale-105 transition-transform" />
+              </div>
+
+              {/* Decorative elements */}
+              <div className="absolute -top-10 -right-10 w-24 h-24 bg-brand-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
+              <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-purple-500 rounded-full blur-3xl opacity-20 animate-pulse delay-1000"></div>
             </div>
           </div>
         </div>
@@ -125,6 +142,97 @@ const LandingPage: React.FC = () => {
         {/* Gradient overlay */}
         <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-purple-600 opacity-10 blur-3xl rounded-full"></div>
       </header>
+
+      {/* Visual Showcase Section */}
+      <section className="py-24 bg-slate-900 overflow-hidden relative border-t border-slate-800">
+        <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20"></div>
+        <div className="max-w-7xl mx-auto px-6 relative z-10">
+          <div className="text-center mb-16">
+            <span className="text-white font-bold tracking-wider uppercase text-sm">Interfaz Moderna</span>
+            <h2 className="text-4xl md:text-5xl font-bold text-white mt-4 mb-6">Diseñado para la Velocidad</h2>
+            <p className="text-xl text-slate-300 max-w-2xl mx-auto">
+              Una interfaz limpia, rápida e intuitiva que tu equipo realmente querrá usar.
+              Disponible en escritorio y móvil.
+            </p>
+          </div>
+
+          {/* Desktop Tabs & Preview */}
+          <div className="mb-24">
+            <div className="flex flex-wrap justify-center gap-2 mb-8">
+              {DESKTOP_IMAGES.map((img, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setActiveDesktopImage(idx)}
+                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                    activeDesktopImage === idx 
+                      ? 'bg-brand-600 text-white shadow-lg shadow-brand-500/30' 
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  }`}
+                >
+                  {img.title}
+                </button>
+              ))}
+            </div>
+            
+            <div className="relative mx-auto max-w-6xl group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-brand-500 to-purple-600 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+              <div className="relative bg-slate-800 rounded-xl shadow-2xl border border-slate-700 overflow-hidden">
+                <div className="h-8 bg-slate-900 flex items-center px-4 space-x-2 border-b border-slate-700">
+                  <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                  <div className="w-3 h-3 rounded-full bg-amber-500/80"></div>
+                  <div className="w-3 h-3 rounded-full bg-green-500/80"></div>
+                </div>
+                <div className="bg-slate-900 relative">
+                   <img 
+                     key={activeDesktopImage}
+                     src={DESKTOP_IMAGES[activeDesktopImage].src} 
+                     alt={DESKTOP_IMAGES[activeDesktopImage].alt} 
+                     className="w-full h-auto object-contain animate-in fade-in duration-500"
+                   />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Mobile Marquee */}
+          <div className="relative">
+            <div className="text-center mb-10">
+              <h3 className="text-2xl font-bold text-white">Lleva tu negocio en el bolsillo</h3>
+              <p className="text-slate-300 mt-2">App móvil totalmente responsiva para gestionar desde cualquier lugar.</p>
+            </div>
+            
+            {/* Gradient Masks */}
+            <div className="absolute left-0 top-0 bottom-0 w-20 z-10 bg-gradient-to-r from-slate-900 to-transparent"></div>
+            <div className="absolute right-0 top-0 bottom-0 w-20 z-10 bg-gradient-to-l from-slate-900 to-transparent"></div>
+            
+            <div className="flex overflow-x-hidden space-x-8 py-8 group hover:pause-scroll">
+              <div className="flex space-x-8 animate-marquee">
+                {[...MOBILE_IMAGES, ...MOBILE_IMAGES].map((src, i) => (
+                  <div key={i} className="flex-none w-64 transition-transform hover:scale-105 duration-300">
+                     {/* Eliminado el borde negro y redondeado extra ya que la imagen ya lo trae */}
+                    <div className="shadow-xl overflow-hidden h-auto">
+                      <img src={src} alt="Mobile Screen" className="w-full h-auto object-contain" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <style>{`
+          .animate-marquee {
+            animation: marquee 40s linear infinite;
+          }
+          .hover\\:pause-scroll:hover .animate-marquee {
+            animation-play-state: paused;
+          }
+          @keyframes marquee {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+          }
+        `}</style>
+      </section>
 
       {/* CRM COMPUTEKSA - Qué es? */}
       <section id="plataforma" className="py-20 bg-slate-50">
