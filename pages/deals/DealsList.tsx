@@ -465,14 +465,14 @@ const DealsList: React.FC = () => {
             id_tenant: user.id_tenant,
             id_user: user.id_user,
           };
-          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/v1/deals/update`, {
+          const res = await apiFetch(GATEWAY_CONFIG.API.DEALS.UPDATE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
           });
           if (!res.ok) throw new Error('No se pudo actualizar el interés del trato');
         } else {
-          await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update`, {
+          await apiFetch(GATEWAY_CONFIG.API.DEALS.UPDATE, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...deal, ...updates, id_tenant: user.id_tenant, id_user: user.id_user }),

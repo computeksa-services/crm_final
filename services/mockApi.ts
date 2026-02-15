@@ -637,7 +637,7 @@ export const MockApi = {
   updateDeal: async (id: string, data: Partial<Deal>): Promise<Deal> => {
     dealsCache = null;
     if (USE_REAL_API) {
-      return apiFetch('/api/deals/update', 'POST', { id_trato: id, ...data });
+      return apiFetch(GATEWAY_CONFIG.API.DEALS.UPDATE, 'POST', { id_trato: id, ...data });
     }
     const idx = mockDeals.findIndex(d => d.id_trato === id);
     mockDeals[idx] = { ...mockDeals[idx], ...data } as Deal;

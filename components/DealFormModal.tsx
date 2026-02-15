@@ -126,14 +126,12 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
       }
 
       // Conectar al backend para edición
-      const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update`;
       const payload = {
         ...formData,
         id_tenant: user.id_tenant,
         id_user: user.id_user,
       };
-      
-      const response = await apiFetch(url, {
+      const response = await apiFetch(GATEWAY_CONFIG.API.DEALS.UPDATE, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),

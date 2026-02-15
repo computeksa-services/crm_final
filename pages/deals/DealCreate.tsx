@@ -198,7 +198,7 @@ const DealCreate: React.FC = () => {
       };
       
       const endpoint = isEditMode 
-        ? `${import.meta.env.VITE_WEBHOOK_URL}/api/v1/deals/update`
+        ? GATEWAY_CONFIG.API.DEALS.UPDATE
         : `${import.meta.env.VITE_WEBHOOK_URL}/api/deals`;
       
       const res = await apiFetch(endpoint, { 
