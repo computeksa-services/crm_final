@@ -44,6 +44,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const userRole = user?.rol_user || 'usuario';
+  const isWorkspaceOwner = user?.is_owner === true;
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Filtrar items según módulos a los que tiene acceso el usuario
@@ -51,7 +52,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (!user) return NAV_GROUPS;
 
     // Owner ve todo
-    if (user.rol_user === 'owner') return NAV_GROUPS;
+    if (user.is_owner) return NAV_GROUPS;
 
     // Admin ve CRM siempre + módulos que le concedieron
     if (user.rol_user === 'admin') {
@@ -107,6 +108,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     setShowLogoutConfirm(true);
   };
 
+  const openAccountSettings = (tab: 'profile' | 'personalIntegrations' | 'tenantIntegrations' | 'tenantUsers' | 'tenantConfigurations' = 'profile') => {
+    localStorage.setItem('accountSettings-activeTab', tab);
+    setUserMenuOpen(false);
+    navigate(`/app/account-settings?tab=${tab}`);
+  };
+
   const confirmLogout = () => {
     logout();
     navigate('/login');
@@ -139,7 +146,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <li className="relative group">
         <Link 
           to={item.path}
-          onClick={() => setIsMobileSidebarOpen(false)} // Cerrar menú móvil al hacer click
+          onClick={() => setIsMobileSidebarOpen(false)}
           className={`flex items-center transition-all duration-200 group-hover:bg-slate-800 ${
             isCollapsed ? 'justify-center px-0 py-1.5 rounded-lg' : 'px-2 py-1.5 rounded-lg'
           } ${
@@ -228,8 +235,36 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </h3>
                  {!isDesktopSidebarOpen && <div className="h-px bg-slate-800 mx-2 my-1 md:block hidden"></div>}
                 
-                <NavLinkItem item={{ label: 'Ajustes', path: '/app/settings', icon: 'fa-sliders', roles: ['admin', 'superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
-                <NavLinkItem item={{ label: 'Usuarios', path: '/app/users', icon: 'fa-users-cog', roles: ['admin', 'superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
+                <li className="relative group">
+                  <Link 
+                    to="/app/account-settings"
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                        setIsDesktopSidebarOpen(false);
+                      }
+                      setIsMobileSidebarOpen(false);
+                    }}
+                    className={`flex items-center transition-all duration-200 group-hover:bg-slate-800 ${
+                      (!isMobileSidebarOpen ? !isDesktopSidebarOpen : false)
+                        ? 'justify-center px-0 py-1.5 rounded-lg'
+                        : 'px-2 py-1.5 rounded-lg'
+                    } ${
+                      location.pathname.startsWith('/app/account-settings')
+                        ? 'bg-brand-600 text-white shadow-md'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <div className={`flex justify-center items-center transition-transform duration-200 ${(!isMobileSidebarOpen ? !isDesktopSidebarOpen : false) ? 'w-10' : 'w-7'} ${location.pathname.startsWith('/app/account-settings') ? 'scale-105' : ''}`}>
+                       <i className="fa-solid fa-sliders text-base"></i>
+                    </div>
+                    <span className={`ml-2 font-medium text-sm whitespace-nowrap transition-all duration-300 ${(!isMobileSidebarOpen ? !isDesktopSidebarOpen : false) ? 'opacity-0 w-0 overflow-hidden' : 'opacity-100 w-auto'}`}>
+                      Configuración
+                    </span>
+                  </Link>
+                </li>
+                {user?.rol_user === 'superadmin' && (
+                  <NavLinkItem item={{ label: 'Usuarios', path: '/app/users', icon: 'fa-users-cog', roles: ['superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
+                )}
                 {(user?.rol_user === 'superadmin' || currentUser?.module_access?.financials) && (
                   <NavLinkItem item={{ label: 'Cartera', path: '/app/financials', icon: 'fa-wallet', roles: ['admin', 'superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
                 )}
@@ -241,39 +276,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </ul>
         </nav>
 
-        {/* User Footer */}
-        <div className="p-3 border-t border-slate-800 bg-slate-950/30">
-          <div className={`flex items-center transition-all duration-300 ${!isDesktopSidebarOpen ? 'justify-center' : 'gap-3'}`}>
-             <Link to="/app/profile" className="relative group shrink-0">
-                <img 
-                    src={getImageUrl(user?.avatar_url) || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=6366f1&color=fff`} 
-                    alt="User" 
-                    className="w-10 h-10 rounded-full border-2 border-slate-600 group-hover:border-brand-500 transition-colors"
-                    referrerPolicy="no-referrer"
-                    onLoad={() => console.log('✅ Avatar sidebar cargado:', getImageUrl(user?.avatar_url))}
-                    onError={(e) => {
-                      console.error('❌ Error cargando avatar sidebar');
-                      console.error('   URL original:', user?.avatar_url);
-                      console.error('   URL procesada:', getImageUrl(user?.avatar_url));
-                    }}
-                />
-                <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-900 rounded-full"></span>
-             </Link>
-             
-             <div className={`flex-1 overflow-hidden transition-all duration-300 ${!isDesktopSidebarOpen && 'md:w-0 md:opacity-0'}`}>
-                <p className="text-sm font-semibold text-white truncate leading-tight">{user?.name_user || 'Usuario'}</p>
-                <p className="text-[10px] text-slate-400 capitalize truncate">{user?.rol_user}</p>
-             </div>
-
-             <button 
-                onClick={handleLogout} 
-                className={`text-slate-400 hover:text-red-400 transition-colors ${!isDesktopSidebarOpen && 'md:hidden'}`}
-                title="Cerrar Sesión"
-             >
-                <i className="fa-solid fa-arrow-right-from-bracket"></i>
-             </button>
-          </div>
-        </div>
       </aside>
 
       {/* --- LOGOUT CONFIRMATION MODAL --- */}
@@ -334,7 +336,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   if (location.pathname === '/app/followups') {
                     return <span className="text-slate-900 dark:text-slate-100 font-bold text-base">Seguimiento</span>;
                   }
-                  const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'settings', 'calendar', 'dashboard', 'new', 'edit', 'marketing'];
+                  const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'account-settings', 'integrations', 'workspace-settings', 'settings', 'calendar', 'dashboard', 'new', 'edit', 'marketing'];
                   let breadcrumbs: { label: string; path: string; isActive: boolean }[] = [];
                   // ...existing code...
                   // Si es "edit" (e.g., /app/quotes/edit?id=xxx) → mostrar Colección > Nombre > Edición
@@ -422,18 +424,19 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                <button
                  ref={userMenuButtonRef}
                  onClick={() => setUserMenuOpen((open) => !open)}
-                 className="flex items-center gap-2 hover:bg-slate-50 dark:hover:bg-slate-800 p-1.5 pr-3 rounded-full border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all"
+                 className="flex items-center gap-2.5 px-2 py-1 pr-2.5 bg-white dark:bg-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-500 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all cursor-pointer"
                >
                   <img 
                       src={getImageUrl(user?.avatar_url) || "https://ui-avatars.com/api/?name=User&background=random"} 
                       alt="User" 
-                      className="w-8 h-8 rounded-full shadow-sm"
+                      className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-500 shadow-sm"
                       referrerPolicy="no-referrer"
                   />
                   <div className="hidden sm:flex flex-col items-start leading-tight">
                     <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 max-w-[140px] line-clamp-2">{user?.name_user || 'Usuario'}</span>
+                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Mi cuenta</span>
                   </div>
-                  <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 dark:text-slate-500 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}></i>
+                  <i className={`fa-solid fa-chevron-down text-[10px] text-slate-500 dark:text-slate-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}></i>
                </button>
              </div>
           </div>
@@ -450,43 +453,101 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {userMenuOpen && menuPosition && createPortal(
           <div 
             onMouseDown={(e) => e.stopPropagation()}
-            className="fixed w-48 bg-white dark:bg-slate-500 border border-slate-200 dark:border-slate-400 rounded-xl shadow-xl py-2 z-[99999] pointer-events-auto"
+            className="fixed w-64 bg-white dark:bg-slate-500 border border-slate-200 dark:border-slate-400 rounded-xl shadow-xl py-2 z-[99999] pointer-events-auto"
             style={{ 
               top: `${menuPosition.top}px`, 
               right: `${menuPosition.right}px`,
               pointerEvents: 'auto'
             }}
           >
-            <Link
-              to="/app/profile"
-              onClick={() => setUserMenuOpen(false)}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
+            {/* Sección: Cuenta personal */}
+            <div className="px-3 py-2">
+              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
+                Mi Cuenta
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openAccountSettings('profile')}
+              className="flex items-center gap-3 w-full text-left px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
             >
-              <i className="fa-regular fa-user"></i>
-              Ver perfil
-            </Link>
+              <i className="fa-regular fa-user w-4 text-center"></i>
+              <div className="flex-1">
+                <div className="font-medium">Perfil</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">Datos personales y preferencias</div>
+              </div>
+            </button>
+            
             <div className="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+            
+            {/* Sección: Integraciones */}
+            <div className="px-3 py-2">
+              <p className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
+                Integraciones
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openAccountSettings('personalIntegrations')}
+              className="flex items-center gap-3 w-full text-left px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+            >
+              <i className="fa-solid fa-plug w-4 text-center text-brand-600"></i>
+              <div className="flex-1">
+                <div className="font-medium">Integraciones personales</div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">Conecte y gestione sus permisos</div>
+              </div>
+            </button>
+            
+            {/* Sección: Configuración del Workspace (solo admin/owner) */}
+            {isWorkspaceOwner && (
+              <>
+                <div className="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+                <div className="px-3 py-2">
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-slate-400 uppercase tracking-wider">
+                    Workspace
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openAccountSettings('tenantIntegrations')}
+                  className="flex items-center gap-3 w-full text-left px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer transition-colors"
+                >
+                  <i className="fa-solid fa-building w-4 text-center text-brand-600"></i>
+                  <div className="flex-1">
+                    <div className="font-medium">Integraciones de workspace</div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">Configuración centralizada de la organización</div>
+                  </div>
+                </button>
+              </>
+            )}
+            
+            <div className="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+            
+            {/* Preferencias */}
             <button
               type="button"
               onClick={() => {
                 setIsDarkMode((prev) => !prev);
                 setUserMenuOpen(false);
               }}
-              className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+              className="flex items-center gap-3 w-full text-left px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600 transition-colors cursor-pointer"
               style={{ pointerEvents: 'auto' }}
             >
-              <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'}`}></i>
-              {isDarkMode ? 'Modo claro' : 'Modo oscuro'}
+              <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'} w-4 text-center`}></i>
+              <span>{isDarkMode ? 'Modo claro' : 'Modo oscuro'}</span>
             </button>
+            
             <div className="border-t border-slate-200 dark:border-slate-700 my-1"></div>
+            
+            {/* Cerrar sesión */}
             <button
               type="button"
               onClick={handleLogout}
-              className="flex items-center gap-2 w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50/60 dark:hover:bg-red-900/20 cursor-pointer"
+              className="flex items-center gap-3 w-full text-left px-3 py-2.5 text-sm text-red-600 hover:bg-red-50/60 dark:hover:bg-red-900/20 cursor-pointer transition-colors"
               style={{ pointerEvents: 'auto' }}
             >
-              <i className="fa-solid fa-arrow-right-from-bracket"></i>
-              Cerrar sesión
+              <i className="fa-solid fa-arrow-right-from-bracket w-4 text-center"></i>
+              <span>Cerrar sesión</span>
             </button>
           </div>,
           document.body

@@ -284,6 +284,11 @@ const FinancialsList: React.FC = () => {
   const [collectionData, setCollectionData] = useState<FinancialTransaction | null>(null);
   const [paymentModal, setPaymentModal] = useState<{isOpen: boolean, tx: FinancialTransaction | null, date: string, amount: number, method: string, ref: string}>({ isOpen: false, tx: null, date: '', amount: 0, method: 'TRANSFERENCIA', ref: '' });
 
+  // Verificar si hay integración de correo activa
+  const hasEmailIntegration = () => {
+    return !!(user?.provider && user?.send_emails && user?.email_connected);
+  };
+
   // Persistence
   useEffect(() => { localStorage.setItem('financials-range', JSON.stringify(dateRange)); }, [dateRange]);
   useEffect(() => { localStorage.setItem('financials-include-open', String(includeOpen)); }, [includeOpen]);
@@ -564,7 +569,23 @@ const FinancialsList: React.FC = () => {
             const tx = row.original;
             return (
                 <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {tx.status === 'VENCIDO' && <button onClick={(e) => { e.stopPropagation(); setCollectionData(tx); }} className="w-7 h-7 flex items-center justify-center text-orange-500 hover:bg-orange-50 rounded transition-colors" title="Cobranza"><i className="fa-solid fa-bell text-[10px]"></i></button>}
+                    {tx.status === 'VENCIDO' && (
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation();
+                          if (!hasEmailIntegration()) {
+                            alert('No tienes una integración de correo configurada. Ve a Configuración → Integraciones para conectar Gmail o Outlook.');
+                            return;
+                          }
+                          setCollectionData(tx);
+                        }} 
+                        disabled={!hasEmailIntegration()}
+                        className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${!hasEmailIntegration() ? 'text-slate-300 cursor-not-allowed' : 'text-orange-500 hover:bg-orange-50'}`}
+                        title={!hasEmailIntegration() ? 'Integración de correo no configurada' : 'Cobranza'}
+                      >
+                        <i className="fa-solid fa-bell text-[10px]"></i>
+                      </button>
+                    )}
                     <button onClick={(e) => { e.stopPropagation(); navigate(`/app/financials/edit?id=${tx.id_transaction}`); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
                     <button onClick={(e) => { e.stopPropagation(); setDeleteId(tx.id_transaction); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-trash text-[10px]"></i></button>
                 </div>

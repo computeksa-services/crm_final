@@ -1,3 +1,10 @@
+/**
+ * @deprecated Esta página ha sido reemplazada por AccountSettings
+ * @see pages/accountSettings/sections/TenantUsers.tsx
+ * Ruta anterior: /app/users
+ * Nueva ruta: /app/account-settings?tab=tenantUsers
+ */
+
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';

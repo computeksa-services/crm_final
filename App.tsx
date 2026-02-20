@@ -15,8 +15,11 @@ import Dashboard from './pages/Dashboard';
 import QuotesList from './pages/quotes/QuotesList';
 import QuoteDetail from './pages/quotes/QuoteDetail';
 import Calendar from './pages/Calendar';
-import UserProfile from './pages/users/UserProfile';
+import Profile from './pages/users/Profile';
+import AccountSettings from './pages/accountSettings/AccountSettings';
+import Integrations from './pages/users/Integrations';
 import UsersList from './pages/users/UsersList';
+import WorkspaceSettings from './pages/workspace/WorkspaceSettings';
 import CompaniesList from './pages/clients/CompaniesList'; // Tenants
 import ClientCompaniesList from './pages/clients/ClientCompaniesList';
 import ClientCompanyDetail from './pages/clients/ClientCompanyDetail';
@@ -33,7 +36,7 @@ import FinancialForm from './pages/financials/FinancialForm';
 import FinancialDetail from './pages/financials/FinancialDetail';
 import AuthCallbackPage from './pages/AuthCallbackPage';
 import MarketingCenter from './pages/MarketingCenter';
-import FollowUpsPage from './pages/FollowUpsPage';
+import FollowUpsPage from './pages/FollowsUpsNew';
 
 // Marketing Pages
 import MarketingDashboard from './components/pages_marketing/Dashboard';
@@ -81,8 +84,8 @@ const ProtectedRoute = () => {
   const moduleKey = getModuleForPath(location.pathname);
 
   if (moduleKey && currentUser) {
-    // Owner y superadmin ven todo
-    if (user.rol_user === 'owner' || user.rol_user === 'superadmin') {
+    // Owner (is_owner) y superadmin ven todo
+    if (user.is_owner || user.rol_user === 'superadmin') {
       return <Layout onLogout={() => {}}><Outlet /></Layout>;
     }
 
@@ -139,7 +142,10 @@ const App: React.FC = () => {
               <Route path="financials/edit" element={<FinancialForm />} />
               <Route path="financials/:id" element={<FinancialDetail />} />
               <Route path="calendar" element={<Calendar />} />
-              <Route path="profile" element={<UserProfile />} />
+              <Route path="profile" element={<Profile />} />
+              <Route path="account-settings" element={<AccountSettings />} />
+              <Route path="integrations" element={<Integrations />} />
+              <Route path="workspace-settings" element={<WorkspaceSettings />} />
               <Route path="users" element={<UsersList />} />
               <Route path="companies" element={<CompaniesList />} />
               <Route path="client-companies" element={<ClientCompaniesList />} />

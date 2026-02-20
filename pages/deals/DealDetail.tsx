@@ -11,6 +11,7 @@ import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
 import DealShareList from '../../components/DealShareList';
 import NewInteractionForm from '../../components/NewInteractionForm';
+import NewInteractionModal from '../../components/NewInteractionModal';
 
 // --- HELPER: Obtener Iniciales (Nombre + Apellido) ---
 const getInitials = (fullName?: string) => {
@@ -92,6 +93,9 @@ const StatusSelector: React.FC<{
         <div className="flex items-center gap-2 truncate">
             <i className={`${current.icon || 'fa-solid fa-circle'} text-[10px]`}></i>
             <span className="uppercase tracking-wide truncate">{current.name}</span>
+            {current.notify_client && (
+              <i className="fa-solid fa-envelope text-[8px] text-blue-500" title="Notificación por correo activada"></i>
+            )}
         </div>
         {!disabled && <i className="fa-solid fa-chevron-down text-[10px] ml-1 opacity-70"></i>}
       </button>
@@ -107,6 +111,9 @@ const StatusSelector: React.FC<{
               >
                 <i className={`${status.icon || 'fa-solid fa-circle'} text-[10px]`} style={{ color: status.color }}></i>
                 <span className="text-xs font-bold text-slate-700 uppercase">{status.name}</span>
+                {status.notify_client && (
+                  <i className="fa-solid fa-envelope text-[8px] text-blue-500 ml-auto" title="Notificación por correo activada"></i>
+                )}
               </button>
             ))}
           </div>
@@ -213,6 +220,7 @@ const DealDetail: React.FC = () => {
   const [isTimelineVisible, setIsTimelineVisible] = useState(true);
   const [history, setHistory] = useState<any[]>([]);
   const [emailHistory, setEmailHistory] = useState<any[]>([]);
+  const [showNewInteractionModal, setShowNewInteractionModal] = useState(false);
 
   const refreshShareCollaborators = useCallback(async () => {
     if (!deal) return;
@@ -450,10 +458,23 @@ const DealDetail: React.FC = () => {
     if (!deal) return;
     const newStatus = dealStatuses.find(s => s.id_status === newStatusId);
     
+    // Enriquecer mensaje con información de notificación por correo
+    const messageContent = (
+      <div className="space-y-3">
+        <p>¿Cambiar el estado del trato a "{newStatus?.name}"?</p>
+        {newStatus?.notify_client && (
+          <div className="flex items-center gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+            <i className="fa-solid fa-envelope text-blue-600"></i>
+            <span className="text-sm text-blue-900 font-medium">Se activará notificación por correo al cliente</span>
+          </div>
+        )}
+      </div>
+    );
+    
     setConfirmState({
       isOpen: true,
       title: 'Actualizar Estado',
-      message: `¿Cambiar el estado del trato a "${newStatus?.name}"?`,
+      message: messageContent,
       onConfirm: async () => {
         setConfirmState(prev => ({...prev, isOpen: false}));
         setProcessing(true);
@@ -948,30 +969,21 @@ const DealDetail: React.FC = () => {
         {/* COLUMNA 3: Historial Interacciones */}
         <div className="space-y-6">
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col">
-              <div className="p-6 pb-0">
-                <NewInteractionForm
-                  entityId={deal.id_trato}
-                  entityType="DEAL"
-                  onSuccess={() => {
-                    setToast({ message: 'Actividad registrada.', type: 'success' });
-                    setRefreshTimelineKey(prev => prev + 1);
-                    fetchHistory();
-                    setIsTimelineVisible(true);
-                  }}
-                />
-              </div>
-
-              <div 
-                className="px-6 py-4 border-b border-slate-100 flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
-                onClick={() => setIsTimelineVisible(!isTimelineVisible)}
-              >
+              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
                 <div className="flex items-center gap-3">
                   <span className="w-2 h-6 bg-blue-400 rounded-full"></span>
                   <h3 className="font-bold text-slate-800">Historial de Interacciones</h3>
                 </div>
-                <button className="text-slate-500 hover:text-slate-700 p-1">
-                  <i className={`fa-solid fa-chevron-down text-sm transition-transform duration-200 ${isTimelineVisible ? '' : '-rotate-90'}`}></i>
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => setShowNewInteractionModal(true)}
+                    className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white inline-flex items-center gap-2 transition-all shadow-sm hover:shadow group"
+                    title="Añadir actividad"
+                  >
+                    <i className="fa-solid fa-plus text-[12px] group-hover:scale-110 transition-transform"></i>
+                    <span className="text-[12px] font-semibold">Añadir actividad</span>
+                  </button>
+                )}
               </div>
 
               {isTimelineVisible && (
@@ -1090,6 +1102,23 @@ const DealDetail: React.FC = () => {
             refreshDealCollaborators();
           }}
           currentCollaborators={shareCollaborators}
+        />
+      )}
+
+      {deal && (
+        <NewInteractionModal
+          isOpen={showNewInteractionModal}
+          onClose={() => setShowNewInteractionModal(false)}
+          entityId={deal.id_trato}
+          entityType="DEAL"
+          contactName={deal.contact_name || deal.client_company_name}
+          contactEmail={deal.contact_email}
+          collaborators={deal.collaborators || []}
+          onSuccess={() => {
+            setShowNewInteractionModal(false);
+            setRefreshTimelineKey(prev => prev + 1);
+            setToast({ message: 'Gestión registrada.', type: 'success' });
+          }}
         />
       )}
     </div>

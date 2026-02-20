@@ -1,10 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { createPortal } from 'react-dom';
-import { apiFetch } from '../services/apiClient';
-import { useAuth } from '../contexts/AuthContext';
 import { FollowUpItem } from '../types';
-import { X, LoaderCircle } from 'lucide-react';
-import { addDays, format } from 'date-fns';
+import { X } from 'lucide-react';
 import NewInteractionForm from './NewInteractionForm';
 
 interface LogActionModalProps {
@@ -15,74 +12,6 @@ interface LogActionModalProps {
 }
 
 const LogActionModal: React.FC<LogActionModalProps> = ({ item, isOpen, onClose, onSuccess }) => {
-  const { user } = useAuth();
-  const [description, setDescription] = useState('');
-  const [nextContactDate, setNextContactDate] = useState('');
-  const [nextActionDesc, setNextActionDesc] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isOpen) {
-      // Resetear estado al abrir
-      setDescription('');
-      setNextActionDesc('');
-      setError(null);
-      // Pre-llenar con fecha de mañana
-      const tomorrow = addDays(new Date(), 1);
-      setNextContactDate(format(tomorrow, 'yyyy-MM-dd'));
-    }
-  }, [isOpen]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!description.trim()) {
-      setError('Debes describir qué sucedió.');
-      return;
-    }
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      // Obtener el ID correcto de la entidad
-      let entityId: string;
-      if (item.entity_type === 'DEAL') {
-        entityId = item.id_entity || item.id_trato || '';
-      } else {
-        entityId = item.id_entity || item.id_contact || '';
-      }
-
-      if (!entityId) {
-        throw new Error('No se pudo obtener el ID de la entidad.');
-      }
-
-      const payload = {
-        entity_id: entityId,
-        entity_type: item.entity_type,
-        interaction_type: 'NOTE',
-        description,
-        next_contact_date: nextContactDate || null,
-        next_action_desc: nextActionDesc || null,
-        id_user: user?.id_user,
-        id_tenant: user?.id_tenant,
-      };
-
-      const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/crm/interactions/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) throw new Error('Error al registrar la gestión.');
-      
-      onSuccess();
-    } catch (err: any) {
-      setError(err.message || 'Ocurrió un error inesperado.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   if (!isOpen) return null;
 
   return createPortal(
@@ -98,6 +27,9 @@ const LogActionModal: React.FC<LogActionModalProps> = ({ item, isOpen, onClose, 
           <NewInteractionForm
             entityId={item.entity_type === 'DEAL' ? (item.id_entity || item.id_trato || '') : (item.id_entity || item.id_contact || '')}
             entityType={item.entity_type}
+            contactEmail={item.email}
+            contactName={(item as any).contact_name || (item as any).contact_full_name || item.title || 'Contacto'}
+            collaborators={(item as any).collaborators || []}
             onSuccess={onSuccess}
           />
         </div>

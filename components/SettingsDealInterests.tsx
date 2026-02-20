@@ -179,8 +179,14 @@ const SettingsDealInterests: React.FC = () => {
       <ConfirmModal {...confirmState} isDestructive={true} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} />
 
       <div className="flex justify-between items-center mb-6">
-        <div>
-            <p className="text-sm text-slate-500">Clasifica tus tratos según la probabilidad de cierre (frío, tibio, caliente). El orden determina la prioridad visual en listados y reportes.</p>
+        <div className="flex items-center gap-2">
+            <button
+              type="button"
+              title="Clasifica tus tratos según la probabilidad de cierre (frío, tibio, caliente). El orden determina la prioridad visual en listados y reportes."
+              className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            >
+              <i className="fa-solid fa-circle-info text-lg"></i>
+            </button>
         </div>
         <div className="flex items-center gap-3">
             {orderChanged && (

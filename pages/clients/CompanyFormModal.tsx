@@ -28,7 +28,7 @@ const labelClasses = "text-[10px] font-black text-slate-400 uppercase tracking-w
 const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mode, initialData, onSuccess }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { countries = [], companyTypes = [], companyLabelsMap } = useDataCache();
+  const { countries = [], companyTypes = [], companySizes = [], companyLabelsMap } = useDataCache();
   // Las etiquetas ahora vienen del cache (companyLabelsMap)
   const [customLabels, setCustomLabels] = useState<CompanyLabel[]>([]);
   const [formData, setFormData] = useState<Partial<ClientCompany>>({});
@@ -75,6 +75,8 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
     if (mode === 'edit' && initialData) {
       setFormData({
         ...initialData,
+        // Normalizar company_size a id_company_size si es necesario
+        id_company_size: initialData.id_company_size || (initialData as any).company_size || '',
         labels: Array.isArray(initialData.labels)
           ? initialData.labels.map(resolveLabel)
           : []
@@ -83,6 +85,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
       setFormData({
         id_type: '',
         id_country: 'EC',
+        id_company_size: '',
         labels: [],
         id_number: '', name_company: '', razon_social: '', city: '', address: ''
       });
@@ -201,11 +204,18 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
 
           {/* Fila 2 */}
           <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-12 md:col-span-4">
+            <div className="col-span-12 md:col-span-3">
               <label className={labelClasses}>Tipo de Empresa <span className="text-red-500">*</span></label>
               <select name="id_company_type" required value={formData.id_company_type || ''} onChange={handleInputChange} className={inputClasses}>
                 <option value="">Seleccionar...</option>
                 {companyTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+              </select>
+            </div>
+            <div className="col-span-12 md:col-span-3">
+              <label className={labelClasses}>Tamaño de Empresa</label>
+              <select name="id_company_size" value={formData.id_company_size || ''} onChange={handleInputChange} className={inputClasses}>
+                <option value="">Seleccionar...</option>
+                {companySizes.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="col-span-6 md:col-span-3">
@@ -218,7 +228,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
                 <option value="ID. DEL EXTERIOR">ID. DEL EXTERIOR</option>
               </select>
             </div>
-            <div className="col-span-6 md:col-span-5">
+            <div className="col-span-6 md:col-span-3">
               <label className={labelClasses}>Número</label>
               <input name="id_number" value={formData.id_number || ''} onChange={handleInputChange} className={`${inputClasses} font-mono`} placeholder="Ej: 1790016919001" />
             </div>

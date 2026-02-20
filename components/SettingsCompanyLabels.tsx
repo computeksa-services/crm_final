@@ -142,8 +142,14 @@ const SettingsCompanyLabels: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-slate-500">Crea etiquetas personalizadas para clasificar y organizar tus empresas. Facilita la segmentación y búsqueda de clientes por categorías específicas.</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            title="Crea etiquetas personalizadas para clasificar y organizar tus empresas. Facilita la segmentación y búsqueda de clientes por categorías específicas."
+            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+          >
+            <i className="fa-solid fa-circle-info text-lg"></i>
+          </button>
         </div>
         <button
           onClick={handleAddNew}
@@ -161,36 +167,32 @@ const SettingsCompanyLabels: React.FC = () => {
             <p>No hay etiquetas configuradas.</p>
           </div>
         ) : (
-          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-6 gap-4">
+          <div className="divide-y divide-slate-100">
             {companyLabels.map((label) => (
               <div
                 key={label.id_label}
-                className="group p-4 rounded-xl border transition-all shadow-sm"
-                style={{
-                  borderColor: `${label.color}40`,
-                  backgroundColor: `${label.color}08`
-                }}
+                className="group flex items-center justify-between px-6 py-4 hover:bg-slate-50 transition-colors"
               >
-                <div className="flex items-center gap-4 min-w-0">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-sm"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 shadow-sm"
                     style={{ backgroundColor: `${label.color}15`, color: label.color }}
                   >
                     <i className="fa-solid fa-tag"></i>
                   </div>
-                  <div className="min-w-0">
-                    <span className="block font-bold text-base truncate" style={{ color: label.color }}>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-base" style={{ color: label.color }}>
                       {label.name}
-                    </span>
+                    </div>
                     {(user?.rol_user === 'admin' || user?.rol_user === 'superadmin') && (
-                      <span className="text-xs text-slate-500">
+                      <div className="text-xs text-slate-500">
                         {label.total_empresas} {label.total_empresas === 1 ? 'empresa' : 'empresas'}
-                      </span>
+                      </div>
                     )}
                   </div>
                 </div>
 
-                <div className="mt-3 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="flex items-center gap-2 ml-4 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                   <button
                     onClick={() => handleEdit(label)}
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors"

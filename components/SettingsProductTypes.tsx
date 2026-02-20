@@ -103,8 +103,14 @@ const SettingsProductTypes: React.FC = () => {
       />
 
       <div className="flex justify-between items-center mb-6">
-        <div>
-            <p className="text-sm text-slate-500">Agrupa tus productos y servicios en categorías (hardware, software, consultoría, etc.). Facilita la organización del catálogo y el análisis de ventas por tipo.</p>
+        <div className="flex items-center gap-2">
+            <button
+              type="button"
+              title="Agrupa tus productos y servicios en categorías (hardware, software, consultoría, etc.). Facilita la organización del catálogo y el análisis de ventas por tipo."
+              className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            >
+              <i className="fa-solid fa-circle-info text-lg"></i>
+            </button>
         </div>
         <button 
             onClick={handleAddNew} 

@@ -7,7 +7,7 @@ import { ClientContact } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import ContactFormModal from './clients/ContactFormModal';
-import StartFollowUpModal from '../components/StartFollowUpModal';
+import NewInteractionModal from '../components/NewInteractionModal';
 import { apiFetch } from '../services/apiClient';
 import {
   useReactTable,
@@ -613,14 +613,18 @@ const ClientContactsList: React.FC = () => {
       />
 
       {followUpContact && (
-        <StartFollowUpModal
-            contact={followUpContact}
+        <NewInteractionModal
             isOpen={!!followUpContact}
             onClose={() => setFollowUpContact(null)}
+            entityId={followUpContact.id_contact}
+            entityType="CONTACT"
+            contactName={`${followUpContact.first_name} ${followUpContact.last_name}`}
+            contactEmail={followUpContact.email}
+            collaborators={[]}
             onSuccess={() => {
                 setFollowUpContact(null);
                 invalidateContacts();
-                setToast({ message: 'Seguimiento iniciado.', type: 'success' });
+                setToast({ message: 'Gestión registrada.', type: 'success' });
             }}
         />
       )}

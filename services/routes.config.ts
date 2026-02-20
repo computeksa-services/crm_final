@@ -97,6 +97,8 @@ export const ROUTE_LABELS: { [key: string]: string } = {
   'users': 'Usuarios',
   'settings': 'Ajustes',
   'profile': 'Mi Perfil',
+  'integrations': 'Integraciones',
+  'workspace-settings': 'Configuración del Workspace',
 };
 
 // ============================================

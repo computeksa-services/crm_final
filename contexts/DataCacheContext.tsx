@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { apiFetch } from '../services/apiClient';
+import { GATEWAY_CONFIG } from '../services/gatewayConfig';
 import type { ClientCompany, ClientContact, Product, User, Tenant, DealStatus, QuoteStatus, ProductType, DealInterest, DealChannel, FinancialTransaction } from '../types';
 
 // --- TIPOS ---
@@ -28,6 +29,7 @@ type DataCacheState = {
   financialsCache: Record<string, { result: any; lastUpdated: number }>;
   countries: { id: string; name: string }[];
   companyTypes: { id: string; name: string }[];
+  companySizes: { id: string; name: string }[];
   currentUser: User | null;
   
   // Estado de carga
@@ -75,6 +77,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [dealInterests, setDealInterests] = useState<DealInterest[]>([]);
   const [dealChannels, setDealChannels] = useState<DealChannel[]>([]);
   const [companyTypes, setCompanyTypes] = useState<{ id: string; name: string }[]>([]);
+  const [companySizes, setCompanySizes] = useState<{ id: string; name: string }[]>([]);
   const [countries, setCountries] = useState<{ id: string; name: string }[]>([]);
   const [financialsCache, setFinancialsCache] = useState<Record<string, { result: any; lastUpdated: number }>>({});
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -179,6 +182,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         priorityKeys.add('companies');
         priorityKeys.add('companyLabels');
         priorityKeys.add('companyTypes');
+        priorityKeys.add('companySizes');
         priorityKeys.add('countries');
       } else if (pathname.startsWith('/app/client-contacts')) {
         priorityKeys.add('contacts');
@@ -191,7 +195,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
 
       const requests: Record<string, () => Promise<Response>> = {
-        currentUser: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/me`),
+        currentUser: () => apiFetch(GATEWAY_CONFIG.API.USERS.ME),
         companies: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         contacts: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         products: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products`),
@@ -206,6 +210,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         dealChannels: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/channels/deals?id_tenant=${user.id_tenant}`),
         companyLabels: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/labels?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
         companyTypes: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/types?id_tenant=${user.id_tenant}&id_user=${user.id_user}`),
+        companySizes: () => apiFetch(GATEWAY_CONFIG.API.CLIENTS.COMPANIES_SIZES),
         countries: () => apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/countries?id_tenant=${user.id_tenant}&id_user=${user.id_user}`)
       };
 
@@ -312,6 +317,15 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             fetchedData.companyTypes = companyTypesArray;
             break;
           }
+          case 'companySizes': {
+            const companySizesData = await safeJson(res, []);
+            const companySizesArray = Array.isArray(companySizesData)
+              ? companySizesData.map((s: any) => ({ id: s.name, name: `${s.name} (${s.size})` }))
+              : [];
+            setCompanySizes(companySizesArray);
+            fetchedData.companySizes = companySizesArray;
+            break;
+          }
           case 'countries': {
             const countriesData = await safeJson(res, []);
             const countriesArray = Array.isArray(countriesData)
@@ -354,6 +368,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             dealInterests: fetchedData.dealInterests ?? dealInterests,
             dealChannels: fetchedData.dealChannels ?? dealChannels,
             companyTypes: fetchedData.companyTypes ?? companyTypes,
+            companySizes: fetchedData.companySizes ?? companySizes,
             countries: fetchedData.countries ?? countries,
             financialsCache
           }));
@@ -722,6 +737,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     dealInterests,
     dealChannels,
     companyTypes,
+    companySizes,
     countries,
     financialsCache,
     currentUser,

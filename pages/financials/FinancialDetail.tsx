@@ -109,6 +109,11 @@ const FinancialDetail: React.FC = () => {
   const [companyContacts, setCompanyContacts] = useState<any[]>([]);
   const [confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
+  // Verificar si hay integración de correo activa
+  const hasEmailIntegration = () => {
+    return !!(user?.provider && user?.send_emails && user?.email_connected);
+  };
+
   const fetchData = useCallback(async () => {
     if (!id || !user?.id_tenant) return;
     setLoading(true);
@@ -357,9 +362,16 @@ const FinancialDetail: React.FC = () => {
                     {/* Botón de Campaña Condicional */}
                     {transaction.status === 'VENCIDO' && (
                         <button 
-                            onClick={() => setIsCollectionModalOpen(true)} 
-                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${transaction.enable_automation ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white' : 'bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white'}`}
-                            title={transaction.enable_automation ? 'Automatización encendida. Haz clic para enviar una notificación manual extra.' : 'Enviar notificación manual'}
+                            onClick={() => {
+                              if (!hasEmailIntegration()) {
+                                alert('No tienes una integración de correo configurada. Ve a Configuración → Integraciones para conectar Gmail o Outlook.');
+                                return;
+                              }
+                              setIsCollectionModalOpen(true);
+                            }} 
+                            disabled={!hasEmailIntegration()}
+                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${!hasEmailIntegration() ? 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-50' : transaction.enable_automation ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white' : 'bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white'}`}
+                            title={!hasEmailIntegration() ? 'Integración de correo no configurada. Ve a Configuración → Integraciones' : transaction.enable_automation ? 'Automatización encendida. Haz clic para enviar una notificación manual extra.' : 'Enviar notificación manual'}
                         >
                         <i className="fa-solid fa-bell text-sm"></i>
                         </button>

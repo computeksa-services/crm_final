@@ -10,6 +10,8 @@ import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
 import DealEditModal from '../../components/DealEditModal';
+import DealViewToggle from '../../components/DealViewToggle';
+import DealsKanban from './DealsKanban';
 import { canUserAction, canEditInline } from '../../utils/permissions';
 import {
   useReactTable,
@@ -75,7 +77,7 @@ const renderGroupCell = (row: any, label: string) => (
 
 const InlineBadgeSelector: React.FC<{
   valueId: string;
-  items: { id: string; name: string; color?: string; icon?: string }[];
+  items: { id: string; name: string; color?: string; icon?: string; notify_client?: boolean }[];
   onSelect: (id: string) => void;
   disabled?: boolean;
 }> = ({ valueId, items, onSelect, disabled }) => {
@@ -150,6 +152,11 @@ const InlineBadgeSelector: React.FC<{
                     <i className={`${item.icon || 'fa-solid fa-tag'} text-[9px]`}></i>
                   </div>
                   <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
+                  {item.notify_client && (
+                    <span className="ml-auto" title="Notificación por correo activada">
+                      <i className="fa-solid fa-envelope text-[8px] text-blue-500"></i>
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -162,6 +169,11 @@ const InlineBadgeSelector: React.FC<{
                 <i className={`${current?.icon || 'fa-solid fa-tag'} text-[9px]`}></i>
               </div>
               <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{current?.name || 'S/N'}</span>
+              {current?.notify_client && (
+                <span title="Notificación por correo activada">
+                  <i className="fa-solid fa-envelope text-[8px] text-blue-500"></i>
+                </span>
+              )}
               <i className="fa-solid fa-check text-[8px] ml-auto text-slate-400"></i>
             </div>
           </div>
@@ -179,6 +191,11 @@ const InlineBadgeSelector: React.FC<{
                     <i className={`${item.icon || 'fa-solid fa-tag'} text-[9px]`}></i>
                   </div>
                   <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
+                  {item.notify_client && (
+                    <span className="ml-auto" title="Notificación por correo activada">
+                      <i className="fa-solid fa-envelope text-[8px] text-blue-500"></i>
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -215,6 +232,8 @@ const DealsList: React.FC = () => {
   const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
     // Estado para mostrar/ocultar archivados
     const [showArchived, setShowArchived] = useState(false);
+  // Estado para vista Kanban/Tabla
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table');
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -288,6 +307,13 @@ const DealsList: React.FC = () => {
               estado_color: d.estado_color,
               estado_categoria: d.estado_categoria,
               estado_icon: d.estado_icon,
+              estado_actual: {
+                id: d.estado_id ?? d.id_deal_status ?? d.id_estado ?? '',
+                icon: d.estado_icon ?? '',
+                name: d.estado_nombre ?? '',
+                color: d.estado_color ?? '#94a3b8',
+                category: d.estado_categoria ?? 'DRAFT',
+              },
               interes_nombre: d.interes_nombre,
               interes_color: d.interes_color,
               interes_icon: d.interes_icon,
@@ -336,6 +362,11 @@ const DealsList: React.FC = () => {
   };
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Limpiar localStorage de vista Kanban
+  useEffect(() => {
+    localStorage.removeItem('deals_view_mode');
+  }, []);
 
   const handleGroupingChange = (newGrouping: string[]) => {
     setGrouping(newGrouping);
@@ -487,12 +518,28 @@ const DealsList: React.FC = () => {
 
     if (isStatusChange) {
       const isLostStatus = targetStatus?.status_category === 'LOST';
+      
+      // Enriquecer mensaje con información de notificación por correo
+      const messageContent = (
+        <div className="space-y-3">
+          <p>
+            {isLostStatus 
+              ? 'Esto marcará todas las cotizaciones asociadas como Perdidas. ¿Deseas continuar?'
+              : `¿Estás seguro de cambiar el estado a "${targetStatus?.name}"?`}
+          </p>
+          {targetStatus?.notify_client && (
+            <div className="flex items-center gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
+              <i className="fa-solid fa-envelope text-blue-600"></i>
+              <span className="text-sm text-blue-900 font-medium">Se activará notificación por correo al cliente</span>
+            </div>
+          )}
+        </div>
+      );
+      
       setConfirmState({
         isOpen: true,
         title: isLostStatus ? 'Marcar Trato como Perdido' : 'Confirmar Cambio de Estado',
-        message: isLostStatus 
-          ? 'Esto marcará todas las cotizaciones asociadas como Perdidas. ¿Deseas continuar?'
-          : `¿Estás seguro de cambiar el estado a "${targetStatus?.name}"?`,
+        message: messageContent,
         isDestructive: isLostStatus,
         onConfirm: () => {
           runUpdate();
@@ -813,9 +860,20 @@ const DealsList: React.FC = () => {
             </div>
         </div>
 
-        {/* 3. BOTÓN AÑADIR */}
-        {/* Mobile/Tablet: Order 1 (Arriba). Desktop: Order 3 (Derecha) */}
-        <button onClick={() => navigate('/app/deals/new')} className="order-1 lg:order-3 w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center justify-center gap-2">
+        {/* 3. VISTA TOGGLE - OCULTO */}
+        {/* <div className="order-1 lg:order-3">
+          <DealViewToggle 
+            viewMode={viewMode} 
+            onChange={(mode) => {
+              setViewMode(mode);
+              localStorage.setItem('deals_view_mode', mode);
+            }} 
+          />
+        </div> */}
+        
+        {/* 4. BOTÓN AÑADIR */}
+        {/* Mobile/Tablet: Order 1 (Arriba). Desktop: Order 4 (Derecha) */}
+        <button onClick={() => navigate('/app/deals/new')} className="order-1 lg:order-4 w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center justify-center gap-2">
             <i className="fa-solid fa-plus"></i> Nuevo Trato
         </button>
         {/* Botón para mostrar/ocultar archivados */}
@@ -830,8 +888,11 @@ const DealsList: React.FC = () => {
       </div>
       {/* FIN TOOLBAR RESPONSIVO */}
 
-      <div className="flex-1 overflow-auto relative bg-slate-50/10">
-        <table className="w-full border-separate border-spacing-0">
+      {/* Renderizado condicional: Tabla o Kanban */}
+      {viewMode === 'table' ? (
+        <>
+          <div className="flex-1 overflow-auto relative bg-slate-50/10">
+            <table className="w-full border-separate border-spacing-0">
           <thead className="sticky top-0 z-40 shadow-sm">
             {table.getHeaderGroups().map(hg => (
               <tr key={hg.id}>
@@ -968,6 +1029,14 @@ const DealsList: React.FC = () => {
             <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-right"></i></button>
           </div>
       </div>
+        </>
+      ) : (
+        <DealsKanban 
+          deals={deals.filter(d => showArchived ? d.archived : !d.archived)} 
+          dealStatuses={cachedDealStatuses} 
+          onRefresh={() => fetchData(true)} 
+        />
+      )}
 
       {isModalOpen && editingDeal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">

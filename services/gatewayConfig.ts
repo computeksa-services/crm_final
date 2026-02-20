@@ -44,7 +44,8 @@ export const GATEWAY_CONFIG = {
       CREATE: buildFullUrl('/api/tenants'),
       UPDATE: buildFullUrl('/api/tenants/update'),
       DELETE: buildFullUrl('/api/tenants/delete'),
-      EMAIL_SETTINGS: buildFullUrl('/api/tenants/email/corporative'),
+      EMAIL_SETTINGS: buildFullUrl('/api/tenants/email/corporative'),        // Activar con OAuth
+      UPDATE_EMAIL_SETTINGS: buildFullUrl('/api/tenants/email/settings'),    // Desactivar toggles
       EMAIL_DELETE: buildFullUrl('/api/tenants/email/corporative/delete'),
     },
     
@@ -90,6 +91,7 @@ export const GATEWAY_CONFIG = {
     CLIENTS: {
       COMPANIES_LIST: buildFullUrl('/api/clients/companies'),
       COMPANIES_DETAIL: buildFullUrl('/api/clients/companies/detail'),
+      COMPANIES_SIZES: buildFullUrl('/api/clients/companies/size'),
       CONTACTS_LIST: buildFullUrl('/api/clients/contacts'),
       CONTACTS_DETAIL: buildFullUrl('/api/clients/contacts/detail'),
       COMPANIES_CONTACTS_DETAIL: buildFullUrl('/api/clients/companies_contacts/detail'),
@@ -112,6 +114,8 @@ export const GATEWAY_CONFIG = {
     // Usuarios
     USERS: {
       LIST: buildFullUrl('/api/users'),
+      ME: buildFullUrl('/api/v1/me'),
+      UPDATE_SETTINGS: buildFullUrl('/api/v1/users/me/settings'),
     },
     
     // Eventos

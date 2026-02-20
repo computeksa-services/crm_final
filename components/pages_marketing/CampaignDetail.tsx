@@ -100,7 +100,16 @@ const CampaignDetail: React.FC = () => {
   }, [campaign?.audience_detail, audienceSearch]);
 
   // --- ACCIONES ---
-  const isCreator = user?.id_user === campaign?.created_by;
+  const normalizeId = (value?: string | number | null) => String(value ?? '').trim().toLowerCase();
+  const isCreator = (() => {
+    const userId = normalizeId(user?.id_user);
+    const creatorId = normalizeId(campaign?.created_by);
+    if (userId && creatorId) return userId === creatorId;
+    const userName = normalizeId(user?.name_user);
+    const creatorName = normalizeId(campaign?.created_by_name);
+    if (userName && creatorName) return userName === creatorName;
+    return false;
+  })();
 
   const handleAction = (actionType: 'delete' | 'launch' | 'pause' | 'resume') => {
     if (!campaign || !user?.id_tenant || !user?.id_user) return;

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { CalendarEvent, ClientCompany, ClientContact, User, Deal, Quote } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
+import { PermissionGuard } from '../src/components/PermissionGuard';
+import { useCalendarPermission } from '../src/hooks/useCalendarPermission';
 
 type ViewMode = 'day' | 'week' | 'month';
 
@@ -15,6 +17,7 @@ interface Attendee {
 
 const Calendar: React.FC = () => {
   const { user } = useAuth();
+  const { grantCalendar } = useCalendarPermission(user);
   const [events, setEvents] = useState<CalendarEvent[]>([]); // Events for calendar view
   const [upcomingEventsData, setUpcomingEventsData] = useState<CalendarEvent[]>([]); // Events for upcoming panel (next 7 days)
   const [clients, setClients] = useState<ClientCompany[]>([]);
@@ -963,7 +966,8 @@ const Calendar: React.FC = () => {
   const upcomingEvents = getUpcomingEvents();
 
   return (
-    <div className="h-full flex flex-col relative">
+    <PermissionGuard user={user} permission="sync_calendar" onConnect={() => grantCalendar({ login_hint: user.email_user })}>
+      <div className="h-full flex flex-col relative">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-0 mb-4 sm:mb-6">
         <div className="flex flex-wrap items-center gap-2 sm:gap-4">
@@ -2236,8 +2240,9 @@ const Calendar: React.FC = () => {
         </div>
       )}
     </div>
-  );
-};
+      </PermissionGuard>
+    );
+  };
 
 // ============ MONTH VIEW ============
 interface ViewProps {

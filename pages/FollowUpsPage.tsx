@@ -39,6 +39,7 @@ const UnifiedFollowUpCard: React.FC<{
 
     const urgency = getUrgency(item.next_contact_date);
     const cleanPhone = (p: string | undefined) => p ? p.replace(/[^0-9]/g, '') : '';
+    const hasCalendarEvent = item.is_calendar_scheduled === true;
 
     return (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col h-full overflow-hidden group">
@@ -168,6 +169,12 @@ const UnifiedFollowUpCard: React.FC<{
                                         hace {formatDistanceToNow(parseISO(item.last_management_date), { locale: es, addSuffix: false })}
                                     </span>
                                 )}
+                                {hasCalendarEvent && item.next_contact_date && (
+                                    <div className="ml-auto text-[8px] px-2 py-1 rounded-full bg-blue-50 text-blue-600 font-bold border border-blue-200 flex items-center gap-1">
+                                        <Calendar size={10} />
+                                        Próx. en calendario
+                                    </div>
+                                )}
                             </div>
                             <div className="flex items-center gap-1.5">
                                 {item.last_management_user_id && (() => {
@@ -193,12 +200,18 @@ const UnifiedFollowUpCard: React.FC<{
                         </p>
                     </div>
                     <div className={`${urgency.bg} ${urgency.color} p-4 rounded-xl border border-current border-opacity-10`}>
-                        <div className="flex justify-between items-center mb-2">
+                        <div className="flex justify-between items-start gap-2 mb-2">
                             <div className="flex items-center gap-1.5">
                                 {urgency.icon}
                                 <span className="text-[10px] font-black tracking-widest">{urgency.label}</span>
+                                {hasCalendarEvent && (
+                                    <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-white/40 font-bold flex items-center gap-0.5">
+                                        <Calendar size={9} />
+                                        CAL
+                                    </span>
+                                )}
                             </div>
-                            <span className="text-[10px] font-black bg-white/60 px-2 py-0.5 rounded shadow-sm">
+                            <span className="text-[10px] font-black bg-white/60 px-2 py-0.5 rounded shadow-sm whitespace-nowrap">
                                 {item.next_contact_date ? format(parseISO(item.next_contact_date), "dd 'de' MMMM", { locale: es }) : '--'}
                             </span>
                         </div>
@@ -300,9 +313,17 @@ const FollowUpsPage: React.FC = () => {
     }, [viewMode]);
 
     const filtered = useMemo(() => {
-        return items.filter(i => i.entity_type === activeTab && 
+        let result = items.filter(i => i.entity_type === activeTab && 
             (i.title?.toLowerCase().includes(searchTerm.toLowerCase()) || i.subtitle?.toLowerCase().includes(searchTerm.toLowerCase()))
         );
+        // Ordenar por próximo contacto (más urgente primero: OVERDUE, TODAY, UPCOMING)
+        result.sort((a, b) => {
+            if (!a.next_contact_date && !b.next_contact_date) return 0;
+            if (!a.next_contact_date) return 1;
+            if (!b.next_contact_date) return -1;
+            return new Date(a.next_contact_date).getTime() - new Date(b.next_contact_date).getTime();
+        });
+        return result;
     }, [items, activeTab, searchTerm]);
 
     if (loading) return <div className="flex h-[80vh] items-center justify-center"><LoaderCircle className="animate-spin text-brand-500" size={40} /></div>;
@@ -420,10 +441,35 @@ const FollowUpsPage: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-5">
-                                        <div className="text-xs font-black text-slate-700 uppercase leading-none mb-1.5">{item.next_action_desc}</div>
-                                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-bold">
-                                            <Calendar size={12} />
-                                            {item.next_contact_date ? format(parseISO(item.next_contact_date), "dd 'de' MMMM", { locale: es }) : '--'}
+                                        <div className="space-y-2">
+                                            {/* Próxima acción con urgencia */}
+                                            <div className="flex items-center gap-2">
+                                                {(() => {
+                                                    const urgency = getUrgency(item.next_contact_date);
+                                                    return (
+                                                        <div className={`${urgency.bg} ${urgency.color} px-2 py-1 rounded-full flex items-center gap-1 text-[9px] font-black whitespace-nowrap`}>
+                                                            {urgency.icon}
+                                                            <span>{urgency.label}</span>
+                                                            {item.is_calendar_scheduled && <Calendar size={10} />}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                            {/* Descripción y fecha */}
+                                            <div>
+                                                <div className="text-xs font-black text-slate-700 uppercase leading-tight line-clamp-1">{item.next_action_desc || 'SIN ACCIÓN'}</div>
+                                                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-bold mt-1">
+                                                    {item.is_calendar_scheduled ? (
+                                                        <>
+                                                            <Calendar size={11} className="text-blue-600" />
+                                                            <span className="text-blue-600 font-bold">Calendario:</span>
+                                                        </>
+                                                    ) : (
+                                                        <History size={11} />
+                                                    )}
+                                                    {item.next_contact_date ? format(parseISO(item.next_contact_date), "dd 'de' MMMM, HH:mm", { locale: es }) : '--'}
+                                                </div>
+                                            </div>
                                         </div>
                                     </td>
                                     <td className="px-6 py-5">

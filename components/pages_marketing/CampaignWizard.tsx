@@ -8,6 +8,7 @@ import JoditEditor from 'jodit-react';
 import Toast from '../Toast';
 import { apiFetch } from '../../services/apiClient';
 import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
+import { useEmailSendPolicy } from '../../src/hooks/useEmailSendPolicy';
 
 // --- CONFIGURACIÓN ---
 const STEPS = [
@@ -43,11 +44,12 @@ const CampaignWizard: React.FC = () => {
   const [lists, setLists] = useState<MarketingList[]>([]);
   const [isLoadingLists, setIsLoadingLists] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [tenantData, setTenantData] = useState<{ corporate_email_address?: string; name_tenant?: string; isMicrosoft?: boolean } | null>(null);
+    const [tenantData, setTenantData] = useState<{ corporate_email_address?: string; corporate_send_emails?: boolean; name_tenant?: string; isMicrosoft?: boolean } | null>(null);
   const [searchLists, setSearchLists] = useState('');
   const [useRichEditor, setUseRichEditor] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [isCreator, setIsCreator] = useState(true);
+    const { policy: emailPolicy } = useEmailSendPolicy(user);
   
   // Estado para controlar si hay cambios pendientes
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -148,11 +150,12 @@ const CampaignWizard: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         const tenant = Array.isArray(data) ? data[0] : data;
-        setTenantData({
-          corporate_email_address: tenant?.corporate_email_address,
-          name_tenant: tenant?.name_tenant,
-          isMicrosoft: user?.outlookConnected || false
-        });
+                setTenantData({
+                    corporate_email_address: tenant?.corporate_email_address,
+                    corporate_send_emails: tenant?.corporate_send_emails,
+                    name_tenant: tenant?.name_tenant,
+                    isMicrosoft: user?.outlookConnected || false
+                });
       }
     } catch (error) { console.error(error); }
   };
@@ -192,7 +195,7 @@ const CampaignWizard: React.FC = () => {
 
     // Si no hay cuenta corporativa disponible, forzamos cuenta personal
     useEffect(() => {
-        const hasCorporate = Boolean(tenantData?.corporate_email_address);
+        const hasCorporate = Boolean(tenantData?.corporate_email_address && tenantData?.corporate_send_emails);
         if (!hasCorporate && formData.senderType === 'TENANT') {
             setFormData(prev => ({
                 ...prev,
@@ -201,7 +204,7 @@ const CampaignWizard: React.FC = () => {
                 senderName: user?.name_user || '',
             }));
         }
-    }, [tenantData?.corporate_email_address, formData.senderType, user?.email_user, user?.name_user]);
+    }, [tenantData?.corporate_email_address, tenantData?.corporate_send_emails, formData.senderType, user?.email_user, user?.name_user]);
 
   // --- MANEJADORES DE PASOS ---
   const handleNext = () => {
@@ -271,8 +274,10 @@ const CampaignWizard: React.FC = () => {
   };
 
     const handleSenderTypeChange = (type: 'USER' | 'TENANT') => {
-        const hasCorporate = Boolean(tenantData?.corporate_email_address);
+        const hasCorporate = Boolean(tenantData?.corporate_email_address && tenantData?.corporate_send_emails);
+        const hasPersonal = Boolean(user?.send_emails);
         if (type === 'TENANT' && !hasCorporate) return;
+        if (type === 'USER' && !hasPersonal) return;
         const senderEmail = type === 'USER' ? (user?.email_user || '') : (tenantData?.corporate_email_address || '');
         const senderName = type === 'USER' ? (user?.name_user || '') : (tenantData?.name_tenant || 'Empresa');
         updateForm({ senderType: type, senderEmail, senderName });
@@ -291,6 +296,23 @@ const CampaignWizard: React.FC = () => {
   };
 
   // --- VALIDACIÓN PARA ENVIAR ---
+  const canUseCorporate = Boolean(tenantData?.corporate_email_address && tenantData?.corporate_send_emails);
+  const canUsePersonal = Boolean(user?.send_emails);
+  const canSendCampaign = canUseCorporate || canUsePersonal;
+
+  const senderBadge = useMemo(() => {
+      if (formData.senderType === 'TENANT' && canUseCorporate) {
+          return { label: 'Enviado desde: Cuenta corporativa', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' };
+      }
+      if (formData.senderType === 'USER' && canUsePersonal) {
+          return { label: 'Enviado desde: Cuenta personal', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      }
+      if (!canSendCampaign) {
+          return { label: 'Envio sin configurar', className: 'bg-amber-50 text-amber-700 border-amber-200' };
+      }
+      return { label: 'Selecciona remitente', className: 'bg-slate-100 text-slate-600 border-slate-200' };
+  }, [formData.senderType, canUseCorporate, canUsePersonal, canSendCampaign]);
+
   const isValidForSending = useMemo(() => {
       return (
           formData.name.trim() !== '' &&
@@ -307,6 +329,10 @@ const CampaignWizard: React.FC = () => {
       if (!user?.id_tenant || !user?.id_user) return;
       if (!formData.name) {
           setToast({ message: 'El nombre interno es obligatorio.', type: 'error' });
+          return;
+      }
+      if (!isDraft && !canSendCampaign) {
+          setToast({ message: 'Configura el remitente de envio en Integraciones o Workspace antes de enviar.', type: 'error' });
           return;
       }
 
@@ -432,6 +458,10 @@ const CampaignWizard: React.FC = () => {
   const handleSendTest = async () => {
       if (!testEmailAddress) return;
       if (!user?.id_tenant || !user?.id_user) return;
+      if (!canSendCampaign) {
+          setToast({ message: 'Configura el remitente de envio en Integraciones o Workspace antes de enviar.', type: 'error' });
+          return;
+      }
       try {
           setIsSendingTest(true);
           const formDataToSend = new FormData();
@@ -599,24 +629,24 @@ const CampaignWizard: React.FC = () => {
                             <div 
                                 onClick={() => isCreator && handleSenderTypeChange('USER')}
                                 className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${
-                                  !isCreator ? 'opacity-50 cursor-not-allowed' :
+                                                                    (!isCreator || !canUsePersonal) ? 'opacity-50 cursor-not-allowed' :
                                   formData.senderType === 'USER' ? 'border-brand-500 bg-brand-50 cursor-pointer' : 'border-slate-200 hover:border-slate-300 cursor-pointer'
                                 }`}
-                                title={!isCreator ? 'Solo el creador puede cambiar el remitente' : ''}
+                                                                title={!isCreator ? 'Solo el creador puede cambiar el remitente' : !canUsePersonal ? 'Habilita envio personal en Integraciones' : ''}
                             >
                                 <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border shadow-sm text-brand-600"><i className="fa-solid fa-user"></i></div>
                                 <div>
                                     <p className="font-bold text-sm text-slate-800">Cuenta Personal</p>
                                 </div>
                             </div>
-                            {tenantData?.corporate_email_address && (
+                                                        {tenantData?.corporate_email_address && (
                               <div 
                                   onClick={() => isCreator && handleSenderTypeChange('TENANT')}
                                   className={`p-4 rounded-xl border-2 flex items-center gap-3 transition-all ${
-                                      !isCreator ? 'opacity-50 cursor-not-allowed' :
+                                                                            (!isCreator || !canUseCorporate) ? 'opacity-50 cursor-not-allowed' :
                                       formData.senderType === 'TENANT' ? 'border-brand-500 bg-brand-50 cursor-pointer' : 'border-slate-200 hover:border-slate-300 cursor-pointer'
                                   }`}
-                                  title={!isCreator ? 'Solo el creador puede cambiar el remitente' : ''}
+                                                                    title={!isCreator ? 'Solo el creador puede cambiar el remitente' : !canUseCorporate ? 'Activa envio corporativo en Workspace' : ''}
                               >
                                   <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center border shadow-sm text-indigo-600"><i className="fa-solid fa-building"></i></div>
                                   <div>
@@ -725,7 +755,16 @@ const CampaignWizard: React.FC = () => {
                                 <button onClick={() => setUseRichEditor(true)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${useRichEditor ? 'bg-white shadow text-brand-600' : 'text-slate-500 hover:text-slate-700'}`}>Visual</button>
                                 <button onClick={() => setUseRichEditor(false)} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${!useRichEditor ? 'bg-white shadow text-brand-600' : 'text-slate-500 hover:text-slate-700'}`}>HTML</button>
                             </div>
-                            <button onClick={() => setIsTestEmailModalOpen(true)} className="px-4 py-2 bg-brand-50 text-brand-700 rounded-lg text-sm font-bold hover:bg-brand-100 transition-colors">
+                                                        <button
+                                                            onClick={() => setIsTestEmailModalOpen(true)}
+                                                            disabled={!canSendCampaign}
+                                                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-colors ${
+                                                                !canSendCampaign
+                                                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                                                    : 'bg-brand-50 text-brand-700 hover:bg-brand-100'
+                                                            }`}
+                                                            title={!canSendCampaign ? 'Activa permisos de envio en Integraciones o Workspace' : ''}
+                                                        >
                                 <i className="fa-regular fa-paper-plane mr-2"></i> Prueba
                             </button>
                         </div>
@@ -904,25 +943,25 @@ const CampaignWizard: React.FC = () => {
                 <div className="flex gap-3">
                     <button 
                         onClick={() => setIsScheduleModalOpen(true)} 
-                        disabled={!isValidForSending || !isCreator}
+                        disabled={!isValidForSending || !isCreator || !canSendCampaign}
                         className={`px-5 py-2.5 rounded-lg font-bold text-sm transition-all ${
                           isCreator
                           ? 'bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed'
                           : 'bg-slate-100 border-2 border-slate-200 text-slate-400 cursor-not-allowed opacity-50'
                         }`}
-                        title={!isCreator ? 'Solo el creador puede programar' : !isValidForSending ? 'Completa todos los campos obligatorios' : 'Programar envío'}
+                        title={!isCreator ? 'Solo el creador puede programar' : !canSendCampaign ? 'Activa permisos de envio en Integraciones o Workspace' : !isValidForSending ? 'Completa todos los campos obligatorios' : 'Programar envío'}
                     >
                         <i className="fa-regular fa-clock mr-2"></i> Programar
                     </button>
                     <button 
                         onClick={() => saveCampaign()} 
-                        disabled={isSaving || !isValidForSending || !isCreator} 
+                        disabled={isSaving || !isValidForSending || !isCreator || !canSendCampaign} 
                         className={`px-8 py-2.5 text-white rounded-lg font-bold text-sm shadow-lg transition-all flex items-center gap-2 ${
-                            !isValidForSending || !isCreator
+                            !isValidForSending || !isCreator || !canSendCampaign
                             ? 'bg-slate-300 cursor-not-allowed shadow-none' 
                             : 'bg-emerald-600 hover:bg-emerald-700 hover:shadow-emerald-200'
                         }`}
-                        title={!isCreator ? 'Solo el creador puede enviar campañas' : !isValidForSending ? 'Completa todos los campos obligatorios para enviar' : ''}
+                        title={!isCreator ? 'Solo el creador puede enviar campañas' : !canSendCampaign ? 'Activa permisos de envio en Integraciones o Workspace' : !isValidForSending ? 'Completa todos los campos obligatorios para enviar' : ''}
                     >
                         {isSaving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>} 
                         Enviar Ahora
@@ -946,7 +985,17 @@ const CampaignWizard: React.FC = () => {
                 />
                 <div className="flex gap-3 justify-end">
                     <button onClick={() => setIsTestEmailModalOpen(false)} className="px-4 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg">Cancelar</button>
-                    <button onClick={handleSendTest} className="px-6 py-2 bg-brand-600 text-white rounded-lg font-bold shadow-md hover:bg-brand-700">Enviar</button>
+                                        <button
+                                            onClick={handleSendTest}
+                                            disabled={!canSendCampaign || isSendingTest}
+                                            className={`px-6 py-2 rounded-lg font-bold shadow-md ${
+                                                !canSendCampaign || isSendingTest
+                                                    ? 'bg-slate-300 text-white cursor-not-allowed'
+                                                    : 'bg-brand-600 text-white hover:bg-brand-700'
+                                            }`}
+                                        >
+                                            Enviar
+                                        </button>
                 </div>
             </div>
         </div>,

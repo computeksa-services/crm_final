@@ -27,7 +27,7 @@ import {
 const ClientCompaniesList: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { companies: cachedCompanies, companyLabelsMap, loading: cacheLoading, invalidateCompanies } = useDataCache();
+  const { companies: cachedCompanies, companyLabelsMap, companySizes = [], loading: cacheLoading, invalidateCompanies } = useDataCache();
   
   const companies = useMemo(() => 
     cachedCompanies.filter(c => c && c.id_client_company), 
@@ -127,7 +127,7 @@ const ClientCompaniesList: React.FC = () => {
 
   const openShareModal = async (company: ClientCompany) => {
     setShareCompanyId(company.id_client_company || null);
-    setShareCompanyName((company as any).name_company || (company as any).company_name || company.name || '');
+    setShareCompanyName((company as any).name_company || (company as any).company_name || '');
     setShareCompanyCreator((company as any).created_by_name || '');
     try {
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/companies/share?id_client_company=${company.id_client_company}`);
@@ -297,6 +297,21 @@ const ClientCompaniesList: React.FC = () => {
         }
         return row.getIsGrouped() ? null : (
           <span className="px-2.5 py-1 rounded bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100 uppercase whitespace-nowrap">{getValue() as string || '-'}</span>
+        );
+      },
+    },
+    {
+      accessorKey: 'company_size',
+      header: 'Tamaño',
+      size: 130,
+      cell: ({ row, getValue }) => {
+        if (row.getIsGrouped()) return null;
+        const sizeValue = getValue() as string | undefined;
+        if (!sizeValue) return <span className="text-slate-400 text-sm">-</span>;
+        const sizeInfo = companySizes.find(s => s.id === sizeValue);
+        const tooltipText = sizeInfo?.name || sizeValue;
+        return (
+          <span className="px-2.5 py-1 rounded bg-purple-50 text-purple-700 text-xs font-bold border border-purple-100 uppercase whitespace-nowrap cursor-help" title={tooltipText}>{sizeValue}</span>
         );
       },
     },

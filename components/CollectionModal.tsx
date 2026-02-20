@@ -18,6 +18,11 @@ type UserOption = {
   rol_user?: string;
 };
 
+type TenantEmailConfig = {
+  email_policy?: 'INDIVIDUAL' | 'CORPORATE';
+  corporate_email_address?: string;
+};
+
 type CollectionModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -51,6 +56,8 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loadingContacts, setLoadingContacts] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [tenantEmailConfig, setTenantEmailConfig] = useState<TenantEmailConfig | null>(null);
+  const [loadingTenantConfig, setLoadingTenantConfig] = useState(false);
   
   // Formulario
   const [selectedRecipients, setSelectedRecipients] = useState<Recipient[]>([]);
@@ -68,8 +75,23 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
       const userId = user.id_user;
       const companyId = transactionData.id_client_company;
 
-
-
+      // 0. CARGAR CONFIGURACIÓN DE EMAIL DEL TENANT
+      setLoadingTenantConfig(true);
+      try {
+        const tenantRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/tenants/detail?id_tenant=${tenantId}&id_user=${userId}`);
+        if (tenantRes.ok) {
+          const tenantDataRaw = await tenantRes.json();
+          const tenantData = Array.isArray(tenantDataRaw) ? tenantDataRaw[0] : tenantDataRaw;
+          setTenantEmailConfig({
+            email_policy: tenantData?.email_policy,
+            corporate_email_address: tenantData?.corporate_email_address
+          });
+        }
+      } catch (err) {
+        console.error("Error cargando configuración de email del tenant:", err);
+      } finally {
+        setLoadingTenantConfig(false);
+      }
 
       // 1. CARGAR USUARIOS INTERNOS (EQUIPO)
       setLoadingUsers(true);
@@ -193,7 +215,53 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
     setExternalName('');
   };
 
+  // Determinar si hay integración de correo activa
+  const hasEmailIntegration = (): boolean => {
+    // 1. Política corporativa con email corporativo configurado
+    if (tenantEmailConfig?.email_policy === 'CORPORATE' && tenantEmailConfig.corporate_email_address) {
+      return true;
+    }
+    
+    // 2. Política individual: verificar integración del usuario actual
+    if (tenantEmailConfig?.email_policy === 'INDIVIDUAL' || !tenantEmailConfig?.email_policy) {
+      return !!(user?.provider && user?.send_emails && user?.email_connected);
+    }
+    
+    return false;
+  };
+
+  // Obtener mensaje de configuración de correo
+  const getEmailSourceMessage = (): { icon: string; text: string; color: string } => {
+    if (tenantEmailConfig?.email_policy === 'CORPORATE' && tenantEmailConfig.corporate_email_address) {
+      return {
+        icon: 'fa-building',
+        text: `Los correos se enviarán desde: ${tenantEmailConfig.corporate_email_address} (cuenta corporativa)`,
+        color: 'text-blue-600 bg-blue-50 border-blue-200'
+      };
+    }
+    
+    if (user?.provider && user?.send_emails && user?.email_connected) {
+      const providerName = user.provider === 'google' ? 'Gmail' : 'Outlook';
+      return {
+        icon: user.provider === 'google' ? 'fa-brands fa-google' : 'fa-brands fa-microsoft',
+        text: `Los correos se enviarán desde: ${user.email_connected} (${providerName})`,
+        color: 'text-emerald-600 bg-emerald-50 border-emerald-200'
+      };
+    }
+    
+    return {
+      icon: 'fa-triangle-exclamation',
+      text: 'No hay integración de correo configurada. Configura una integración para enviar notificaciones.',
+      color: 'text-amber-600 bg-amber-50 border-amber-200'
+    };
+  };
+
   const handleConfirm = () => {
+    if (!hasEmailIntegration()) {
+      alert('No puedes enviar correos sin una integración activa. Por favor, configura una integración primero.');
+      return;
+    }
+    
     onSend({
       recipients: selectedRecipients,
       update_automation: {
@@ -202,6 +270,8 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
       }
     });
   };
+
+  const emailSourceInfo = getEmailSourceMessage();
 
   if (!isOpen) return null;
 
@@ -224,6 +294,26 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
 
         {/* Body Scrollable */}
         <div className="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
+            
+            {/* MENSAJE DE CONFIGURACIÓN DE CORREO */}
+            {loadingTenantConfig ? (
+              <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
+                <i className="fa-solid fa-spinner fa-spin"></i>
+                <span>Verificando configuración de correo...</span>
+              </div>
+            ) : (
+              <div className={`flex items-start gap-3 p-3 border rounded-lg ${emailSourceInfo.color}`}>
+                <i className={`${emailSourceInfo.icon} text-lg mt-0.5`}></i>
+                <div className="flex-1">
+                  <p className="text-xs font-semibold">{emailSourceInfo.text}</p>
+                  {!hasEmailIntegration() && (
+                    <p className="text-[10px] mt-1 opacity-80">
+                      Ve a <strong>Configuración</strong> → <strong>Integraciones</strong> para conectar Gmail o Outlook.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
             
             {/* 1. Destinatarios del Cliente */}
             <div>

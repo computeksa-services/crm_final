@@ -243,6 +243,7 @@ export const marketingApi = {
         search: filters.search || undefined,
         company_id: filters.id_company || undefined,
         id_company_type: filters.id_company_type || undefined,  // NUEVO: ID de categoría
+        id_company_size: filters.id_company_size || undefined,  // NUEVO: ID de tamaño de empresa
         id_country: filters.id_country || undefined,             // CAMBIO: Ahora es ID
         city: filters.city || undefined,
         tags_ids: filters.tags_ids && filters.tags_ids.length > 0 ? filters.tags_ids : undefined,  // CAMBIO: Ahora son IDs

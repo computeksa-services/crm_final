@@ -305,8 +305,14 @@ const SettingsQuoteStatuses: React.FC = () => {
       <ConfirmModal {...confirmState} isDestructive={true} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} />
 
       <div className="flex justify-between items-center mb-6">
-        <div>
-            <p className="text-sm text-slate-500">Gestiona el ciclo de vida de tus cotizaciones (borrador, enviada, aprobada, rechazada). Arrastra estados entre categorías para cambiar su comportamiento en el sistema.</p>
+        <div className="flex items-center gap-2">
+            <button
+              type="button"
+              title="Gestiona el ciclo de vida de tus cotizaciones (borrador, enviada, aprobada, rechazada). Arrastra estados entre categorías para cambiar su comportamiento en el sistema."
+              className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+            >
+              <i className="fa-solid fa-circle-info text-lg"></i>
+            </button>
         </div>
         <div className="flex items-center gap-2">
           {orderChanged && (
@@ -334,26 +340,25 @@ const SettingsQuoteStatuses: React.FC = () => {
           <p>No hay estados configurados.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-5 gap-4">
+        <div className="space-y-3">
           
           {/* BORRADOR */}
           <div 
             onDragOver={(e) => handleDragOverCategory(e, 'DRAFT')}
             onDrop={(e) => handleDropOnCategory(e, 'DRAFT')}
-            className="bg-white rounded-2xl shadow-sm border-2 border-slate-300 overflow-hidden"
+            className="bg-white border border-slate-200 rounded-lg overflow-hidden"
           >
-            <div className="bg-gradient-to-r from-slate-500 to-slate-600 p-4 text-white">
-              <div className="flex items-center gap-2 mb-1">
-                <i className="fa-solid fa-pencil"></i>
-                <h4 className="font-bold text-sm uppercase tracking-wide">Borrador</h4>
+            <div className="px-4 py-3 border-b border-slate-200" style={{ backgroundColor: '#6b728015', borderLeftColor: '#6b7280', borderLeftWidth: '4px' }}>
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-pencil text-sm" style={{ color: '#6b7280' }}></i>
+                <h4 className="font-bold text-sm" style={{ color: '#6b7280' }}>Borrador</h4>
+                <span className="text-xs text-slate-500 ml-auto">({draftStatuses.length})</span>
               </div>
-              <p className="text-xs text-slate-100">Edición inicial</p>
             </div>
-            <div className="p-3 space-y-2 min-h-[200px]">
+            <div className="p-2 space-y-1.5">
               {draftStatuses.length === 0 ? (
-                <div className="text-center text-slate-400 text-xs py-8">
-                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
-                  <p>Arrastra estados aquí</p>
+                <div className="text-center text-slate-400 text-xs py-3">
+                  Sin elementos en esta categoría
                 </div>
               ) : (
                 draftStatuses.map((status) => renderStatusCard(status))
@@ -365,20 +370,19 @@ const SettingsQuoteStatuses: React.FC = () => {
           <div 
             onDragOver={(e) => handleDragOverCategory(e, 'SENT')}
             onDrop={(e) => handleDropOnCategory(e, 'SENT')}
-            className="bg-white rounded-2xl shadow-sm border-2 border-indigo-200 overflow-hidden"
+            className="bg-white border border-slate-200 rounded-lg overflow-hidden"
           >
-            <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 p-4 text-white">
-              <div className="flex items-center gap-2 mb-1">
-                <i className="fa-solid fa-paper-plane"></i>
-                <h4 className="font-bold text-sm uppercase tracking-wide">Enviado</h4>
+            <div className="px-4 py-3 border-b border-slate-200" style={{ backgroundColor: '#4f46e515', borderLeftColor: '#4f46e5', borderLeftWidth: '4px' }}>
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-paper-plane text-sm" style={{ color: '#4f46e5' }}></i>
+                <h4 className="font-bold text-sm" style={{ color: '#4f46e5' }}>Enviado</h4>
+                <span className="text-xs text-slate-500 ml-auto">({sentStatuses.length})</span>
               </div>
-              <p className="text-xs text-indigo-100">Esperando respuesta</p>
             </div>
-            <div className="p-3 space-y-2 min-h-[200px]">
+            <div className="p-2 space-y-1.5">
               {sentStatuses.length === 0 ? (
-                <div className="text-center text-slate-400 text-xs py-8">
-                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
-                  <p>Arrastra estados aquí</p>
+                <div className="text-center text-slate-400 text-xs py-3">
+                  Sin elementos en esta categoría
                 </div>
               ) : (
                 sentStatuses.map((status) => renderStatusCard(status))
@@ -390,20 +394,19 @@ const SettingsQuoteStatuses: React.FC = () => {
           <div 
             onDragOver={(e) => handleDragOverCategory(e, 'ACCEPTED')}
             onDrop={(e) => handleDropOnCategory(e, 'ACCEPTED')}
-            className="bg-white rounded-2xl shadow-sm border-2 border-emerald-200 overflow-hidden"
+            className="bg-white border border-slate-200 rounded-lg overflow-hidden"
           >
-            <div className="bg-gradient-to-r from-emerald-500 to-emerald-600 p-4 text-white">
-              <div className="flex items-center gap-2 mb-1">
-                <i className="fa-solid fa-check-circle"></i>
-                <h4 className="font-bold text-sm uppercase tracking-wide">Aceptado</h4>
+            <div className="px-4 py-3 border-b border-slate-200" style={{ backgroundColor: '#10b98115', borderLeftColor: '#10b981', borderLeftWidth: '4px' }}>
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-check-circle text-sm" style={{ color: '#10b981' }}></i>
+                <h4 className="font-bold text-sm" style={{ color: '#10b981' }}>Aceptado</h4>
+                <span className="text-xs text-slate-500 ml-auto">({acceptedStatuses.length})</span>
               </div>
-              <p className="text-xs text-emerald-100">Cliente aprobó</p>
             </div>
-            <div className="p-3 space-y-2 min-h-[200px]">
+            <div className="p-2 space-y-1.5">
               {acceptedStatuses.length === 0 ? (
-                <div className="text-center text-slate-400 text-xs py-8">
-                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
-                  <p>Arrastra estados aquí</p>
+                <div className="text-center text-slate-400 text-xs py-3">
+                  Sin elementos en esta categoría
                 </div>
               ) : (
                 acceptedStatuses.map((status) => renderStatusCard(status))
@@ -415,20 +418,19 @@ const SettingsQuoteStatuses: React.FC = () => {
           <div 
             onDragOver={(e) => handleDragOverCategory(e, 'REJECTED')}
             onDrop={(e) => handleDropOnCategory(e, 'REJECTED')}
-            className="bg-white rounded-2xl shadow-sm border-2 border-red-200 overflow-hidden"
+            className="bg-white border border-slate-200 rounded-lg overflow-hidden"
           >
-            <div className="bg-gradient-to-r from-red-500 to-red-600 p-4 text-white">
-              <div className="flex items-center gap-2 mb-1">
-                <i className="fa-solid fa-times-circle"></i>
-                <h4 className="font-bold text-sm uppercase tracking-wide">Rechazado</h4>
+            <div className="px-4 py-3 border-b border-slate-200" style={{ backgroundColor: '#ef444415', borderLeftColor: '#ef4444', borderLeftWidth: '4px' }}>
+              <div className="flex items-center gap-2">
+                <i className="fa-solid fa-times-circle text-sm" style={{ color: '#ef4444' }}></i>
+                <h4 className="font-bold text-sm" style={{ color: '#ef4444' }}>Rechazado</h4>
+                <span className="text-xs text-slate-500 ml-auto">({rejectedStatuses.length})</span>
               </div>
-              <p className="text-xs text-red-100">Cliente rechazó</p>
             </div>
-            <div className="p-3 space-y-2 min-h-[200px]">
+            <div className="p-2 space-y-1.5">
               {rejectedStatuses.length === 0 ? (
-                <div className="text-center text-slate-400 text-xs py-8">
-                  <i className="fa-solid fa-inbox text-2xl mb-2 opacity-30"></i>
-                  <p>Arrastra estados aquí</p>
+                <div className="text-center text-slate-400 text-xs py-3">
+                  Sin elementos en esta categoría
                 </div>
               ) : (
                 rejectedStatuses.map((status) => renderStatusCard(status))
@@ -444,8 +446,8 @@ const SettingsQuoteStatuses: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all relative">
             
-            <div className="px-6 py-4 border-b border-slate-100 bg-white flex justify-between items-center">
-                <h2 className="font-bold text-lg text-slate-800">
+            <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 bg-white flex justify-between items-center">
+                <h2 className="font-bold text-base md:text-lg text-slate-800">
                     {editingStatus.id_status ? 'Editar Estado' : 'Nuevo Estado'}
                 </h2>
                 <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
@@ -453,18 +455,18 @@ const SettingsQuoteStatuses: React.FC = () => {
                 </button>
             </div>
             
-            <div className="p-6 space-y-6">
+            <div className="p-4 md:p-6 space-y-4 md:space-y-6">
               
               {/* Vista Previa */}
               <div className="flex justify-center">
                   <div 
-                    className="flex items-center gap-3 px-5 py-3 rounded-xl border border-slate-100 bg-slate-50 transition-all"
+                    className="flex items-center gap-2 md:gap-3 px-3 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl border border-slate-100 bg-slate-50 transition-all"
                     style={{ borderColor: `${editingStatus.color}40`, backgroundColor: `${editingStatus.color}10` }}
                   >
-                     <div className="text-xl" style={{ color: editingStatus.color }}>
+                     <div className="text-lg md:text-xl" style={{ color: editingStatus.color }}>
                         <i className={editingStatus.icon}></i>
                      </div>
-                     <span className="font-bold text-lg" style={{ color: editingStatus.color }}>
+                     <span className="font-bold text-base md:text-lg" style={{ color: editingStatus.color }}>
                         {editingStatus.name || 'Nombre Estado'}
                      </span>
                   </div>
@@ -477,7 +479,7 @@ const SettingsQuoteStatuses: React.FC = () => {
                     type="text" 
                     value={editingStatus.name || ''} 
                     onChange={(e) => setEditingStatus({ ...editingStatus, name: e.target.value })} 
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all placeholder:text-slate-300"
+                    className="w-full px-3 md:px-4 py-2 md:py-2.5 border border-slate-200 rounded-lg md:rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all placeholder:text-slate-300 text-sm"
                     placeholder="Ej. Aprobado"
                     autoFocus
                 />
@@ -491,7 +493,7 @@ const SettingsQuoteStatuses: React.FC = () => {
                 <select
                   value={editingStatus.status_category || 'DRAFT'}
                   onChange={(e) => setEditingStatus({ ...editingStatus, status_category: e.target.value as 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REJECTED' })}
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all bg-white"
+                  className="w-full px-3 md:px-4 py-2 md:py-2.5 border border-slate-200 rounded-lg md:rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all bg-white text-sm"
                 >
                   <option value="DRAFT">📝 Borrador - Edición inicial</option>
                   <option value="SENT">📤 Enviado - Esperando respuesta</option>
@@ -563,7 +565,7 @@ const SettingsQuoteStatuses: React.FC = () => {
             </div>
             
             {/* Footer */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+            <div className="px-4 md:px-6 py-3 md:py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 md:gap-3">
               <button 
                 onClick={() => setIsModalOpen(false)} 
                 className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 hover:bg-white transition-colors text-sm font-medium"

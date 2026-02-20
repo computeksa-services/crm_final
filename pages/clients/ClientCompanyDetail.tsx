@@ -429,6 +429,11 @@ const ClientCompanyDetail: React.FC = () => {
                             <i className="fa-solid fa-building"></i> {company.company_type_name}
                           </span>
                         )}
+                        {company.company_size && (
+                          <span className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded border border-purple-100 inline-flex items-center gap-1 uppercase font-bold">
+                            <i className="fa-solid fa-users"></i> {company.company_size}
+                          </span>
+                        )}
                         {company.label_name && (
                           <span
                             className="px-2 py-0.5 rounded-full border text-[11px] font-bold uppercase inline-flex items-center gap-1"
@@ -529,6 +534,10 @@ const ClientCompanyDetail: React.FC = () => {
                   <div>
                     <p className="text-xs text-slate-400 mb-1">Tipo de Empresa</p>
                     <p className="text-xs font-bold uppercase inline-block px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">{company.company_type_name || '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-slate-400 mb-1">Tamaño</p>
+                    <p className="text-xs font-bold uppercase inline-block px-2 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-100">{company.company_size || '—'}</p>
                   </div>
                   <div>
                     <p className="text-xs text-slate-400 mb-1">Etiquetas</p>

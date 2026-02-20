@@ -7,7 +7,7 @@ import { apiFetch } from '../../services/apiClient';
 import ConfirmModal from '../../components/ConfirmModal';
 import ContactFormModal from './ContactFormModal';
 import ShareModal from '../../components/ShareModal';
-import NewInteractionForm from '../../components/NewInteractionForm';
+import NewInteractionModal from '../../components/NewInteractionModal';
 import ContactHistoryTimeline from '../../components/ContactHistoryTimeline';
 
 const ClientContactDetail: React.FC = () => {
@@ -22,6 +22,7 @@ const ClientContactDetail: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [refreshTimelineKey, setRefreshTimelineKey] = useState(0);
   const [isTimelineVisible, setIsTimelineVisible] = useState(true);
+  const [showNewInteractionModal, setShowNewInteractionModal] = useState(false);
   
   // Asignaciones
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -251,7 +252,7 @@ const ClientContactDetail: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Left Column: Contact Details */}
         <div className="lg:col-span-1 space-y-6">
@@ -480,25 +481,19 @@ const ClientContactDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* Middle Column: Solo formulario */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col mb-6">
-            <NewInteractionForm 
-              entityId={contact.id_contact}
-              entityType="CONTACT"
-              onSuccess={() => {
-                setToast({ message: 'Actividad registrada.', type: 'success' });
-                setRefreshTimelineKey(prev => prev + 1);
-                setIsTimelineVisible(true);
-              }} 
-            />
-          </div>
-        </div>
         {/* Right Column: Seguimiento General */}
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col" style={{ maxHeight: '600px', overflowY: 'auto' }}>
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
               <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Historial de Interacciones</h3>
+              <button
+                onClick={() => setShowNewInteractionModal(true)}
+                className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white inline-flex items-center gap-2 transition-all shadow-sm hover:shadow group"
+                title="Añadir actividad"
+              >
+                <i className="fa-solid fa-plus text-[12px] group-hover:scale-110 transition-transform"></i>
+                <span className="text-[12px] font-semibold">Añadir actividad</span>
+              </button>
             </div>
             {isTimelineVisible && (
               <ContactHistoryTimeline
@@ -519,6 +514,24 @@ const ClientContactDetail: React.FC = () => {
           initialData={contact}
           preselectedCompanyId={contact.id_client_company || ''}
           onSuccess={handleEditSuccess}
+        />
+      )}
+
+      {/* NEW INTERACTION MODAL */}
+      {showNewInteractionModal && contact && (
+        <NewInteractionModal
+          isOpen={showNewInteractionModal}
+          onClose={() => setShowNewInteractionModal(false)}
+          entityId={contact.id_contact}
+          entityType="CONTACT"
+          contactEmail={contact.email}
+          contactName={contact.first_name && contact.last_name ? `${contact.first_name} ${contact.last_name}` : (contact.first_name || contact.email || 'Contacto')}
+          collaborators={shareCollaborators}
+          onSuccess={() => {
+            setToast({ message: 'Actividad registrada.', type: 'success' });
+            setRefreshTimelineKey(prev => prev + 1);
+            setIsTimelineVisible(true);
+          }}
         />
       )}
 

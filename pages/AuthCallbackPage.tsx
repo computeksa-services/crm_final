@@ -17,6 +17,7 @@ const AuthCallbackPage: React.FC = () => {
       try {
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
+        const state = params.get('state');
         const errorParam = params.get('error');
 
         // Si el proveedor ya devolvió el code, enviarlo a la ventana principal
@@ -26,10 +27,13 @@ const AuthCallbackPage: React.FC = () => {
 
           if (window.opener && !window.opener.closed) {
             window.opener.postMessage(
-              { type: AUTH_SUCCESS_MESSAGE, provider: 'microsoft', code },
+              { type: AUTH_SUCCESS_MESSAGE, provider: 'microsoft', code, state },
               window.location.origin
             );
-            // Permanecer en la pantalla de procesamiento mientras el Gateway responde vía la ventana principal
+            // Cerrar el popup una vez que el mensaje se haya enviado
+            setTimeout(() => {
+              window.close();
+            }, 150);
             return;
           }
 

@@ -92,3 +92,84 @@ div[style*="--avatar-dark"] {
   color: var(--avatar-dark-text) !important;
   border-color: var(--avatar-dark-text) !important;
 }
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Kanban Board Styles */
+@keyframes kanban-card-drag {
+  from {
+    transform: rotate(0deg) scale(1);
+  }
+  to {
+    transform: rotate(3deg) scale(1.05);
+  }
+}
+
+/* Smooth scrollbar for Kanban columns */
+.kanban-column::-webkit-scrollbar {
+  width: 6px;
+}
+
+.kanban-column::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-column::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.kanban-column::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Drag overlay animation */
+.drag-overlay {
+  animation: kanban-card-drag 0.2s ease-out;
+}
+
+/* Drop indicator */
+.drop-indicator {
+  border: 2px dashed #3b82f6;
+  background-color: #eff6ff;
+  border-radius: 0.75rem;
+  min-height: 100px;
+}
+
+/* Kanban card hover effect */
+.kanban-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -4px rgba(0, 0, 0, 0.1);
+}
+
+/* Dark mode Kanban adjustments */
+.dark .drop-indicator {
+  border-color: #60a5fa;
+  background-color: rgba(96, 165, 250, 0.1);
+}
+
+.dark .kanban-column::-webkit-scrollbar-thumb {
+  background: #3a3a3a;
+}
+
+.dark .kanban-column::-webkit-scrollbar-thumb:hover {
+  background: #4a4a4a;
+}

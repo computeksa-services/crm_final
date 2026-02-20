@@ -1,0 +1,500 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import { FollowUpItem } from '../types';
+import { apiFetch } from '../services/apiClient';
+import { format, parseISO, isToday, startOfDay, isBefore } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { Phone, Mail, MessageSquare, Briefcase, User, LayoutGrid, List, LoaderCircle, Search, ChevronRight } from 'lucide-react';
+import LogActionModal from '../components/LogActionModal';
+import ReassignModal from '../components/ReassignModal';
+import Toast from '../components/Toast';
+import { useDataCache } from '../contexts/DataCacheContext';
+
+// ── HELPERS ────────────────────────────────────────────────────────────────
+const getUrgencyLevel = (dateStr?: string | null, timerStatus?: string) => {
+  if (!dateStr && !timerStatus) return 'none';
+  if (timerStatus === 'OVERDUE') return 'overdue';
+  if (timerStatus === 'TODAY') return 'today';
+  if (timerStatus === 'UPCOMING' || timerStatus === 'SCHEDULED') return 'upcoming';
+
+  if (!dateStr) return 'none';
+  const date = parseISO(dateStr);
+  const today = startOfDay(new Date());
+  if (isBefore(date, today)) return 'overdue';
+  if (isToday(date)) return 'today';
+  return 'upcoming';
+};
+
+const URGENCY_CONFIG = {
+  overdue: { label: 'Vencido', color: '#ef4444', bg: '#fef2f2', icon: '⚠️' },
+  today: { label: 'Para Hoy', color: '#f59e0b', bg: '#fffbeb', icon: '⏰' },
+  upcoming: { label: 'Programado', color: '#6b7280', bg: '#f9fafb', icon: '📅' },
+  none: { label: 'Sin fecha', color: '#9ca3af', bg: '#f9fafb', icon: '—' },
+};
+
+const formatTime = (dateStr?: string | null) => {
+  if (!dateStr) return '—';
+  return format(parseISO(dateStr), "dd-MMM, HH:mm", { locale: es }).toLowerCase();
+};
+
+const cleanPhone = (p?: string) => p ? p.replace(/[^0-9]/g, '') : '';
+
+// ── STAT CARD ──────────────────────────────────────────────────────────────
+const StatCard: React.FC<{ label: string; value: number; dark?: boolean }> = ({ label, value, dark }) => (
+  <div className={`rounded-2xl px-6 py-5 font-sans ${dark ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200'}`}>
+    <div className="text-3xl font-black tracking-tight">{value}</div>
+    <div className={`text-xs font-bold uppercase tracking-widest mt-1 ${dark ? 'text-slate-400' : 'text-slate-400'}`}>{label}</div>
+  </div>
+);
+
+// ── FOLLOW UP CARD ─────────────────────────────────────────────────────────
+const FollowUpCard: React.FC<{ item: FollowUpItem; onManage: () => void }> = ({ item, onManage }) => {
+  const navigate = useNavigate();
+  const isDeal = item.entity_type === 'DEAL';
+  const urgLevel = getUrgencyLevel(item.next_contact_date, item.followup_timer_status);
+  const urg = URGENCY_CONFIG[urgLevel as keyof typeof URGENCY_CONFIG];
+  const statusBg = item.category_color ? `${item.category_color}20` : '#f3f4f6';
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden hover:shadow-md transition-all flex flex-col h-full">
+      {/* Status badge */}
+      <div className="px-5 pt-4 pb-3 flex items-start justify-between">
+        <span
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border"
+          style={{ backgroundColor: statusBg, color: item.category_color, borderColor: `${item.category_color}40` }}
+        >
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.category_color }} />
+          {item.current_status_name}
+        </span>
+      </div>
+
+      {/* Content */}
+      <div className="px-5 pb-4 flex-grow flex flex-col space-y-3">
+        {/* Title + Company */}
+        <div
+          className="cursor-pointer group"
+          onClick={() => navigate(isDeal ? `/app/deals/${item.id_entity}` : `/app/client-contacts/${item.id_entity}`)}
+        >
+          <h3 className="font-bold text-slate-900 text-base leading-snug group-hover:text-brand-600 transition-colors">
+            {item.title}
+          </h3>
+          <div className="flex items-center gap-1 mt-1 text-slate-500">
+            <span>{isDeal ? '🏢' : '👤'}</span>
+            <span className="text-sm text-slate-500">{item.subtitle}</span>
+          </div>
+        </div>
+
+        {/* Next action box */}
+        {item.next_action_desc ? (
+          <div
+            className="border-l-4 rounded-r-lg p-3"
+            style={{ backgroundColor: urg.bg, borderColor: urg.color }}
+          >
+            <div className="flex justify-between items-center mb-1">
+              <span className="text-xs font-bold uppercase tracking-widest flex items-center gap-1" style={{ color: urg.color }}>
+                {urg.icon} {urg.label}
+                {item.is_calendar_scheduled && <span className="ml-1 text-[10px] text-blue-600">📆 Cal.</span>}
+              </span>
+              <span className="text-xs font-bold" style={{ color: urg.color }}>
+                {formatTime(item.next_contact_date)}
+              </span>
+            </div>
+            <p className="text-sm font-bold text-slate-900">{item.next_action_desc}</p>
+          </div>
+        ) : (
+          <div className="border-l-4 rounded-r-lg p-3 bg-slate-50 border-slate-200">
+            <p className="text-xs text-slate-400 italic">Sin próxima acción definida</p>
+          </div>
+        )}
+
+        {/* Last activity */}
+        {item.last_management_desc && (
+          <div className="flex items-start gap-2">
+            <div className="text-slate-300 mt-0.5 text-lg">💬</div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-bold text-slate-500 uppercase">Última actividad</p>
+              <p className="text-xs text-slate-600 italic line-clamp-2 mt-0.5">"{item.last_management_desc}"</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="px-5 py-3 bg-slate-50 border-t border-slate-100 flex items-center gap-2">
+        <div className="flex gap-1">
+          {item.phone && (
+            <a
+              href={`https://wa.me/${cleanPhone(item.phone)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="w-9 h-9 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-green-600 hover:border-green-200 flex items-center justify-center transition-all"
+            >
+              <MessageSquare size={16} />
+            </a>
+          )}
+          {item.email && (
+            <a
+              href={`mailto:${item.email}`}
+              className="w-9 h-9 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 flex items-center justify-center transition-all"
+            >
+              <Mail size={16} />
+            </a>
+          )}
+        </div>
+        <button
+          onClick={onManage}
+          className="flex-1 bg-slate-900 text-white text-xs font-bold py-2 rounded-lg hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
+        >
+          Gestionar <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ── TABLE ROW ──────────────────────────────────────────────────────────────
+const TableRow: React.FC<{ item: FollowUpItem; onManage: () => void; idx: number }> = ({ item, onManage, idx }) => {
+  const navigate = useNavigate();
+  const isDeal = item.entity_type === 'DEAL';
+  const urgLevel = getUrgencyLevel(item.next_contact_date, item.followup_timer_status);
+  const urg = URGENCY_CONFIG[urgLevel as keyof typeof URGENCY_CONFIG];
+  const statusBg = item.category_color ? `${item.category_color}20` : '#f3f4f6';
+
+  return (
+    <tr className={`border-b border-slate-100 hover:bg-slate-50/60 transition-colors ${idx % 2 === 1 ? 'bg-slate-50/30' : ''}`}>
+      <td className="px-6 py-4">
+        <div
+          className="cursor-pointer"
+          onClick={() => navigate(isDeal ? `/app/deals/${item.id_entity}` : `/app/client-contacts/${item.id_entity}`)}
+        >
+          <p className="font-bold text-slate-900 text-sm">{item.title}</p>
+          <div className="flex items-center gap-1 mt-0.5 text-xs text-slate-500">
+            <span>{isDeal ? '🏢' : '👤'}</span>
+            <span>{item.subtitle}</span>
+          </div>
+        </div>
+      </td>
+      <td className="px-6 py-4">
+        <span
+          className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border"
+          style={{ backgroundColor: statusBg, color: item.category_color, borderColor: `${item.category_color}40` }}
+        >
+          <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: item.category_color }} />
+          {item.current_status_name}
+        </span>
+      </td>
+      <td className="px-6 py-4">
+        {item.next_action_desc ? (
+          <div>
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: urg.color }}>
+                {urg.icon} {urg.label}
+              </span>
+              {item.is_calendar_scheduled && <span className="text-[9px] text-blue-600">📆 Cal.</span>}
+            </div>
+            <p className="text-xs font-bold text-slate-900 line-clamp-1">{item.next_action_desc}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">{formatTime(item.next_contact_date)}</p>
+          </div>
+        ) : (
+          <span className="text-xs text-slate-300 italic">Sin acción</span>
+        )}
+      </td>
+      <td className="px-6 py-4">
+        <p className="text-xs text-slate-500 italic line-clamp-2">
+          {item.last_management_desc ? `"${item.last_management_desc}"` : '—'}
+        </p>
+      </td>
+      <td className="px-6 py-4 text-right">
+        <div className="flex items-center justify-end gap-1">
+          {item.phone && (
+            <a
+              href={`https://wa.me/${cleanPhone(item.phone)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="w-8 h-8 rounded-lg bg-slate-50 hover:bg-green-50 text-slate-400 hover:text-green-600 flex items-center justify-center transition-all"
+            >
+              <MessageSquare size={14} />
+            </a>
+          )}
+          {item.email && (
+            <a
+              href={`mailto:${item.email}`}
+              className="w-8 h-8 rounded-lg bg-slate-50 hover:bg-blue-50 text-slate-400 hover:text-blue-600 flex items-center justify-center transition-all"
+            >
+              <Mail size={14} />
+            </a>
+          )}
+          <button
+            onClick={onManage}
+            className="px-4 py-2 bg-slate-900 text-white text-xs font-bold rounded-lg hover:bg-slate-800 transition-all"
+          >
+            Gestionar
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+};
+
+// ── MAIN PAGE ──────────────────────────────────────────────────────────────
+const FollowUpsPage: React.FC = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { users: cachedUsers } = useDataCache();
+
+  const [items, setItems] = useState<FollowUpItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'CONTACT' | 'DEAL'>(() => {
+    return (localStorage.getItem('followups_activeTab') as 'CONTACT' | 'DEAL') || 'CONTACT';
+  });
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>(() => {
+    return (localStorage.getItem('followups_viewMode') as 'grid' | 'table') || 'grid';
+  });
+  const [urgencyFilter, setUrgencyFilter] = useState('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [managingItem, setManagingItem] = useState<FollowUpItem | null>(null);
+  const [transferItem, setTransferItem] = useState<FollowUpItem | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const fetchItems = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/crm/followups`);
+      const data = await res.json();
+      setItems(Array.isArray(data) ? data : []);
+    } catch (e) {
+      setToast({ message: 'Error al conectar con el servidor', type: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
+
+  useEffect(() => {
+    localStorage.setItem('followups_activeTab', activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    localStorage.setItem('followups_viewMode', viewMode);
+  }, [viewMode]);
+
+  const filtered = useMemo(() => {
+    const tabFiltered = items.filter(i => i.entity_type === activeTab);
+
+    const searched = tabFiltered.filter(i =>
+      !searchTerm ||
+      i.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      i.subtitle?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const urgencyFiltered = searched.filter(i => {
+      if (urgencyFilter === 'ALL') return true;
+      const level = getUrgencyLevel(i.next_contact_date, i.followup_timer_status);
+      return level === urgencyFilter;
+    });
+
+    return urgencyFiltered.sort((a, b) => {
+      if (!a.next_contact_date && !b.next_contact_date) return 0;
+      if (!a.next_contact_date) return 1;
+      if (!b.next_contact_date) return -1;
+      return new Date(a.next_contact_date).getTime() - new Date(b.next_contact_date).getTime();
+    });
+  }, [items, activeTab, searchTerm, urgencyFilter]);
+
+  // Stats
+  const tabItems = items.filter(i => i.entity_type === activeTab);
+  const stats = {
+    total: tabItems.length,
+    overdue: tabItems.filter(i => getUrgencyLevel(i.next_contact_date, i.followup_timer_status) === 'overdue').length,
+    today: tabItems.filter(i => getUrgencyLevel(i.next_contact_date, i.followup_timer_status) === 'today').length,
+    upcoming: tabItems.filter(i => getUrgencyLevel(i.next_contact_date, i.followup_timer_status) === 'upcoming').length,
+  };
+
+  if (loading) {
+    return (
+      <div className="flex h-[80vh] items-center justify-center">
+        <LoaderCircle className="animate-spin text-brand-600" size={40} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-6 lg:p-8">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-black text-slate-900 tracking-tight">Seguimientos</h1>
+        <p className="text-slate-500 mt-1">Gestiona tus próximos contactos y negociaciones pendientes.</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+        <StatCard label="Total" value={stats.total} dark />
+        <StatCard label="Vencidos" value={stats.overdue} />
+        <StatCard label="Hoy" value={stats.today} />
+        <StatCard label="Próximos" value={stats.upcoming} />
+      </div>
+
+      {/* Toolbar */}
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 mb-8 space-y-4 md:space-y-0">
+        {/* Tabs + Urgency Filters */}
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          {/* Tabs */}
+          <div className="flex bg-slate-100 p-1 rounded-lg">
+            {[
+              { k: 'CONTACT', label: 'Prospectos' },
+              { k: 'DEAL', label: 'Negociaciones' },
+            ].map(t => (
+              <button
+                key={t.k}
+                onClick={() => setActiveTab(t.k as 'CONTACT' | 'DEAL')}
+                className={`px-6 py-2 rounded-md text-sm font-bold transition-all ${
+                  activeTab === t.k
+                    ? 'bg-white text-brand-600 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Urgency Pills */}
+          <div className="flex gap-2 flex-wrap">
+            {[
+              { k: 'ALL', label: 'Todos' },
+              { k: 'overdue', label: 'Vencidos' },
+              { k: 'today', label: 'Hoy' },
+              { k: 'upcoming', label: 'Próximos' },
+            ].map(f => (
+              <button
+                key={f.k}
+                onClick={() => setUrgencyFilter(f.k)}
+                className={`px-4 py-2 rounded-lg text-xs font-bold border transition-all ${
+                  urgencyFilter === f.k
+                    ? 'bg-slate-900 text-white border-slate-900'
+                    : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Search + View Toggle */}
+        <div className="flex gap-3 items-center">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <input
+              type="text"
+              placeholder="Buscar contacto o empresa..."
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-100 focus:border-brand-400"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          <div className="flex border border-slate-200 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`px-3 py-2.5 transition-all ${viewMode === 'grid' ? 'bg-slate-100 text-brand-600' : 'bg-white text-slate-400'}`}
+            >
+              <LayoutGrid size={18} />
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`px-3 py-2.5 border-l border-slate-200 transition-all ${viewMode === 'table' ? 'bg-slate-100 text-brand-600' : 'bg-white text-slate-400'}`}
+            >
+              <List size={18} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      {filtered.length === 0 ? (
+        <div className="bg-white border border-slate-200 rounded-2xl py-24 text-center">
+          <p className="text-lg font-bold text-slate-800">Sin seguimientos pendientes</p>
+          <p className="text-slate-400 text-sm mt-1">¡Todo al día por el momento!</p>
+        </div>
+      ) : viewMode === 'grid' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+          {filtered.map(item => (
+            <FollowUpCard
+              key={item.id_entity}
+              item={item}
+              onManage={() => setManagingItem(item)}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm min-w-[1000px]">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-6 py-3.5 font-bold uppercase text-xs text-slate-500 tracking-widest">
+                    Entidad / Empresa
+                  </th>
+                  <th className="px-6 py-3.5 font-bold uppercase text-xs text-slate-500 tracking-widest">
+                    Estado
+                  </th>
+                  <th className="px-6 py-3.5 font-bold uppercase text-xs text-slate-500 tracking-widest">
+                    Próxima Acción
+                  </th>
+                  <th className="px-6 py-3.5 font-bold uppercase text-xs text-slate-500 tracking-widest">
+                    Última Actividad
+                  </th>
+                  <th className="px-6 py-3.5 font-bold uppercase text-xs text-slate-500 tracking-widest text-right">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((item, idx) => (
+                  <TableRow key={item.id_entity} item={item} onManage={() => setManagingItem(item)} idx={idx} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modals */}
+      {managingItem && (
+        <LogActionModal
+          isOpen={!!managingItem}
+          item={managingItem}
+          onClose={() => setManagingItem(null)}
+          onSuccess={() => {
+            setManagingItem(null);
+            fetchItems();
+            setToast({ message: 'Gestión guardada exitosamente', type: 'success' });
+          }}
+        />
+      )}
+
+      {transferItem && user?.rol_user === 'admin' && (
+        <ReassignModal
+          isOpen={!!transferItem}
+          contact={transferItem as any}
+          users={cachedUsers}
+          onClose={() => setTransferItem(null)}
+          onSuccess={() => {
+            setTransferItem(null);
+            fetchItems();
+            setToast({ message: 'Responsable actualizado correctamente', type: 'success' });
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+export default FollowUpsPage;

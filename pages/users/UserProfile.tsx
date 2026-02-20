@@ -1,453 +1,237 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { useGoogleLogin } from '@react-oauth/google';
-import { microsoftClientId, oauthRedirectUri } from '../../services/oauthConfig';
 import { User } from '../../types';
 import Toast from '../../components/Toast';
-import ConfirmModal from '../../components/ConfirmModal';
 import { getImageUrl } from '../../utils/imageUtils';
-import { apiFetch } from '../../services/apiClient';
-import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
+import { PersonalIntegrations } from '../../src/components/users/PersonalIntegrations';
+
+// Helper para traducir scopes a descripciones amigables
+const scopeDescriptions: Record<string, { name: string; description: string; icon: string }> = {
+  'openid': {
+    name: 'OpenID',
+    description: 'Permiso básico para autenticación.',
+    icon: 'fa-id-card'
+  },
+  'profile': {
+    name: 'Perfil Básico',
+    description: 'Acceso a tu nombre, foto de perfil e información pública.',
+    icon: 'fa-user-circle'
+  },
+  'email': {
+    name: 'Correo Electrónico',
+    description: 'Acceso a tu dirección de correo electrónico principal.',
+    icon: 'fa-envelope'
+  },
+  'https://www.googleapis.com/auth/calendar': {
+    name: 'Google Calendar',
+    description: 'Ver, crear y editar eventos en tu calendario.',
+    icon: 'fa-google'
+  },
+  'https://www.googleapis.com/auth/gmail.modify': {
+    name: 'Gestión de Gmail',
+    description: 'Leer, modificar y organizar tus correos.',
+    icon: 'fa-google'
+  },
+  'https://www.googleapis.com/auth/gmail.send': {
+    name: 'Envío desde Gmail',
+    description: 'Enviar correos electrónicos en tu nombre.',
+    icon: 'fa-google'
+  },
+  'User.Read': {
+    name: 'Lectura de Usuario',
+    description: 'Leer tu perfil básico de Microsoft.',
+    icon: 'fa-microsoft'
+  },
+  'Mail.ReadWrite': {
+    name: 'Lectura y Escritura de Correo',
+    description: 'Leer, escribir y organizar tus correos de Outlook.',
+    icon: 'fa-microsoft'
+  },
+  'Mail.Send': {
+    name: 'Envío de Correo',
+    description: 'Enviar correos en tu nombre desde Outlook.',
+    icon: 'fa-microsoft'
+  },
+  'Calendars.ReadWrite': {
+    name: 'Lectura y Escritura de Calendario',
+    description: 'Ver, crear y editar eventos en tu calendario de Outlook.',
+    icon: 'fa-microsoft'
+  },
+  'offline_access': {
+    name: 'Acceso sin Conexión',
+    description: 'Mantener tu sesión activa para sincronización en segundo plano.',
+    icon: 'fa-sync-alt'
+  }
+};
 
 const UserProfile: React.FC = () => {
-  const { user } = useAuth(); // Obtener usuario del contexto
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState<'google' | 'outlook' | null>(null);
-  
-  // Estado local para datos del perfil (en caso de que queramos editar sin tocar el contexto global inmediatamente)
   const [profileData, setProfileData] = useState<User | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  
-  // --- Tenant email policy (admin only) ---
-  const [tenantLoading, setTenantLoading] = useState(false);
-  const [corporativeSetup, setCorporativeSetup] = useState(false);
-  const [corporativeLoading, setCorporativeLoading] = useState(false);
-  const [corporativeDeleting, setCorporativeDeleting] = useState(false);
-  const [adminProvider, setAdminProvider] = useState<'google' | 'outlook' | null>(null);
-  const [corporativeEmail, setCorporativeEmail] = useState<string>('');
-  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (user) {
       setProfileData(user);
       setLoading(false);
-      // Identificar provider del admin
-      setAdminProvider(user.googleConnected ? 'google' : user.outlookConnected ? 'outlook' : null);
     }
   }, [user]);
 
-  const loadTenant = useCallback(async () => {
-    if (!user?.id_tenant) return;
-    setTenantLoading(true);
-    try {
-      const res = await apiFetch(buildUrl(GATEWAY_CONFIG.API.TENANTS.DETAIL, { id_tenant: user.id_tenant }));
-      if (res.ok) {
-        const data = await res.json();
-        const t: any = Array.isArray(data) ? data[0] : data;
-        setCorporativeEmail(t?.corporate_email_address || '');
-        setCorporativeSetup(t?.email_policy === 'CORPORATE' && Boolean(t?.corporate_email_address));
-      } else {
-        setCorporativeEmail('');
-        setCorporativeSetup(false);
-      }
-    } catch (e) {
-      console.error('Error loading tenant detail', e);
-    } finally {
-      setTenantLoading(false);
-    }
-  }, [user?.id_tenant]);
-
-  // Cargar detalle del tenant para admins
+  // Escuchar evento global para mostrar toasts desde componentes hijos
   useEffect(() => {
-    if (user?.rol_user === 'admin') loadTenant();
-  }, [user?.rol_user, loadTenant]);
-
-  const activeProvider: 'google' | 'outlook' | null = profileData?.googleConnected
-    ? 'google'
-    : profileData?.outlookConnected
-    ? 'outlook'
-    : null;
-
-  // Simulación de conexión (Aquí iría la lógica real de OAuth)
-  const handleSyncToggle = async (provider: 'google' | 'outlook') => {
-    if (!profileData) return;
-    setSyncing(provider);
-    
-    // Determinamos el estado actual basado en el proveedor
-    const isConnected = provider === 'google' ? profileData.googleConnected : profileData.outlookConnected;
-    const action = isConnected ? 'desconectado' : 'conectado';
-
-    try {
-      // AQUÍ IRÍA LA LLAMADA AL BACKEND REAL
-      // await api.updateSyncStatus(...)
-      
-      // Simulamos un delay de red
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      // Actualizamos estado local (Optimistic UI)
-      setProfileData(prev => prev ? ({
-        ...prev,
-        [provider === 'google' ? 'googleConnected' : 'outlookConnected']: !isConnected
-      }) : null);
-
-      setToast({ message: `Cuenta de ${provider === 'google' ? 'Google' : 'Outlook'} ${action} correctamente.`, type: 'success' });
-
-    } catch (error) {
-      console.error("Error updating sync status:", error);
-      setToast({ message: 'Error al actualizar sincronización.', type: 'error' });
-    } finally {
-      setSyncing(null);
-    }
-  };
-
-  // Google OAuth para email corporativo
-  const googleLoginCorporative = useGoogleLogin({
-    onSuccess: (codeResponse) => {
-      setCorporativeLoading(true);
-      saveCorporativeEmail(codeResponse.code, 'google');
-    },
-    onError: () => {
-      setToast({ message: 'Error al conectar con Google.', type: 'error' });
-    },
-    flow: 'auth-code',
-    scope: "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/gmail.send"
-  });
-
-  // Microsoft OAuth para email corporativo
-  const handleMicrosoftCorporative = () => {
-    if (!microsoftClientId) {
-      setToast({ message: 'Microsoft no está configurado.', type: 'error' });
-      return;
-    }
-    setCorporativeLoading(true);
-    const scopes = "openid profile email offline_access User.Read Mail.Send";
-    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${microsoftClientId}&redirect_uri=${encodeURIComponent(oauthRedirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}`;
-    
-    const popup = window.open(authUrl, 'microsoftAuth', 'width=500,height=600');
-    const checkPopup = setInterval(() => {
-      if (popup?.closed) {
-        clearInterval(checkPopup);
-        setCorporativeLoading(false);
-      }
-    }, 500);
-
-    window.addEventListener('message', (event) => {
-      if (event.data?.type === 'MICROSOFT_AUTH_CODE') {
-        clearInterval(checkPopup);
-        popup?.close();
-        saveCorporativeEmail(event.data.code, 'microsoft');
-      }
-    }, { once: true });
-  };
-
-  const saveCorporativeEmail = async (code: string, provider: 'google' | 'microsoft') => {
-    if (!user?.id_tenant || !user?.id_user) return;
-    try {
-      // ✅ CORRECCIÓN: Enviar JSON en lugar de FormData
-      const jsonPayload = {
-        id_tenant: user.id_tenant,
-        id_user: user.id_user,
-        code,
-        provider
-      };
-      const res = await apiFetch(GATEWAY_CONFIG.API.TENANTS.EMAIL_SETTINGS, { 
-        method: 'POST', 
-        body: JSON.stringify(jsonPayload)  // ✅ JSON, no FormData
-      });
-      if (!res.ok) throw new Error('No se pudo guardar configuración');
-      const data = await res.json();
-      setCorporativeEmail(data?.corporate_email_address || '');
-      setCorporativeSetup(true);
-      setToast({ message: 'Email corporativo configurado correctamente.', type: 'success' });
-      await loadTenant();
-    } catch (e) {
-      console.error(e);
-      setToast({ message: 'Error al guardar la configuración.', type: 'error' });
-    } finally {
-      setCorporativeLoading(false);
-    }
-  };
-
-  const deleteCorporativeEmail = async () => {
-    if (!user?.id_tenant || !user?.id_user) return;
-    setCorporativeDeleting(true);
-    try {
-      // ✅ CORRECCIÓN: Enviar JSON en lugar de FormData
-      const jsonPayload = {
-        id_tenant: user.id_tenant,
-        id_user: user.id_user
-      };
-      const res = await apiFetch(GATEWAY_CONFIG.API.TENANTS.EMAIL_DELETE, { 
-        method: 'POST', 
-        body: JSON.stringify(jsonPayload)  // ✅ JSON, no FormData
-      });
-      if (!res.ok) throw new Error('No se pudo eliminar configuración');
-      setCorporativeEmail('');
-      setCorporativeSetup(false);
-      setToast({ message: 'Email corporativo eliminado correctamente.', type: 'success' });
-      await loadTenant();
-    } catch (e) {
-      console.error(e);
-      setToast({ message: 'Error al eliminar la configuración.', type: 'error' });
-    } finally {
-      setCorporativeDeleting(false);
-      setConfirmDelete(false);
-    }
-  };
+    const handleShowToast = (event: CustomEvent) => {
+      setToast(event.detail);
+    };
+    window.addEventListener('showToast' as any, handleShowToast);
+    return () => window.removeEventListener('showToast' as any, handleShowToast);
+  }, []);
 
   if (loading || !profileData) {
     return (
-        <div className="flex h-64 items-center justify-center">
-            <div className="flex flex-col items-center space-y-3">
-                <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500"></i>
-                <p className="text-slate-500 font-medium animate-pulse">Cargando perfil...</p>
-            </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <i className="fas fa-spinner fa-spin text-4xl text-blue-500 mb-4"></i>
+          <p className="text-slate-600">Cargando perfil...</p>
         </div>
+      </div>
     );
   }
 
+  const { provider, email_connected } = profileData;
+
   return (
-    <div className="max-w-5xl mx-auto space-y-8 pb-12 animate-fade-in">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      <ConfirmModal
-        isOpen={confirmDelete}
-        onClose={() => setConfirmDelete(false)}
-        onConfirm={deleteCorporativeEmail}
-        title="Eliminar correo corporativo"
-        message="¿Estás seguro de que deseas eliminar la configuración del correo corporativo? Si lo borras, los correos se enviarán desde las cuentas personales."
-        isDestructive
-      />
+      
+
 
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Mi Perfil</h1>
-        <p className="text-slate-500 text-sm mt-1">Gestiona tu información personal y preferencias de cuenta.</p>
+      <div className="max-w-7xl mx-auto mb-8">
+        <div className="flex items-center gap-3 mb-2">
+          <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
+            <i className="fa-brands fa-google text-2xl text-red-500"></i>
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-slate-800">Integraciones de Google</h1>
+            <p className="text-slate-600">Conecta tu cuenta personal de Google para sincronizar Calendar y Gmail</p>
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Identity Card */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative">
-             <div className="h-24 bg-gradient-to-r from-slate-800 to-slate-900 relative">
-                <div className="absolute top-3 right-3">
-                  <span className="px-2.5 py-1 bg-white/20 text-white text-xs rounded-full font-semibold uppercase tracking-wide border border-white/30 backdrop-blur-sm">
-                    {profileData.rol_user}
+        <div className="lg:col-span-1">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="h-24 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+            <div className="px-6 pb-6 -mt-12">
+              <div className="relative w-24 h-24 mx-auto mb-4">
+                <img
+                  src={getImageUrl(profileData.avatar_url)}
+                  alt={profileData.name_user}
+                  className="w-full h-full rounded-full border-4 border-white shadow-lg object-cover"
+                />
+                {profileData.is_owner && (
+                  <span className="absolute -top-1 -right-1 bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full shadow">
+                    Owner
                   </span>
-                </div>
-             </div>
-             <div className="px-6 pb-6 text-center -mt-16">
-                <div className="relative inline-block">
-                    <img 
-                        src={getImageUrl(profileData.avatar_url) || `https://ui-avatars.com/api/?name=${profileData.name_user}&background=random`} 
-                        alt="Profile" 
-                        className="w-32 h-32 rounded-full border-4 border-white shadow-md object-cover bg-white"
-                        referrerPolicy="no-referrer"
-                        onError={(e) => {
-                          console.error('❌ Error cargando avatar en perfil:', profileData.avatar_url);
-                          e.currentTarget.src = `https://ui-avatars.com/api/?name=${profileData.name_user}&background=random`;
-                        }}
-                    />
-                    <div className="absolute bottom-2 right-2 w-5 h-5 bg-green-500 border-2 border-white rounded-full" title="Activo"></div>
-                </div>
-                
-                <p className="text-xs text-slate-500 font-semibold uppercase tracking-wide mt-5">{profileData.name_tenant || 'Tenant'}</p>
-                <h2 className="text-lg font-bold text-slate-800 mt-1">{profileData.name_user}</h2>
-                <p className="text-sm text-brand-600 font-medium">{profileData.job_title || '—'}</p>
-                
-                <div className="mt-4 flex justify-center gap-2">
-                    <span className="px-3 py-1 bg-slate-100 text-slate-600 text-xs rounded-full font-medium border border-slate-200 flex items-center">
-                        <i className="fa-regular fa-envelope mr-1.5"></i> {profileData.email_user}
-                    </span>
-                </div>
+                )}
+              </div>
 
-                {/* Se oculta acción de edición hasta que exista flujo permitido */}
-             </div>
+              <div className="text-center mb-6">
+                <span className="inline-block px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium mb-2">
+                  {profileData.rol_user}
+                </span>
+                <p className="text-xs text-slate-500 mb-1">{profileData.name_tenant || 'Tenant'}</p>
+                <h2 className="text-xl font-bold text-slate-800">{profileData.name_user}</h2>
+                <p className="text-sm text-slate-600">{profileData.job_title || '—'}</p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 text-sm">
+                  <i className="fas fa-envelope text-slate-400 w-5"></i>
+                  <span className="text-slate-700">{profileData.email_user}</span>
+                </div>
+              </div>
+            </div>
           </div>
-
-
         </div>
 
         {/* Right Column: Settings */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Tenant Email Policy for Admin */}
-          {profileData?.rol_user === 'admin' && (
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-amber-50 rounded-lg flex items-center justify-center text-amber-600">
-                  <i className="fa-solid fa-building"></i>
-                </div>
+          {/* Personal Integrations */}
+          <PersonalIntegrations 
+            key={`${profileData.send_emails}-${profileData.sync_emails}-${profileData.sync_calendar}-${profileData.granted_scopes?.length || 0}`}
+            user={profileData} 
+          />
+
+          {/* Roles & Permissions Card */}
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <i className="fas fa-shield-alt text-blue-500 text-xl"></i>
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800">Rol y Acceso a Módulos</h3>
+                <p className="text-sm text-slate-600">Tu nivel de acceso dentro de la plataforma.</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <span className="text-sm font-medium text-slate-700">Rol: {profileData.rol_user}</span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <span className="text-sm text-slate-700">
+                  {profileData.is_owner ? 'Eres Propietario (Owner)' : 'No eres Propietario'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <span className="text-sm text-slate-700">Acceso a CRM</span>
+                <i className="fas fa-check text-green-500"></i>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <span className="text-sm text-slate-700">Acceso a Marketing</span>
+                <i className="fas fa-check text-green-500"></i>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                <span className="text-sm text-slate-700">Acceso a Finanzas</span>
+                <i className="fas fa-check text-green-500"></i>
+              </div>
+            </div>
+          </div>
+
+          {/* Scopes Card */}
+          {profileData.granted_scopes && profileData.granted_scopes.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <i className="fas fa-key text-blue-500 text-xl"></i>
                 <div>
-                  <h3 className="font-bold text-slate-800 text-lg">Correo Corporativo de {profileData?.name_tenant || 'Tenant'}</h3>
-                  <p className="text-sm text-slate-500">Configura un correo corporativo para notificaciones.</p>
+                  <h3 className="text-lg font-semibold text-slate-800">Permisos de API Concedidos</h3>
+                  <p className="text-sm text-slate-600">
+                    Permisos que has otorgado a la aplicación en tu cuenta de {profileData.provider}.
+                  </p>
                 </div>
               </div>
 
-              {!corporativeSetup && (
-                <div className="mt-4 grid gap-4">
-                  <p className="text-sm text-slate-600 mb-3">Inicia sesión con tu proveedor ({adminProvider === 'google' ? 'Google' : 'Microsoft'}) para configurar el correo corporativo.</p>
-                  {adminProvider === 'google' && (
-                    <button
-                      onClick={() => googleLoginCorporative()}
-                      disabled={corporativeLoading || tenantLoading}
-                      className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {corporativeLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-brands fa-google"></i>}
-                      {corporativeLoading ? 'Conectando…' : 'Configurar con Google Workspace'}
-                    </button>
-                  )}
-                  {adminProvider === 'outlook' && (
-                    <button
-                      onClick={handleMicrosoftCorporative}
-                      disabled={corporativeLoading || tenantLoading}
-                      className="w-full px-4 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {corporativeLoading ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-brands fa-microsoft"></i>}
-                      {corporativeLoading ? 'Conectando…' : 'Configurar con Microsoft'}
-                    </button>
-                  )}
-                </div>
-              )}
+              <div className="space-y-2">
+                {profileData.granted_scopes.map((scope, index) => {
+                  const details = scopeDescriptions[scope] || {
+                    name: scope,
+                    description: 'Permiso personalizado o no documentado.',
+                    icon: 'fa-question-circle'
+                  };
 
-              {corporativeSetup && corporativeEmail && (
-                <div className="mt-4 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <i className="fa-solid fa-check-circle text-emerald-600 text-lg"></i>
+                  return (
+                    <div key={index} className="flex items-start gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                      <i className={`fas ${details.icon} text-slate-400 mt-1`}></i>
                       <div>
-                        <p className="text-sm font-bold text-emerald-700">Email corporativo configurado</p>
-                        <p className="text-xs text-emerald-600">{corporativeEmail}</p>
+                        <p className="text-sm font-medium text-slate-800">{details.name}</p>
+                        <p className="text-xs text-slate-600">{details.description}</p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => setConfirmDelete(true)}
-                      disabled={corporativeDeleting}
-                      className="px-3 py-1 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-100 rounded-lg transition-all disabled:opacity-50"
-                      title="Eliminar configuración de email corporativo"
-                    >
-                      {corporativeDeleting ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-trash"></i>}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {tenantLoading && (
-                <div className="mt-3 text-xs text-slate-500">Cargando configuración del tenant…</div>
-              )}
+                  );
+                })}
+              </div>
             </div>
           )}
-          
-          {/* Integrations Card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-            <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-600">
-                    <i className="fa-solid fa-plug text-lg"></i>
-                </div>
-                <div>
-                    <h3 className="font-bold text-slate-800 text-lg">Integraciones</h3>
-                    <p className="text-sm text-slate-500">Conecta tu calendario y correo para sincronización automática.</p>
-                </div>
-            </div>
-            
-            <div className="space-y-4">
-              {(activeProvider === 'google' || activeProvider === null) && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-200 rounded-xl hover:border-slate-300 transition-all bg-slate-50/50">
-                  <div className="flex items-center gap-4 mb-4 sm:mb-0">
-                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 via-yellow-400 to-blue-500 flex items-center justify-center text-white text-xl">
-                        <i className="fa-brands fa-google"></i>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-800">Google Workspace</p>
-                      <p className="text-xs text-slate-500 mt-0.5">Sincroniza Calendar y Gmail</p>
-                    </div>
-                  </div>
-                  {profileData.googleConnected ? (
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center">
-                        <i className="fa-solid fa-check-circle mr-1.5"></i> Conectado
-                      </span>
-                      <button
-                        onClick={() => handleSyncToggle('google')}
-                        disabled={syncing === 'google'}
-                        className="text-slate-400 hover:text-red-500 p-2 rounded-lg transition-colors text-sm"
-                        title="Desconectar"
-                      >
-                        {syncing === 'google' ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-power-off"></i>}
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleSyncToggle('google')}
-                      disabled={syncing === 'google'}
-                      className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm flex items-center"
-                    >
-                      {syncing === 'google' ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-brands fa-google mr-2"></i>}
-                      Conectar Cuenta
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {(activeProvider === 'outlook' || (activeProvider === null && !profileData.googleConnected)) && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-5 border border-slate-200 rounded-xl hover:border-slate-300 transition-all bg-slate-50/50">
-                  <div className="flex items-center gap-4 mb-4 sm:mb-0">
-                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100">
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700 flex items-center justify-center text-white text-xl">
-                        <i className="fa-brands fa-microsoft"></i>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-800">Microsoft Outlook</p>
-                      <p className="text-xs text-slate-500 mt-0.5">Sincroniza Calendario y Contactos</p>
-                    </div>
-                  </div>
-                  {profileData.outlookConnected ? (
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-bold text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center">
-                        <i className="fa-solid fa-check-circle mr-1.5"></i> Conectado
-                      </span>
-                      <button
-                        onClick={() => handleSyncToggle('outlook')}
-                        disabled={syncing === 'outlook'}
-                        className="text-slate-400 hover:text-red-500 p-2 rounded-lg transition-colors text-sm"
-                        title="Desconectar"
-                      >
-                        {syncing === 'outlook' ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-power-off"></i>}
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => handleSyncToggle('outlook')}
-                      disabled={syncing === 'outlook'}
-                      className="bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 px-4 py-2 rounded-lg text-sm font-medium transition-all shadow-sm flex items-center"
-                    >
-                      {syncing === 'outlook' ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-brands fa-microsoft mr-2"></i>}
-                      Conectar Cuenta
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Security (Placeholder) */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 opacity-75">
-             <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 bg-slate-50 rounded-lg flex items-center justify-center text-slate-600">
-                    <i className="fa-solid fa-shield-halved text-lg"></i>
-                </div>
-                <div>
-                    <h3 className="font-bold text-slate-800 text-lg">Seguridad</h3>
-                    <p className="text-sm text-slate-500">Tu acceso está protegido por Google OAuth.</p>
-                </div>
-            </div>
-            <div className="p-4 border border-dashed border-slate-200 rounded-xl text-center bg-slate-50">
-                <p className="text-sm text-slate-500">Tu autenticación se realiza a través de tu cuenta de Google.</p>
-            </div>
-          </div>
-
         </div>
       </div>
     </div>

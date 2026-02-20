@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGoogleLogin } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
-import { buildMicrosoftAuthUrl, registerAuthMessageListener } from '../services/authService';
-import { enabledProviders, microsoftClientId, oauthRedirectUri } from '../services/oauthConfig';
+import { useGoogleAuth } from '../services/authProviders/googleAuth';
+import { useMicrosoftAuth } from '../services/authProviders/microsoftAuth';
+import { AUTH_PROVIDERS, ProviderType } from '../services/authProviders/providers';
+import { LoginProviderButton } from '../components/LoginProviderButton';
+import { enabledProviders, oauthRedirectUri } from '../services/oauthConfig';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -30,6 +32,47 @@ const LoginPage: React.FC = () => {
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
   const [error, setError] = useState('');
 
+  // Inicializar hooks de autenticación para cada proveedor
+  const googleAuthHandler = useGoogleAuth({
+    onSuccess: (code) => {
+      setLoadingProvider('google');
+      sendCodeToGateway(code, 'google');
+    },
+    onError: () => {
+      setError('Falló la conexión con Google.');
+      setLoadingProvider(null);
+    }
+  });
+
+  const microsoftAuthHandler = useMicrosoftAuth({
+    scope: 'openid profile email offline_access User.Read',
+    onSuccess: (code) => {
+      setLoadingProvider('microsoft');
+      sendCodeToGateway(code, 'microsoft');
+    },
+    onError: () => {
+      setError('Falló la conexión con Microsoft.');
+      setLoadingProvider(null);
+    }
+  });
+
+  // Mapeo de proveedores a sus handlers
+  const authHandlers: Record<ProviderType, () => void> = {
+    google: googleAuthHandler,
+    microsoft: microsoftAuthHandler,
+    // Agregar nuevos proveedores aquí:
+    // github: githubAuthHandler,
+    // linkedin: linkedinAuthHandler,
+  };
+
+  // Disparador genérico para cualquier proveedor
+  const handleProviderLogin = (provider: ProviderType) => {
+    setError('');
+    if (provider in authHandlers) {
+      authHandlers[provider]();
+    }
+  };
+
   // Enviar el authorization code al Gateway para que lo intercambie por tokens
   const sendCodeToGateway = async (code: string, provider: 'google' | 'microsoft') => {
     try {
@@ -43,10 +86,11 @@ const LoginPage: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          code: code,                    // Código OAuth de Google/Microsoft
-          provider: provider,            // 'google' o 'microsoft'
-          app_id: 'crm',                 // Identificador de la aplicación
-          redirect_uri: oauthRedirectUri // URL de callback registrada
+          code: code,
+          provider: provider,
+          module: 'auth_only',
+          app_id: 'crm',
+          redirect_uri: oauthRedirectUri
         }),
       });
 
@@ -56,15 +100,15 @@ const LoginPage: React.FC = () => {
       }
 
       const responseData = await response.json();
-
+      const loginData = Array.isArray(responseData) ? responseData[0] : responseData;
 
       // El Gateway devuelve: { token: "appToken", user: {...} }
       // El objeto user contiene los datos mapeados a la estructura del CRM
-      if (!responseData || !responseData.token) {
+      if (!loginData || !loginData.token) {
         throw new Error('El Gateway no devolvió un token válido.');
       }
 
-      const { token: appToken, user: userData } = responseData;
+      const { token: appToken, user: userData } = loginData;
 
 
       // Validar que el usuario tenga los campos esenciales
@@ -72,10 +116,8 @@ const LoginPage: React.FC = () => {
         throw new Error('Los datos del usuario son incompletos.');
       }
 
-      // Guardar el appToken y el usuario en el contexto
-      // El useEffect del componente detectará el cambio en 'user' y navegará automáticamente
-
-      login(appToken, userData);
+      // Guardar el appToken. El contexto se encargará de solicitar /api/v1/me.
+      await login(appToken, userData);
 
 
     } catch (err: any) {
@@ -92,149 +134,7 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  // --- CONFIGURACIÓN GOOGLE: Obtener authorization code ---
-  const googleLogin = useGoogleLogin({
-    onSuccess: (tokenResponse: any) => {
-      setLoadingProvider('google');
 
-      // tokenResponse.code contiene el authorization code en flujo auth-code
-      const code = tokenResponse.code;
-      if (!code) {
-        setError('No se recibió el código de autorización de Google.');
-        setLoadingProvider(null);
-        return;
-      }
-      sendCodeToGateway(code, 'google');
-    },
-    onError: () => {
-      setError('Falló la conexión con Google.');
-      setLoadingProvider(null);
-    },
-    flow: 'auth-code', // Authorization Code Flow para obtener el code (no id_token)
-    // Scopes para Calendario, Gmail y acceso offline para refresh_token
-    scope: "openid profile email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.modify"
-  });
-
-  // --- CONFIGURACIÓN MICROSOFT (POPUP MANUAL) ---
-  const handleMicrosoftLogin = () => {
-    if (!microsoftClientId) {
-        setError('Falta configurar el Cliente de Microsoft.');
-        return;
-    }
-
-    if (!oauthRedirectUri) {
-        setError('Falta configurar VITE_REDIRECT_URI en las variables de entorno.');
-        return;
-    }
-
-    setError('');
-    setLoadingProvider('microsoft');
-
-    // Scopes de Microsoft
-    const scopes = "openid profile email offline_access User.Read Mail.ReadWrite Calendars.ReadWrite";
-
-    // URL con prompt=select_account para evitar intentos de Silent SSO con sesiones caducadas
-    const authUrl = buildMicrosoftAuthUrl({
-      clientId: microsoftClientId,
-      redirectUri: oauthRedirectUri,
-      scopes,
-    });
-
-    // Seguimiento del popup y tolerancia a cierres breves durante MFA
-    let popup: Window | null = null;
-    let intervalId: number | null = null;
-    let closeTimeoutId: number | null = null;
-    let authCompleted = false;
-    let detachMessageListener: (() => void) | null = null;
-
-    const clearWatchers = (keepLoading = false) => {
-      if (intervalId) {
-        clearInterval(intervalId);
-        intervalId = null;
-      }
-      if (closeTimeoutId) {
-        clearTimeout(closeTimeoutId);
-        closeTimeoutId = null;
-      }
-      if (detachMessageListener) {
-        detachMessageListener();
-        detachMessageListener = null;
-      }
-      if (!keepLoading) {
-        setLoadingProvider(null);
-      }
-    };
-
-    const handleSuccess = (code: string) => {
-      authCompleted = true;
-      if (closeTimeoutId) {
-        clearTimeout(closeTimeoutId);
-        closeTimeoutId = null;
-      }
-      if (popup && !popup.closed) {
-        popup.close();
-      }
-      clearWatchers(true);
-      sendCodeToGateway(code, 'microsoft');
-    };
-
-    // Listener persistente: se registra ANTES de abrir el popup y se limpia al terminar
-    detachMessageListener = registerAuthMessageListener((message) => {
-      if (message.provider !== 'microsoft') return;
-      if (!message.code) return;
-      handleSuccess(message.code);
-    });
-
-    // Centrar Popup
-    const width = 500; const height = 600;
-    const left = window.screen.width / 2 - width / 2;
-    const top = window.screen.height / 2 - height / 2;
-
-    popup = window.open(
-      authUrl,
-      'Microsoft Login',
-      `width=${width},height=${height},top=${top},left=${left}`
-    );
-
-    if (!popup) {
-      clearWatchers();
-      setError('No se pudo abrir la ventana de Microsoft.');
-      return;
-    }
-
-    // Vigilar el Popup con tolerancia a cierres breves (2s) para MFA
-    intervalId = window.setInterval(() => {
-      try {
-        if (popup && popup.location && popup.location.origin === window.location.origin) {
-          const searchParams = new URLSearchParams(popup.location.search);
-          const code = searchParams.get('code');
-          const err = searchParams.get('error');
-
-          if (code) {
-            handleSuccess(code);
-            return;
-          }
-
-          if (err && !authCompleted) {
-            clearWatchers();
-            popup.close();
-            setError('Microsoft: ' + err);
-            return;
-          }
-        }
-      } catch (e) {
-        // Ignoramos errores de cross-origin mientras el usuario está en microsoft.com
-      }
-
-      if (popup?.closed && !closeTimeoutId && !authCompleted) {
-        closeTimeoutId = window.setTimeout(() => {
-          if (authCompleted) return;
-          clearWatchers();
-          setError('Microsoft: Cancelado por el usuario');
-        }, 2000);
-      }
-    }, 500);
-  };
 
   // --- RENDERIZADO ---
   // Mostrar pantalla de carga mientras se verifica la sesión
@@ -282,35 +182,18 @@ const LoginPage: React.FC = () => {
           )}
 
           <div className="space-y-3">
-            {/* GOOGLE BUTTON */}
-            <button
-              type="button"
-              disabled={!enabledProviders.google || !!loadingProvider}
-              onClick={() => googleLogin()}
-              className={`w-full inline-flex items-center justify-center gap-3 py-2.5 px-4 border border-slate-200 dark:border-slate-400 rounded-lg shadow-sm bg-white dark:bg-slate-400 text-sm font-semibold text-slate-700 dark:text-slate-900 hover:bg-slate-50 dark:hover:bg-slate-300 transition ${loadingProvider === 'google' ? 'opacity-70 cursor-wait' : ''} ${!enabledProviders.google ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {loadingProvider === 'google' ? (
-                <i className="fa-solid fa-circle-notch fa-spin text-slate-400"></i>
-              ) : (
-                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-              )}
-              {loadingProvider === 'google' ? 'Conectando...' : 'Continuar con Google'}
-            </button>
-
-            {/* MICROSOFT BUTTON */}
-            <button
-              type="button"
-              disabled={!enabledProviders.microsoft || !!loadingProvider}
-              onClick={handleMicrosoftLogin}
-              className={`w-full inline-flex items-center justify-center gap-3 py-2.5 px-4 border border-slate-200 dark:border-slate-400 rounded-lg shadow-sm bg-white dark:bg-slate-400 text-sm font-semibold text-slate-700 dark:text-slate-900 hover:bg-slate-50 dark:hover:bg-slate-300 transition ${loadingProvider === 'microsoft' ? 'opacity-70 cursor-wait' : ''} ${!enabledProviders.microsoft ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {loadingProvider === 'microsoft' ? (
-                 <i className="fa-solid fa-circle-notch fa-spin text-slate-400"></i>
-              ) : (
-                 <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" alt="M" className="w-5 h-5" />
-              )}
-              {loadingProvider === 'microsoft' ? 'Conectando...' : 'Continuar con Microsoft'}
-            </button>
+            {/* Renderizar botones dinámicamente para cada proveedor habilitado */}
+            {Object.entries(AUTH_PROVIDERS)
+              .filter(([_, config]) => config.enabled && enabledProviders[_ as ProviderType])
+              .map(([provider, config]) => (
+                <LoginProviderButton
+                  key={provider}
+                  provider={provider as ProviderType}
+                  isLoading={loadingProvider === provider}
+                  onClick={() => handleProviderLogin(provider as ProviderType)}
+                  disabled={!!loadingProvider && loadingProvider !== provider}
+                />
+              ))}
 
             {(!enabledProviders.google && !enabledProviders.microsoft) && (
               <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg p-3 text-center">

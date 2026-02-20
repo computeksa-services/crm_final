@@ -1,0 +1,44 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "client_id",
+              "value": "=f313a15a-a78b-4d15-ae88-9e236e62da04"
+            },
+            {
+              "name": "client_secret",
+              "value": "=PkJ8Q~Tl63MTVGE-VidB1.-VDhyp2zFE5Ur5Wb0l"
+            },
+            {
+              "name": "grant_type",
+              "value": "authorization_code"
+            },
+            {
+              "name": "code",
+              "value": "={{ $json.body.code }}"
+            },
+            {
+              "name": "redirect_uri",
+              "value": "={{ $json.body.redirect_uri }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [32, 384],
+      "id": "85159b9c-e89b-4e30-a008-8b10ac8a0507",
+      "name": "Canjear Codigo Microsoft"
+    }
+  ],
+  "connections": {},
+  "pinData": {}
+}

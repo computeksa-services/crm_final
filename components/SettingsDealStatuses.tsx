@@ -6,6 +6,7 @@ import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import IconPicker from '../components/IconPicker';
 import { apiFetch } from '../services/apiClient';
+import { useEmailSendPolicy } from '../src/hooks/useEmailSendPolicy';
 
 // Paleta de colores estándar
 const PRESET_COLORS = [
@@ -27,6 +28,7 @@ interface ExtendedDealStatus extends DealStatus {
 const SettingsDealStatuses: React.FC = () => {
   const { user } = useAuth();
   const { dealStatuses: cachedStatuses, loading: cacheLoading, invalidateDealStatuses } = useDataCache();
+  const { policy: emailPolicy } = useEmailSendPolicy(user);
   
   // Datos locales para drag & drop
   const [statuses, setStatuses] = useState<ExtendedDealStatus[]>([]);
@@ -44,6 +46,15 @@ const SettingsDealStatuses: React.FC = () => {
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
   const [orderChanged, setOrderChanged] = useState(false);
   const [savingOrder, setSavingOrder] = useState(false);
+
+  const canSendEmail = emailPolicy.status === 'corporate' || emailPolicy.status === 'personal';
+  const emailPermissionMessage = emailPolicy.status === 'corporate'
+    ? 'Permiso activo: Cuenta corporativa.'
+    : emailPolicy.status === 'personal'
+      ? 'Permiso activo: Cuenta personal.'
+      : emailPolicy.status === 'loading'
+        ? 'Validando permisos de envio...'
+        : 'No hay permisos de envio activos. Configura Integraciones o Workspace.';
 
   // Sincronizar cache con estado local para drag & drop
   useEffect(() => {
@@ -281,8 +292,14 @@ const SettingsDealStatuses: React.FC = () => {
       <ConfirmModal {...confirmState} isDestructive={true} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} />
 
       <div className="flex justify-between items-center mb-6">
-        <div>
-            <p className="text-sm text-slate-500">Define las etapas del pipeline de ventas. Cada estado representa un paso en el proceso comercial y puede configurarse para enviar notificaciones automáticas al cliente.</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            title="Define las etapas del pipeline de ventas. Cada estado representa un paso en el proceso comercial y puede configurarse para enviar notificaciones automáticas al cliente."
+            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+          >
+            <i className="fa-solid fa-circle-info text-lg"></i>
+          </button>
         </div>
         <div className="flex items-center gap-2">
           {orderChanged && (
@@ -301,11 +318,12 @@ const SettingsDealStatuses: React.FC = () => {
           <i className="fa-regular fa-folder-open text-4xl mb-3 opacity-50"></i> <p>No hay estados configurados.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          {/* Renderizado de columnas usando los arrays filtrados */}
+        <div className="space-y-3">
+          {/* Renderizado de columnas usando los arrays filtrados - Lista Vertical */}
           {['DRAFT', 'PROGRESS', 'PAUSED', 'WON', 'LOST'].map(cat => {
              const list = cat === 'DRAFT' ? draftStatuses : cat === 'PROGRESS' ? progressStatuses : cat === 'PAUSED' ? pausedStatuses : cat === 'WON' ? wonStatuses : lostStatuses;
              const colors: any = { DRAFT: 'slate', PROGRESS: 'emerald', PAUSED: 'amber', WON: 'blue', LOST: 'red' };
+             const colorCodes: any = { DRAFT: '#6b7280', PROGRESS: '#10b981', PAUSED: '#f59e0b', WON: '#3b82f6', LOST: '#ef4444' };
              const titles: any = { DRAFT: 'Borrador', PROGRESS: 'En Progreso', PAUSED: 'Pausado', WON: 'Ganado', LOST: 'Perdido' };
              const icons: any = { DRAFT: 'fa-file-lines', PROGRESS: 'fa-arrows-spin', PAUSED: 'fa-pause', WON: 'fa-trophy', LOST: 'fa-circle-xmark' };
              
@@ -314,16 +332,25 @@ const SettingsDealStatuses: React.FC = () => {
                  key={cat}
                  onDragOver={(e) => handleDragOverCategory(e)}
                  onDrop={(e) => handleDropOnCategory(e, cat)}
-                 className={`bg-white rounded-xl shadow-sm border-2 border-${colors[cat]}-200 overflow-hidden flex flex-col`}
+                 className="bg-white border border-slate-200 rounded-lg overflow-hidden"
                >
-                 <div className={`bg-gradient-to-r from-${colors[cat]}-500 to-${colors[cat]}-600 p-3 text-white flex-shrink-0`}>
+                 {/* Header */}
+                 <div className="px-4 py-3 border-b border-slate-200" style={{ backgroundColor: colorCodes[cat] + '15', borderLeftColor: colorCodes[cat], borderLeftWidth: '4px' }}>
                    <div className="flex items-center gap-2">
-                     <i className={`fa-solid ${icons[cat]} text-sm`}></i>
-                     <h4 className="font-bold text-xs uppercase tracking-wide">{titles[cat]}</h4>
+                     <i className={`fa-solid ${icons[cat]} text-sm`} style={{ color: colorCodes[cat] }}></i>
+                     <h4 className="font-bold text-sm" style={{ color: colorCodes[cat] }}>{titles[cat]}</h4>
+                     <span className="text-xs text-slate-500 ml-auto">({list.length})</span>
                    </div>
                  </div>
-                 <div className="p-2 space-y-2 min-h-[150px] flex-1 overflow-auto">
-                   {list.map(status => renderStatusCard(status))}
+                 {/* Items - Lista vertical */}
+                 <div className="p-2 space-y-1.5">
+                   {list.length === 0 ? (
+                     <div className="text-center py-4 text-slate-400 text-xs">
+                       Sin elementos en esta categoría
+                     </div>
+                   ) : (
+                     list.map(status => renderStatusCard(status))
+                   )}
                  </div>
                </div>
              )
@@ -336,8 +363,8 @@ const SettingsDealStatuses: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all relative">
             
-            <div className="px-6 py-4 border-b border-slate-100 bg-white flex justify-between items-center">
-                <h2 className="font-bold text-lg text-slate-800">
+            <div className="px-4 md:px-6 py-3 md:py-4 border-b border-slate-100 bg-white flex justify-between items-center">
+                <h2 className="font-bold text-base md:text-lg text-slate-800">
                     {editingStatus.id_status ? 'Editar Estado' : 'Nuevo Estado'}
                 </h2>
                 <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
@@ -345,18 +372,18 @@ const SettingsDealStatuses: React.FC = () => {
                 </button>
             </div>
             
-            <div className="p-6 space-y-5">
+            <div className="p-4 md:p-6 space-y-4 md:space-y-5">
               
               {/* Vista Previa */}
               <div className="flex justify-center">
                   <div 
-                    className="flex items-center gap-3 px-5 py-3 rounded-xl border border-slate-100 bg-slate-50 transition-all"
+                    className="flex items-center gap-2 md:gap-3 px-3 md:px-5 py-2 md:py-3 rounded-lg md:rounded-xl border border-slate-100 bg-slate-50 transition-all"
                     style={{ borderColor: `${editingStatus.color}40`, backgroundColor: `${editingStatus.color}10` }}
                   >
-                     <div className="text-xl" style={{ color: editingStatus.color }}>
+                     <div className="text-lg md:text-xl" style={{ color: editingStatus.color }}>
                         <i className={editingStatus.icon}></i>
                      </div>
-                     <span className="font-bold text-lg" style={{ color: editingStatus.color }}>
+                     <span className="font-bold text-base md:text-lg" style={{ color: editingStatus.color }}>
                         {editingStatus.name || 'Nombre Estado'}
                      </span>
                   </div>
@@ -369,7 +396,7 @@ const SettingsDealStatuses: React.FC = () => {
                     type="text" 
                     value={editingStatus.name || ''} 
                     onChange={(e) => setEditingStatus({ ...editingStatus, name: e.target.value })} 
-                    className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all placeholder:text-slate-300"
+                    className="w-full px-3 md:px-4 py-2 md:py-2.5 border border-slate-200 rounded-lg md:rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all placeholder:text-slate-300 text-sm"
                     placeholder="Ej. En Negociación"
                     autoFocus
                 />
@@ -383,7 +410,7 @@ const SettingsDealStatuses: React.FC = () => {
                 <select
                   value={editingStatus.status_category || 'DRAFT'}
                   onChange={(e) => setEditingStatus({ ...editingStatus, status_category: e.target.value as any })}
-                  className="w-full px-4 py-2.5 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all bg-white"
+                  className="w-full px-3 md:px-4 py-2 md:py-2.5 border border-slate-200 rounded-lg md:rounded-xl focus:ring-2 focus:ring-brand-500 outline-none transition-all bg-white text-sm"
                 >
                   <option value="DRAFT">📝 Borrador</option>
                   <option value="PROGRESS">🔄 En Progreso</option>
@@ -393,7 +420,7 @@ const SettingsDealStatuses: React.FC = () => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
                  {/* Color Picker */}
                  <div>
                     <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Color</label>
@@ -428,14 +455,14 @@ const SettingsDealStatuses: React.FC = () => {
               </div>
 
               {/* --- AQUÍ ESTÁ LA NUEVA CONFIGURACIÓN DE NOTIFICACIONES --- */}
-              <div className="border-t border-slate-100 pt-4 mt-2">
+                <div className="border-t border-slate-100 pt-4 mt-2">
                  <div 
-                    onClick={() => setEditingStatus({ ...editingStatus, notify_client: !editingStatus.notify_client })}
-                    className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${
-                        editingStatus.notify_client 
-                        ? 'bg-blue-50 border-blue-200' 
-                        : 'bg-slate-50 border-slate-100 hover:bg-slate-100'
-                    }`}
+                  onClick={() => canSendEmail && setEditingStatus({ ...editingStatus, notify_client: !editingStatus.notify_client })}
+                  className={`flex items-center justify-between p-3 rounded-xl transition-all border ${
+                    editingStatus.notify_client 
+                    ? 'bg-blue-50 border-blue-200' 
+                    : 'bg-slate-50 border-slate-100'
+                  } ${canSendEmail ? 'cursor-pointer hover:bg-slate-100' : 'opacity-60 cursor-not-allowed'}`}
                  >
                     <div className="flex gap-3 items-center">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center ${editingStatus.notify_client ? 'bg-blue-200 text-blue-600' : 'bg-slate-200 text-slate-400'}`}>
@@ -452,10 +479,13 @@ const SettingsDealStatuses: React.FC = () => {
                     </div>
                     
                     {/* Toggle Switch Visual */}
-                    <div className={`w-10 h-5 rounded-full relative transition-colors ${editingStatus.notify_client ? 'bg-blue-600' : 'bg-slate-300'}`}>
+                      <div className={`w-10 h-5 rounded-full relative transition-colors ${editingStatus.notify_client ? 'bg-blue-600' : 'bg-slate-300'}`}>
                         <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all shadow-sm ${editingStatus.notify_client ? 'left-6' : 'left-1'}`}></div>
                     </div>
                  </div>
+                    <p className="mt-2 text-[11px] text-slate-500">
+                     {emailPermissionMessage}
+                    </p>
               </div>
 
               {/* Checkbox Default */}
@@ -475,7 +505,7 @@ const SettingsDealStatuses: React.FC = () => {
             </div>
             
             {/* Footer */}
-            <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+            <div className="px-4 md:px-6 py-3 md:py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 md:gap-3">
               <button 
                 onClick={() => setIsModalOpen(false)} 
                 className="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 hover:bg-white transition-colors text-sm font-medium"

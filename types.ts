@@ -24,31 +24,37 @@ export interface Tenant {
 // 2. USER (El empleado del Tenant)
 export interface User {
   id_user: string;
-  id_tenant: string; // Foreign Key a Tenant
+  id_tenant: string;
   name_user: string;
-  name_tenant?: string; // Nombre del tenant
+  name_tenant?: string;
   email_user: string;
   phone_user?: string;
-  rol_user: 'superadmin' | 'admin' | 'usuario';
+  rol_user: 'superadmin' | 'admin' | 'usuario' | 'owner';
   status_user: 'Activo' | 'Inactivo';
   avatar_url?: string;
   job_title?: string;
-  
-  // Owner Flag
-  is_owner?: boolean;
-  
-  // Module Access
-  module_access?: {
-    crm?: boolean;
-    marketing?: boolean;
-    financials?: boolean;
+  is_owner: boolean;
+  module_access: {
+    crm: boolean;
+    marketing: boolean;
+    financials: boolean;
   };
-  
-  // Sync Status
-  googleConnected: boolean;
-  outlookConnected: boolean;
-  google_connected?: boolean;
-  outlook_connected?: boolean;
+  provider: 'google' | 'microsoft' | null;
+  email_connected: string | null;
+  sync_calendar: boolean;
+  sync_emails: boolean;
+  send_emails: boolean;
+  watch_active: boolean;
+  requires_admin_consent: boolean;
+  granted_scopes: string[];
+  // ⚠️ Campo opcional para compatibilidad con respuestas del backend que usan estructura anidada
+  integrations?: {
+    send_emails?: boolean;
+    sync_emails?: boolean;
+    sync_calendar?: boolean;
+    watch_active?: boolean;
+    granted_scopes?: string[];
+  };
 }
 
 // NUEVA INTERFAZ PARA TIPOS DE PRODUCTO
@@ -68,6 +74,7 @@ export interface DealStatus {
   is_default: boolean;
   icon: string;
   status_category?: 'DRAFT' | 'PROGRESS' | 'PAUSED' | 'WON' | 'LOST';
+  notify_client?: boolean; // Flag para enviar notificación al cliente por correo
 }
 
 export interface QuoteStatus {
@@ -120,12 +127,14 @@ export interface ClientCompany {
   access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend
   id_country?: string; // ID del país
   id_company_type?: string; // ID del tipo de empresa
+  id_company_size?: string; // ID del tamaño de empresa
   id_label?: string; // ID de la etiqueta
   // Campos calculados por el backend
   created_by_name?: string;
   created_by_avatar?: string;
   country_name?: string;
   company_type_name?: string;
+  company_size?: string;
   label_name?: string;
   label_color?: string;
 }
@@ -176,6 +185,13 @@ export interface ClientContact {
   current_status_color?: string; // Nuevo: color del estado
   current_status_icon?: string; // Nuevo: icono del estado
   status_category?: 'LEAD' | 'ACTIVE' | 'DORMANT'; // Nuevo: categoría del estado
+  collaborators?: Array<{
+    id?: string;
+    id_user?: string;
+    access_level?: string;
+    permission_level?: string;
+    is_owner?: boolean;
+  }>;
 }
 
 // NUEVA INTERFAZ PARA TRATOS EN EL PANEL DE SEGUIMIENTO
@@ -185,6 +201,11 @@ export interface DealFollowUpItem {
     status_category_label?: string;
     last_management_date?: string;
     last_management_desc?: string;
+    last_management_user_id?: string;
+    last_management_user_name?: string;
+    last_management_user_avatar?: string;
+    last_management_channel_icon?: string;
+    last_management_channel_color?: string;
   id_entity: string; // ID del trato desde el backend
   id_trato?: string; // Compatibilidad
   id_tenant?: string;
@@ -192,6 +213,7 @@ export interface DealFollowUpItem {
   title: string; // Nombre del trato
   nombre_trato?: string; // Compatibilidad
   subtitle?: string; // Nombre de la empresa
+  contact_name?: string; // Nombre del contacto principal
   valor_trato?: number | string;
   client_company_name?: string;
   contact_full_name?: string;
@@ -213,6 +235,13 @@ export interface DealFollowUpItem {
   id_client_company?: string;
   id_contact?: string;
   id_status?: string;
+  collaborators?: Array<{
+    id?: string;
+    id_user?: string;
+    access_level?: string;
+    permission_level?: string;
+    is_owner?: boolean;
+  }>;
 }
 
 // TIPO DE UNIÓN PARA EL PANEL DE SEGUIMIENTO

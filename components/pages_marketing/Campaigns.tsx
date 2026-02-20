@@ -5,6 +5,7 @@ import { MarketingCampaign } from '../../types';
 import { marketingApi } from '../../services/marketingApi';
 import Toast from '../Toast';
 import ConfirmModal from '../ConfirmModal';
+import { useEmailSendPolicy } from '../../src/hooks/useEmailSendPolicy';
 import {
   useReactTable,
   getCoreRowModel,
@@ -67,6 +68,7 @@ const formatDateString = (dateStr?: string) => {
 const Campaigns: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { policy: emailPolicy } = useEmailSendPolicy(user);
   
   // --- STATE ---
   const [data, setData] = useState<MarketingCampaign[]>([]);
@@ -92,6 +94,18 @@ const Campaigns: React.FC = () => {
     isDestructive: false,
     onConfirm: async () => {}, 
   });
+
+  const canSendCampaign = emailPolicy.status === 'corporate' || emailPolicy.status === 'personal';
+  const normalizeId = (value?: string | number | null) => String(value ?? '').trim().toLowerCase();
+  const isCampaignCreator = (campaign: MarketingCampaign) => {
+    const userId = normalizeId(user?.id_user);
+    const creatorId = normalizeId(campaign.created_by);
+    if (userId && creatorId) return userId === creatorId;
+    const userName = normalizeId(user?.name_user);
+    const creatorName = normalizeId(campaign.created_by_name);
+    if (userName && creatorName) return userName === creatorName;
+    return false;
+  };
 
   // --- DATA LOADING ---
   useEffect(() => {
@@ -205,10 +219,21 @@ const Campaigns: React.FC = () => {
 
   const handleLaunch = (e: React.MouseEvent, row: MarketingCampaign) => {
     e.stopPropagation();
+    const isCreator = isCampaignCreator(row);
+    if (!isCreator) {
+      setToast({ message: 'Solo el creador de la campaña puede lanzar el envio.', type: 'error' });
+      return;
+    }
+    if (!canSendCampaign) {
+      setToast({ message: 'Activa permisos de envio en Integraciones o Workspace para lanzar la campaña.', type: 'error' });
+      return;
+    }
+    const senderType = String(row.sender_type || '').toUpperCase() === 'TENANT' ? 'Corporativa' : 'Personal';
+    const senderEmail = row.sender_email ? ` (${row.sender_email})` : '';
     setConfirmState({
       isOpen: true,
       title: 'Lanzar Campaña',
-      message: `La campaña se enviará inmediatamente. ¿Confirmar envío?`,
+      message: `La campaña se enviará inmediatamente desde cuenta ${senderType}${senderEmail}. ¿Confirmar envío?`,
       confirmText: 'Enviar Ahora',
       isDestructive: false,
       onConfirm: async () => {
@@ -354,6 +379,26 @@ const Campaigns: React.FC = () => {
         filterValue.length === 0 || filterValue.includes(row.getValue(id) || 'DRAFT')
     },
     {
+      accessorKey: 'sender_type',
+      header: 'Remitente',
+      size: 180,
+      cell: ({ row, getValue }) => {
+        const senderType = String(getValue() || '').toUpperCase();
+        const isTenant = senderType === 'TENANT';
+        const senderEmail = row.original.sender_email;
+        return (
+          <div className="flex items-center gap-2 text-xs text-slate-600">
+            <span className={`w-6 h-6 rounded-full border flex items-center justify-center ${isTenant ? 'text-indigo-600 border-indigo-100 bg-indigo-50' : 'text-emerald-600 border-emerald-100 bg-emerald-50'}`}>
+              <i className={`fa-solid ${isTenant ? 'fa-building' : 'fa-user'} text-[10px]`}></i>
+            </span>
+            <span className="truncate max-w-[150px]">
+              {senderEmail || (isTenant ? 'Cuenta corporativa' : 'Cuenta personal')}
+            </span>
+          </div>
+        );
+      }
+    },
+    {
       id: 'progress',
       header: 'Progreso',
       size: 160,
@@ -422,12 +467,12 @@ const Campaigns: React.FC = () => {
         // Nueva Columna "Creado por"
         accessorKey: 'created_by_name',
         header: 'Creado',
-        size: 100,
+        size: 115,
         cell: ({ row }) => {
             const name = row.original.created_by_name || 'Desconocido';
             const avatar = row.original.avatar_url;
             return (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center" title={name}>
                     {avatar ? (
                         <img src={avatar} alt={name} className="w-6 h-6 rounded-full border border-slate-200" />
                     ) : (
@@ -435,7 +480,6 @@ const Campaigns: React.FC = () => {
                             {name.charAt(0)}
                         </div>
                     )}
-                    <span className="text-xs text-slate-600 font-medium truncate max-w-[80px]">{name}</span>
                 </div>
             )
         }
@@ -477,7 +521,8 @@ const Campaigns: React.FC = () => {
       cell: ({ row }) => {
         const c = row.original;
         const st = c.status || 'DRAFT';
-        const isCreator = user?.id_user === c.created_by;
+        const isCreator = isCampaignCreator(c);
+        const canLaunch = isCreator && canSendCampaign;
         
         return (
           <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -485,14 +530,14 @@ const Campaigns: React.FC = () => {
             {/* Lanzar (Solo draft y solo el creador) */}
             {st === 'DRAFT' && (
                 <button 
-                  onClick={(e) => isCreator && handleLaunch(e, c)} 
-                  disabled={!isCreator}
+                  onClick={(e) => canLaunch && handleLaunch(e, c)} 
+                  disabled={!canLaunch}
                   className={`w-6 h-6 flex items-center justify-center text-slate-400 rounded transition-colors ${
-                    isCreator 
+                    canLaunch 
                       ? 'hover:text-green-600 hover:bg-green-50 cursor-pointer' 
                       : 'opacity-40 cursor-not-allowed'
                   }`} 
-                  title={isCreator ? 'Lanzar' : 'Solo el creador puede lanzar'}
+                  title={!isCreator ? 'Solo el creador puede lanzar' : !canSendCampaign ? 'Activa permisos de envio en Integraciones o Workspace' : 'Lanzar'}
                 >
                     <i className="fa-solid fa-rocket text-[10px]"></i>
                 </button>
@@ -688,7 +733,7 @@ const Campaigns: React.FC = () => {
                         className="hover:bg-blue-50/30 cursor-pointer group border-b border-slate-100 transition-colors"
                     >
                         {row.getVisibleCells().map(cell => (
-                            <td key={cell.id} className="px-4 py-3 border-r border-slate-50 text-sm text-slate-600">
+                          <td key={cell.id} style={{ width: cell.column.getSize() }} className="px-4 py-3 border-r border-slate-50 text-sm text-slate-600">
                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </td>
                         ))}

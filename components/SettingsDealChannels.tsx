@@ -167,8 +167,14 @@ const SettingsDealChannels: React.FC = () => {
       <ConfirmModal {...confirmState} isDestructive={true} onClose={() => setConfirmState({ ...confirmState, isOpen: false })} />
 
       <div className="flex justify-between items-center mb-6">
-        <div>
-          <p className="text-sm text-slate-500">Define los canales de origen de tus tratos (redes sociales, web, referidos, etc.). Permite rastrear qué fuentes generan más oportunidades de negocio.</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            title="Define los canales de origen de tus tratos (redes sociales, web, referidos, etc.). Permite rastrear qué fuentes generan más oportunidades de negocio."
+            className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+          >
+            <i className="fa-solid fa-circle-info text-lg"></i>
+          </button>
         </div>
         <div className="flex items-center gap-3">
           {orderChanged && (

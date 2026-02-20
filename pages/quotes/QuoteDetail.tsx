@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Quote, QuoteItem, UserDecision, Product, QuoteStatus, PdfVersion, ProductType } from '../../types';
 import { apiFetch } from '../../services/apiClient';
+import { useEmailSendPolicy } from '../../src/hooks/useEmailSendPolicy';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
@@ -143,6 +144,7 @@ const QuoteDetail: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { policy: emailPolicy, isLoading: emailPolicyLoading } = useEmailSendPolicy(user);
 
   // --- ESTADOS DE DATOS ---
   const [quote, setQuote] = useState<QuoteExtended | null>(null);
@@ -198,8 +200,20 @@ const QuoteDetail: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Confirm Modal State
-  const [confirmState, setConfirmState] = useState({
-    isOpen: false, title: '', message: '', onConfirm: () => {}, isDestructive: false,
+  const [confirmState, setConfirmState] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: React.ReactNode;
+    onConfirm: () => void;
+    isDestructive?: boolean;
+    confirmText?: string;
+    cancelText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    isDestructive: false,
   });
 
   // --- HELPER FUNCTIONS ---
@@ -746,13 +760,62 @@ const QuoteDetail: React.FC = () => {
 
   const handleSendQuote = async (idVersion?: string) => {
     if (!quote || !user) return;
+    if (emailPolicyLoading) {
+      setToast({ message: 'Validando configuracion de correo...', type: 'error' });
+      return;
+    }
+    if (emailPolicy.status === 'blocked') {
+      setConfirmState({
+        isOpen: true,
+        title: 'Configura el envio de correos',
+        message: emailPolicy.reason,
+        confirmText: 'Ir a Configuracion',
+        cancelText: 'Cerrar',
+        onConfirm: () => {
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
+          if (emailPolicy.ctaPath) navigate(emailPolicy.ctaPath);
+        }
+      });
+      return;
+    }
     const destEmail = quote.contact_detail?.email || 'el cliente';
     const isManual = idVersion === undefined && quote.url_cotizacion_manual;
+    const senderLabel = emailPolicy.senderLabel || 'Cuenta';
+    const senderBadgeClass = emailPolicy.status === 'corporate'
+      ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+      : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    const configPath = emailPolicy.status === 'corporate'
+      ? '/app/workspace-settings'
+      : '/app/integrations';
 
     setConfirmState({
         isOpen: true,
         title: 'Enviar Cotización',
-        message: `¿Enviar ${isManual ? 'la cotización manual' : 'la versión seleccionada'} a ${destEmail}?`,
+        message: (
+          <div className="space-y-3">
+            <p className="text-sm text-slate-600">
+              ¿Enviar {isManual ? 'la cotizacion manual' : 'la version seleccionada'} a {destEmail}?
+            </p>
+            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border ${senderBadgeClass}`}>
+              <i className="fa-solid fa-paper-plane text-[9px]"></i>
+              Enviado desde: {senderLabel}
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <div className="relative group">
+                <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-600">
+                  <i className="fa-solid fa-circle-info text-slate-400"></i>
+                  Info de envio
+                </div>
+                <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-64 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity">
+                  <div className="bg-slate-900 text-white text-[11px] px-3 py-2 rounded-lg shadow-lg">
+                    Si deseas cambiar esta configuracion puedes hacerlo en {configPath}.
+                  </div>
+                  <div className="w-2 h-2 bg-slate-900 rotate-45 mx-auto -mt-1"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ),
         isDestructive: false,
         onConfirm: async () => {
             setConfirmState(prev => ({...prev, isOpen: false}));
@@ -848,6 +911,9 @@ const QuoteDetail: React.FC = () => {
   );
 
   const canEdit = quote.access_level === 'EDIT' || user?.rol_user === 'admin';
+  const canSendEmail = emailPolicy.status === 'corporate' || emailPolicy.status === 'personal';
+  const sendDisabled = !canSendEmail || emailPolicyLoading;
+  const sendBlockedReason = !canSendEmail ? emailPolicy.reason : '';
   const isSent = quote.estado_decision !== UserDecision.PENDING;
   
   const currentStatusObj = (quote as any).status_detail || quoteStatuses.find(s => s.id_status === quote.id_quote_status);
@@ -1309,9 +1375,10 @@ const QuoteDetail: React.FC = () => {
                                 {canEdit && (
                                     <>
                                         <button 
-                                            onClick={() => handleSendQuote(undefined)} 
-                                            disabled={sendingQuoteId === undefined}
-                                            className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
+                                          onClick={() => handleSendQuote(undefined)} 
+                                          disabled={sendingQuoteId === undefined || sendDisabled}
+                                          title={sendDisabled ? sendBlockedReason : ''}
+                                          className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
                                         >
                                             {sendingQuoteId === undefined ? <i className="fa-solid fa-circle-notch fa-spin mr-1"></i> : <i className="fa-solid fa-paper-plane mr-1"></i>}
                                             {sendingQuoteId === undefined ? 'Enviando...' : 'Enviar'}
@@ -1354,7 +1421,7 @@ const QuoteDetail: React.FC = () => {
                                     <i className="fa-solid fa-external-link-alt mr-1"></i> Abrir
                                 </a>
                                 {canEdit && !isManualQuoteActive && (
-                                    <button onClick={() => handleSendQuote(pdf.id_version)} disabled={sendingQuoteId === pdf.id_version} className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50">
+                                  <button onClick={() => handleSendQuote(pdf.id_version)} disabled={sendingQuoteId === pdf.id_version || sendDisabled} title={sendDisabled ? sendBlockedReason : ''} className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50">
                                         {sendingQuoteId === pdf.id_version ? <i className="fa-solid fa-circle-notch fa-spin mr-1"></i> : <i className="fa-solid fa-paper-plane mr-1"></i>}
                                         {sendingQuoteId === pdf.id_version ? 'Enviando...' : 'Enviar'}
                                     </button>

@@ -45,6 +45,7 @@ interface AdvancedFilters {
   search: string;
   id_company: string[];
   id_company_type: string[];      // IDs de categoría
+  id_company_size: string[];      // IDs de tamaño de empresa
   tags_ids: string[];             // Array de IDs de etiquetas
   position: string;
   id_country: string[];           // IDs de país
@@ -190,7 +191,7 @@ interface Props {
 }
 
 const AudienceMembersModal: React.FC<Props> = ({ isOpen, onClose, listId, listName, tenantId, userId, isNewList }) => {
-  const { quoteStatuses, products, countries, companyTypes } = useDataCache();
+  const { quoteStatuses, products, countries, companyTypes, companySizes } = useDataCache();
   const [activeTab, setActiveTab] = useState<'MEMBERS' | 'ADD'>(isNewList ? 'ADD' : 'MEMBERS');
   
   // Datos
@@ -215,6 +216,7 @@ const AudienceMembersModal: React.FC<Props> = ({ isOpen, onClose, listId, listNa
     search: '',
     id_company: [],
     id_company_type: [],
+    id_company_size: [],
     tags_ids: [],
     position: '',
     id_country: [],
@@ -226,6 +228,7 @@ const AudienceMembersModal: React.FC<Props> = ({ isOpen, onClose, listId, listNa
   // Opciones para los filtros
   const [filterOptions, setFilterOptions] = useState({
     categories: [] as FilterOption[],
+    sizes: [] as FilterOption[],
     tags: [] as FilterOption[],
     countries: [] as FilterOption[],
     products: [] as FilterOption[],
@@ -317,9 +320,11 @@ useEffect(() => {
       // Use cached countries and companyTypes
       const countriesOptions: FilterOption[] = (countries || []).map(c => ({ value: c.id, label: c.name }));
       const categoriesOptions: FilterOption[] = (companyTypes || []).map(t => ({ value: t.id, label: t.name }));
+      const sizesOptions: FilterOption[] = (companySizes || []).map(s => ({ value: s.id, label: s.name }));
 
       setFilterOptions({
         categories: categoriesOptions,
+        sizes: sizesOptions,
         tags,
         countries: countriesOptions,
         products: productsList,
@@ -355,6 +360,7 @@ useEffect(() => {
         // FILTROS DEMOGRÁFICOS (IDs)
         id_company: filters.id_company && filters.id_company.length > 0 ? filters.id_company : undefined,
         id_company_type: filters.id_company_type && filters.id_company_type.length > 0 ? filters.id_company_type : undefined,
+        id_company_size: filters.id_company_size && filters.id_company_size.length > 0 ? filters.id_company_size : undefined,
         id_country: filters.id_country && filters.id_country.length > 0 ? filters.id_country : undefined,
         tags_ids: filters.tags_ids && filters.tags_ids.length > 0 ? filters.tags_ids : undefined,
         position: filters.position || undefined,
@@ -500,6 +506,46 @@ useEffect(() => {
             <div className="w-80 border-r border-slate-200 bg-slate-50 overflow-y-auto flex-shrink-0">
               <div className="p-4 space-y-4">
                 
+                {/* Botón Limpiar Filtros */}
+                {(() => {
+                  const hasActiveFilters = 
+                    filters.search !== '' ||
+                    filters.id_company.length > 0 ||
+                    filters.id_company_type.length > 0 ||
+                    filters.id_company_size.length > 0 ||
+                    filters.tags_ids.length > 0 ||
+                    filters.position !== '' ||
+                    filters.id_country.length > 0 ||
+                    filters.bought_product_ids.length > 0 ||
+                    filters.winning_status_ids.length > 0 ||
+                    filters.purchase_period_days !== null;
+                  
+                  return (
+                    <button
+                      onClick={() => setFilters({
+                        search: '',
+                        id_company: [],
+                        id_company_type: [],
+                        id_company_size: [],
+                        tags_ids: [],
+                        position: '',
+                        id_country: [],
+                        bought_product_ids: [],
+                        winning_status_ids: [],
+                        purchase_period_days: null
+                      })}
+                      disabled={!hasActiveFilters}
+                      className={`w-full px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+                        hasActiveFilters
+                          ? 'text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 cursor-pointer'
+                          : 'text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed'
+                      }`}
+                    >
+                      <i className="fa-solid fa-xmark mr-2"></i> Limpiar Filtros
+                    </button>
+                  );
+                })()}
+
                 {/* Búsqueda */}
                 <div>
                   <label className="text-xs font-bold text-slate-700 uppercase block mb-2">Búsqueda</label>
@@ -531,6 +577,17 @@ useEffect(() => {
                     selected={filters.id_company_type}
                     placeholder="Todas"
                     onChange={(vals) => setFilters(prev => ({ ...prev, id_company_type: vals }))}
+                  />
+                </div>
+
+                {/* Tamaño Empresa */}
+                <div className="space-y-1">
+                  <CheckboxDropdown
+                    label="Tamaño Empresa"
+                    options={filterOptions.sizes}
+                    selected={filters.id_company_size}
+                    placeholder="Todos"
+                    onChange={(vals) => setFilters(prev => ({ ...prev, id_company_size: vals }))}
                   />
                 </div>
 
@@ -612,26 +669,6 @@ useEffect(() => {
                     />
                   </div>
                 </div>
-
-                {/* Botón Limpiar */}
-                <div className="pt-4 border-t border-slate-300">
-                  <button
-                    onClick={() => setFilters({
-                      search: '',
-                      id_company: [],
-                      id_company_type: [],
-                      tags_ids: [],
-                      position: '',
-                      id_country: [],
-                      bought_product_ids: [],
-                      winning_status_ids: [],
-                      purchase_period_days: null
-                    })}
-                    className="w-full px-4 py-2 text-sm font-semibold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
-                  >
-                    <i className="fa-solid fa-xmark mr-2"></i> Limpiar Filtros
-                  </button>
-                </div>
               </div>
             </div>
           )}
@@ -669,7 +706,7 @@ useEffect(() => {
                 const query = memberSearch.toLowerCase();
                 return name.includes(query) || email.includes(query);
               }).length === 0 ? (
-                <div className="text-center py-20 text-slate-400">
+                <div className="col-span-3 text-center py-20 text-slate-400">
                   <i className="fas fa-folder-open text-4xl mb-3 opacity-50"></i>
                   <p>{memberSearch ? 'No se encontraron miembros con esa búsqueda.' : 'La lista está vacía.'}</p>
                 </div>
