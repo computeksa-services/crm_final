@@ -9,6 +9,7 @@ import ConfirmModal from '../components/ConfirmModal';
 import ContactFormModal from './clients/ContactFormModal';
 import NewInteractionModal from '../components/NewInteractionModal';
 import { apiFetch } from '../services/apiClient';
+import { BrandSpinner } from '../components/AppLoaders';
 import {
   useReactTable,
   getCoreRowModel,
@@ -530,8 +531,10 @@ const ClientContactsList: React.FC = () => {
             {loading ? (
               <tr>
                 <td colSpan={columns.length} className="py-24 text-center">
-                   <i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i>
-                   <p className="text-slate-400 text-sm font-medium tracking-wide">Cargando contactos...</p>
+                   <div className="flex flex-col items-center gap-2">
+                     <BrandSpinner size="lg" className="mb-2" />
+                     <p className="text-slate-400 text-sm font-medium tracking-wide">Cargando contactos...</p>
+                   </div>
                 </td>
               </tr>
             ) : table.getRowModel().rows.length === 0 ? (

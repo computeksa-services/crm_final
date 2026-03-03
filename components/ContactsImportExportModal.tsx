@@ -135,8 +135,8 @@ const ContactsImportExportModal: React.FC<{ open: boolean; onClose: () => void }
                 onClick={handleUpload}
                 disabled={!selectedFile || uploading}
               >
-                <i className="fa-solid fa-check"></i>
-                {uploading ? 'Enviando...' : 'Enviar archivo'}
+                {uploading ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-check"></i>}
+                {!uploading && 'Enviar archivo'}
               </button>
               
               {uploadError && (

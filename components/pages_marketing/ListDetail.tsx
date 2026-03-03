@@ -6,6 +6,7 @@ import { MarketingList, ListMember } from '../../types';
 import { apiFetch } from '../../services/apiClient';
 import AudienceMembersModal from '../marketing_center/audiences/AudienceMembersModal';
 import ConfirmModal from '../ConfirmModal';
+import { BrandSpinner } from '../AppLoaders';
 
 interface SharedUser {
   id_user: string;
@@ -131,7 +132,7 @@ const ListDetail: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
-        <i className="fas fa-spinner fa-spin text-4xl text-blue-600"></i>
+        <BrandSpinner size="xl" />
       </div>
     );
   }

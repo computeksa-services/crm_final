@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { BrandSpinner } from '../components/AppLoaders';
 
 const DESKTOP_IMAGES = [
   { src: '/DESKTOP/DASHBOARD1.png', alt: 'Dashboard General', title: 'Visión Global' },
@@ -38,9 +39,7 @@ const LandingPage: React.FC = () => {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin mb-4 inline-block">
-            <i className="fa-solid fa-circle-notch text-brand-600 text-4xl"></i>
-          </div>
+          <BrandSpinner size="xl" className="mb-4" />
           <p className="text-slate-600">Cargando...</p>
         </div>
       </div>

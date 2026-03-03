@@ -1,4 +1,5 @@
 import React from 'react';
+import { BrandSpinner } from './AppLoaders';
 import { User, Tenant } from '../types';
 
 interface UserModalProps {
@@ -374,10 +375,7 @@ const UserModal: React.FC<UserModalProps> = ({
               className="px-6 py-2.5 bg-gradient-to-r from-brand-600 to-brand-700 text-white text-sm font-semibold rounded-lg shadow-lg shadow-brand-200 hover:shadow-xl hover:shadow-brand-300 hover:from-brand-700 hover:to-brand-800 disabled:opacity-50 disabled:shadow-none transition-all duration-200 flex items-center gap-2"
             >
               {submitting ? (
-                <>
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  Guardando...
-                </>
+                <BrandSpinner size="xs" />
               ) : (
                 <>
                   <i className="fa-solid fa-check"></i>

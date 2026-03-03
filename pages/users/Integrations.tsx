@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { User } from '../../types';
 import Toast from '../../components/Toast';
 import { PersonalIntegrations } from '../../src/components/users/PersonalIntegrations';
+import { BrandSpinner } from '../../components/AppLoaders';
 
 const Integrations: React.FC = () => {
   const { user } = useAuth();
@@ -37,7 +38,7 @@ const Integrations: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <i className="fas fa-spinner fa-spin text-4xl text-blue-500 mb-4"></i>
+          <BrandSpinner size="xl" className="mb-4" />
           <p className="text-slate-600 dark:text-slate-400">Cargando integraciones...</p>
         </div>
       </div>

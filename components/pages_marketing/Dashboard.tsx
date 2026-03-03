@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { marketingApi } from '../../services/marketingApi';
 import { MarketingCampaign, MarketingList } from '../../types';
 import CreateListModal from './CreateListModal';
+import { BrandSpinner } from '../AppLoaders';
 
 // Componente de Tarjeta de Estadística (Pequeño y reutilizable)
 const StatCard = ({ title, value, icon, subtext, color = "blue" }: any) => {
@@ -134,7 +135,7 @@ const Dashboard: React.FC = () => {
   if (loading) {
     return (
       <div className="w-full h-96 flex flex-col items-center justify-center text-slate-400">
-        <i className="fa-solid fa-circle-notch fa-spin text-4xl mb-3 text-brand-500"></i>
+        <BrandSpinner size="xl" className="mb-3" />
         <p>Calculando estadísticas...</p>
       </div>
     );

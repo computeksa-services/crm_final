@@ -6,6 +6,7 @@ import { useMicrosoftAuth } from '../services/authProviders/microsoftAuth';
 import { AUTH_PROVIDERS, ProviderType } from '../services/authProviders/providers';
 import { LoginProviderButton } from '../components/LoginProviderButton';
 import { enabledProviders, oauthRedirectUri } from '../services/oauthConfig';
+import { PageLoader } from '../components/AppLoaders';
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
@@ -139,16 +140,7 @@ const LoginPage: React.FC = () => {
   // --- RENDERIZADO ---
   // Mostrar pantalla de carga mientras se verifica la sesión
   if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin mb-4 inline-block">
-            <i className="fa-solid fa-circle-notch text-brand-600 text-4xl"></i>
-          </div>
-          <p className="text-slate-600">Cargando sesión...</p>
-        </div>
-      </div>
-    );
+    return <PageLoader message="Cargando sesión..." />;
   }
 
   return (
@@ -184,7 +176,7 @@ const LoginPage: React.FC = () => {
           <div className="space-y-3">
             {/* Renderizar botones dinámicamente para cada proveedor habilitado */}
             {Object.entries(AUTH_PROVIDERS)
-              .filter(([_, config]) => config.enabled && enabledProviders[_ as ProviderType])
+              .filter(([provider, config]) => config.enabled && enabledProviders[provider as keyof typeof enabledProviders])
               .map(([provider, config]) => (
                 <LoginProviderButton
                   key={provider}

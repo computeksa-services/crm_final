@@ -7,6 +7,7 @@ import { parseISO, isBefore, startOfDay } from 'date-fns';
 import LogActionModal from '../components/LogActionModal';
 import ReassignModal from '../components/ReassignModal';
 import Toast from '../components/Toast';
+import { BrandSpinner } from '../components/AppLoaders';
 import { useDataCache } from '../contexts/DataCacheContext';
 
 // ── ICONS ──────────────────────────────────────────────────────────────────
@@ -29,8 +30,8 @@ const IconArrow = () => (
   </svg>
 );
 
-const IconCalendar = () => (
-  <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+const IconCalendar: React.FC<{ className?: string }> = ({ className }) => (
+  <svg className={className} viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
   </svg>
 );
@@ -154,68 +155,59 @@ function AvatarGroup({ collaborators, users }: { collaborators?: any[]; users?: 
   });
   return (
     <div className="flex -space-x-2 items-center overflow-visible">
-      {sorted.slice(0, 3).map((c, i) => {
+      {sorted.slice(0, 3).reverse().map((c, i) => {
         const user = users?.find(u => u.id_user === c.id);
         const avatarUrl = user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=random`;
         const isOwner = c.access_level === 'OWNER';
         const isPrincipal = c.access_level === 'EDIT' && !isOwner;
         const isSecondary = c.access_level === 'VIEW';
         
-        let borderColor = 'border-slate-300';
-        let shadowColor = '';
+        let borderColor = 'border-white';
         let badgeIcon = null;
-        let tooltipLevel = '';
+        let tooltipText = user?.name_user || 'Usuario';
         
         if (isOwner) {
           borderColor = 'border-amber-400';
-          shadowColor = 'shadow-amber-200';
-          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-amber-400 rounded-full flex items-center justify-center"><i className="fa-solid fa-star text-white text-[6px]"></i></div>;
-          tooltipLevel = 'Propietario';
+          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-star text-white text-[6px]"></i></div>;
+          tooltipText = `${user?.name_user || 'Usuario'} (Creador)`;
         } else if (isPrincipal) {
           borderColor = 'border-indigo-400';
-          shadowColor = 'shadow-indigo-200';
-          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-indigo-500 rounded-full flex items-center justify-center"><i className="fa-solid fa-crown text-white text-[6px]"></i></div>;
-          tooltipLevel = 'Edición';
+          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-crown text-white text-[6px]"></i></div>;
+          tooltipText = `${user?.name_user || 'Usuario'} (Principal)`;
         } else if (isSecondary) {
           borderColor = 'border-slate-300';
-          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-slate-400 rounded-full flex items-center justify-center"><i className="fa-solid fa-eye text-white text-[6px]"></i></div>;
-          tooltipLevel = 'Solo lectura';
+          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-slate-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-eye text-white text-[6px]"></i></div>;
+          tooltipText = `${user?.name_user || 'Usuario'} (Secundario)`;
         }
         
         return (
           <div
             key={c.id || i}
-            className="relative inline-block group/avatar overflow-visible"
-            style={{ zIndex: 3 - i }}
+            className="relative group/collab inline-block"
+            title={tooltipText}
           >
-            <div
-              className={`w-7 h-7 rounded-full border-2 ${borderColor} ${shadowColor} shadow-sm flex-shrink-0 flex items-center justify-center relative cursor-pointer transition-all`}
-            >
-              {user?.avatar_url ? (
-                <img src={avatarUrl} alt="User" className="w-full h-full object-cover rounded-full" />
-              ) : (
-                <div
-                  className="w-full h-full flex items-center justify-center text-[10px] font-semibold text-white"
-                  style={{ backgroundColor: avColor(user?.name_user || c.id || `user-${i}`) }}
-                >
-                  {getInitials(user || c)}
-                </div>
-              )}
+            <div className="relative transition-all group-hover/collab:scale-125 group-hover/collab:z-30">
+              <img 
+                src={avatarUrl} 
+                alt={user?.name_user || 'Usuario'}
+                className={`w-8 h-8 rounded-full border-2 shadow-sm ${borderColor} bg-white relative`}
+              />
               {badgeIcon}
             </div>
             
-            {/* Tooltip */}
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] font-medium rounded whitespace-nowrap opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none z-50">
+            {/* Tooltip personalizado */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/collab:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
               <div className="font-bold">{user?.name_user || 'Usuario'}</div>
-              <div className="text-slate-300">{tooltipLevel}</div>
-              <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-900"></div>
+              <div className={`text-[9px] ${isOwner ? 'text-amber-300' : isPrincipal ? 'text-indigo-300' : 'text-slate-300'}`}>
+                {isOwner ? 'Creador' : isPrincipal ? 'Principal' : 'Secundario'}
+              </div>
             </div>
           </div>
         );
       })}
       {sorted.length > 3 && (
-        <div className="w-7 h-7 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-gray-500 text-[9px] font-bold shadow-sm flex-shrink-0">
-          +{sorted.length - 3}
+        <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center shadow-sm hover:scale-110 transition-all hover:z-20" title={`+${sorted.length - 3} más`}>
+          <span className="text-[8px] font-black text-slate-500">+{sorted.length - 3}</span>
         </div>
       )}
     </div>
@@ -283,7 +275,7 @@ function FollowUpCard({ item, onManage, users, onNavigate }: { item: FollowUpIte
         {item.next_action_desc ? (
           <div className="border-l-4 rounded-r-lg p-3 mb-4" style={{ backgroundColor: urg.bg, borderColor: urg.border }}>
             <div className="flex justify-between items-center mb-1">
-              {item.is_calendar_scheduled ? (
+              {(item as any).is_calendar_scheduled ? (
                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
                   <IconCalendar className="text-[10px]" />
                   Programado
@@ -410,7 +402,7 @@ function TableRow({ item, onManage, idx, users, onNavigate }: { item: FollowUpIt
               <span className="text-[10px] font-bold uppercase tracking-wide flex items-center gap-1" style={{ color: urg.textColor }}>
                 {urg.icon} {urg.label}
               </span>
-              {item.is_calendar_scheduled && (
+              {(item as any).is_calendar_scheduled && (
                 <span className="text-[9px] font-bold text-blue-500 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full flex items-center gap-0.5 whitespace-nowrap">
                   <IconCalendar/> Calendario
                 </span>
@@ -423,7 +415,7 @@ function TableRow({ item, onManage, idx, users, onNavigate }: { item: FollowUpIt
           <span className="text-xs text-gray-300 italic">Sin acción</span>
         )}
       </td>
-      <td className="px-5 py-4">
+      <td className="px-5 py-4 min-w-[180px]">
         <AvatarGroup collaborators={item.collaborators} users={users} />
       </td>
       <td className="px-5 py-4 max-w-[200px]">
@@ -534,12 +526,7 @@ const FollowUpsPage: React.FC = () => {
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
         <div className="text-center">
-          <div className="inline-flex animate-spin text-gray-300 mb-3">
-            <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" opacity="0.1" />
-              <path d="M4 12a8 8 0 018-8" />
-            </svg>
-          </div>
+          <BrandSpinner size="lg" className="mb-3" />
           <p className="text-sm text-gray-400">Cargando seguimientos...</p>
         </div>
       </div>
@@ -547,15 +534,7 @@ const FollowUpsPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans antialiased">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        * { font-family: 'Inter', system-ui, sans-serif; box-sizing: border-box; }
-        .crm-card { transition: all 0.2s ease-in-out; }
-        .crm-card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -4px rgba(0,0,0,0.08); }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
-        ::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 99px; }
-        ::placeholder { color: #d1d5db; }
-      `}</style>
+
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}

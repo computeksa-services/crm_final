@@ -374,7 +374,7 @@ const CompanyFormModal: React.FC<CompanyFormModalProps> = ({ isOpen, onClose, mo
           <div className="flex justify-end gap-3 pt-6">
             <button type="button" onClick={onClose} className="px-5 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl transition-all">Cancelar</button>
             <button type="submit" disabled={submitting} className="px-8 py-2.5 bg-brand-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-200 hover:bg-brand-700 disabled:opacity-50 transition-all flex items-center gap-2">
-              {submitting ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
+              {submitting ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-check"></i>}
               {mode === 'create' ? 'Crear Empresa' : 'Guardar Cambios'}
             </button>
           </div>

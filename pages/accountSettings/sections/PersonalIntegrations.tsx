@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
 import Toast from '../../../components/Toast';
 import { PersonalIntegrations as PersonalIntegrationsComponent } from '../../../src/components/users/PersonalIntegrations';
+import { BrandSpinner } from '../../../components/AppLoaders';
 
 const PersonalIntegrations: React.FC = () => {
   const { user } = useAuth();
@@ -20,7 +21,7 @@ const PersonalIntegrations: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <i className="fas fa-spinner fa-spin text-4xl text-blue-500 mb-4"></i>
+          <BrandSpinner size="xl" className="mb-4" />
           <p className="text-slate-600 dark:text-slate-400">Cargando...</p>
         </div>
       </div>

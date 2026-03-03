@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { BrandSpinner } from '../../components/AppLoaders';
 import { createPortal } from 'react-dom';
 import { ClientContact, ClientCompany } from '../../types';
 import Toast from '../../components/Toast';
@@ -307,7 +308,7 @@ const ContactFormModal: React.FC<ContactFormModalProps> = ({
               disabled={submitting}
               className="px-6 py-2.5 bg-brand-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-200 hover:bg-brand-700 disabled:opacity-50 transition-all flex items-center gap-2"
             >
-              {submitting ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
+              {submitting ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-check"></i>}
               {mode === 'create' ? 'Crear Contacto' : 'Guardar Cambios'}
             </button>
           </div>

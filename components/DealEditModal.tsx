@@ -306,7 +306,7 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto flex-1 p-6">
+        <div className="overflow-y-auto flex-1 min-h-0 p-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
             
             {/* COL 1: INFO */}
@@ -576,7 +576,7 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
             disabled={processing || loading}
             className="px-6 py-2 bg-brand-600 text-white text-sm font-bold rounded-lg shadow-lg shadow-brand-200 hover:bg-brand-700 disabled:opacity-50 transition-all flex items-center gap-2"
           >
-            {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
+            {processing ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-check"></i>}
             Guardar Cambios
           </button>
         </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { BrandSpinner } from '../../components/AppLoaders';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Quote, QuoteItem, UserDecision, Product, QuoteStatus, PdfVersion, ProductType } from '../../types';
@@ -189,9 +190,11 @@ const QuoteDetail: React.FC = () => {
   const manualFileInputRef = useRef<HTMLInputElement | null>(null);
   const attachmentInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Form States (Product Modal)
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [itemQuantity, setItemQuantity] = useState<number>(1);
+  // Form States (Product Modal) - Improved multi-selection
+  const [selectedProducts, setSelectedProducts] = useState<Map<string, number>>(new Map()); // Map<id_product, quantity>
+  const [productSearchQuery, setProductSearchQuery] = useState<string>('');
+  const [productTypeFilter, setProductTypeFilter] = useState<string>(''); // '', 'BIEN', 'SERVICIO'
+  const [productCategoryFilter, setProductCategoryFilter] = useState<string>('');
   const [isCreatingProduct, setIsCreatingProduct] = useState(false);
   const [newProduct, setNewProduct] = useState<any>({
     codigo: '', descripcion: '', tipo: 'BIEN', categoria: '', precio_unitario: 0, imagen_url: ''
@@ -238,6 +241,35 @@ const QuoteDetail: React.FC = () => {
     
     return colors[Math.abs(hash) % colors.length];
   };
+
+  // --- HELPER: Filtrar productos disponibles ---
+  const getFilteredProducts = useCallback(() => {
+    if (!availableProducts || availableProducts.length === 0) return [];
+    
+    return availableProducts.filter(p => {
+      // Búsqueda por código o descripción
+      const matchesSearch = !productSearchQuery || 
+        p.codigo?.toLowerCase().includes(productSearchQuery.toLowerCase()) ||
+        p.descripcion?.toLowerCase().includes(productSearchQuery.toLowerCase());
+      
+      // Filtro por tipo
+      const matchesType = !productTypeFilter || p.tipo === productTypeFilter;
+      
+      // Filtro por categoría
+      const matchesCategory = !productCategoryFilter || p.categoria === productCategoryFilter;
+      
+      return matchesSearch && matchesType && matchesCategory;
+    });
+  }, [availableProducts, productSearchQuery, productTypeFilter, productCategoryFilter]);
+
+  // --- HELPER: Obtener categorías únicas ---
+  const getUniqueCategories = useCallback(() => {
+    if (!availableProducts || availableProducts.length === 0) return [];
+    const categories = availableProducts
+      .map(p => p.categoria)
+      .filter((cat): cat is string => !!cat && cat.trim() !== '');
+    return Array.from(new Set(categories)).sort();
+  }, [availableProducts]);
 
   // --- FETCH DATA ---
   const fetchData = useCallback(async () => {
@@ -585,8 +617,10 @@ const QuoteDetail: React.FC = () => {
       setProductTypes(Array.isArray(types) ? types : []);
       
       setIsCreatingProduct(false);
-      setSelectedProductId(null);
-      setItemQuantity(1);
+      setSelectedProducts(new Map());
+      setProductSearchQuery('');
+      setProductTypeFilter('');
+      setProductCategoryFilter('');
       setIsProductModalOpen(true);
     } catch (err) {
       console.error('Error al cargar productos:', err);
@@ -594,8 +628,10 @@ const QuoteDetail: React.FC = () => {
       setAvailableProducts([]);
       setProductTypes([]);
       setIsCreatingProduct(false);
-      setSelectedProductId(null);
-      setItemQuantity(1);
+      setSelectedProducts(new Map());
+      setProductSearchQuery('');
+      setProductTypeFilter('');
+      setProductCategoryFilter('');
       setIsProductModalOpen(true);
     } finally {
       setProcessing(false);
@@ -603,35 +639,47 @@ const QuoteDetail: React.FC = () => {
   };
 
   const handleProductSelection = async () => {
-    if (!selectedProductId || !quote || !user) return;
-    const prod = availableProducts.find(p => p.id_product === selectedProductId);
-    if (!prod) return;
+    if (selectedProducts.size === 0 || !quote || !user) return;
 
     setProcessing(true);
-    const precio = parseFloat((prod.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
-    
     try {
-      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products-selected`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id_cotizacion: quote.id_cotizacion,
-          id_tenant: user.id_tenant,
-          id_user: user.id_user,
-          descripcion: prod.descripcion, 
-          cantidad: itemQuantity,
-          precio_unitario: precio,
-          subtotal: itemQuantity * precio,
-          id_producto: prod.id_product
-        }),
+      // Procesar todos los productos seleccionados en paralelo
+      const addPromises = Array.from(selectedProducts.entries()).map(async ([productId, quantity]) => {
+        const prod = availableProducts.find(p => p.id_product === productId);
+        if (!prod) return null;
+
+        const precio = parseFloat((prod.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
+        
+        return apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products-selected`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id_cotizacion: quote.id_cotizacion,
+            id_tenant: user.id_tenant,
+            id_user: user.id_user,
+            descripcion: prod.descripcion, 
+            cantidad: quantity,
+            precio_unitario: precio,
+            subtotal: quantity * precio,
+            id_producto: prod.id_product
+          }),
+        });
       });
-      if (!res.ok) throw new Error();
+
+      const results = await Promise.all(addPromises);
+      const allSuccess = results.every(res => res && res.ok);
       
-      setToast({ message: 'Artículo añadido.', type: 'success' });
-      setIsProductModalOpen(false);
-      fetchData();
+      if (allSuccess) {
+        const count = selectedProducts.size;
+        setToast({ message: `${count} artículo${count > 1 ? 's' : ''} añadido${count > 1 ? 's' : ''}.`, type: 'success' });
+        setIsProductModalOpen(false);
+        setSelectedProducts(new Map());
+        fetchData();
+      } else {
+        throw new Error('Algunos productos no pudieron agregarse');
+      }
     } catch {
-      setToast({ message: 'Error al añadir artículo.', type: 'error' });
+      setToast({ message: 'Error al añadir artículos.', type: 'error' });
     } finally {
       setProcessing(false);
     }
@@ -895,7 +943,7 @@ const QuoteDetail: React.FC = () => {
   if (loading) return (
     <div className="flex h-[calc(100vh-200px)] items-center justify-center">
       <div className="flex flex-col items-center gap-3">
-        <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500"></i>
+        <BrandSpinner size="xl" />
         <p className="text-slate-400 font-medium animate-pulse">Cargando cotización...</p>
       </div>
     </div>
@@ -1044,7 +1092,7 @@ const QuoteDetail: React.FC = () => {
                                 disabled={processing || uploadingAttachments}
                                 className="w-7 h-7 rounded-full bg-pink-50 text-pink-600 hover:bg-pink-100 flex items-center justify-center transition-colors disabled:opacity-50"
                             >
-                                {uploadingAttachments ? <i className="fa-solid fa-circle-notch fa-spin text-xs"></i> : <i className="fa-solid fa-paperclip text-xs"></i>}
+                                {uploadingAttachments ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-paperclip text-xs"></i>}
                             </button>
                         </>
                     )}
@@ -1075,7 +1123,7 @@ const QuoteDetail: React.FC = () => {
                                                 disabled={deletingAttachmentUrl === file.url}
                                                 className="p-2 text-slate-400 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100 disabled:opacity-100"
                                             >
-                                                {deletingAttachmentUrl === file.url ? <i className="fa-solid fa-circle-notch fa-spin text-xs"></i> : <i className="fa-solid fa-trash-can"></i>}
+                                                {deletingAttachmentUrl === file.url ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-trash-can"></i>}
                                             </button>
                                         )}
                                     </div>
@@ -1338,7 +1386,7 @@ const QuoteDetail: React.FC = () => {
                              </button>
                              {items.length > 0 && (
                                 <button onClick={handleGeneratePDF} disabled={generatingPDF} className="text-[11px] bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg transition-colors font-bold flex items-center disabled:opacity-50 uppercase tracking-wide border border-indigo-100">
-                                    {generatingPDF ? <i className="fa-solid fa-circle-notch fa-spin mr-1.5"></i> : <i className="fa-solid fa-file-pdf mr-1.5"></i>}
+                                    {generatingPDF ? <BrandSpinner size="xs" className="mr-1.5" /> : <i className="fa-solid fa-file-pdf mr-1.5"></i>}
                                     {generatingPDF ? 'Generando...' : `Generar v${(quote.versions?.length || 0) + 1}`}
                                 </button>
                              )}
@@ -1380,8 +1428,7 @@ const QuoteDetail: React.FC = () => {
                                           title={sendDisabled ? sendBlockedReason : ''}
                                           className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
                                         >
-                                            {sendingQuoteId === undefined ? <i className="fa-solid fa-circle-notch fa-spin mr-1"></i> : <i className="fa-solid fa-paper-plane mr-1"></i>}
-                                            {sendingQuoteId === undefined ? 'Enviando...' : 'Enviar'}
+                                          {sendingQuoteId === undefined ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
                                         </button>
                                         <button 
                                             onClick={handleDeleteManualQuote} 
@@ -1422,8 +1469,7 @@ const QuoteDetail: React.FC = () => {
                                 </a>
                                 {canEdit && !isManualQuoteActive && (
                                   <button onClick={() => handleSendQuote(pdf.id_version)} disabled={sendingQuoteId === pdf.id_version || sendDisabled} title={sendDisabled ? sendBlockedReason : ''} className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50">
-                                        {sendingQuoteId === pdf.id_version ? <i className="fa-solid fa-circle-notch fa-spin mr-1"></i> : <i className="fa-solid fa-paper-plane mr-1"></i>}
-                                        {sendingQuoteId === pdf.id_version ? 'Enviando...' : 'Enviar'}
+                                        {sendingQuoteId === pdf.id_version ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
                                     </button>
                                 )}
                             </div>
@@ -1819,49 +1865,445 @@ const QuoteDetail: React.FC = () => {
         />
       )}
 
-      {/* MODAL DE PRODUCTOS */}
+      {/* MODAL DE PRODUCTOS - IMPROVED */}
       {isProductModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-                <h2 className="font-bold text-slate-800 flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center text-sm"><i className={`fa-solid ${isCreatingProduct ? 'fa-plus' : 'fa-box-open'}`}></i></span>
-                    {isCreatingProduct ? 'Crear Nuevo Producto' : 'Seleccionar Producto'}
-                </h2>
-                <button onClick={() => setIsProductModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 flex items-center justify-center transition-colors"><i className="fa-solid fa-times"></i></button>
-             </div>
-             <div className="p-6 overflow-y-auto">
-                <div className="flex bg-slate-100 p-1 rounded-xl mb-6">
-                    <button onClick={() => setIsCreatingProduct(false)} className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all ${!isCreatingProduct ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Existente</button>
-                    <button onClick={() => setIsCreatingProduct(true)} className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all ${isCreatingProduct ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>Nuevo</button>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]">
+             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+                <div className="flex items-center gap-3">
+                  <span className="w-8 h-8 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center text-sm">
+                    <i className={`fa-solid ${isCreatingProduct ? 'fa-plus' : 'fa-box-open'}`}></i>
+                  </span>
+                  <div>
+                    <h2 className="font-bold text-slate-800">
+                      {isCreatingProduct ? 'Crear Nuevo Producto' : 'Seleccionar Productos'}
+                    </h2>
+                    {!isCreatingProduct && selectedProducts.size > 0 && (
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {selectedProducts.size} producto{selectedProducts.size > 1 ? 's' : ''} seleccionado{selectedProducts.size > 1 ? 's' : ''}
+                      </p>
+                    )}
+                  </div>
                 </div>
+                <button 
+                  onClick={() => {
+                    setIsProductModalOpen(false);
+                    setSelectedProducts(new Map());
+                    setProductSearchQuery('');
+                    setProductTypeFilter('');
+                    setProductCategoryFilter('');
+                  }} 
+                  className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 flex items-center justify-center transition-colors"
+                >
+                  <i className="fa-solid fa-times"></i>
+                </button>
+             </div>
+             
+             <div className="flex bg-slate-100 p-1 mx-6 mt-4 rounded-xl shrink-0">
+                <button 
+                  onClick={() => setIsCreatingProduct(false)} 
+                  className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all ${!isCreatingProduct ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Catálogo
+                </button>
+                <button 
+                  onClick={() => setIsCreatingProduct(true)} 
+                  className={`flex-1 py-2 text-xs font-bold uppercase tracking-wide rounded-lg transition-all ${isCreatingProduct ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  Crear Nuevo
+                </button>
+             </div>
+
+             <div className="flex-1 overflow-y-auto min-h-0">
                 {!isCreatingProduct ? (
-                     <div className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Buscar Producto</label>
-                            <div className="relative">
-                                <select value={selectedProductId || ''} onChange={(e) => setSelectedProductId(e.target.value)} className="w-full pl-4 pr-10 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none appearance-none font-medium text-sm">
-                                    <option value="">-- Seleccionar --</option>
-                                    {availableProducts.map(p => <option key={p.id_product} value={p.id_product}>{p.descripcion} ({p.codigo})</option>)}
-                                </select>
-                                <i className="fa-solid fa-chevron-down absolute right-4 top-4 text-slate-400 text-xs pointer-events-none"></i>
-                            </div>
+                  <div className="p-6 space-y-4">
+                    {/* BÚSQUEDA Y FILTROS */}
+                    <div className="space-y-3">
+                      {/* Búsqueda */}
+                      <div className="relative">
+                        <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <input
+                          type="text"
+                          placeholder="Buscar por código o descripción..."
+                          value={productSearchQuery}
+                          onChange={(e) => setProductSearchQuery(e.target.value)}
+                          className="w-full pl-11 pr-4 py-3 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-brand-500 outline-none font-medium text-sm transition-all"
+                        />
+                      </div>
+
+                      {/* Filtros */}
+                      <div className="flex flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-slate-500 uppercase">Tipo:</span>
+                          <button
+                            onClick={() => setProductTypeFilter('')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${!productTypeFilter ? 'bg-brand-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                          >
+                            Todos
+                          </button>
+                          <button
+                            onClick={() => setProductTypeFilter('BIEN')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${productTypeFilter === 'BIEN' ? 'bg-blue-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                          >
+                            <i className="fa-solid fa-box mr-1"></i> Bienes
+                          </button>
+                          <button
+                            onClick={() => setProductTypeFilter('SERVICIO')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${productTypeFilter === 'SERVICIO' ? 'bg-purple-500 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                          >
+                            <i className="fa-solid fa-briefcase mr-1"></i> Servicios
+                          </button>
                         </div>
-                        {selectedProductId && (<div className="p-4 bg-slate-50 rounded-xl border border-slate-200 flex gap-4">{(() => { const p = availableProducts.find(x => x.id_product === selectedProductId); if(!p) return null; return (<><div className="w-16 h-16 bg-white rounded-lg border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">{p.imagen_url ? <img src={convertGoogleDriveUrl(p.imagen_url)} className="w-full h-full object-cover"/> : <i className="fa-solid fa-image text-slate-300"></i>}</div><div><p className="font-bold text-slate-800 text-sm">{p.descripcion}</p><p className="text-xs text-slate-500 mt-1">Precio Ref: <span className="font-bold text-slate-700">${parseFloat(String(p.precio_unitario).replace(/[^0-9.-]+/g,"")).toFixed(2)}</span></p></div></>); })()}</div>)}
-                        <div><label className="block text-xs font-bold text-slate-500 uppercase mb-2">Cantidad</label><input type="number" min="1" value={itemQuantity} onChange={(e) => setItemQuantity(parseInt(e.target.value) || 1)} className="w-full px-4 py-3 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-brand-500" /></div>
-                     </div>
+
+                        {getUniqueCategories().length > 0 && (
+                          <div className="flex items-center gap-2 pl-4 border-l border-slate-300">
+                            <span className="text-xs font-bold text-slate-500 uppercase">Categoría:</span>
+                            <select
+                              value={productCategoryFilter}
+                              onChange={(e) => setProductCategoryFilter(e.target.value)}
+                              className="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-100 border border-slate-200 hover:bg-slate-200 transition-all outline-none"
+                            >
+                              <option value="">Todas</option>
+                              {getUniqueCategories().map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        {(productSearchQuery || productTypeFilter || productCategoryFilter) && (
+                          <button
+                            onClick={() => {
+                              setProductSearchQuery('');
+                              setProductTypeFilter('');
+                              setProductCategoryFilter('');
+                            }}
+                            className="ml-auto px-3 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-all"
+                          >
+                            <i className="fa-solid fa-filter-circle-xmark mr-1"></i> Limpiar filtros
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* GRID DE PRODUCTOS */}
+                    <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+                      {(() => {
+                        const filteredProducts = getFilteredProducts();
+                        
+                        if (filteredProducts.length === 0) {
+                          return (
+                            <div className="text-center py-12 px-4">
+                              <i className="fa-solid fa-inbox text-4xl text-slate-300 mb-3"></i>
+                              <p className="text-slate-500 font-medium">
+                                {productSearchQuery || productTypeFilter || productCategoryFilter 
+                                  ? 'No se encontraron productos con estos filtros' 
+                                  : 'No hay productos disponibles'}
+                              </p>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3">
+                            {filteredProducts.map((product) => {
+                                const isSelected = selectedProducts.has(product.id_product);
+                                const quantity = selectedProducts.get(product.id_product) || 1;
+                                const precio = parseFloat((product.precio_unitario as any).toString().replace(/[^0-9.-]+/g,"")) || 0;
+
+                                return (
+                                  <div
+                                    key={product.id_product}
+                                    className={`bg-white rounded-xl border-2 transition-all cursor-pointer hover:shadow-md ${
+                                      isSelected 
+                                        ? 'border-brand-500 shadow-sm ring-2 ring-brand-100' 
+                                        : 'border-slate-200 hover:border-brand-300'
+                                    }`}
+                                    onClick={() => {
+                                      const newMap = new Map(selectedProducts);
+                                      if (isSelected) {
+                                        newMap.delete(product.id_product);
+                                      } else {
+                                        newMap.set(product.id_product, 1);
+                                      }
+                                      setSelectedProducts(newMap);
+                                    }}
+                                  >
+                                    <div className="p-4 flex gap-4">
+                                      {/* Checkbox */}
+                                      <div className="flex items-center shrink-0">
+                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${
+                                          isSelected 
+                                            ? 'bg-brand-500 border-brand-500' 
+                                            : 'border-slate-300'
+                                        }`}>
+                                          {isSelected && (
+                                            <i className="fa-solid fa-check text-white text-xs"></i>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Imagen */}
+                                      <div className="w-16 h-16 bg-slate-100 rounded-lg border border-slate-200 flex items-center justify-center shrink-0 overflow-hidden">
+                                        {product.imagen_url ? (
+                                          <img 
+                                            src={convertGoogleDriveUrl(product.imagen_url)} 
+                                            alt={product.descripcion}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <i className="fa-solid fa-image text-slate-300 text-xl"></i>
+                                        )}
+                                      </div>
+
+                                      {/* Info */}
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-start justify-between gap-2 mb-1">
+                                          <h4 className="font-bold text-slate-800 text-sm line-clamp-2 leading-tight">
+                                            {product.descripcion}
+                                          </h4>
+                                        </div>
+                                        
+                                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 uppercase">
+                                            <i className="fa-solid fa-barcode"></i>
+                                            {product.codigo}
+                                          </span>
+                                          
+                                          {product.tipo === 'BIEN' ? (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-600 uppercase">
+                                              <i className="fa-solid fa-box"></i>
+                                              Bien
+                                            </span>
+                                          ) : (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-600 uppercase">
+                                              <i className="fa-solid fa-briefcase"></i>
+                                              Servicio
+                                            </span>
+                                          )}
+                                          
+                                          {product.categoria && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-600">
+                                              <i className="fa-solid fa-tag"></i>
+                                              {product.categoria}
+                                            </span>
+                                          )}
+                                        </div>
+
+                                        <div className="flex items-center justify-between gap-3">
+                                          <div className="text-sm font-mono font-bold text-brand-600">
+                                            ${precio.toFixed(2)}
+                                          </div>
+
+                                          {isSelected && (
+                                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                              <label className="text-xs font-bold text-slate-500">Cant:</label>
+                                              <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden">
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const newMap = new Map(selectedProducts);
+                                                    const newQty = Math.max(1, quantity - 1);
+                                                    newMap.set(product.id_product, newQty);
+                                                    setSelectedProducts(newMap);
+                                                  }}
+                                                  className="px-2 py-1 bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors"
+                                                >
+                                                  <i className="fa-solid fa-minus text-xs"></i>
+                                                </button>
+                                                <input
+                                                  type="number"
+                                                  min="1"
+                                                  value={quantity}
+                                                  onChange={(e) => {
+                                                    e.stopPropagation();
+                                                    const val = parseInt(e.target.value) || 1;
+                                                    const newMap = new Map(selectedProducts);
+                                                    newMap.set(product.id_product, Math.max(1, val));
+                                                    setSelectedProducts(newMap);
+                                                  }}
+                                                  className="w-14 px-2 py-1 text-center text-sm font-bold border-x border-slate-200 outline-none"
+                                                />
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const newMap = new Map(selectedProducts);
+                                                    newMap.set(product.id_product, quantity + 1);
+                                                    setSelectedProducts(newMap);
+                                                  }}
+                                                  className="px-2 py-1 bg-slate-50 hover:bg-slate-100 text-slate-600 transition-colors"
+                                                >
+                                                  <i className="fa-solid fa-plus text-xs"></i>
+                                                </button>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
                 ) : (
-                     <div className="space-y-4">
-                         <div className="flex gap-4"><div onClick={() => fileInputRef.current?.click()} className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-white hover:border-brand-400 cursor-pointer flex items-center justify-center relative overflow-hidden shrink-0 transition-all">{newProduct.imagen_url ? <img src={convertGoogleDriveUrl(newProduct.imagen_url)} className="w-full h-full object-cover"/> : <div className="text-center"><i className="fa-solid fa-camera text-slate-300 mb-1"></i><p className="text-[9px] text-slate-400 font-bold uppercase">Foto</p></div>}</div><input type="file" ref={fileInputRef} onChange={(e) => { const file = e.target.files?.[0]; if(file){ setImageFile(file); const reader = new FileReader(); reader.onloadend = () => setNewProduct({...newProduct, imagen_url: reader.result}); reader.readAsDataURL(file); } }} className="hidden" /><div className="flex-1 space-y-3"><div><label className="text-[10px] font-bold text-slate-400 uppercase">Código</label><input value={newProduct.codigo} onChange={e => setNewProduct({...newProduct, codigo: e.target.value})} placeholder={getNextProductCode()} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono"/></div><div><label className="text-[10px] font-bold text-slate-400 uppercase">Categoría</label><input value={newProduct.categoria} onChange={e => setNewProduct({...newProduct, categoria: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"/></div></div></div>
-                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Descripción *</label><textarea rows={2} value={newProduct.descripcion} onChange={e => setNewProduct({...newProduct, descripcion: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-brand-500 outline-none"></textarea></div>
-                         <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-400 uppercase">Tipo</label><select value={newProduct.tipo} onChange={e => setNewProduct({...newProduct, tipo: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"><option value="">-- Seleccionar --</option>{productTypes.map(pt => <option key={pt.id_product_type} value={pt.type}>{pt.type}</option>)}</select></div><div><label className="text-[10px] font-bold text-slate-400 uppercase">Precio Unitario</label><div className="relative"><span className="absolute left-3 top-2 text-slate-400">$</span><input type="number" step="0.01" value={newProduct.precio_unitario} onChange={e => setNewProduct({...newProduct, precio_unitario: e.target.value})} className="w-full pl-6 pr-3 py-2 border border-slate-200 rounded-lg text-sm"/></div></div></div>
-                         <div><label className="text-[10px] font-bold text-slate-400 uppercase">Cantidad a añadir</label><input type="number" min="1" value={itemQuantity} onChange={e => setItemQuantity(parseInt(e.target.value))} className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"/></div>
-                     </div>
+                  <div className="p-6 space-y-4">
+                    <div className="flex gap-4">
+                      <div 
+                        onClick={() => fileInputRef.current?.click()} 
+                        className="w-24 h-24 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 hover:bg-white hover:border-brand-400 cursor-pointer flex items-center justify-center relative overflow-hidden shrink-0 transition-all"
+                      >
+                        {newProduct.imagen_url ? (
+                          <img src={convertGoogleDriveUrl(newProduct.imagen_url)} className="w-full h-full object-cover"/>
+                        ) : (
+                          <div className="text-center">
+                            <i className="fa-solid fa-camera text-slate-300 mb-1"></i>
+                            <p className="text-[9px] text-slate-400 font-bold uppercase">Foto</p>
+                          </div>
+                        )}
+                      </div>
+                      <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={(e) => { 
+                          const file = e.target.files?.[0]; 
+                          if(file){ 
+                            setImageFile(file); 
+                            const reader = new FileReader(); 
+                            reader.onloadend = () => setNewProduct({...newProduct, imagen_url: reader.result}); 
+                            reader.readAsDataURL(file); 
+                          } 
+                        }} 
+                        className="hidden" 
+                      />
+                      <div className="flex-1 space-y-3">
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Código</label>
+                          <input 
+                            value={newProduct.codigo} 
+                            onChange={e => setNewProduct({...newProduct, codigo: e.target.value})} 
+                            placeholder={getNextProductCode()} 
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold text-slate-400 uppercase">Categoría</label>
+                          <input 
+                            value={newProduct.categoria} 
+                            onChange={e => setNewProduct({...newProduct, categoria: e.target.value})} 
+                            className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Descripción *</label>
+                      <textarea 
+                        rows={2} 
+                        value={newProduct.descripcion} 
+                        onChange={e => setNewProduct({...newProduct, descripcion: e.target.value})} 
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm resize-none focus:ring-2 focus:ring-brand-500 outline-none"
+                      ></textarea>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Tipo</label>
+                        <select 
+                          value={newProduct.tipo} 
+                          onChange={e => setNewProduct({...newProduct, tipo: e.target.value})} 
+                          className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"
+                        >
+                          <option value="">-- Seleccionar --</option>
+                          {productTypes.map(pt => (
+                            <option key={pt.id_product_type} value={pt.type}>{pt.type}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase">Precio Unitario</label>
+                        <div className="relative">
+                          <span className="absolute left-3 top-2 text-slate-400">$</span>
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            value={newProduct.precio_unitario} 
+                            onChange={e => setNewProduct({...newProduct, precio_unitario: e.target.value})} 
+                            className="w-full pl-6 pr-3 py-2 border border-slate-200 rounded-lg text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase">Cantidad a añadir</label>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        value={selectedProducts.size > 0 ? Array.from(selectedProducts.values())[0] : 1} 
+                        onChange={e => {
+                          const qty = parseInt(e.target.value) || 1;
+                          // For new products, we'll store temp quantity
+                          setNewProduct({...newProduct, tempQuantity: qty});
+                        }}
+                        className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm"
+                      />
+                    </div>
+                  </div>
                 )}
              </div>
-             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-                <button onClick={() => setIsProductModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-600 font-bold text-xs hover:bg-slate-200 transition-colors">Cancelar</button>
-                <button onClick={isCreatingProduct ? handleCreateAndAddProduct : handleProductSelection} disabled={processing || (isCreatingProduct && !newProduct.descripcion) || (!isCreatingProduct && !selectedProductId)} className="px-6 py-2 rounded-lg bg-brand-600 text-white font-bold text-xs hover:bg-brand-700 shadow-md shadow-brand-200 transition-all disabled:opacity-50">{processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : (isCreatingProduct ? 'Crear y Añadir' : 'Añadir')}</button>
+
+             {/* FOOTER con resumen */}
+             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-between items-center gap-4 shrink-0">
+                {!isCreatingProduct && selectedProducts.size > 0 && (
+                  <div className="text-sm">
+                    <div className="font-bold text-slate-800">
+                      {selectedProducts.size} producto{selectedProducts.size > 1 ? 's' : ''} • {' '}
+                      {Array.from(selectedProducts.values()).reduce((sum, qty) => sum + qty, 0)} unidad{Array.from(selectedProducts.values()).reduce((sum, qty) => sum + qty, 0) > 1 ? 'es' : ''}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      Total estimado: ${(() => {
+                        let total = 0;
+                        selectedProducts.forEach((qty, prodId) => {
+                          const prod = availableProducts.find(p => p.id_product === prodId);
+                          if (prod) {
+                            const precio = parseFloat((prod.precio_unitario as any).toString().replace(/[^0-9.-]+/g,"")) || 0;
+                            total += precio * qty;
+                          }
+                        });
+                        return total.toFixed(2);
+                      })()}
+                    </div>
+                  </div>
+                )}
+                <div className="flex gap-3 ml-auto">
+                  <button 
+                    onClick={() => {
+                      setIsProductModalOpen(false);
+                      setSelectedProducts(new Map());
+                      setProductSearchQuery('');
+                      setProductTypeFilter('');
+                      setProductCategoryFilter('');
+                    }} 
+                    className="px-4 py-2 rounded-lg text-slate-600 font-bold text-xs hover:bg-slate-200 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    onClick={isCreatingProduct ? handleCreateAndAddProduct : handleProductSelection} 
+                    disabled={processing || (isCreatingProduct && !newProduct.descripcion) || (!isCreatingProduct && selectedProducts.size === 0)} 
+                    className="px-6 py-2 rounded-lg bg-brand-600 text-white font-bold text-xs hover:bg-brand-700 shadow-md shadow-brand-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {processing ? (
+                      <BrandSpinner size="lg" />
+                    ) : (
+                      <>
+                        {isCreatingProduct ? 'Crear y Añadir' : `Añadir ${selectedProducts.size > 0 ? `(${selectedProducts.size})` : ''}`}
+                      </>
+                    )}
+                  </button>
+                </div>
              </div>
           </div>
         </div>

@@ -222,9 +222,7 @@ const AudienceListModal: React.FC<AudienceListModalProps> = ({
               disabled={submitting}
             >
               {submitting ? (
-                <>
-                  <i className="fas fa-circle-notch fa-spin"></i> Guardando...
-                </>
+                <i className="fas fa-circle-notch fa-spin"></i>
               ) : (
                 <>{isEditing ? 'Actualizar' : 'Crear Audiencia'}</>
               )}

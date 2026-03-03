@@ -269,7 +269,7 @@ const FinancialFormModal: React.FC<FinancialFormModalProps> = ({
             disabled={isProcessing}
             className="px-5 py-2 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 shadow-lg disabled:opacity-60 flex items-center"
           >
-            {isProcessing ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-save mr-2"></i>}
+            {isProcessing ? <BrandSpinner size="xs" className="mr-2" /> : <i className="fa-solid fa-save mr-2"></i>}
             Guardar cambios
           </button>
         </div>

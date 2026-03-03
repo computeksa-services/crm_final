@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { BrandSpinner } from './AppLoaders';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
 
@@ -437,10 +438,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
               className="px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {submitting ? (
-                <>
-                  <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  <span className="hidden sm:inline">Guardando...</span>
-                </>
+                <BrandSpinner size="xs" />
               ) : (
                 <>
                   <i className="fa-solid fa-check"></i>

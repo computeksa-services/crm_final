@@ -574,6 +574,9 @@ export interface CalendarEvent {
   color?: string;
   deal_title?: string | null;
   deal_id?: string | null;
+  company_name?: string | null;
+  provider?: 'GOOGLE' | 'MICROSOFT' | 'NONE' | string;
+  my_response_status?: 'needsAction' | 'accepted' | 'declined' | 'tentative' | string;
   quote_number?: string | null;
   quote_id?: string | null;
   attendees?: Array<{

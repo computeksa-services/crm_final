@@ -1,4 +1,5 @@
 ﻿import React, { useEffect, useState, useCallback } from 'react';
+import { BrandSpinner } from '../../components/AppLoaders';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -384,7 +385,7 @@ const ClientCompanyDetail: React.FC = () => {
   if (loading) return (
     <div className="flex h-64 items-center justify-center">
       <div className="flex flex-col items-center space-y-3">
-        <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500"></i>
+        <BrandSpinner size="xl" />
         <p className="text-slate-500 font-medium animate-pulse">Cargando...</p>
       </div>
     </div>
@@ -881,7 +882,7 @@ const ClientCompanyDetail: React.FC = () => {
               <div className="flex justify-end pt-4 gap-3 border-t border-slate-100 mt-2">
                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all">Cancelar</button>
                  <button type="submit" disabled={submitting} className="px-5 py-2.5 rounded-xl bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-200 font-medium flex items-center transition-all disabled:opacity-70">
-                    {submitting ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-check mr-2"></i>}
+                    {submitting ? <BrandSpinner size="xs" className="mr-2" /> : <i className="fa-solid fa-check mr-2"></i>}
                     Guardar
                  </button>
                </div>

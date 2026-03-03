@@ -6,6 +6,7 @@ import { marketingApi } from '../../services/marketingApi';
 import { MarketingList } from '../../types';
 import ConfirmModal from '../ConfirmModal';
 import Toast from '../Toast';
+import { BrandSpinner } from '../AppLoaders';
 
 const Lists: React.FC = () => {
   const navigate = useNavigate();
@@ -119,7 +120,7 @@ const Lists: React.FC = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full text-slate-400">
-        <i className="fas fa-spinner fa-spin text-3xl mb-2"></i>
+        <BrandSpinner size="lg" />
       </div>
     );
   }

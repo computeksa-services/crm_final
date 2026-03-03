@@ -5,6 +5,7 @@ import { MarketingCampaign } from '../../types';
 import { marketingApi } from '../../services/marketingApi';
 import Toast from '../Toast';
 import ConfirmModal from '../ConfirmModal';
+import { BrandSpinner } from '../AppLoaders';
 import { useEmailSendPolicy } from '../../src/hooks/useEmailSendPolicy';
 import {
   useReactTable,
@@ -704,7 +705,7 @@ const Campaigns: React.FC = () => {
              {loading ? (
                  <tr>
                     <td colSpan={columns.length} className="py-24 text-center">
-                        <i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i>
+                  <BrandSpinner size="lg" className="mb-3" />
                         <p className="text-slate-400 text-sm font-medium">Cargando campañas...</p>
                     </td>
                  </tr>

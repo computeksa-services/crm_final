@@ -6,6 +6,7 @@ import { Product, ProductType } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import { apiFetch } from '../services/apiClient';
+import { BrandSpinner } from '../components/AppLoaders';
 
 const ProductsList: React.FC = () => {
   const { user } = useAuth();
@@ -267,8 +268,8 @@ const ProductsList: React.FC = () => {
   const renderContent = () => {
     if (cacheLoading) {
         return (
-          <div className="p-12 text-center">
-              <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500 mb-4"></i>
+          <div className="p-12 text-center flex flex-col items-center">
+              <BrandSpinner size="xl" className="mb-4" />
               <p className="text-slate-500 font-medium">Cargando catálogo...</p>
           </div>
         );

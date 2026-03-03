@@ -5,6 +5,7 @@ import { useDataCache } from '../../contexts/DataCacheContext';
 import { Quote, ClientCompany, ClientContact, QuoteStatus, Deal, UserDecision, CustomStatus, DealChannel } from '../../types';
 import { apiFetch } from '../../services/apiClient';
 import Toast from '../../components/Toast';
+import { BrandSpinner } from '../../components/AppLoaders';
 import CompanyFormModal from '../clients/CompanyFormModal';
 import ContactFormModal from '../clients/ContactFormModal';
 
@@ -479,7 +480,7 @@ const QuoteCreate: React.FC = () => {
   if (isLoading) {
     return (
       <div className="flex h-[80vh] items-center justify-center flex-col gap-4">
-        <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500"></i>
+        <BrandSpinner size="xl" />
         <p className="text-slate-500 font-medium">Cargando configuración...</p>
       </div>
     );
@@ -520,7 +521,7 @@ const QuoteCreate: React.FC = () => {
             disabled={processing}
             className="flex-1 md:flex-none px-6 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-70 text-sm"
           >
-            {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-save"></i>}
+            {processing ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-save"></i>}
             Guardar Registro
           </button>
         </div>

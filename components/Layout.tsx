@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useDataCache } from '../contexts/DataCacheContext';
 import { getImageUrl } from '../utils/imageUtils';
 import { NAV_GROUPS, PAGE_NAMES } from '../services/routes.config';
+import { ButtonLoader } from './AppLoaders';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -377,16 +378,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   return breadcrumbs.map((crumb, idx) => (
                     <React.Fragment key={crumb.path}>
                       {idx > 0 && (
-                        <span className="text-slate-400 text-base mx-1.5">
+                        <span className="text-slate-400 text-sm mx-1.5">
                           <i className="fa-solid fa-chevron-right"></i>
                         </span>
                       )}
                       {crumb.isActive ? (
-                        <span className="text-slate-900 dark:text-slate-100 font-bold text-base">{crumb.label}</span>
+                        <span className="text-slate-900 dark:text-slate-100 font-bold text-sm">{crumb.label}</span>
                       ) : (
                         <Link 
                           to={crumb.path} 
-                          className="text-brand-600 font-semibold text-base px-2 py-1 rounded-md hover:bg-brand-50 dark:hover:bg-slate-800 hover:text-brand-700 transition-all cursor-pointer duration-200 ease-in-out"
+                          className="text-brand-600 font-medium text-sm px-2 py-1 rounded-md hover:bg-brand-50 dark:hover:bg-slate-800 hover:text-brand-700 transition-all cursor-pointer duration-200 ease-in-out"
                         >
                           {crumb.label}
                         </Link>
@@ -401,9 +402,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
              {/* Indicador de carga del caché */}
              {cacheLoading && (
                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                 <div className="animate-spin">
-                   <i className="fa-solid fa-circle-notch text-brand-500"></i>
-                 </div>
+                 <ButtonLoader size="xs" />
                  <span>Cargando datos...</span>
                </div>
              )}
@@ -420,23 +419,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
              )}
              
              {/* User dropdown */}
-             <div className="relative" ref={userMenuRef}>
+             <div className="relative flex items-center" ref={userMenuRef}>
                <button
                  ref={userMenuButtonRef}
-                 onClick={() => setUserMenuOpen((open) => !open)}
-                 className="flex items-center gap-2.5 px-2 py-1 pr-2.5 bg-white dark:bg-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-500 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all cursor-pointer"
+                 onClick={() => setUserMenuOpen(o => !o)}
+                 className="flex items-center gap-2 p-1 bg-white dark:bg-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-500 rounded-full shadow-sm hover:shadow-md active:scale-[0.98] transition-all cursor-pointer"
                >
-                  <img 
-                      src={getImageUrl(user?.avatar_url) || "https://ui-avatars.com/api/?name=User&background=random"} 
-                      alt="User" 
-                      className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-500 shadow-sm"
-                      referrerPolicy="no-referrer"
-                  />
-                  <div className="hidden sm:flex flex-col items-start leading-tight">
-                    <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 max-w-[140px] line-clamp-2">{user?.name_user || 'Usuario'}</span>
-                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Mi cuenta</span>
-                  </div>
-                  <i className={`fa-solid fa-chevron-down text-[10px] text-slate-500 dark:text-slate-400 transition-transform ${userMenuOpen ? 'rotate-180' : ''}`}></i>
+                 <img
+                   src={getImageUrl(user?.avatar_url) || 'https://ui-avatars.com/api/?name=User&background=random'}
+                   alt="User"
+                   className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-500 shadow-sm"
+                   referrerPolicy="no-referrer"
+                 />
+                 <div className="hidden sm:flex flex-col items-start leading-tight max-w-[120px] truncate">
+                   <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
+                     {user?.name_user || 'Usuario'}
+                   </span>
+                 </div>
                </button>
              </div>
           </div>

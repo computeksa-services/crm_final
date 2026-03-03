@@ -236,18 +236,56 @@ function AvatarGroup({ collaborators }) {
   );
   return (
     <div className="flex -space-x-2">
-      {sorted.slice(0,3).map((c,i) => (
-        <div
-          key={c.id||i}
-          title={`${c.name} · ${c.access_level}`}
-          className="w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-white shadow-sm text-[10px] font-semibold"
-          style={{ backgroundColor: avColor(c.name||c.id), zIndex: 10-i, position:"relative" }}
-        >
-          {c.initials || (c.name||"U").slice(0,2).toUpperCase()}
-        </div>
-      ))}
+      {sorted.slice(0,3).map((c,i) => {
+        const isOwner = c.access_level === 'OWNER';
+        const isPrincipal = c.access_level === 'EDIT';
+        const isSecondary = c.access_level === 'VIEW';
+        
+        let borderColor = 'border-white';
+        let badgeIcon = null;
+        let tooltipText = c.name || 'Usuario';
+        
+        if (isOwner) {
+          borderColor = 'border-amber-400';
+          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-star text-white text-[5px]"></i></div>;
+          tooltipText = `${c.name || 'Usuario'} (Creador)`;
+        } else if (isPrincipal) {
+          borderColor = 'border-indigo-400';
+          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-indigo-500 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-crown text-white text-[5px]"></i></div>;
+          tooltipText = `${c.name || 'Usuario'} (Principal)`;
+        } else if (isSecondary) {
+          borderColor = 'border-slate-300';
+          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-slate-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-eye text-white text-[5px]"></i></div>;
+          tooltipText = `${c.name || 'Usuario'} (Secundario)`;
+        }
+        
+        const avatarUrl = c.avatar_url || `https://ui-avatars.com/api/?name=${c.name || 'U'}&background=random`;
+        
+        return (
+          <div
+            key={c.id||i}
+            className="relative group/collab inline-block"
+          >
+            <div className="relative transition-all group-hover/collab:scale-125 group-hover/collab:z-30">
+              <img 
+                src={avatarUrl} 
+                alt={c.name || 'Usuario'}
+                className={`w-7 h-7 rounded-full border-2 shadow-sm ${borderColor} bg-white relative`}
+              />
+              {badgeIcon}
+            </div>
+            {/* Tooltip personalizado */}
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/collab:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+              <div className="font-bold">{c.name || 'Usuario'}</div>
+              <div className={`text-[9px] ${isOwner ? 'text-amber-300' : isPrincipal ? 'text-indigo-300' : 'text-slate-300'}`}>
+                {isOwner ? 'Creador' : isPrincipal ? 'Principal' : 'Secundario'}
+              </div>
+            </div>
+          </div>
+        );
+      })}
       {sorted.length > 3 && (
-        <div className="w-7 h-7 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-gray-500 text-[9px] font-bold shadow-sm" style={{zIndex:1}}>
+        <div className="w-7 h-7 rounded-full border-2 border-white bg-gray-100 flex items-center justify-center text-gray-500 text-[9px] font-bold shadow-sm hover:scale-110 transition-all" title={`+${sorted.length-3} más`}>
           +{sorted.length-3}
         </div>
       )}
@@ -582,16 +620,7 @@ export default function FollowUpsPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans antialiased">
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-        * { font-family: 'Inter', system-ui, sans-serif; box-sizing: border-box; }
-        .crm-card { transition: all 0.2s ease-in-out; }
-        .crm-card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px -4px rgba(0,0,0,0.08); }
-        @keyframes modalIn { from { opacity:0; transform:scale(.97) translateY(4px); } to { opacity:1; transform:scale(1) translateY(0); } }
-        ::-webkit-scrollbar { width:5px; height:5px; }
-        ::-webkit-scrollbar-thumb { background:#e5e7eb; border-radius:99px; }
-        ::placeholder { color:#d1d5db; }
-      `}</style>
+
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
 

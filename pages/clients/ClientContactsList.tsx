@@ -159,6 +159,32 @@ const ClientContactsList: React.FC = () => {
     }
   };
 
+  // --- FILTRO GLOBAL PERSONALIZADO ---
+  const globalContactFilter = (row: any, columnId: string, filterValue: string) => {
+    if (!filterValue) return true;
+    
+    const searchTerm = filterValue.toLowerCase();
+    const contact = row.original as ClientContact;
+    
+    // Buscar en todos los campos relevantes
+    const searchableFields = [
+      contact.first_name || '',
+      contact.last_name || '',
+      contact.email || '',
+      contact.phone || '',
+      contact.position || '',
+      (contact as any).name_company || '',
+      (contact as any).client_company_name || '',
+      (contact as any).subtitle || '',
+      `${contact.first_name || ''} ${contact.last_name || ''}`.trim(), // Nombre completo
+      `${contact.last_name || ''} ${contact.first_name || ''}`.trim(), // Apellido Nombre
+    ];
+    
+    return searchableFields.some(field => 
+      field.toLowerCase().includes(searchTerm)
+    );
+  };
+
   // --- HANDLERS DE ACCIONES ---
   const handleAddNew = () => {
     setEditingContact(undefined);
@@ -200,9 +226,9 @@ const ClientContactsList: React.FC = () => {
     setShareModalOpen(true);
   };
 
-  const handleModalSuccess = async () => {
+  const handleModalSuccess = async (savedContact?: ClientContact) => {
     setIsModalOpen(false);
-    await invalidateContacts(); // Recargar caché
+    await invalidateContacts(savedContact); // Recargar caché con actualización optimista
     setToast({ message: isEditMode ? 'Contacto actualizado.' : 'Contacto creado.', type: 'success' });
   };
 
@@ -462,6 +488,7 @@ const ClientContactsList: React.FC = () => {
     getExpandedRowModel: getExpandedRowModel(),
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
+    globalFilterFn: globalContactFilter,
   });
 
   return (

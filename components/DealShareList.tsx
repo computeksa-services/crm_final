@@ -136,7 +136,7 @@ const DealShareList: React.FC<DealShareListProps> = ({ id_trato, refreshTrigger 
   if (loading) {
     return (
         <div className="flex justify-center p-6 text-slate-400">
-            <i className="fa-solid fa-circle-notch fa-spin text-xl"></i>
+            <BrandSpinner size="lg" />
         </div>
     );
   }
@@ -211,7 +211,7 @@ const DealShareList: React.FC<DealShareListProps> = ({ id_trato, refreshTrigger 
                     title="Revocar acceso"
                     disabled={isProcessing}
                   >
-                    {isProcessing ? <i className="fa-solid fa-circle-notch fa-spin text-xs"></i> : <i className="fa-solid fa-trash-can"></i>}
+                    {isProcessing ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-trash-can"></i>}
                   </button>
                 </div>
               </div>

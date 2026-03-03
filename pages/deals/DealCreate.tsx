@@ -305,7 +305,7 @@ const DealCreate: React.FC = () => {
                 disabled={processing || cacheLoading}
                 className="flex-1 md:flex-none px-6 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2 transition-all disabled:opacity-70 text-sm"
               >
-                {processing ? <><i className="fa-solid fa-circle-notch fa-spin"></i> Guardando...</> : <><i className="fa-solid fa-check"></i> Guardar</>}
+                {processing ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-check"></i> Guardar</>}
               </button>
             </div>
           </div>

@@ -15,6 +15,7 @@ import LogActionModal from '../components/LogActionModal';
 import ReassignModal from '../components/ReassignModal';
 import Toast from '../components/Toast';
 import { useDataCache } from '../contexts/DataCacheContext';
+import { BrandSpinner } from '../components/AppLoaders';
 
 // --- COMPONENTE DE TARJETA UNIFICADO (PROSPECTOS Y TRATOS) ---
 const UnifiedFollowUpCard: React.FC<{ 
@@ -84,7 +85,7 @@ const UnifiedFollowUpCard: React.FC<{
                         </div>
                     </div>
                     {/* Colaboradores */}
-                    <div className="flex items-center -space-x-2 shrink-0">
+                    <div className="flex items-center -space-x-2 shrink-0 bg-red-500 p-2 rounded">
                         {(() => {
                             const collaborators = item.collaborators || [];
                             if (collaborators.length === 0) return null;
@@ -95,7 +96,7 @@ const UnifiedFollowUpCard: React.FC<{
                                 return (levelOrder[a.access_level as keyof typeof levelOrder] || 4) - (levelOrder[b.access_level as keyof typeof levelOrder] || 4);
                             });
                             
-                            // Invertir para que en el renderizado con -space-x el último (OWNER) quede al frente
+                            // Invertir para que owner quede a la derecha con -space-x
                             return sorted.slice(0, 4).reverse().map((collab: any, idx: number) => {
                                 const user = cachedUsers.find(u => u.id_user === collab.id);
                                 const avatarUrl = user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=random`;
@@ -106,24 +107,20 @@ const UnifiedFollowUpCard: React.FC<{
                                 
                                 let borderColor = 'border-white';
                                 let badgeIcon = null;
-                                let tooltipText = userName;
                                 
                                 if (isOwner) {
                                     borderColor = 'border-amber-400';
                                     badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-star text-white text-[6px]"></i></div>;
-                                    tooltipText = `${userName} (Creador)`;
                                 } else if (isPrincipal) {
                                     borderColor = 'border-indigo-400';
                                     badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-crown text-white text-[6px]"></i></div>;
-                                    tooltipText = `${userName} (Principal)`;
                                 } else if (isSecondary) {
                                     borderColor = 'border-slate-300';
                                     badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-slate-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-eye text-white text-[6px]"></i></div>;
-                                    tooltipText = `${userName} (Secundario)`;
                                 }
                                 
                                 return (
-                                    <div key={collab.id || idx} className="relative group/collab" title={tooltipText}>
+                                    <div key={collab.id || idx} className="relative group/collab">
                                         <div className="relative transition-all group-hover/collab:scale-125 group-hover/collab:z-30">
                                             <img 
                                                 src={avatarUrl} 
@@ -131,6 +128,13 @@ const UnifiedFollowUpCard: React.FC<{
                                                 className={`w-8 h-8 rounded-full border-2 shadow-sm ${borderColor} bg-white relative`}
                                             />
                                             {badgeIcon}
+                                        </div>
+                                        {/* Tooltip personalizado */}
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/collab:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                                            <div className="font-bold">{userName}</div>
+                                            <div className={`text-[9px] ${isOwner ? 'text-amber-300' : isPrincipal ? 'text-indigo-300' : 'text-slate-300'}`}>
+                                                {isOwner ? 'Creador' : isPrincipal ? 'Principal' : 'Secundario'}
+                                            </div>
                                         </div>
                                     </div>
                                 );
@@ -326,7 +330,7 @@ const FollowUpsPage: React.FC = () => {
         return result;
     }, [items, activeTab, searchTerm]);
 
-    if (loading) return <div className="flex h-[80vh] items-center justify-center"><LoaderCircle className="animate-spin text-brand-500" size={40} /></div>;
+    if (loading) return <div className="flex h-[80vh] items-center justify-center"><BrandSpinner size="xl" /></div>;
 
 
         return (
@@ -496,24 +500,20 @@ const FollowUpsPage: React.FC = () => {
                                                             
                                                             let borderColor = 'border-white';
                                                             let badgeIcon = null;
-                                                            let tooltipText = userName;
                                                             
                                                             if (isOwner) {
                                                                 borderColor = 'border-amber-400';
                                                                 badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-star text-white text-[5px]"></i></div>;
-                                                                tooltipText = `${userName} (Creador)`;
                                                             } else if (isPrincipal) {
                                                                 borderColor = 'border-indigo-400';
                                                                 badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-indigo-500 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-crown text-white text-[5px]"></i></div>;
-                                                                tooltipText = `${userName} (Principal)`;
                                                             } else if (isSecondary) {
                                                                 borderColor = 'border-slate-300';
                                                                 badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-slate-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-eye text-white text-[5px]"></i></div>;
-                                                                tooltipText = `${userName} (Secundario)`;
                                                             }
                                                             
                                                             return (
-                                                                <div key={collab.id || idx} className="relative group/collab" title={tooltipText}>
+                                                                <div key={collab.id || idx} className="relative group/collab">
                                                                     <div className="relative transition-all group-hover/collab:scale-125 group-hover/collab:z-30">
                                                                         <img 
                                                                             src={avatarUrl} 
@@ -521,6 +521,13 @@ const FollowUpsPage: React.FC = () => {
                                                                             className={`w-7 h-7 rounded-full border-2 shadow-sm ${borderColor} bg-white relative`}
                                                                         />
                                                                         {badgeIcon}
+                                                                    </div>
+                                                                    {/* Tooltip personalizado */}
+                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/collab:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                                                                        <div className="font-bold">{userName}</div>
+                                                                        <div className={`text-[9px] ${isOwner ? 'text-amber-300' : isPrincipal ? 'text-indigo-300' : 'text-slate-300'}`}>
+                                                                            {isOwner ? 'Creador' : isPrincipal ? 'Principal' : 'Secundario'}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             );

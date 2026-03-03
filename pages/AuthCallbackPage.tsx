@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { authService, AUTH_SUCCESS_MESSAGE } from '../services/authService';
+import { SectionLoader } from '../components/AppLoaders';
 
 // Guard global para evitar doble procesamiento del callback
 let isProcessingGlobal = false;
@@ -74,9 +75,7 @@ const AuthCallbackPage: React.FC = () => {
       <div className="bg-white rounded-xl shadow-lg p-8 max-w-md w-full text-center">
         {loading && (
           <>
-            <div className="animate-spin mb-4 inline-block">
-              <i className="fa-solid fa-circle-notch text-brand-600 text-4xl"></i>
-            </div>
+            <SectionLoader message="Procesando autenticación..." className="py-2" />
             <h2 className="text-lg font-semibold text-slate-800">Procesando autenticación...</h2>
             <p className="text-sm text-slate-600 mt-2">No cierres esta ventana mientras completamos el inicio de sesión.</p>
           </>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { BrandSpinner } from '../../components/AppLoaders';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
 import { Tenant } from '../../types';
@@ -249,8 +250,8 @@ const CompaniesList: React.FC = () => {
   const renderContent = () => {
     if (cacheLoading) {
       return (
-        <div className="p-12 text-center">
-          <i className="fa-solid fa-circle-notch fa-spin text-4xl text-slate-800 mb-4"></i>
+        <div className="p-12 text-center flex flex-col items-center">
+          <BrandSpinner size="xl" className="mb-4" />
           <p className="text-slate-500 font-medium">Cargando suscripciones...</p>
         </div>
       );
@@ -568,7 +569,7 @@ const CompaniesList: React.FC = () => {
                <div className="flex justify-end pt-4 space-x-2">
                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 rounded-lg text-slate-600 hover:bg-slate-100 text-sm">Cancelar</button>
                  <button type="submit" disabled={submitting} className="px-4 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-900 text-sm shadow-sm flex items-center">
-                   {submitting && <i className="fa-solid fa-circle-notch fa-spin mr-2"></i>}
+                   {submitting && <BrandSpinner size="xs" className="mr-2" />}
                    {isEditMode ? 'Guardar Cambios' : 'Crear Tenant'}
                  </button>
                </div>

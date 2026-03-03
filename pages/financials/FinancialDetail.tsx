@@ -6,6 +6,7 @@ import CollectionModal from '../../components/CollectionModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { apiFetch } from '../../services/apiClient';
 import { financialService } from '../../services/financials.service';
+import { BrandSpinner } from '../../components/AppLoaders';
 import type { FinancialTransaction } from '../../types';
 
 // --- HELPERS ---
@@ -247,7 +248,7 @@ const FinancialDetail: React.FC = () => {
   if (loading) return (
     <div className="flex h-[calc(100vh-200px)] items-center justify-center">
       <div className="flex flex-col items-center gap-3">
-        <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500"></i>
+        <BrandSpinner size="xl" />
         <p className="text-slate-400 font-medium animate-pulse">Cargando detalles financieros...</p>
       </div>
     </div>

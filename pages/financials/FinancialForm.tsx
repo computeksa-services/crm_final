@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import { BrandSpinner } from '../../components/AppLoaders';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
@@ -401,7 +402,7 @@ const FinancialForm: React.FC = () => {
     return 'Total';
   };
 
-  if (loading) return <div className="p-20 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500"></i></div>;
+  if (loading) return <div className="p-20 text-center flex flex-col items-center"><BrandSpinner size="lg" className="mb-3" /><p className="text-slate-400 text-sm">Cargando formulario...</p></div>;
 
   const pageTitle = isEditMode ? 'Editar Transacción' : 'Nueva Transacción';
   const pageSubtitle = isEditMode ? 'Modifique los datos de la transacción.' : 'Registre un nuevo ingreso o egreso financiero.';
@@ -419,7 +420,7 @@ const FinancialForm: React.FC = () => {
         <div className="flex items-center gap-3 w-full md:w-auto">
           <button onClick={() => navigate(-1)} className="flex-1 md:flex-none px-4 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-white transition-all text-sm bg-white">Cancelar</button>
           <button onClick={handleSave} disabled={saving} className="flex-1 md:flex-none px-6 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2 transition-all text-sm disabled:opacity-70">
-            {saving ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-save"></i>}
+            {saving ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-save"></i>}
             {isEditMode ? 'Actualizar' : 'Guardar'} Registro
           </button>
         </div>

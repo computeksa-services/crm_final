@@ -17,7 +17,7 @@ interface DealFollowUpCardProps {
 const DealFollowUpCard: React.FC<DealFollowUpCardProps> = ({ deal, onManageClick, onSuccess }) => {
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { dealStatuses } = useDataCache();
+    const { dealStatuses, users: cachedUsers } = useDataCache();
     const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
 
     const dealId = deal.id_entity || deal.id_trato;
@@ -74,7 +74,71 @@ const DealFollowUpCard: React.FC<DealFollowUpCardProps> = ({ deal, onManageClick
                         </p>
                     )}
                 </div>
-                <img src={deal.owner_avatar || `https://ui-avatars.com/api/?name=${deal.owner_name}&background=random`} alt={deal.owner_name} className="w-8 h-8 rounded-full border-2 border-white shadow-sm" title={`Responsable: ${deal.owner_name}`} />
+                {/* Colaboradores con badges */}
+                <div className="flex items-center -space-x-2">
+                    {(() => {
+                        const collaborators = deal.collaborators || [];
+                        if (collaborators.length === 0) return null;
+                        
+                        // Ordenar: Owner primero, luego EDIT, luego VIEW
+                        const sorted = [...collaborators].sort((a, b) => {
+                            const levelOrder = { OWNER: 1, EDIT: 2, VIEW: 3, BLOCKED: 4 };
+                            return (levelOrder[a.access_level as keyof typeof levelOrder] || 4) - (levelOrder[b.access_level as keyof typeof levelOrder] || 4);
+                        });
+                        
+                        // Invertir para que el Owner (primero en la lista) aparezca a la derecha con -space-x
+                        return sorted.slice(0, 3).reverse().map((collab: any, idx: number) => {
+                            const collabUser = cachedUsers.find(u => u.id_user === collab.id);
+                            const avatarUrl = collabUser?.avatar_url || `https://ui-avatars.com/api/?name=${collabUser?.name_user || 'U'}&background=random`;
+                            const userName = collabUser?.name_user || 'Usuario';
+                            const isOwner = collab.access_level === 'OWNER';
+                            const isPrincipal = collab.access_level === 'EDIT';
+                            const isSecondary = collab.access_level === 'VIEW';
+                            
+                            let borderColor = 'border-white';
+                            let badgeIcon = null;
+                            let tooltipText = userName;
+                            
+                            if (isOwner) {
+                                borderColor = 'border-amber-400';
+                                badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-star text-white text-[6px]"></i></div>;
+                                tooltipText = `${userName} (Creador)`;
+                            } else if (isPrincipal) {
+                                borderColor = 'border-indigo-400';
+                                badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-crown text-white text-[6px]"></i></div>;
+                                tooltipText = `${userName} (Principal)`;
+                            } else if (isSecondary) {
+                                borderColor = 'border-slate-300';
+                                badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-slate-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-eye text-white text-[6px]"></i></div>;
+                                tooltipText = `${userName} (Secundario)`;
+                            }
+                            
+                            return (
+                                <div key={collab.id || idx} className="relative group/collab" title={tooltipText}>
+                                    <div className="relative transition-all group-hover/collab:scale-125 group-hover/collab:z-30">
+                                        <img 
+                                            src={avatarUrl} 
+                                            alt={userName}
+                                            className={`w-8 h-8 rounded-full border-2 shadow-sm ${borderColor} bg-white relative`}
+                                        />
+                                        {badgeIcon}
+                                    </div>
+                                </div>
+                            );
+                        });
+                    })()}
+                    {(() => {
+                        const collaborators = deal.collaborators || [];
+                        if (collaborators.length > 3) {
+                            return (
+                                <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center shadow-sm hover:scale-110 transition-all hover:z-20" title={`+${collaborators.length - 3} más`}>
+                                    <span className="text-[8px] font-black text-slate-500">+{collaborators.length - 3}</span>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
+                </div>
             </div>
 
             <div className="p-4 space-y-3 flex-grow">

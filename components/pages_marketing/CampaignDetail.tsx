@@ -6,6 +6,7 @@ import { marketingApi } from '../../services/marketingApi';
 import { useAuth } from '../../contexts/AuthContext';
 import ConfirmModal from '../ConfirmModal';
 import Toast from '../Toast';
+import { BrandSpinner } from '../AppLoaders';
 
 // Tipos adicionales para la nueva data
 interface AudienceMember {
@@ -317,7 +318,7 @@ const CampaignDetail: React.FC = () => {
   if (isLoading) {
     return (
       <div className="h-96 flex flex-col items-center justify-center text-slate-400">
-        <i className="fa-solid fa-circle-notch fa-spin text-3xl mb-3 text-brand-500"></i>
+        <BrandSpinner size="lg" className="mb-3" />
         <p>Cargando detalles...</p>
       </div>
     );

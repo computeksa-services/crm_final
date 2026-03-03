@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrandSpinner } from '../../components/AppLoaders';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import ProfileSection from './sections/ProfileSection';
@@ -144,7 +145,7 @@ const AccountSettings: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <i className="fas fa-spinner fa-spin text-4xl text-blue-500 mb-4"></i>
+          <BrandSpinner size="xl" className="mb-4" />
           <p className="text-slate-600 dark:text-slate-400">Cargando...</p>
         </div>
       </div>

@@ -38,7 +38,7 @@ type DataCacheState = {
   
   // Métodos de invalidación
   invalidateCompanies: () => Promise<void>;
-  invalidateContacts: () => Promise<void>;
+  invalidateContacts: (optimisticContact?: ClientContact) => Promise<void>;
   invalidateProducts: () => Promise<void>;
   invalidateUsers: () => Promise<void>;
   invalidateTenants: () => Promise<void>;
@@ -417,8 +417,20 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, [user, parseCompaniesPayload]);
 
-  const invalidateContacts = useCallback(async () => {
+  const invalidateContacts = useCallback(async (optimisticContact?: ClientContact) => {
     if (!user?.id_tenant || !user?.id_user) return;
+    
+    // Si se proporciona un contacto optimista, agregarlo inmediatamente
+    if (optimisticContact) {
+      setContacts(prev => {
+        // Si es edición, reemplazar; si es creación, agregar
+        const existing = prev.find(c => c.id_contact === optimisticContact.id_contact);
+        if (existing) {
+          return prev.map(c => c.id_contact === optimisticContact.id_contact ? optimisticContact : c);
+        }
+        return [optimisticContact, ...prev];
+      });
+    }
     
     try {
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/contacts?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);

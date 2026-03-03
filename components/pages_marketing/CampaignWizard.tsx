@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { MarketingList } from '../../types';
 import JoditEditor from 'jodit-react';
 import Toast from '../Toast';
+import { BrandSpinner } from '../AppLoaders';
 import { apiFetch } from '../../services/apiClient';
 import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
 import { useEmailSendPolicy } from '../../src/hooks/useEmailSendPolicy';
@@ -549,7 +550,7 @@ const CampaignWizard: React.FC = () => {
                             <i className="fa-solid fa-check"></i>
                         )}
                         <span className="hidden sm:inline">
-                            {isSaving ? 'Guardando...' : hasUnsavedChanges ? 'Guardar Cambios' : 'Guardado'}
+                            {isSaving ? '' : hasUnsavedChanges ? 'Guardar Cambios' : 'Guardado'}
                         </span>
                     </button>
                 </div>
@@ -688,7 +689,7 @@ const CampaignWizard: React.FC = () => {
 
                     {isLoadingLists ? (
                         <div className="py-20 text-center text-slate-400">
-                            <i className="fa-solid fa-circle-notch fa-spin text-3xl mb-3"></i>
+                            <BrandSpinner size="lg" className="mb-3" />
                             <p>Cargando listas...</p>
                         </div>
                     ) : lists.length === 0 ? (

@@ -16,6 +16,7 @@ import DealKanbanCard from '../../components/DealKanbanCard';
 import { useDealKanban } from '../../hooks/useDealKanban';
 import { canEditInline } from '../../utils/permissions';
 import { useAuth } from '../../contexts/AuthContext';
+import { BrandSpinner } from '../../components/AppLoaders';
 
 interface DealsKanbanProps {
   deals: Deal[];
@@ -67,7 +68,7 @@ const DealsKanban: React.FC<DealsKanbanProps> = ({ deals, dealStatuses, onRefres
       {isUpdating && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
           <div className="bg-white rounded-xl shadow-2xl px-6 py-4 flex items-center gap-3">
-            <i className="fa-solid fa-circle-notch fa-spin text-blue-600 text-xl"></i>
+            <BrandSpinner size="md" />
             <span className="text-sm font-semibold text-gray-700">Actualizando trato...</span>
           </div>
         </div>

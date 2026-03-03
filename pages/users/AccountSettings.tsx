@@ -13,6 +13,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { User } from '../../types';
 import { getImageUrl } from '../../utils/imageUtils';
+import { BrandSpinner } from '../../components/AppLoaders';
 
 type SettingsSection = 'profile' | 'integrations' | 'workspace-integrations';
 
@@ -41,7 +42,7 @@ const AccountSettings: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <i className="fas fa-spinner fa-spin text-4xl text-blue-500 mb-4"></i>
+          <BrandSpinner size="xl" className="mb-4" />
           <p className="text-slate-600 dark:text-slate-400">Cargando configuración...</p>
         </div>
       </div>

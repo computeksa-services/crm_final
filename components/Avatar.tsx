@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { getImageUrl } from '../utils/imageUtils';
+import { BrandSpinner } from './AppLoaders';
 
 interface AvatarProps {
   src?: string | null;
@@ -82,7 +83,7 @@ const Avatar: React.FC<AvatarProps> = ({
           {/* Mostrar spinner mientras carga */}
           {!imageLoaded && (
             <div className="absolute inset-0 flex items-center justify-center bg-slate-200 dark:bg-slate-400 rounded-full">
-              <i className="fa-solid fa-circle-notch fa-spin text-slate-400 dark:text-slate-600 text-xs"></i>
+              <BrandSpinner size="xs" />
             </div>
           )}
         </>

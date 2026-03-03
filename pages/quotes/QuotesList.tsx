@@ -7,6 +7,7 @@ import { apiFetch } from '../../services/apiClient';
 import Toast from '../../components/Toast';
 import ShareModal from '../../components/ShareModal';
 import ConfirmModal from '../../components/ConfirmModal';
+import { BrandSpinner } from '../../components/AppLoaders';
 import { canUserAction, canEditInline } from '../../utils/permissions';
 import {
   useReactTable,
@@ -28,9 +29,35 @@ import {
 // --- UTILS & FILTERS ---
 const dateRangeFilter: FilterFn<any> = (row, columnId, value) => {
   const { start, end } = value as { start: string; end: string };
-  const rowDate = row.getValue(columnId) as string;
+  let rowDate = row.getValue(columnId) as string;
   if (!rowDate) return false;
-  const date = rowDate.split('T')[0];
+  
+  // Extraer solo la parte de fecha (YYYY-MM-DD)
+  let date: string;
+  if (rowDate.includes('T')) {
+    // Formato ISO: 2024-03-03T12:00:00
+    date = rowDate.split('T')[0];
+  } else if (rowDate.includes(' ')) {
+    // Formato con espacio: 2024-03-03 12:00:00
+    date = rowDate.split(' ')[0];
+  } else if (rowDate.includes('/')) {
+    // Formato con barras: 03/03/2024 -> convertir a YYYY-MM-DD
+    const parts = rowDate.split('/');
+    if (parts.length === 3) {
+      // Asumiendo formato DD/MM/YYYY o MM/DD/YYYY
+      try {
+        const d = new Date(rowDate);
+        date = d.toISOString().split('T')[0];
+      } catch {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  } else {
+    date = rowDate;
+  }
+  
   if (start && date < start) return false;
   if (end && date > end) return false;
   return true;
@@ -48,14 +75,32 @@ const formatDateTime = (value?: string) => {
   return `${date}${time ? ` ${time.slice(0, 5)}` : ''}`;
 };
 
-// --- HELPER PARA CELDA DE GRUPO (Sutil) ---
-const renderGroupCell = (row: any, label: string) => (
-  <div className="flex items-center gap-3">
-    <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
-    <span className="font-bold text-slate-700 uppercase tracking-tight">{label || 'No asignado'}</span>
-    <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
-  </div>
-);
+// --- HELPER PARA CELDA DE GRUPO (Actualizado) ---
+const renderGroupCell = (row: any, label: string) => {
+  // Calcular subtotal del grupo
+  const subtotal = row.subRows.reduce((sum: number, subRow: any) => {
+    const value = parseFloat(String(subRow.original?.total || 0));
+    return sum + value;
+  }, 0);
+
+  return (
+    <div className="flex items-center gap-3">
+      {/* Ícono Chevron */}
+      <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+      
+      {/* Nombre del grupo */}
+      <span className="font-bold text-slate-600 uppercase tracking-tight text-xs">{label || 'No asignado'}</span>
+      
+      {/* Contador de registros */}
+      <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
+      
+      {/* Subtotal del grupo */}
+      <span className="bg-brand-50 text-brand-700 px-3 py-1 rounded-lg border border-brand-200 font-mono font-bold text-xs">
+        {subtotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+      </span>
+    </div>
+  );
+};
 
 // --- COMPONENTE INTERNO: Selector Inline ---
 const InlineBadgeSelector: React.FC<{
@@ -186,18 +231,29 @@ const QuotesList: React.FC = () => {
 
   // --- TABLE STATE ---
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() => {
+    const saved = localStorage.getItem('quotesListColumnFilters');
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [globalFilter, setGlobalFilter] = useState('');
   const [grouping, setGrouping] = useState<GroupingState>(() => {
     const saved = localStorage.getItem('quotesList_grouping');
     return saved ? JSON.parse(saved) : [];
   });
-  const [expanded, setExpanded] = useState<ExpandedState>({});
+  const [expanded, setExpanded] = useState<ExpandedState>(() => {
+    const saved = localStorage.getItem('quotesListExpanded');
+    return saved ? JSON.parse(saved) : {};
+  });
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
 
   // --- UI STATE ---
   const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
+  const isFirstRender = useRef(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
   // --- MODALS ---
@@ -271,10 +327,22 @@ const QuotesList: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
-  // Guardar estado de agrupación en localStorage
+  // Guardar estado de agrupación en localStorage y limpiar expanded cuando cambia
   useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
     localStorage.setItem('quotesList_grouping', JSON.stringify(grouping));
+    // Limpiar el estado expandido cuando cambia el agrupamiento (no en el primer render)
+    setExpanded({});
+    localStorage.setItem('quotesListExpanded', JSON.stringify({}));
   }, [grouping]);
+
+  // Guardar filtros en localStorage cuando cambien
+  useEffect(() => {
+    localStorage.setItem('quotesListColumnFilters', JSON.stringify(columnFilters));
+  }, [columnFilters]);
 
   // --- FILTERS LOGIC ---
   useEffect(() => {
@@ -288,14 +356,6 @@ const QuotesList: React.FC = () => {
   const getFacetedValues = (columnId: string) => {
     const counts = new Map<string, number>();
     quotes.forEach(quote => {
-        let val = (quote as any)[columnId];
-        
-        // Manejo especial para id_quote_status
-        if (columnId === 'id_quote_status') {
-            const status = (metadata?.statuses || []).find(s => s.id_status === val);
-            val = status ? status.name : 'Desconocido';
-        }
-        
         // Manejo especial para collaborators (array de objetos)
         if (columnId === 'collaborators') {
             const collaborators = (quote as any).collaborators || [];
@@ -308,15 +368,50 @@ const QuotesList: React.FC = () => {
                     counts.set(userName, (counts.get(userName) || 0) + 1);
                 });
             }
-            return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+            return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+        }
+
+        // Manejo especial para id_user_owner (Creador)
+        if (columnId === 'id_user_owner') {
+            const collaborators = (quote as any).collaborators || [];
+            const owner = collaborators.find((c: any) => c.is_owner);
+            if (owner) {
+                const user = users.find((u: any) => u.id_user === owner.id);
+                const userName = user?.name_user || 'Usuario';
+                counts.set(userName, (counts.get(userName) || 0) + 1);
+            } else {
+                counts.set('Sin asignar', (counts.get('Sin asignar') || 0) + 1);
+            }
+            return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+        }
+
+        // Para la columna de cliente, agregar empresas y contactos con prefijos
+        if (columnId === 'client_company_name') {
+            const comp = (quote as any).client_company_name || '(Vacío)';
+            const contact = (quote as any).contact_full_name || 'Sin contacto';
+            
+            // Agregar empresa con prefijo
+            const companyKey = `🏢 ${comp}`;
+            counts.set(companyKey, (counts.get(companyKey) || 0) + 1);
+            
+            // Agregar contacto con prefijo
+            const contactKey = `👤 ${contact}`;
+            counts.set(contactKey, (counts.get(contactKey) || 0) + 1);
+            return; // continuar con siguiente cotización
         }
         
-
+        let val = (quote as any)[columnId];
+        
+        // Manejo especial para id_quote_status
+        if (columnId === 'id_quote_status') {
+            const status = (metadata?.statuses || []).find(s => s.id_status === val);
+            val = status ? status.name : 'Desconocido';
+        }
         
         if (!val) val = '(Vacío)';
         counts.set(val, (counts.get(val) || 0) + 1);
     });
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+    return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   };
 
   // --- ACTIONS HANDLERS ---
@@ -468,6 +563,7 @@ const QuotesList: React.FC = () => {
         size: 200,
         minSize: 150,
         maxSize: 250,
+        enableColumnFilter: false,
         cell: ({ getValue, row }) => {
             if (row.getIsGrouped()) return null;
             const nombre = getValue() as string;
@@ -490,6 +586,18 @@ const QuotesList: React.FC = () => {
       minSize: 180,
       maxSize: 250,
       enableColumnFilter: true,
+      filterFn: (row, columnId, filterValue: string[]) => {
+        if (filterValue.length === 0) return true;
+        const companyName = row.getValue(columnId) as string;
+        const contactName = row.original.contact_full_name || 'Sin contacto';
+        
+        return filterValue.some(val => {
+          // Remover prefijos de emoji para comparar
+          const cleanVal = val.replace(/^(🏢|👤)\s/, '');
+          return (companyName && companyName.toLowerCase() === cleanVal.toLowerCase())
+              || (contactName && contactName.toLowerCase() === cleanVal.toLowerCase());
+        });
+      },
       cell: ({ row, getValue, column }) => {
         // CORRECCIÓN PRINCIPAL: Solo renderizar grupo si ESTA columna es la agrupada
         if (row.getIsGrouped()) {
@@ -511,6 +619,35 @@ const QuotesList: React.FC = () => {
         size: 120,
         // CORRECCIÓN: Retornar null si es grupo
         cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="font-mono font-bold text-slate-700 text-xs bg-slate-50 px-2 py-1 rounded border border-slate-100">{formatCurrency(getValue() as string)}</span>
+    },
+    {
+        accessorKey: 'id_user_owner',
+        accessorFn: (row) => {
+            const collaborators = (row as any).collaborators || [];
+            const owner = collaborators.find((c: any) => c.is_owner);
+            const userId = owner?.id;
+            const user = users.find(u => u.id_user === userId);
+            return user?.name_user || 'Sin asignar';
+        },
+        header: 'Creador',
+        size: 120,
+        enableColumnFilter: true,
+        enableGrouping: true,
+        filterFn: (row, id, filterValue: string[]) => {
+            const collaborators = (row.original as any).collaborators || [];
+            const owner = collaborators.find((c: any) => c.is_owner);
+            const userId = owner?.id;
+            if (filterValue.length === 0) return true;
+            const user = users.find((u: any) => u.id_user === userId);
+            const userName = user?.name_user || '';
+            return filterValue.some(filter => userName.toLowerCase().includes(filter.toLowerCase()));
+        },
+        cell: ({ row, column, getValue }) => {
+            if (row.getIsGrouped()) {
+                return grouping.includes(column.id) ? renderGroupCell(row, getValue() as string) : null;
+            }
+            return <span className="text-xs text-slate-600">{getValue() as string}</span>;
+        }
     },
     {
         accessorKey: 'collaborators',
@@ -583,19 +720,19 @@ const QuotesList: React.FC = () => {
                                 key={collab.id || idx}
                                 className="relative inline-block group/avatar"
                             >
-                                <div className="relative cursor-pointer">
+                                <div className="relative cursor-pointer transition-all duration-200 hover:scale-125 hover:z-10">
                                     <img 
                                         src={avatarUrl} 
                                         alt={userName}
-                                        className={`w-8 h-8 rounded-full border-2 transition-all hover:scale-125 hover:z-10 shadow-sm ${borderColor}`}
+                                        className={`w-8 h-8 rounded-full border-2 shadow-sm ${borderColor}`}
                                     />
                                     {badgeIcon}
-                                    {/* Tooltip solo en hover del avatar */}
-                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-                                        <div className="font-bold">{userName}</div>
-                                        <div className={`text-[9px] ${isOwner ? 'text-amber-300' : isPrincipal ? 'text-indigo-300' : 'text-slate-300'}`}>
-                                            {tooltipLevel}
-                                        </div>
+                                </div>
+                                {/* Tooltip fuera del contenedor que se escala */}
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
+                                    <div className="font-bold">{userName}</div>
+                                    <div className={`text-[9px] ${isOwner ? 'text-amber-300' : isPrincipal ? 'text-indigo-300' : 'text-slate-300'}`}>
+                                        {tooltipLevel}
                                     </div>
                                 </div>
                             </div>
@@ -620,6 +757,8 @@ const QuotesList: React.FC = () => {
       accessorKey: 'created_at',
       header: 'Creado',
       size: 140,
+      enableColumnFilter: true,
+      filterFn: dateRangeFilter,
       cell: ({ row }) => {
         if (row.getIsGrouped()) return null;
         // Preferir el campo formateado si existe, si no, formatear localmente
@@ -705,8 +844,15 @@ const QuotesList: React.FC = () => {
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     onGroupingChange: setGrouping,
-    onExpandedChange: setExpanded,
+    onExpandedChange: (updater) => {
+      setExpanded((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        localStorage.setItem('quotesListExpanded', JSON.stringify(next));
+        return next;
+      });
+    },
     onPaginationChange: setPagination,
+    autoResetExpanded: false,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -718,6 +864,9 @@ const QuotesList: React.FC = () => {
       return '';
     }
   });
+
+  const filteredRows = table.getFilteredRowModel().rows;
+  const totalFiltered = useMemo(() => filteredRows.reduce((s, r) => s + (r.getIsGrouped() ? 0 : parseFloat(String(r.original.total || 0))), 0), [filteredRows]);
 
   return (
     <div className="flex flex-col h-[calc(100vh-58px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
@@ -743,7 +892,7 @@ const QuotesList: React.FC = () => {
             {[
               { id: 'client_company_name', label: 'Cliente', icon: 'fa-building' },
               { id: 'id_quote_status', label: 'Estado', icon: 'fa-list-check' },
-              { id: 'collaborators', label: 'Colaboradores', icon: 'fa-user-group' }
+              { id: 'id_user_owner', label: 'Creador', icon: 'fa-user' }
             ].map(opt => (
               <button 
                 key={opt.id} 
@@ -776,7 +925,7 @@ const QuotesList: React.FC = () => {
               <tr key={hg.id}>
                 {hg.headers.map(header => {
                   const isFiltered = columnFilters.some(f => f.id === header.column.id);
-                  const isDate = header.column.id === 'fecha_emision';
+                  const isDate = header.column.id === 'fecha_emision' || header.column.id === 'created_at';
                   
                   return (
                     <th key={header.id} style={{ width: header.getSize() }} className="border-b border-r border-slate-200 bg-slate-50 px-4 py-2 text-left relative group">
@@ -834,7 +983,7 @@ const QuotesList: React.FC = () => {
           </thead>
           <tbody className="bg-white">
             {loading ? (
-                <tr><td colSpan={columns.length} className="py-24 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i><p className="text-slate-400 text-sm font-medium">Cargando cotizaciones...</p></td></tr>
+              <tr><td colSpan={columns.length} className="py-24 text-center"><BrandSpinner size="lg" className="mb-3" /><p className="text-slate-400 text-sm font-medium">Cargando cotizaciones...</p></td></tr>
             ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length} className="py-20 text-center">
@@ -848,17 +997,37 @@ const QuotesList: React.FC = () => {
                 </tr>
             ) : table.getRowModel().rows.map(row => {
                 const isGrouped = row.getIsGrouped();
+                const handleRowClick = () => {
+                    if (isGrouped) row.toggleExpanded();
+                    else navigate(`/app/quotes/${row.original.id_cotizacion}`);
+                };
+
                 return (
                     <tr 
                         key={row.id} 
-                        onClick={() => { if(isGrouped) row.toggleExpanded(); else navigate(`/app/quotes/${row.original.id_cotizacion}`); }}
-                        className={`${isGrouped ? 'bg-slate-50/80 border-l-4 border-l-brand-500 cursor-pointer font-bold' : 'hover:bg-blue-50/30 cursor-pointer group'} border-b border-slate-100 transition-colors`}
+                        onClick={handleRowClick}
+                        className={`
+                            ${isGrouped 
+                                ? 'bg-slate-50/80 border-l-4 border-l-brand-500 cursor-pointer font-bold' 
+                                : 'hover:bg-blue-50/30 cursor-pointer group'} 
+                            border-b border-slate-100 transition-colors
+                        `}
                     >
-                        {row.getVisibleCells().map(cell => (
-                            <td key={cell.id} className={`px-4 py-2 border-r border-slate-50 ${isGrouped ? 'py-3' : ''}`}>
-                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {isGrouped ? (
+                            <td colSpan={row.getVisibleCells().length} className="px-4 py-3">
+                                {row.getVisibleCells().map(cell => {
+                                    const content = flexRender(cell.column.columnDef.cell, cell.getContext());
+                                    if (content) return content;
+                                    return null;
+                                }).find(c => c)}
                             </td>
-                        ))}
+                        ) : (
+                            row.getVisibleCells().map(cell => (
+                                <td key={cell.id} className="px-4 py-2 border-r border-slate-50">
+                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                </td>
+                            ))
+                        )}
                     </tr>
                 );
             })}
@@ -869,6 +1038,9 @@ const QuotesList: React.FC = () => {
       <div className="bg-slate-50 border-t border-slate-200 px-3 py-2 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
           <div className="flex items-center gap-6">
             <span>{quotes.length} REGISTROS</span>
+            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-brand-600">
+                <span className="text-slate-400">VALOR TOTAL:</span> {totalFiltered.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-left"></i></button>

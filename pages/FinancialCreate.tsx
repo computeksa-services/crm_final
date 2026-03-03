@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Toast from '../components/Toast';
 import { apiFetch } from '../services/apiClient';
 import type { ClientCompany, FinancialTransaction, Quote } from '../types';
+import { BrandSpinner } from '../components/AppLoaders';
 
 // --- HELPERS ---
 const formatCurrency = (val: number) => 
@@ -235,7 +236,7 @@ const FinancialCreate: React.FC = () => {
     }
   };
 
-  if (loading) return <div className="p-20 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500"></i></div>;
+  if (loading) return <div className="p-20 text-center flex flex-col items-center"><BrandSpinner size="lg" className="mb-3" /><p className="text-slate-400 text-sm">Cargando formulario...</p></div>;
 
   return (
     <div className="w-full px-4 md:px-8 py-6 animate-fade-in pb-20 max-w-[1600px] mx-auto bg-slate-50 min-h-screen">
@@ -250,7 +251,7 @@ const FinancialCreate: React.FC = () => {
         <div className="flex items-center gap-3 w-full md:w-auto">
           <button onClick={() => navigate(-1)} className="flex-1 md:flex-none px-4 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium hover:bg-white transition-all text-sm bg-white">Cancelar</button>
           <button onClick={handleSave} disabled={saving} className="flex-1 md:flex-none px-6 py-2 rounded-lg bg-brand-600 text-white font-medium hover:bg-brand-700 shadow-lg shadow-brand-600/20 flex items-center justify-center gap-2 transition-all text-sm disabled:opacity-70">
-            {saving ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-save"></i>}
+            {saving ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-save"></i>}
             Guardar Registro
           </button>
         </div>

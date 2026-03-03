@@ -571,7 +571,7 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
         )}
         <button type="submit" disabled={isSubmitting || !description.trim()}
           className="px-4 py-2 text-[13px] font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-60 flex items-center gap-1.5">
-          {isSubmitting ? <i className="fa-solid fa-circle-notch fa-spin text-[12px]" /> : 'Registrar gestión'}
+          {isSubmitting ? <BrandSpinner size="xs" /> : 'Registrar gestión'}
         </button>
       </div>
     </form>

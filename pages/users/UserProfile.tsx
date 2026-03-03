@@ -4,6 +4,7 @@ import { User } from '../../types';
 import Toast from '../../components/Toast';
 import { getImageUrl } from '../../utils/imageUtils';
 import { PersonalIntegrations } from '../../src/components/users/PersonalIntegrations';
+import { BrandSpinner } from '../../components/AppLoaders';
 
 // Helper para traducir scopes a descripciones amigables
 const scopeDescriptions: Record<string, { name: string; description: string; icon: string }> = {
@@ -90,7 +91,7 @@ const UserProfile: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <i className="fas fa-spinner fa-spin text-4xl text-blue-500 mb-4"></i>
+          <BrandSpinner size="xl" className="mb-4" />
           <p className="text-slate-600">Cargando perfil...</p>
         </div>
       </div>

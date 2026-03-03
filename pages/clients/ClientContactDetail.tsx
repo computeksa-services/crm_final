@@ -9,6 +9,7 @@ import ContactFormModal from './ContactFormModal';
 import ShareModal from '../../components/ShareModal';
 import NewInteractionModal from '../../components/NewInteractionModal';
 import ContactHistoryTimeline from '../../components/ContactHistoryTimeline';
+import { BrandSpinner } from '../../components/AppLoaders';
 
 const ClientContactDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -186,7 +187,7 @@ const ClientContactDetail: React.FC = () => {
   if (loading) return (
     <div className="flex h-64 items-center justify-center">
       <div className="flex flex-col items-center space-y-3">
-        <i className="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500"></i>
+        <BrandSpinner size="xl" />
         <p className="text-slate-500 font-medium animate-pulse">Cargando contacto...</p>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { BrandSpinner } from '../../components/AppLoaders';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
@@ -65,15 +66,31 @@ const formatDateTime = (value?: string) => {
 };
 
 // --- HELPER PARA CELDA DE GRUPO (Actualizado) ---
-const renderGroupCell = (row: any, label: string) => (
-  <div className="flex items-center gap-3">
-    {/* Ícono Chevron en lugar de botón */}
-    <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
-    
-    <span className="font-bold text-slate-700 uppercase tracking-tight">{label || 'No asignado'}</span>
-    <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
-  </div>
-);
+const renderGroupCell = (row: any, label: string) => {
+  // Calcular subtotal del grupo
+  const subtotal = row.subRows.reduce((sum: number, subRow: any) => {
+    const value = parseDealValue(subRow.original?.valor_trato || 0);
+    return sum + value;
+  }, 0);
+
+  return (
+    <div className="flex items-center gap-3">
+      {/* Ícono Chevron */}
+      <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+      
+      {/* Nombre del grupo */}
+      <span className="font-bold text-slate-600 uppercase tracking-tight text-xs">{label || 'No asignado'}</span>
+      
+      {/* Contador de registros */}
+      <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
+      
+      {/* Subtotal del grupo */}
+      <span className="bg-brand-50 text-brand-700 px-3 py-1 rounded-lg border border-brand-200 font-mono font-bold text-xs">
+        {subtotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+      </span>
+    </div>
+  );
+};
 
 const InlineBadgeSelector: React.FC<{
   valueId: string;
@@ -85,6 +102,15 @@ const InlineBadgeSelector: React.FC<{
   const current = items.find(i => i.id === valueId);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const renderNotifyBadge = () => (
+    <span
+      className="ml-auto inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold text-sky-700"
+      title="Notificación por correo activada"
+    >
+      <i className="fa-solid fa-envelope text-[8px]"></i>
+      <span className="leading-none">MAIL</span>
+    </span>
+  );
 
   // Encontrar el índice del estado actual
   const currentIndex = items.findIndex(i => i.id === valueId);
@@ -130,11 +156,18 @@ const InlineBadgeSelector: React.FC<{
       >
         {current?.icon && <i className={current.icon}></i>}
         {current?.name || 'S/N'}
+        {current?.notify_client && (
+          <span
+            className="inline-flex items-center justify-center rounded-full border border-sky-200 bg-sky-50 w-4 h-4 text-sky-700"
+            title="Notificación por correo activada"
+          >
+            <i className="fa-solid fa-envelope text-[8px]"></i>
+          </span>
+        )}
         {!disabled && <i className="fa-solid fa-chevron-down opacity-50 text-[8px]"></i>}
       </button>
       {isOpen && (
         <div 
-          ref={dropdownRef}
           onMouseLeave={() => setIsOpen(false)}
           className={`absolute z-[100] ${dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'} left-0 w-52 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in ${dropdownPosition === 'top' ? 'slide-in-from-bottom-1' : 'slide-in-from-top-1'}`}
         >
@@ -152,11 +185,7 @@ const InlineBadgeSelector: React.FC<{
                     <i className={`${item.icon || 'fa-solid fa-tag'} text-[9px]`}></i>
                   </div>
                   <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
-                  {item.notify_client && (
-                    <span className="ml-auto" title="Notificación por correo activada">
-                      <i className="fa-solid fa-envelope text-[8px] text-blue-500"></i>
-                    </span>
-                  )}
+                  {item.notify_client && renderNotifyBadge()}
                 </button>
               ))}
             </div>
@@ -169,11 +198,7 @@ const InlineBadgeSelector: React.FC<{
                 <i className={`${current?.icon || 'fa-solid fa-tag'} text-[9px]`}></i>
               </div>
               <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{current?.name || 'S/N'}</span>
-              {current?.notify_client && (
-                <span title="Notificación por correo activada">
-                  <i className="fa-solid fa-envelope text-[8px] text-blue-500"></i>
-                </span>
-              )}
+              {current?.notify_client && renderNotifyBadge()}
               <i className="fa-solid fa-check text-[8px] ml-auto text-slate-400"></i>
             </div>
           </div>
@@ -191,11 +216,7 @@ const InlineBadgeSelector: React.FC<{
                     <i className={`${item.icon || 'fa-solid fa-tag'} text-[9px]`}></i>
                   </div>
                   <span className="text-[10px] font-bold text-slate-700 uppercase tracking-tight">{item.name}</span>
-                  {item.notify_client && (
-                    <span className="ml-auto" title="Notificación por correo activada">
-                      <i className="fa-solid fa-envelope text-[8px] text-blue-500"></i>
-                    </span>
-                  )}
+                  {item.notify_client && renderNotifyBadge()}
                 </button>
               ))}
             </div>
@@ -217,7 +238,14 @@ const DealsList: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() => {
+    const saved = localStorage.getItem('dealsListColumnFilters');
+    try {
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [globalFilter, setGlobalFilter] = useState('');
   const [grouping, setGrouping] = useState<GroupingState>(() => {
     const saved = localStorage.getItem('dealsListGrouping');
@@ -280,9 +308,26 @@ const DealsList: React.FC = () => {
 
       const text = await response.text();
       const raw = text ? JSON.parse(text) : {};
-      
-      // El backend devuelve: [{ response: { tratos: [...] } }] o { response: { tratos: [...] } }
-      const payload = Array.isArray(raw) ? (raw[0]?.response ?? raw[0]?.data ?? raw[0] ?? {}) : (raw.response ?? raw.data ?? raw);
+
+      // Extract tratos robustly: support [{ response: { tratos: [...] } }], { response: { tratos: [...] } }, { data: { tratos: [...] } }, or plain array
+      const extractTratos = (input: any): any[] => {
+        if (!input) return [];
+        if (Array.isArray(input)) {
+          const first = input[0];
+          if (first) {
+            if (Array.isArray(first?.response?.tratos)) return first.response.tratos;
+            if (Array.isArray(first?.data?.tratos)) return first.data.tratos;
+            if (Array.isArray(first?.tratos)) return first.tratos;
+          }
+          if (input.every((it: any) => it && (it.id_trato || it.nombre_trato))) return input;
+          return [];
+        } else {
+          if (Array.isArray(input?.response?.tratos)) return input.response.tratos;
+          if (Array.isArray(input?.data?.tratos)) return input.data.tratos;
+          if (Array.isArray(input?.tratos)) return input.tratos;
+          return [];
+        }
+      };
 
       const normalizeDeals = (list: any[] = []) => Array.isArray(list)
         ? list.map(d => ({
@@ -324,7 +369,7 @@ const DealsList: React.FC = () => {
             }))
         : [];
 
-      const dealsFromApi = normalizeDeals(payload.tratos);
+      const dealsFromApi = normalizeDeals(extractTratos(raw));
       
       
       setDeals(dealsFromApi);
@@ -368,27 +413,18 @@ const DealsList: React.FC = () => {
     localStorage.removeItem('deals_view_mode');
   }, []);
 
+  // Guardar filtros en localStorage cuando cambien
+  useEffect(() => {
+    localStorage.setItem('dealsListColumnFilters', JSON.stringify(columnFilters));
+  }, [columnFilters]);
+
   const handleGroupingChange = (newGrouping: string[]) => {
     setGrouping(newGrouping);
     localStorage.setItem('dealsListGrouping', JSON.stringify(newGrouping));
     
-    if (newGrouping.length > 0) {
-      const groupByColumn = newGrouping[0];
-      const allExpanded: ExpandedState = {};
-      
-      deals.forEach((deal) => {
-        const groupValue = (deal as any)[groupByColumn];
-        if (groupValue !== null && groupValue !== undefined) {
-          allExpanded[String(groupValue)] = true;
-        }
-      });
-      
-      setExpanded(allExpanded);
-      localStorage.setItem('dealsListExpanded', JSON.stringify(allExpanded));
-    } else {
-      setExpanded({});
-      localStorage.setItem('dealsListExpanded', JSON.stringify({}));
-    }
+    // Limpiar el estado expandido cuando cambia el agrupamiento
+    setExpanded({});
+    localStorage.setItem('dealsListExpanded', JSON.stringify({}));
   };
 
   useEffect(() => {
@@ -415,13 +451,42 @@ const DealsList: React.FC = () => {
             counts.set(userName, (counts.get(userName) || 0) + 1);
           });
         }
-        return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+        return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      }
+
+      // Manejo especial para id_user_owner (Creador)
+      if (columnId === 'id_user_owner') {
+        const collaborators = (deal as any).collaborators || [];
+        const owner = collaborators.find((c: any) => c.is_owner);
+        if (owner) {
+          const user = users.find((u: any) => u.id_user === owner.id);
+          const userName = user?.name_user || 'Usuario';
+          counts.set(userName, (counts.get(userName) || 0) + 1);
+        } else {
+          counts.set('Sin asignar', (counts.get('Sin asignar') || 0) + 1);
+        }
+        return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+      }
+
+      // Para la columna de cliente, agregar empresas y contactos con prefijos
+      if (columnId === 'client_company_name') {
+        const comp = (deal as any).client_company_name || '(Vacío)';
+        const contact = (deal as any).contact_full_name || 'Sin contacto';
+        
+        // Agregar empresa con prefijo
+        const companyKey = `🏢 ${comp}`;
+        counts.set(companyKey, (counts.get(companyKey) || 0) + 1);
+        
+        // Agregar contacto con prefijo
+        const contactKey = `👤 ${contact}`;
+        counts.set(contactKey, (counts.get(contactKey) || 0) + 1);
+        return; // continuar con siguiente trato
       }
       
       const val = (deal as any)[columnId] || '(Vacío)';
       counts.set(val, (counts.get(val) || 0) + 1);
     });
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+    return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   };
 
   const handleEdit = (deal: Deal) => {
@@ -571,6 +636,12 @@ const DealsList: React.FC = () => {
       accessorKey: 'estado_nombre',
       header: 'Estado',
       size: 180,
+      enableColumnFilter: true,
+      filterFn: (row, columnId, filterValue: string[]) => {
+        if (!filterValue || filterValue.length === 0) return true;
+        const estadoNombre = row.getValue(columnId) as string;
+        return filterValue.includes(estadoNombre);
+      },
       cell: ({ row, getValue, column }) => {
         if (row.getIsGrouped()) {
           if (grouping[0] === column.id) return renderGroupCell(row, getValue() as string);
@@ -585,6 +656,7 @@ const DealsList: React.FC = () => {
       size: 250,
       minSize: 150,
       maxSize: 300,
+      enableColumnFilter: false,
       cell: ({ getValue, row }) => {
         if (row.getIsGrouped()) return null;
         const nombre = getValue() as string;
@@ -602,11 +674,24 @@ const DealsList: React.FC = () => {
     },
     {
       accessorKey: 'client_company_name',
-      header: 'Cliente',
+      header: 'Cliente / Contacto',
       size: 200,
       minSize: 150,
       maxSize: 250,
       enableColumnFilter: true,
+      // custom filter: compare against company OR contact name
+      filterFn: (row, columnId, filterValue: string[]) => {
+        if (!filterValue || filterValue.length === 0) return true;
+        const company = row.getValue(columnId) as string;
+        const contact = (row.original as any).contact_full_name || 'Sin contacto';
+        
+        return filterValue.some(val => {
+          // Remover prefijos de emoji para comparar
+          const cleanVal = val.replace(/^(🏢|👤)\s/, '');
+          return (company && company.toLowerCase() === cleanVal.toLowerCase())
+              || (contact && contact.toLowerCase() === cleanVal.toLowerCase());
+        });
+      },
       cell: ({ row, getValue, column }) => {
         if (row.getIsGrouped()) {
           if (grouping[0] === column.id) return renderGroupCell(row, getValue() as string);
@@ -637,12 +722,47 @@ const DealsList: React.FC = () => {
       accessorKey: 'interes_nombre',
       header: 'Interés',
       size: 160,
+      enableColumnFilter: true,
+      filterFn: (row, columnId, filterValue: string[]) => {
+        if (!filterValue || filterValue.length === 0) return true;
+        const interesNombre = row.getValue(columnId) as string;
+        return filterValue.includes(interesNombre || '(Vacío)');
+      },
       cell: ({ row, getValue, column }) => {
         if (row.getIsGrouped()) {
           if (grouping[0] === column.id) return renderGroupCell(row, getValue() as string);
           return null;
         }
         return <InlineBadgeSelector valueId={row.original.id_interest || ''} items={cachedDealInterests.map(i => ({ ...i, id: i.id_interest }))} onSelect={id => handleInlineUpdate(row.original, { id_interest: id })} disabled={!canEditInline(user, row.original)} />;
+      }
+    },
+    {
+      accessorKey: 'id_user_owner',
+      accessorFn: (row) => {
+        const collaborators = (row as any).collaborators || [];
+        const owner = collaborators.find((c: any) => c.is_owner);
+        const userId = owner?.id;
+        const user = users.find(u => u.id_user === userId);
+        return user?.name_user || 'Sin asignar';
+      },
+      header: 'Creador',
+      size: 120,
+      enableColumnFilter: true,
+      enableGrouping: true,
+      filterFn: (row, id, filterValue: string[]) => {
+        const collaborators = (row.original as any).collaborators || [];
+        const owner = collaborators.find((c: any) => c.is_owner);
+        const userId = owner?.id;
+        if (filterValue.length === 0) return true;
+        const user = users.find((u: any) => u.id_user === userId);
+        const userName = user?.name_user || '';
+        return filterValue.some(filter => userName.toLowerCase().includes(filter.toLowerCase()));
+      },
+      cell: ({ row, column, getValue }) => {
+        if (row.getIsGrouped()) {
+          return grouping.includes(column.id) ? renderGroupCell(row, getValue() as string) : null;
+        }
+        return <span className="text-xs text-slate-600">{getValue() as string}</span>;
       }
     },
     {
@@ -676,7 +796,7 @@ const DealsList: React.FC = () => {
         if (collaborators.length === 0) return <span className="text-xs text-slate-400">Sin asignar</span>;
         
         // Ordenar: Creador primero, luego Principal (EDIT), luego Secundario (VIEW)
-        const sorted = [...collaborators].sort((a: any, b: any) => {
+        const sorted = [...collaborators].sort((a, b) => {
           if (a.is_owner !== b.is_owner) return b.is_owner ? 1 : -1;
           const levelOrder = { EDIT: 1, VIEW: 2, BLOCKED: 3 };
           return (levelOrder[a.access_level as keyof typeof levelOrder] || 3) - (levelOrder[b.access_level as keyof typeof levelOrder] || 3);
@@ -716,20 +836,20 @@ const DealsList: React.FC = () => {
                   key={collab.id || idx}
                   className="relative inline-block group/avatar"
                 >
-                  <div className="relative cursor-pointer">
+                  <div className="relative cursor-pointer transition-all duration-200 hover:scale-125 hover:z-10">
                     <img 
                       src={avatarUrl} 
-                      className={`w-7 h-7 rounded-full border-2 ${borderColor} transition-all`}
                       alt={userName}
+                      className={`w-8 h-8 rounded-full border-2 shadow-sm ${borderColor}`}
                     />
                     {badgeIcon}
                   </div>
-                  
-                  {/* Tooltip */}
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-slate-900 text-white text-[10px] font-medium rounded whitespace-nowrap opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none z-50">
+                  {/* Tooltip fuera del contenedor que se escala */}
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
                     <div className="font-bold">{userName}</div>
-                    <div className="text-slate-300">{tooltipLevel}</div>
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-slate-900"></div>
+                    <div className={`text-[9px] ${isOwner ? 'text-amber-300' : isPrincipal ? 'text-indigo-300' : 'text-slate-300'}`}>
+                      {tooltipLevel}
+                    </div>
                   </div>
                 </div>
               );
@@ -742,7 +862,24 @@ const DealsList: React.FC = () => {
       accessorKey: 'created_at',
       header: 'Creado',
       size: 150,
+      enableColumnFilter: true,
       filterFn: dateRangeFilter,
+      accessorFn: (row) => {
+        // Retornar fecha en formato ISO para que el filtro funcione correctamente
+        const dateValue = row.created_at;
+        if (!dateValue) return '';
+        // Si ya tiene formato ISO, retornar directo
+        if (typeof dateValue === 'string' && dateValue.includes('T')) {
+          return dateValue;
+        }
+        // Si es otro formato, intentar convertir
+        try {
+          const d = new Date(dateValue);
+          return d.toISOString();
+        } catch {
+          return dateValue;
+        }
+      },
       cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-[12px] text-slate-600">{formatDateTime(getValue() as string)}</span>
     },
     {
@@ -816,6 +953,7 @@ const DealsList: React.FC = () => {
       });
     }, 
     onPaginationChange: setPagination,
+    autoResetExpanded: false,
     getCoreRowModel: getCoreRowModel(), getFilteredRowModel: getFilteredRowModel(), getSortedRowModel: getSortedRowModel(), getPaginationRowModel: getPaginationRowModel(), getGroupedRowModel: getGroupedRowModel(), getExpandedRowModel: getExpandedRowModel(),
     getRowId: (row) => {
       if ('id_trato' in row) return row.id_trato as string;
@@ -850,8 +988,8 @@ const DealsList: React.FC = () => {
                 {[
                   { id: 'estado_nombre', label: 'Estado', icon: 'fa-list-check' },
                   { id: 'interes_nombre', label: 'Interés', icon: 'fa-star' },
-                  { id: 'collaborators', label: 'Colaboradores', icon: 'fa-user-group' },
-                  { id: 'client_company_name', label: 'Empresa', icon: 'fa-building' }
+                  { id: 'id_user_owner', label: 'Creador', icon: 'fa-user' },
+                  { id: 'client_company_name', label: 'Empresa / Contacto', icon: 'fa-building' }
                 ].map(opt => (
                   <button key={opt.id} onClick={() => handleGroupingChange(grouping.includes(opt.id) ? [] : [opt.id])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping.includes(opt.id) ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}>
                     <i className={`fa-solid ${opt.icon} text-[11px]`}></i> {opt.label}
@@ -974,7 +1112,7 @@ const DealsList: React.FC = () => {
           </thead>
           <tbody className="bg-white">
             {loading ? (
-                <tr><td colSpan={columns.length} className="py-24 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i><p className="text-slate-400 text-sm font-medium">Cargando tratos...</p></td></tr>
+              <tr><td colSpan={columns.length} className="py-24 text-center"><BrandSpinner size="lg" className="mb-3" /><p className="text-slate-400 text-sm font-medium">Cargando tratos...</p></td></tr>
             ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length} className="py-20 text-center">
@@ -1004,11 +1142,21 @@ const DealsList: React.FC = () => {
                             border-b border-slate-100 transition-colors
                         `}
                     >
-                        {row.getVisibleCells().map(cell => (
-                            <td key={cell.id} className={`px-4 py-2 border-r border-slate-50 ${isGrouped ? 'py-3' : ''}`}>
-                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        {isGrouped ? (
+                            <td colSpan={row.getVisibleCells().length} className="px-4 py-3">
+                                {row.getVisibleCells().map(cell => {
+                                    const content = flexRender(cell.column.columnDef.cell, cell.getContext());
+                                    if (content) return content;
+                                    return null;
+                                }).find(c => c)}
                             </td>
-                        ))}
+                        ) : (
+                            row.getVisibleCells().map(cell => (
+                                <td key={cell.id} className="px-4 py-2 border-r border-slate-50">
+                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                </td>
+                            ))
+                        )}
                     </tr>
                 );
             })}
@@ -1103,7 +1251,7 @@ const DealsList: React.FC = () => {
               <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2 text-sm font-bold text-slate-500 hover:bg-slate-100 rounded-xl">Cancelar</button>
                 <button type="submit" disabled={submitting} className="px-6 py-2.5 bg-brand-600 text-white text-sm font-bold rounded-xl shadow-lg hover:bg-brand-700 disabled:opacity-50 flex items-center gap-2">
-                  {submitting ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>} Guardar Trato
+                  {submitting ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-check"></i>} Guardar Trato
                 </button>
               </div>
             </form>

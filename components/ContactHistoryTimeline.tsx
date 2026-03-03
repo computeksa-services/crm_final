@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { BrandSpinner } from './AppLoaders';
 import { apiFetch } from '../services/apiClient';
 import { useAuth } from '../contexts/AuthContext';
 import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
@@ -78,7 +79,7 @@ const ContactHistoryTimeline: React.FC<ContactHistoryTimelineProps> = ({ contact
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
-        <i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500"></i>
+        <BrandSpinner size="lg" />
       </div>
     );
   }

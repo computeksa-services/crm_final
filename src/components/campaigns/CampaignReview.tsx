@@ -282,10 +282,7 @@ const CampaignReview: React.FC<CampaignReviewProps> = ({
           disabled={isLoading}
         >
           {loading.isSaving ? (
-            <>
-              <span className="spinner"></span>
-              Guardando...
-            </>
+            <span className="spinner"></span>
           ) : (
             <>
               <span>💾</span>

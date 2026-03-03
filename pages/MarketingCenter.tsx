@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { BrandSpinner } from '../components/AppLoaders';
 
 const MarketingCenter: React.FC = () => {
   const { user } = useAuth();
@@ -39,7 +40,7 @@ const MarketingCenter: React.FC = () => {
     return (
       <div className="h-full flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-2 text-slate-400">
-          <i className="fa-solid fa-circle-notch fa-spin text-2xl"></i>
+          <BrandSpinner size="lg" />
           <p>Cargando sesión...</p>
         </div>
       </div>

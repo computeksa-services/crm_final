@@ -298,7 +298,7 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
             {/* MENSAJE DE CONFIGURACIÓN DE CORREO */}
             {loadingTenantConfig ? (
               <div className="flex items-center gap-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
-                <i className="fa-solid fa-spinner fa-spin"></i>
+                <BrandSpinner size="xs" />
                 <span>Verificando configuración de correo...</span>
               </div>
             ) : (
@@ -320,7 +320,7 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
                 <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Destinatarios (Cliente)</h3>
                 
                 {loadingContacts ? (
-                    <div className="text-center py-4 text-slate-400 text-xs"><i className="fa-solid fa-spinner fa-spin mr-2"></i> Cargando contactos...</div>
+                    <div className="text-center py-4 text-slate-400 text-xs"><BrandSpinner className="mr-2" size="xs" /> Cargando contactos...</div>
                 ) : contacts.length === 0 ? (
                     <div className="text-center py-4 bg-slate-50 rounded-lg border border-dashed border-slate-200">
                         <p className="text-xs text-slate-500">No se encontraron contactos con email para esta empresa.</p>

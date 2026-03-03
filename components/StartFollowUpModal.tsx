@@ -578,8 +578,7 @@ const StartFollowUpForm: React.FC<StartFollowUpFormProps2> = ({ contact, onSucce
           disabled={isSubmitting || !initialNote.trim() || !nextActionDesc.trim() || !nextContactDate}
           className="px-4 py-2 text-[13px] font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-60 flex items-center gap-1.5"
         >
-          {isSubmitting ? <LoaderCircle size={13} className="animate-spin" /> : null}
-          {isSubmitting ? 'Guardando…' : 'Iniciar seguimiento'}
+          {isSubmitting ? <LoaderCircle size={13} className="animate-spin" /> : 'Iniciar seguimiento'}
         </button>
       </div>
     </form>

@@ -242,7 +242,7 @@ const DealCreate: React.FC = () => {
                  Cancelar
              </button>
              <button onClick={handleSave} disabled={processing || cacheLoading} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-700 shadow-md flex items-center gap-2 disabled:opacity-50">
-                 {processing ? <i className="fa-solid fa-circle-notch fa-spin"></i> : <i className="fa-solid fa-check"></i>}
+                 {processing ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-check"></i>}
                  Guardar
              </button>
          </div>

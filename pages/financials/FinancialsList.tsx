@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { BrandSpinner } from '../../components/AppLoaders';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
@@ -790,7 +791,7 @@ const FinancialsList: React.FC = () => {
           </thead>
           <tbody className="bg-white">
             {loading ? (
-                <tr><td colSpan={columns.length} className="py-24 text-center"><i className="fa-solid fa-circle-notch fa-spin text-3xl text-brand-500 mb-3"></i><p className="text-slate-400 text-sm font-medium">Cargando datos...</p></td></tr>
+                <tr><td colSpan={columns.length} className="py-24 text-center"><div className="flex flex-col items-center"><BrandSpinner size="lg" className="mb-2" /><p className="text-slate-400 text-sm font-medium">Cargando datos...</p></div></td></tr>
             ) : table.getRowModel().rows.length === 0 ? (
                 <tr><td colSpan={columns.length} className="py-24 text-center text-slate-500">No se encontraron transacciones.</td></tr>
             ) : table.getRowModel().rows.map(row => {
