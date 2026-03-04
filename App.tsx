@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, useAuth } from './contexts/AuthContext'; // Importar
@@ -11,10 +11,8 @@ import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
-import Dashboard from './pages/Dashboard';
 import QuotesList from './pages/quotes/QuotesList';
 import QuoteDetail from './pages/quotes/QuoteDetail';
-import Calendar from './pages/calendar/Calendar';
 import Profile from './pages/users/Profile';
 import AccountSettings from './pages/accountSettings/AccountSettings';
 import Integrations from './pages/users/Integrations';
@@ -35,17 +33,21 @@ import FinancialsList from './pages/financials/FinancialsList';
 import FinancialForm from './pages/financials/FinancialForm';
 import FinancialDetail from './pages/financials/FinancialDetail';
 import AuthCallbackPage from './pages/AuthCallbackPage';
-import MarketingCenter from './pages/MarketingCenter';
 import FollowUpsPage from './pages/FollowsUpsNew';
-import { PageLoader } from './components/AppLoaders';
+import { PageLoader, AppLoadingFallback } from './components/AppLoaders';
 
-// Marketing Pages
-import MarketingDashboard from './components/pages_marketing/Dashboard';
-import MarketingCampaigns from './components/pages_marketing/Campaigns';
-import MarketingCampaignDetail from './components/pages_marketing/CampaignDetail';
-import MarketingCampaignWizard from './components/pages_marketing/CampaignWizard';
-import MarketingLists from './components/pages_marketing/Lists';
-import MarketingListDetail from './components/pages_marketing/ListDetail';
+// Lazy load componentes pesados
+const Dashboard = React.lazy(() => import('./pages/Dashboard'));
+const Calendar = React.lazy(() => import('./pages/calendar/Calendar'));
+const MarketingCenter = React.lazy(() => import('./pages/MarketingCenter'));
+
+// Marketing Pages - lazy load
+const MarketingDashboard = React.lazy(() => import('./components/pages_marketing/Dashboard'));
+const MarketingCampaigns = React.lazy(() => import('./components/pages_marketing/Campaigns'));
+const MarketingCampaignDetail = React.lazy(() => import('./components/pages_marketing/CampaignDetail'));
+const MarketingCampaignWizard = React.lazy(() => import('./components/pages_marketing/CampaignWizard'));
+const MarketingLists = React.lazy(() => import('./components/pages_marketing/Lists'));
+const MarketingListDetail = React.lazy(() => import('./components/pages_marketing/ListDetail'));
 
 // Componente para proteger rutas
 const ProtectedRoute = () => {
@@ -120,7 +122,11 @@ const App: React.FC = () => {
             <Route path="/app" element={<ProtectedRoute />}>
               {/* Todas las rutas anidadas usarán Layout y estarán protegidas */}
               <Route index element={<Navigate to="/app/dashboard" />} />
-              <Route path="dashboard" element={<Dashboard />} />
+              <Route path="dashboard" element={
+                <Suspense fallback={<AppLoadingFallback />}>
+                  <Dashboard />
+                </Suspense>
+              } />
               <Route path="quotes" element={<QuotesList />} />
               <Route path="quotes/new" element={<QuoteCreate />} />
               <Route path="quotes/edit" element={<QuoteCreate />} />
@@ -133,7 +139,11 @@ const App: React.FC = () => {
               <Route path="financials/new" element={<FinancialForm />} />
               <Route path="financials/edit" element={<FinancialForm />} />
               <Route path="financials/:id" element={<FinancialDetail />} />
-              <Route path="calendar" element={<Calendar />} />
+              <Route path="calendar" element={
+                <Suspense fallback={<AppLoadingFallback />}>
+                  <Calendar />
+                </Suspense>
+              } />
               <Route path="profile" element={<Profile />} />
               <Route path="account-settings" element={<AccountSettings />} />
               <Route path="integrations" element={<Integrations />} />
@@ -149,15 +159,47 @@ const App: React.FC = () => {
               <Route path="settings" element={<SettingsPage />} />
               
               {/* Marketing Center - Sistema independiente con subrutas */}
-              <Route path="marketing" element={<MarketingCenter />}>
+              <Route path="marketing" element={
+                <Suspense fallback={<AppLoadingFallback />}>
+                  <MarketingCenter />
+                </Suspense>
+              }>
                 <Route index element={<Navigate to="/app/marketing/dashboard" replace />} />
-                <Route path="dashboard" element={<MarketingDashboard />} />
-                <Route path="campaigns" element={<MarketingCampaigns />} />
-                <Route path="campaigns/new" element={<MarketingCampaignWizard />} />
-                <Route path="campaigns/edit/:id" element={<MarketingCampaignWizard />} />
-                <Route path="campaigns/:id" element={<MarketingCampaignDetail />} />
-                <Route path="lists" element={<MarketingLists />} />
-                <Route path="lists/:id" element={<MarketingListDetail />} />
+                <Route path="dashboard" element={
+                  <Suspense fallback={<AppLoadingFallback />}>
+                    <MarketingDashboard />
+                  </Suspense>
+                } />
+                <Route path="campaigns" element={
+                  <Suspense fallback={<AppLoadingFallback />}>
+                    <MarketingCampaigns />
+                  </Suspense>
+                } />
+                <Route path="campaigns/new" element={
+                  <Suspense fallback={<AppLoadingFallback />}>
+                    <MarketingCampaignWizard />
+                  </Suspense>
+                } />
+                <Route path="campaigns/edit/:id" element={
+                  <Suspense fallback={<AppLoadingFallback />}>
+                    <MarketingCampaignWizard />
+                  </Suspense>
+                } />
+                <Route path="campaigns/:id" element={
+                  <Suspense fallback={<AppLoadingFallback />}>
+                    <MarketingCampaignDetail />
+                  </Suspense>
+                } />
+                <Route path="lists" element={
+                  <Suspense fallback={<AppLoadingFallback />}>
+                    <MarketingLists />
+                  </Suspense>
+                } />
+                <Route path="lists/:id" element={
+                  <Suspense fallback={<AppLoadingFallback />}>
+                    <MarketingListDetail />
+                  </Suspense>
+                } />
               </Route>
             </Route>
           </Routes>

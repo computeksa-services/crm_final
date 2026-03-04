@@ -103,3 +103,18 @@ export const SkeletonLoader: React.FC<SkeletonLoaderProps> = ({
     </div>
   );
 };
+
+/**
+ * Componente de carga optimizado para Suspense fallback
+ * Usado durante lazy loading de rutas y componentes pesados
+ */
+export const AppLoadingFallback: React.FC = () => {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center">
+      <div className="text-center">
+        <BrandSpinner size="lg" className="mb-3" />
+        <p className="text-sm text-slate-500 dark:text-slate-400">Cargando módulo...</p>
+      </div>
+    </div>
+  );
+};
