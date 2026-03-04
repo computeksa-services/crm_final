@@ -211,12 +211,20 @@ const ClientCompaniesList: React.FC = () => {
       if (columnId === 'labels') {
         const ids: string[] = Array.isArray((company as any).labels) ? (company as any).labels : [];
         if (ids.length === 0) counts.set('(Sin etiqueta)', (counts.get('(Sin etiqueta)') || 0) + 1);
-        else ids.forEach(id => counts.set(id, (counts.get(id) || 0) + 1));
+        else ids.forEach(id => {
+          const labelName = companyLabelsMap[id]?.name || id;
+          counts.set(labelName, (counts.get(labelName) || 0) + 1);
+        });
       } else {
         const val = (company as any)[columnId] ?? '(Vacío)';
         counts.set(String(val), (counts.get(String(val)) || 0) + 1);
       }
     });
+    
+    // Ordenar alfabéticamente para columnas específicas, por frecuencia para el resto
+    if (['company_type_name', 'country_name', 'company_size', 'labels'].includes(columnId)) {
+      return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    }
     return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   };
 
@@ -256,6 +264,7 @@ const ClientCompaniesList: React.FC = () => {
       accessorKey: 'name_company',
       header: 'Empresa',
       size: 420,
+      enableColumnFilter: false,
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) return null;
         const companyName = getValue() as string;
@@ -274,6 +283,7 @@ const ClientCompaniesList: React.FC = () => {
       accessorKey: 'id_number',
       header: 'Identificación',
       size: 140,
+      enableColumnFilter: false,
       cell: ({ row }) => row.getIsGrouped() ? null : (
         <div className="flex flex-col">
             <span className="text-[10px] font-black text-slate-400 uppercase leading-none">{row.original.id_type}</span>
@@ -285,6 +295,11 @@ const ClientCompaniesList: React.FC = () => {
       accessorKey: 'company_type_name',
       header: 'Tipo',
       size: 150,
+      enableColumnFilter: true,
+      filterFn: (row, columnId, filterValue) => {
+        const value = row.getValue(columnId) as string;
+        return (filterValue as string[]).includes(value ?? '(Vacío)');
+      },
       cell: ({ row, getValue, column }) => {
         if (row.getIsGrouped() && grouping[0] === column.id) {
           return (
@@ -304,6 +319,11 @@ const ClientCompaniesList: React.FC = () => {
       accessorKey: 'company_size',
       header: 'Tamaño',
       size: 130,
+      enableColumnFilter: true,
+      filterFn: (row, columnId, filterValue) => {
+        const value = row.getValue(columnId) as string;
+        return (filterValue as string[]).includes(value ?? '(Vacío)');
+      },
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) return null;
         const sizeValue = getValue() as string | undefined;
@@ -319,8 +339,20 @@ const ClientCompaniesList: React.FC = () => {
       id: 'labels',
       header: 'Etiquetas',
       size: 240,
+      enableColumnFilter: true,
       // EL CAMBIO CLAVE: El accessor cambia según si estamos agrupando o no
       accessorFn: (row) => (grouping[0] === 'labels' ? (row as any).__f_label : (row as any).labels),
+      filterFn: (row, columnId, filterValue) => {
+        const labelIds: string[] = Array.isArray((row.original as any).labels) ? (row.original as any).labels : [];
+        if (labelIds.length === 0) {
+          return (filterValue as string[]).includes('(Sin etiqueta)');
+        }
+        // Convertir IDs a nombres y verificar si alguno está en filterValue
+        return labelIds.some(id => {
+          const labelName = companyLabelsMap[id]?.name || id;
+          return (filterValue as string[]).includes(labelName);
+        });
+      },
       cell: ({ row, column, getValue }) => {
         if (row.getIsGrouped() && grouping[0] === column.id) {
           const labelId = getValue() as string;
@@ -366,6 +398,11 @@ const ClientCompaniesList: React.FC = () => {
       accessorKey: 'country_name',
       header: 'País',
       size: 120,
+      enableColumnFilter: true,
+      filterFn: (row, columnId, filterValue) => {
+        const value = row.getValue(columnId) as string;
+        return (filterValue as string[]).includes(value ?? '(Vacío)');
+      },
       cell: ({ row, getValue, column }) => {
         if (row.getIsGrouped() && grouping[0] === column.id) {
           return (
@@ -383,6 +420,11 @@ const ClientCompaniesList: React.FC = () => {
       accessorKey: 'created_by_name',
       header: 'Creado',
       size: 200,
+      enableColumnFilter: true,
+      filterFn: (row, columnId, filterValue) => {
+        const value = row.getValue(columnId) as string;
+        return (filterValue as string[]).includes(value ?? '(Vacío)');
+      },
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) return null;
         const avatar = row.original.created_by_avatar;
@@ -453,17 +495,99 @@ const ClientCompaniesList: React.FC = () => {
 
       <div className="flex-1 overflow-auto relative bg-slate-50/10">
         <table className="border-separate border-spacing-0" style={{ width: `${table.getTotalSize()}px`, minWidth: '100%' }}>
-          <thead className="sticky top-0 z-40 shadow-sm bg-slate-50">
+          <thead className="sticky top-0 z-40 shadow-sm">
             {table.getHeaderGroups().map(headerGroup => (
               <tr key={headerGroup.id}>
-                {headerGroup.headers.map(header => (
-                  <th key={header.id} style={{ width: header.getSize() }} className="border-b border-r border-slate-200 px-4 py-3 text-left">
-                    <div className="flex items-center gap-2 cursor-pointer select-none" onClick={header.column.getToggleSortingHandler()}>
-                      <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">{flexRender(header.column.columnDef.header, header.getContext())}</span>
-                      {{ asc: <i className="fa-solid fa-sort-up text-brand-600"></i>, desc: <i className="fa-solid fa-sort-down text-brand-600"></i> }[header.column.getIsSorted() as string] ?? null}
-                    </div>
-                  </th>
-                ))}
+                {headerGroup.headers.map(header => {
+                  const isFiltered = columnFilters.some(f => f.id === header.column.id);
+                  const canFilter = header.column.columnDef.enableColumnFilter !== false;
+
+                  return (
+                    <th
+                      key={header.id}
+                      style={{ width: header.getSize() }}
+                      className="border-b border-r border-slate-200 bg-slate-50 px-4 py-3 text-left relative group transition-colors"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div 
+                          className="flex items-center gap-2 cursor-pointer select-none"
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </span>
+                          {{
+                            asc: <i className="fa-solid fa-sort-up text-brand-600"></i>,
+                            desc: <i className="fa-solid fa-sort-down text-brand-600"></i>,
+                          }[header.column.getIsSorted() as string] ?? null}
+                        </div>
+
+                        {canFilter && header.column.id !== 'actions' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveFilterMenu(activeFilterMenu === header.column.id ? null : header.column.id);
+                            }}
+                            className={`w-6 h-6 rounded flex items-center justify-center transition-all ${
+                              isFiltered ? 'bg-brand-100 text-brand-600' : 'text-slate-300 hover:bg-slate-200 hover:text-slate-500'
+                            }`}
+                          >
+                            <i className="fa-solid fa-filter text-[10px]"></i>
+                          </button>
+                        )}
+                      </div>
+
+                      {activeFilterMenu === header.column.id && (
+                        <div 
+                          ref={filterMenuRef}
+                          className="absolute top-full left-0 mt-1 w-64 bg-white shadow-xl rounded-xl border border-slate-200 z-50 py-2 animate-in fade-in slide-in-from-top-1 duration-200"
+                        >
+                          <div className="max-h-60 overflow-y-auto px-1">
+                            {getFacetedValues(header.column.id).map(([val, count]) => {
+                              const activeValues = (columnFilters.find(f => f.id === header.column.id)?.value as string[]) || [];
+                              const isChecked = activeValues.includes(val);
+                              return (
+                                <label 
+                                  key={val} 
+                                  className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer group transition-colors"
+                                >
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <div className={`w-4 h-4 min-w-4 min-h-4 shrink-0 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>
+                                      {isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}
+                                    </div>
+                                    <span
+                                      title={val}
+                                      className="text-xs font-bold text-slate-700 uppercase tracking-tight truncate"
+                                    >
+                                      {val}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600 shrink-0 ml-2">({count})</span>
+                                  <input 
+                                    type="checkbox" 
+                                    className="hidden" 
+                                    checked={isChecked} 
+                                    onChange={() => toggleFilterValue(header.column.id, val)}
+                                  />
+                                </label>
+                              );
+                            })}
+                          </div>
+                          {isFiltered && (
+                            <div className="mt-2 pt-2 border-t border-slate-100 px-3">
+                              <button 
+                                onClick={() => setColumnFilters([])}
+                                className="text-[10px] font-bold text-red-500 hover:underline"
+                              >
+                                Limpiar filtro
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             ))}
           </thead>

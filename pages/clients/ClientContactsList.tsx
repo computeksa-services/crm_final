@@ -267,11 +267,20 @@ const ClientContactsList: React.FC = () => {
     const counts = new Map<string, number>();
     contacts.forEach(contact => {
       let val = '';
-      if (columnId === 'id_client_company') val = getCompanyNameForContact(contact);
-      else val = (contact as any)[columnId] || '(Vacío)';
+      if (columnId === 'id_client_company') {
+        val = getCompanyNameForContact(contact);
+      } else if (columnId === 'contact_status') {
+        val = getFollowUpStatus(contact.next_contact_date).label;
+      } else {
+        val = (contact as any)[columnId] || '(Vacío)';
+      }
       counts.set(val, (counts.get(val) || 0) + 1);
     });
-    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
+    const entries = Array.from(counts.entries());
+    if (columnId === 'id_client_company' || columnId === 'position') {
+      return entries.sort((a, b) => a[0].localeCompare(b[0], 'es', { sensitivity: 'base' }));
+    }
+    return entries.sort((a, b) => b[1] - a[1]);
   };
 
   const toggleFilterValue = (columnId: string, value: string) => {
@@ -396,7 +405,7 @@ const ClientContactsList: React.FC = () => {
     },
     {
       accessorKey: 'contact_status', 
-      header: 'Estado/Seguimiento',
+      header: 'Estado',
       size: 180,
       enableColumnFilter: true,
       cell: ({ row }) => {
@@ -414,7 +423,7 @@ const ClientContactsList: React.FC = () => {
                     className="px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[11px] font-bold hover:bg-emerald-100 border border-emerald-200 transition-all flex items-center gap-1.5"
                 >
                     <i className="fa-solid fa-rocket text-xs"></i>
-                    Iniciar Seguimiento
+                    Start Follow-Up
                 </button>
             );
         }
@@ -599,13 +608,18 @@ const ClientContactsList: React.FC = () => {
                                   key={val} 
                                   className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer group transition-colors"
                                 >
-                                  <div className="flex items-center gap-3">
-                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>
+                                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <div className={`w-4 h-4 min-w-4 min-h-4 shrink-0 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>
                                       {isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}
                                     </div>
-                                    <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
+                                    <span
+                                      title={val}
+                                      className={`text-xs font-bold text-slate-700 tracking-tight truncate ${header.column.id === 'position' ? 'normal-case' : 'uppercase'}`}
+                                    >
+                                      {val}
+                                    </span>
                                   </div>
-                                  <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600">({count})</span>
+                                  <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600 shrink-0 ml-2">({count})</span>
                                   <input 
                                     type="checkbox" 
                                     className="hidden" 

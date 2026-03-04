@@ -890,8 +890,8 @@ const QuotesList: React.FC = () => {
           <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
           <div className="flex items-center gap-1 flex-wrap">
             {[
-              { id: 'client_company_name', label: 'Cliente', icon: 'fa-building' },
               { id: 'id_quote_status', label: 'Estado', icon: 'fa-list-check' },
+              { id: 'client_company_name', label: 'Cliente', icon: 'fa-building' },
               { id: 'id_user_owner', label: 'Creador', icon: 'fa-user' }
             ].map(opt => (
               <button 
@@ -957,11 +957,11 @@ const QuotesList: React.FC = () => {
                                     const isChecked = (columnFilters.find(f => f.id === header.column.id)?.value as string[] || []).includes(val);
                                     return (
                                         <label key={val} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer group transition-colors">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>{isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}</div>
-                                                <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
+                                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            <div className={`w-4 h-4 min-w-4 min-h-4 shrink-0 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>{isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}</div>
+                                            <span title={val} className="text-xs font-bold text-slate-700 uppercase tracking-tight truncate">{val}</span>
                                             </div>
-                                            <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600">({count})</span>
+                                          <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600 shrink-0 ml-2">({count})</span>
                                             <input type="checkbox" className="hidden" checked={isChecked} onChange={() => {
                                                 const current = (columnFilters.find(f => f.id === header.column.id)?.value as string[]) || [];
                                                 const next = current.includes(val) ? current.filter(v => v !== val) : [...current, val];

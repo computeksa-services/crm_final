@@ -986,10 +986,10 @@ const DealsList: React.FC = () => {
             <span className="text-[11px] font-black text-slate-400 uppercase px-2 whitespace-nowrap">Agrupar por:</span>
             <div className="flex items-center gap-1 flex-wrap">
                 {[
+                  { id: 'client_company_name', label: 'Cliente', icon: 'fa-building' },
                   { id: 'estado_nombre', label: 'Estado', icon: 'fa-list-check' },
                   { id: 'interes_nombre', label: 'Interés', icon: 'fa-star' },
-                  { id: 'id_user_owner', label: 'Creador', icon: 'fa-user' },
-                  { id: 'client_company_name', label: 'Empresa / Contacto', icon: 'fa-building' }
+                  { id: 'id_user_owner', label: 'Creador', icon: 'fa-user' }
                 ].map(opt => (
                   <button key={opt.id} onClick={() => handleGroupingChange(grouping.includes(opt.id) ? [] : [opt.id])} className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${grouping.includes(opt.id) ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'}`}>
                     <i className={`fa-solid ${opt.icon} text-[11px]`}></i> {opt.label}
@@ -1081,13 +1081,13 @@ const DealsList: React.FC = () => {
                                     const isChecked = activeValues.includes(val);
                                     return (
                                         <label key={val} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer group transition-colors">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>
+                                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            <div className={`w-4 h-4 min-w-4 min-h-4 shrink-0 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>
                                                     {isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}
                                                 </div>
-                                                <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
+                                            <span title={val} className="text-xs font-bold text-slate-700 uppercase tracking-tight truncate">{val}</span>
                                             </div>
-                                            <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600">({count})</span>
+                                          <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600 shrink-0 ml-2">({count})</span>
                                             <input type="checkbox" className="hidden" checked={isChecked} onChange={() => {
                                                 const next = isChecked ? activeValues.filter(v => v !== val) : [...activeValues, val];
                                                 header.column.setFilterValue(next.length ? next : undefined);
