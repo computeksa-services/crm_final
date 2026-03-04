@@ -8,6 +8,7 @@ import Toast from './Toast';
 import CompanyFormModal from '../pages/clients/CompanyFormModal';
 import ContactFormModal from '../pages/clients/ContactFormModal';
 import { createPortal } from 'react-dom';
+import { BrandSpinner } from './AppLoaders';
 
 interface DealEditModalProps {
   isOpen: boolean;

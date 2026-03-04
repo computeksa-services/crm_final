@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { addDays, format } from 'date-fns';
 import { CalendarCheck, CalendarPlus, UserPlus, X } from 'lucide-react';
 import Avatar from './Avatar';
+import { BrandSpinner } from './AppLoaders';
 
 type InteractionType = 'NOTE' | 'CALL' | 'MEETING';
 

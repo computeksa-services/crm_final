@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { FollowUpItem } from '../types';
 import { apiFetch } from '../services/apiClient';
 import { parseISO, isBefore, startOfDay } from 'date-fns';
+import { Handshake } from 'lucide-react';
 import LogActionModal from '../components/LogActionModal';
 import ReassignModal from '../components/ReassignModal';
 import Toast from '../components/Toast';
@@ -225,7 +226,7 @@ function Stat({ label, value, dark }: { label: string; value: number; dark?: boo
 }
 
 // ── CARD ──────────────────────────────────────────────────────────────────
-function FollowUpCard({ item, onManage, users, onNavigate }: { item: FollowUpItem; onManage: (item: FollowUpItem) => void; users?: any[]; onNavigate?: (item: FollowUpItem) => void }) {
+function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: FollowUpItem; onManage: (item: FollowUpItem) => void; users?: any[]; onNavigate?: (item: FollowUpItem) => void; navigate: any }) {
   const lvl = getUrgency(item.next_contact_date);
   const urg = URGENCY_CONFIG[lvl as keyof typeof URGENCY_CONFIG];
   const statusStyle = getStatusStyle(item.category_color);
@@ -347,6 +348,40 @@ function FollowUpCard({ item, onManage, users, onNavigate }: { item: FollowUpIte
               <IconMail/>
             </a>
           )}
+          {!isDeal && (
+            <div className="relative group/convert inline-block">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/app/deals/new', {
+                    state: {
+                      contactId: item.id_contact || item.id_entity,
+                      companyId: item.id_client_company,
+                      is_conversion: true,
+                      contactName: item.title,
+                      contactEmail: item.email,
+                      contactPhone: item.phone,
+                      companyName: item.subtitle || item.name_company
+                    }
+                  });
+                }}
+                className="relative w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-500 text-white flex items-center justify-center transition-all shadow-md hover:shadow-xl hover:scale-110 active:scale-95 overflow-hidden group-hover/convert:from-amber-500 group-hover/convert:via-yellow-600 group-hover/convert:to-amber-600 animate-pulse-slow">
+                {/* Efecto de brillo animado */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover/convert:opacity-30 group-hover/convert:animate-shine"></div>
+                <Handshake size={16} className="relative z-10 drop-shadow-sm" />
+              </button>
+              
+              {/* Tooltip elegante */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/convert:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                <div className="font-bold text-amber-300">✨ Convertir a Trato</div>
+                <div className="text-[9px] text-slate-300 mt-0.5">Crear negociación desde contacto</div>
+                {/* Flecha */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                  <div className="border-4 border-transparent border-t-slate-900"></div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
         <button onClick={() => onManage(item)}
           className="flex-1 bg-gray-900 text-white text-sm font-medium py-2 rounded-lg hover:bg-gray-800 active:scale-[.98] transition-all flex justify-center items-center gap-2 shadow-sm">
@@ -358,7 +393,7 @@ function FollowUpCard({ item, onManage, users, onNavigate }: { item: FollowUpIte
 }
 
 // ── TABLE ROW ──────────────────────────────────────────────────────────────
-function TableRow({ item, onManage, idx, users, onNavigate }: { item: FollowUpItem; onManage: (item: FollowUpItem) => void; idx: number; users?: any[]; onNavigate?: (item: FollowUpItem) => void }) {
+function TableRow({ item, onManage, idx, users, onNavigate, navigate }: { item: FollowUpItem; onManage: (item: FollowUpItem) => void; idx: number; users?: any[]; onNavigate?: (item: FollowUpItem) => void; navigate: any }) {
   const lvl = getUrgency(item.next_contact_date);
   const urg = URGENCY_CONFIG[lvl as keyof typeof URGENCY_CONFIG];
   const statusStyle = getStatusStyle(item.category_color);
@@ -437,6 +472,40 @@ function TableRow({ item, onManage, idx, users, onNavigate }: { item: FollowUpIt
               className="w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-400 hover:text-blue-500 hover:border-blue-200 flex items-center justify-center transition-colors">
               <IconMail/>
             </a>
+          )}
+          {!isDeal && (
+            <div className="relative group/convert inline-block">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/app/deals/new', {
+                    state: {
+                      contactId: item.id_contact || item.id_entity,
+                      companyId: item.id_client_company,
+                      is_conversion: true,
+                      contactName: item.title,
+                      contactEmail: item.email,
+                      contactPhone: item.phone,
+                      companyName: item.subtitle || item.name_company
+                    }
+                  });
+                }}
+                className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-500 text-white flex items-center justify-center transition-all shadow-md hover:shadow-xl hover:scale-110 active:scale-95 overflow-hidden group-hover/convert:from-amber-500 group-hover/convert:via-yellow-600 group-hover/convert:to-amber-600 animate-pulse-slow">
+                {/* Efecto de brillo animado */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover/convert:opacity-30 group-hover/convert:animate-shine"></div>
+                <Handshake size={14} className="relative z-10 drop-shadow-sm" />
+              </button>
+              
+              {/* Tooltip elegante */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/convert:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                <div className="font-bold text-amber-300">✨ Convertir a Trato</div>
+                <div className="text-[9px] text-slate-300 mt-0.5">Crear negociación desde contacto</div>
+                {/* Flecha */}
+                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                  <div className="border-4 border-transparent border-t-slate-900"></div>
+                </div>
+              </div>
+            </div>
           )}
           <button onClick={() => onManage(item)}
             className="px-4 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-1.5">
@@ -643,7 +712,7 @@ const FollowUpsPage: React.FC = () => {
         ) : view === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filtered.map(item => (
-              <FollowUpCard key={item.id_entity} item={item} onManage={setManagingItem} users={cachedUsers} onNavigate={handleNavigateToDetails}/>
+              <FollowUpCard key={item.id_entity} item={item} onManage={setManagingItem} users={cachedUsers} onNavigate={handleNavigateToDetails} navigate={navigate}/>
             ))}
           </div>
         ) : (
@@ -661,7 +730,7 @@ const FollowUpsPage: React.FC = () => {
                 </thead>
                 <tbody>
                   {filtered.map((item, idx) => (
-                    <TableRow key={item.id_entity} item={item} onManage={setManagingItem} idx={idx} users={cachedUsers} onNavigate={handleNavigateToDetails}/>
+                    <TableRow key={item.id_entity} item={item} onManage={setManagingItem} idx={idx} users={cachedUsers} onNavigate={handleNavigateToDetails} navigate={navigate}/>
                   ))}
                 </tbody>
               </table>

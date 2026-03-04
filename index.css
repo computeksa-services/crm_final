@@ -184,3 +184,37 @@ div[style*="--avatar-dark"] {
 .dark .kanban-column::-webkit-scrollbar-thumb:hover {
   background: #4a4a4a;
 }
+
+/* ======================================================== */
+/* ANIMACIONES PARA BOTÓN DE CONVERSIÓN CONTACTO → TRATO */
+/* ======================================================== */
+
+/* Pulso suave continuo */
+@keyframes pulse-slow {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 4px 6px -1px rgba(251, 191, 36, 0.3), 0 2px 4px -1px rgba(251, 191, 36, 0.2);
+  }
+  50% {
+    opacity: 0.9;
+    box-shadow: 0 10px 15px -3px rgba(251, 191, 36, 0.4), 0 4px 6px -2px rgba(251, 191, 36, 0.3), 0 0 20px rgba(251, 191, 36, 0.4);
+  }
+}
+
+.animate-pulse-slow {
+  animation: pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Efecto de brillo que pasa por el botón */
+@keyframes shine {
+  0% {
+    transform: translateX(-100%) skewX(-15deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-15deg);
+  }
+}
+
+.group-hover\/convert:hover .group-hover\/convert\:animate-shine {
+  animation: shine 0.8s ease-in-out;
+}

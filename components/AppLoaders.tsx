@@ -23,17 +23,17 @@ interface BrandSpinnerProps {
   className?: string;
 }
 
-export const BrandSpinner: React.FC<BrandSpinnerProps> = ({
+export function BrandSpinner({
   size = 'md',
   className = ''
-}) => {
+}: BrandSpinnerProps) {
   return (
     <span className={`relative inline-flex items-center justify-center ${SIZE_MAP[size]} ${className}`}>
       <span className="absolute inset-0 rounded-full border-2 border-brand-100 border-t-brand-600 animate-spin" />
       <img src="/logo.png" alt="Computeksa" className={`${ICON_SIZE_MAP[size]} object-contain`} />
     </span>
   );
-};
+}
 
 interface PageLoaderProps {
   message?: string;
@@ -118,3 +118,6 @@ export const AppLoadingFallback: React.FC = () => {
     </div>
   );
 };
+
+// Exportación por defecto como respaldo
+export default BrandSpinner;

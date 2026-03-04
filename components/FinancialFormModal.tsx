@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { FinancialTransaction, ClientCompany, Quote } from '../types';
+import { BrandSpinner } from './AppLoaders';
 
 interface FinancialFormModalProps {
   isOpen: boolean;
