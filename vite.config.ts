@@ -43,50 +43,40 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       emptyOutDir: true,
-      chunkSizeWarningLimit: 800,
+      chunkSizeWarningLimit: 1200,
       rollupOptions: {
         output: {
           manualChunks(id) {
-            // Separar React core libraries
-            if (id.includes('node_modules/react') || 
-                id.includes('node_modules/react-dom') || 
-                id.includes('node_modules/react-router') ||
-                id.includes('node_modules/scheduler')) {
-              return 'vendor-react';
-            }
+            if (!id.includes('node_modules')) return null;
             
-            // Separar FullCalendar (muy pesado)
-            if (id.includes('node_modules/@fullcalendar')) {
-              return 'vendor-calendar';
-            }
+            // Estrategia simple: separar solo librerías muy pesadas que son independientes
+            // Dejar que Rollup agrupe automáticamente las dependencias
             
-            // Separar librerías de gráficas
-            if (id.includes('node_modules/recharts')) {
-              return 'vendor-charts';
-            }
-            
-            // Separar editores pesados
-            if (id.includes('node_modules/react-quill') || 
-                id.includes('node_modules/jodit-react') ||
-                id.includes('node_modules/jodit')) {
-              return 'vendor-editors';
-            }
-            
-            // Separar ExcelJS (muy pesado)
-            if (id.includes('node_modules/exceljs')) {
+            // 1. Excel - completamente independiente
+            if (id.includes('exceljs')) {
               return 'vendor-excel';
             }
             
-            // Separar librerías UI
-            if (id.includes('node_modules/lucide-react') ||
-                id.includes('node_modules/@headlessui')) {
-              return 'vendor-ui';
+            // 2. Editores - independientes entre sí
+            if (id.includes('react-quill')) {
+              return 'vendor-quill';
+            }
+            if (id.includes('jodit')) {
+              return 'vendor-jodit';
             }
             
-            // Resto de node_modules en un chunk común
-            if (id.includes('node_modules')) {
-              return 'vendor-common';
+            // 3. FullCalendar - independiente
+            if (id.includes('@fullcalendar')) {
+              return 'vendor-calendar';
             }
+            
+            // 4. Charts - independiente de React core
+            if (id.includes('recharts')) {
+              return 'vendor-charts';
+            }
+            
+            // Dejar que Rollup agrupe React y todo lo demás automáticamente
+            // Esto evita ciclos de dependencia
           }
         }
       }
