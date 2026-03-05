@@ -5,6 +5,7 @@ import Toast from './Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useDataCache } from '../contexts/DataCacheContext';
 import { apiFetch } from '../services/apiClient';
+import { GATEWAY_CONFIG } from '../services/gatewayConfig';
 import CompanyFormModal from '../pages/clients/CompanyFormModal';
 import ContactFormModal from '../pages/clients/ContactFormModal';
 import { BrandSpinner } from './AppLoaders';

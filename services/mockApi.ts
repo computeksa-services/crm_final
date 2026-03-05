@@ -1,5 +1,6 @@
 import { Quote, QuoteItem, UserDecision, CalendarEvent, User, Tenant, ClientCompany, ClientContact, Deal, DealPermission, Product, CustomStatus } from '../types';
-import { apiFetch as apiClientFetch } from './apiClient';
+import { apiFetch } from './apiClient';
+import { GATEWAY_CONFIG } from './gatewayConfig';
 
 const USE_REAL_API = true; // Cambiar a true cuando configures n8n
 const N8N_BASE_URL = import.meta.env.VITE_WEBHOOK_URL; 

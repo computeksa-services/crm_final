@@ -42,6 +42,13 @@ interface QuoteExtended extends Quote {
   url_cotizacion_manual?: string | null;
   archivos_adjuntos?: Attachment[];
   sent_history?: SentLog[];
+  deal_detail?: {
+    id?: string;
+    name?: string;
+    value?: string;
+    status_name?: string;
+    status_color?: string;
+  };
 }
 
 const getAvatarColor = (name: string = '') => {
@@ -941,11 +948,8 @@ const QuoteDetail: React.FC = () => {
   // --- RENDER ---
 
   if (loading) return (
-    <div className="flex h-[calc(100vh-200px)] items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
-        <BrandSpinner size="xl" />
-        <p className="text-slate-400 font-medium animate-pulse">Cargando cotización...</p>
-      </div>
+    <div className="flex h-full items-center justify-center">
+      <BrandSpinner size="xl" />
     </div>
   );
 
@@ -1133,6 +1137,57 @@ const QuoteDetail: React.FC = () => {
                     )}
                 </div>
             </div>
+
+            {/* Trato Relacionado */}
+            {quote.id_trato && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3 bg-white">
+                  <span className="w-2 h-6 bg-emerald-500 rounded-full"></span>
+                  <div><h3 className="font-bold text-slate-800 text-sm">Trato Relacionado</h3></div>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nombre</p>
+                    <p className="text-sm font-bold text-slate-800 mt-1 break-words">
+                      {quote.deal_detail?.name || 'Trato vinculado'}
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Valor</p>
+                      <p className="text-xs font-bold text-slate-700 mt-1">
+                        {quote.deal_detail?.value || quote.total || '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado</p>
+                      <span
+                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold mt-1 border"
+                        style={{
+                          color: quote.deal_detail?.status_color || '#64748b',
+                          borderColor: `${quote.deal_detail?.status_color || '#cbd5e1'}40`,
+                          backgroundColor: `${quote.deal_detail?.status_color || '#64748b'}15`
+                        }}
+                      >
+                        <i className="fa-solid fa-circle text-[8px]"></i>
+                        {quote.deal_detail?.status_name || 'Sin estado'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-1">
+                    <Link
+                      to={`/app/deals/${quote.id_trato}`}
+                      className="w-full inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors text-xs font-bold"
+                    >
+                      <i className="fa-solid fa-handshake"></i>
+                      Ir al trato
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Condiciones Comerciales */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">

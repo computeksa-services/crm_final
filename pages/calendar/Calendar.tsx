@@ -791,9 +791,8 @@ const Calendar: React.FC = () => {
         {/* ── CALENDAR MAIN ─────────────────────────────────────────────────── */}
         <main className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden min-h-0">
           {loading ? (
-            <div className="flex-1 flex items-center justify-center gap-3 text-slate-400">
+            <div className="flex-1 flex items-center justify-center">
               <BrandSpinner size="lg" />
-              <span className="text-sm">Cargando eventos…</span>
             </div>
           ) : viewMode === 'month' ? (
             <MonthView {...viewProps} />

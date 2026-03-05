@@ -6,6 +6,7 @@ import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import IconPicker from '../components/IconPicker';
 import { apiFetch } from '../services/apiClient';
+import { SimpleSpinner } from '../components/AppLoaders';
 
 // Paleta de colores moderna y profesional para CRM
 const PRESET_COLORS = [
@@ -169,7 +170,7 @@ const SettingsDealInterests: React.FC = () => {
 
   if (cacheLoading) return (
       <div className="flex justify-center p-8">
-          <i className="fa-solid fa-circle-notch fa-spin text-brand-500"></i>
+        <SimpleSpinner size="md" />
       </div>
   );
 
@@ -195,7 +196,7 @@ const SettingsDealInterests: React.FC = () => {
                     disabled={savingOrder}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl shadow-lg shadow-indigo-200 font-medium transition-all flex items-center animate-pulse"
                 >
-                    {savingOrder ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-floppy-disk mr-2"></i>}
+                  {savingOrder ? <SimpleSpinner size="sm" className="mr-2" /> : <i className="fa-solid fa-floppy-disk mr-2"></i>}
                     Guardar Orden
                 </button>
             )}

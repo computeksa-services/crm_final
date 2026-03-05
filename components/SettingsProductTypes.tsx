@@ -5,6 +5,7 @@ import { ProductType } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import { apiFetch } from '../services/apiClient';
+import { SimpleSpinner } from '../components/AppLoaders';
 
 const SettingsProductTypes: React.FC = () => {
   const { user } = useAuth();
@@ -89,7 +90,7 @@ const SettingsProductTypes: React.FC = () => {
 
   if (cacheLoading) return (
       <div className="flex justify-center p-8">
-          <i className="fa-solid fa-circle-notch fa-spin text-brand-500"></i>
+        <SimpleSpinner size="md" />
       </div>
   );
 

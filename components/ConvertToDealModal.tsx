@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { ClientContact, DealStatus, DealInterest, DealChannel } from '../types';
 import { apiFetch } from '../services/apiClient';
-import { LoaderCircle, X } from 'lucide-react';
+import { X } from 'lucide-react';
+import { SimpleSpinner } from './AppLoaders';
 
 interface ConvertToDealModalProps {
   contact: ClientContact;
@@ -127,7 +128,7 @@ const ConvertToDealModal: React.FC<ConvertToDealModalProps> = ({ contact, dealSt
           <div className="flex justify-end gap-3 pt-4">
             <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-slate-600 font-semibold hover:bg-slate-100">Cancelar</button>
             <button type="submit" disabled={isSubmitting} className="px-5 py-2 bg-emerald-600 text-white font-bold rounded-lg hover:bg-emerald-700 disabled:opacity-50 flex items-center gap-2">
-              {isSubmitting && <LoaderCircle size={16} className="animate-spin" />}
+              {isSubmitting && <SimpleSpinner size="sm" />}
               {isSubmitting ? 'Creando...' : '🚀 Crear Trato'}
             </button>
           </div>

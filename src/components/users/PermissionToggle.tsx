@@ -1,4 +1,5 @@
 import React from 'react';
+import { SimpleSpinner } from '../../../components/AppLoaders';
 
 export const PermissionToggle: React.FC<{
   id: string;
@@ -29,7 +30,7 @@ export const PermissionToggle: React.FC<{
             disabled={isUpdating || disabled}
           />
           <div className={`w-11 h-6 bg-slate-200 rounded-full peer peer-focus:ring-2 peer-focus:ring-slate-400 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-slate-700 ${isUpdating || disabled ? 'opacity-50' : ''}`}></div>
-          {isUpdating && <i className="fa-solid fa-spinner fa-spin absolute left-3 top-1/2 -translate-y-1/2 text-white text-xs"></i>}
+          {isUpdating && <SimpleSpinner size="xs" className="absolute left-3 top-1/2 -translate-y-1/2" />}
         </label>
       </div>
     </div>

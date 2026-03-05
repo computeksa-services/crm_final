@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrandSpinner } from '../../components/AppLoaders';
+import { SimpleSpinner } from '../../components/AppLoaders';
 
 // ── ICONS ─────────────────────────────────────────────────────────────────────
 const IconX        = () => <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
@@ -81,7 +81,7 @@ export const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
           >
             {deleting ? (
-              <><BrandSpinner size="xs" /> Eliminando…</>
+              <><SimpleSpinner size="sm" /> Eliminando…</>
             ) : (
               <><IconTrash /> Eliminar</>
             )}
@@ -157,7 +157,7 @@ export const RSVPConfirmModal: React.FC<RSVPConfirmModalProps> = ({
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
           >
             {submittingRSVP ? (
-              <BrandSpinner size="xs" />
+              <SimpleSpinner size="sm" />
             ) : (
               <><IconCheck /> {rsvpAction ? CONFIRM_LABELS[rsvpAction] : 'Confirmar'}</>
             )}
@@ -230,7 +230,7 @@ export const ConfirmChangesModal: React.FC<ConfirmChangesModalProps> = ({
             disabled={submitting}
             className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-gray-900 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
           >
-            {submitting && <BrandSpinner size="xs" />}
+            {submitting && <SimpleSpinner size="sm" />}
             Guardar cambios
           </button>
         </div>

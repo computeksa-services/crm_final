@@ -559,7 +559,7 @@ const QuotesList: React.FC = () => {
     },
     {
         accessorKey: 'nombre_cotizacion',
-        header: 'Nombre Cotización',
+        header: 'Nombre',
         size: 200,
         minSize: 150,
         maxSize: 250,
@@ -810,7 +810,7 @@ const QuotesList: React.FC = () => {
     },
     {
         id: 'actions',
-        header: 'Acciones',
+        header: '',
         size: 100,
         cell: ({ row }) => {
             if (row.getIsGrouped()) return null;
@@ -983,7 +983,7 @@ const QuotesList: React.FC = () => {
           </thead>
           <tbody className="bg-white">
             {loading ? (
-              <tr><td colSpan={columns.length} className="py-24 text-center"><BrandSpinner size="lg" className="mb-3" /><p className="text-slate-400 text-sm font-medium">Cargando cotizaciones...</p></td></tr>
+              <tr><td colSpan={columns.length} className="py-24 text-center"><BrandSpinner size="lg" /></td></tr>
             ) : table.getRowModel().rows.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length} className="py-20 text-center">

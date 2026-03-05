@@ -222,6 +222,9 @@ const DealDetail: React.FC = () => {
   const [history, setHistory] = useState<any[]>([]);
   const [emailHistory, setEmailHistory] = useState<any[]>([]);
   const [showNewInteractionModal, setShowNewInteractionModal] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
+    FASE_PROSPECCION: true
+  });
 
   const refreshShareCollaborators = useCallback(async () => {
     if (!deal) return;
@@ -446,7 +449,7 @@ const DealDetail: React.FC = () => {
   }, [id]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
-  useEffect(() => { fetchHistory(); }, [fetchHistory]);
+  useEffect(() => { fetchHistory(); }, [fetchHistory, refreshTimelineKey]);
 
   // Refrescar datos cuando se vuelve de editar
   useEffect(() => {
@@ -990,77 +993,182 @@ const DealDetail: React.FC = () => {
               {isTimelineVisible && (
                 <div className="p-6 pt-4">
                   {history && history.length > 0 ? (
-                    <div className="space-y-8">
+                    <div className="space-y-3">
                       {(() => {
-                        // Ordenar: todos menos antecedentes, luego antecedentes
-                        const antecedentes = history.filter(g => g.group_id === 'FASE_PROSPECCION');
-                        const otros = history.filter(g => g.group_id !== 'FASE_PROSPECCION');
-                        const ordered = [...otros, ...antecedentes];
-                        return ordered.map((group, gIdx) => (
-                          <div key={group.group_id || gIdx} className="bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
-                            <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-2 bg-white rounded-t-xl">
-                              <h4 className="font-bold text-slate-800 text-sm">{group.group_name}</h4>
+                        const hasRealContent = (item: any) => {
+                          if (!item) return false;
+                          const description = String(item.description || '').trim();
+                          const itemId = String(item.id || '').trim();
+                          return Boolean(
+                            description ||
+                            itemId ||
+                            item.date_iso ||
+                            item.date_fmt ||
+                            item.planned_action ||
+                            item.channel_name ||
+                            item.channel_icon ||
+                            item.is_new ||
+                            item.is_calendar_scheduled
+                          );
+                        };
+
+                        const normalizedHistory = history
+                          .map((group: any) => ({
+                            ...group,
+                            interactions: (Array.isArray(group.interactions) ? group.interactions : []).filter(hasRealContent)
+                          }))
+                          .filter((group: any) => group.interactions.length > 0);
+
+                        if (normalizedHistory.length === 0) {
+                          return (
+                            <div className="text-center py-6">
+                              <i className="fa-solid fa-clock-rotate-left text-slate-200 text-3xl mb-2"></i>
+                              <p className="text-[13px] text-slate-400 italic">No hay actividad registrada aún.</p>
                             </div>
-                            <div className="p-4 space-y-4">
-                              {Array.isArray(group.interactions) && group.interactions.length > 0 ? (
-                                group.interactions.map((item: any, idx: number) => {
-                                  const interactionType = item.type;
-                                  // Estilo por fase
-                                  const strongStyle = item.is_deal_interaction ? 'border-emerald-200 bg-white' : 'border-slate-100 bg-slate-50';
-                                  const textStyle = item.is_deal_interaction ? 'text-slate-800' : 'text-slate-500';
-                                  return (
-                                    <div key={item.id || idx} className={`flex items-start gap-3 border-l-4 ${strongStyle} rounded-lg p-3 group relative`}>
-                                      {/* Solo avatar, sin icono superpuesto */}
-                                      <div className="relative w-9 h-9">
-                                        <img
-                                          src={item.user_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.user_name || 'S')}&background=random`}
-                                          alt="avatar"
-                                          className="w-9 h-9 rounded-full border border-slate-200 object-cover"
-                                        />
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                          <span className={`font-bold text-sm truncate ${textStyle}`}>{item.user_name || 'Sistema'}</span>
-                                          <span className="text-xs text-slate-400">{item.date_fmt}</span>
-                                          {/* Channel Badge */}
-                                          {item.channel_name && (
-                                            <span className="ml-2 px-2 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1" style={{ background: item.channel_color || '#e0e7ff', color: item.channel_color ? '#fff' : '#374151' }}>
-                                              {item.channel_icon && <i className={`${item.channel_icon} text-xs mr-1`}></i>}
-                                              {item.channel_name}
+                          );
+                        }
+
+                        // Ordenar: todos menos antecedentes, luego antecedentes
+                        const antecedentes = normalizedHistory.filter(g => g.group_id === 'FASE_PROSPECCION');
+                        const otros = normalizedHistory.filter(g => g.group_id !== 'FASE_PROSPECCION');
+                        const ordered = [...otros, ...antecedentes];
+                        const flatFeed = ordered.flatMap((group: any, gIdx: number) => {
+                          const groupId = group.group_id || `group-${gIdx}`;
+                          const isCollapsed = collapsedGroups[groupId] ?? (group.group_id === 'FASE_PROSPECCION');
+                          const interactions = Array.isArray(group.interactions) ? group.interactions : [];
+
+                          if (isCollapsed) {
+                            return [{
+                              kind: 'header',
+                              groupId,
+                              groupName: group.group_name,
+                              isBackgroundGroup: group.group_id === 'FASE_PROSPECCION',
+                              isCollapsed,
+                              count: interactions.length
+                            }];
+                          }
+
+                          return [
+                            {
+                              kind: 'header',
+                              groupId,
+                              groupName: group.group_name,
+                              isBackgroundGroup: group.group_id === 'FASE_PROSPECCION',
+                              isCollapsed,
+                              count: interactions.length
+                            },
+                            ...interactions.map((item: any, idx: number) => ({
+                              kind: 'item',
+                              groupId,
+                              groupName: group.group_name,
+                              item,
+                              idx
+                            }))
+                          ];
+                        });
+
+                        return flatFeed.map((entry: any, feedIdx: number) => {
+                          if (entry.kind === 'header') {
+                            return (
+                              <button
+                                key={`hdr-${entry.groupId}-${feedIdx}`}
+                                type="button"
+                                onClick={() => setCollapsedGroups(prev => ({ ...prev, [entry.groupId]: !entry.isCollapsed }))}
+                                className="w-full py-1.5 flex items-center justify-between gap-2 hover:opacity-80 transition-opacity"
+                              >
+                                <div className="flex items-center gap-2 min-w-0">
+                                  <h4 className="font-bold text-slate-800 text-sm truncate">{entry.groupName}</h4>
+                                  {entry.isBackgroundGroup && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                                      Historial
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-slate-400">{entry.count}</span>
+                                </div>
+                                <span className="text-slate-400 text-xs">
+                                  <i className={`fa-solid ${entry.isCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'}`}></i>
+                                </span>
+                              </button>
+                            );
+                          }
+
+                          const item = entry.item;
+                          const interactionType = item.type;
+                          const strongStyle = item.is_deal_interaction ? 'border-emerald-300' : 'border-slate-300';
+                          const textStyle = item.is_deal_interaction ? 'text-slate-800' : 'text-slate-600';
+
+                          return (
+                            <div key={item.id || `itm-${entry.groupId}-${entry.idx}`} className={`flex items-start gap-2.5 border-l-2 ${strongStyle} pl-2.5 py-1 group relative`}>
+                              <div className="relative w-7 h-7">
+                                <img
+                                  src={item.user_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.user_name || 'S')}&background=random`}
+                                  alt="avatar"
+                                  title={item.user_name || 'Sistema'}
+                                  className="w-7 h-7 rounded-full border border-slate-200 object-cover"
+                                />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs text-slate-400">
+                                    {item.date_fmt}
+                                    {item.time_fmt && ` · ${item.time_fmt}`}
+                                    {item.relative_label && ` (${item.relative_label})`}
+                                  </span>
+                                  {item.is_new && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      NUEVA
+                                    </span>
+                                  )}
+                                  {item.channel_name && item.channel_icon && (
+                                    <span
+                                      className="ml-1 w-6 h-6 rounded-full text-[11px] font-bold inline-flex items-center justify-center"
+                                      style={{ background: item.channel_color || '#e0e7ff', color: item.channel_color ? '#fff' : '#374151' }}
+                                      title={item.channel_name}
+                                    >
+                                      <i className={`${item.channel_icon} text-xs`}></i>
+                                    </span>
+                                  )}
+                                  {item.is_calendar_scheduled && (
+                                    <span className="w-6 h-6 rounded-full text-[11px] font-bold inline-flex items-center justify-center bg-blue-50 text-blue-600 border border-blue-200" title="Agendado en calendario">
+                                      <i className="fa-solid fa-calendar-check text-xs"></i>
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-1">
+                                  {interactionType === 'SYSTEM' ? (
+                                    <div className="italic text-slate-400 text-sm flex items-center gap-2">
+                                      <i className="fa-solid fa-gear"></i>
+                                      {item.description}
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div className={`text-sm whitespace-pre-line ${textStyle}`}>{item.description}</div>
+                                      {item.planned_action || (item.planned_date && item.is_planned_overdue !== null) ? (
+                                        <div className="mt-1.5 text-xs flex flex-wrap items-center gap-1.5">
+                                          {item.is_planned_overdue !== null && (
+                                            <i className={`fa-solid ${item.is_planned_overdue ? 'fa-triangle-exclamation text-rose-500' : 'fa-list-check text-blue-500'}`}></i>
+                                          )}
+                                          {item.planned_action && (
+                                            <>
+                                              <span className="font-semibold text-slate-600">Próxima:</span>
+                                              <span className="text-slate-700">{item.planned_action}</span>
+                                            </>
+                                          )}
+                                          {item.planned_date && <span className="text-slate-500">({item.planned_date})</span>}
+                                          {item.is_planned_overdue && (
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                              VENCIDA
                                             </span>
                                           )}
                                         </div>
-                                        <div className="mt-1">
-                                          {interactionType === 'SYSTEM' ? (
-                                            <div className="italic text-slate-400 text-[14px] flex items-center gap-2">
-                                              <i className="fa-solid fa-gear"></i>
-                                              {item.description}
-                                            </div>
-                                          ) : (
-                                            <>
-                                              <div className={`text-[15px] whitespace-pre-line ${textStyle}`}>{item.description}</div>
-                                              {/* Mostrar acción y fecha planificada si existen, igual que en contactos */}
-                                              {(item.planned_action || item.planned_date) && (
-                                                <div className="mt-1 flex items-center gap-2 text-xs text-slate-500">
-                                                  <i className="fa-solid fa-arrow-right text-slate-400"></i>
-                                                  <span className="font-semibold">Siguiente acción:</span>
-                                                  {item.planned_action && <span>{item.planned_action}</span>}
-                                                  {item.planned_date && <span className="ml-2">({item.planned_date})</span>}
-                                                </div>
-                                              )}
-                                            </>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })
-                              ) : (
-                                <div className="text-center py-4 text-slate-400 italic text-sm">No hay actividad registrada en esta fase.</div>
-                              )}
+                                      ) : null}
+                                    </>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ));
+                          );
+                        });
                       })()}
                     </div>
                   ) : (

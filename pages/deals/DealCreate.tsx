@@ -4,7 +4,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
 import { Deal, ClientCompany, ClientContact, User } from '../../types';
 import { apiFetch } from '../../services/apiClient';
+import { GATEWAY_CONFIG } from '../../services/gatewayConfig';
 import Toast from '../../components/Toast';
+import { BrandSpinner } from '../../components/AppLoaders';
 import CompanyFormModal from '../clients/CompanyFormModal';
 import ContactFormModal from '../clients/ContactFormModal';
 import ShareModal from '../../components/ShareModal';
@@ -342,7 +344,7 @@ const DealCreate: React.FC = () => {
                   <div>
                       <label className="block text-xs font-bold text-slate-600 mb-1.5">Empresa *</label>
                       <select name="id_client_company" value={deal.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-100 disabled:text-slate-500" disabled={cacheLoading || isConversion}>
-                          <option value="">{cacheLoading ? 'Cargando...' : '-- Seleccionar Empresa --'}</option>
+                          <option value="">{cacheLoading ? '...' : '-- Seleccionar Empresa --'}</option>
                           <option value="__ADD_NEW_COMPANY__" className="font-bold text-emerald-600 bg-emerald-50">+ Nueva Empresa</option>
                           {cachedCompanies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}
                       </select>
@@ -370,7 +372,7 @@ const DealCreate: React.FC = () => {
                     <div>
                       <label className="block text-xs font-bold text-slate-600 mb-1.5">Contacto *</label>
                       <select name="id_contact" value={deal.id_contact || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none disabled:bg-slate-100 disabled:text-slate-500" disabled={cacheLoading || isConversion}>
-                          <option value="">{cacheLoading ? 'Cargando...' : '-- Seleccionar Contacto --'}</option>
+                          <option value="">{cacheLoading ? '...' : '-- Seleccionar Contacto --'}</option>
                           <option value="__ADD_NEW_CONTACT__" className="font-bold text-emerald-600 bg-emerald-50">+ Nuevo Contacto</option>
                           {filteredContacts.map(c => <option key={c.id_contact} value={c.id_contact}>{c.first_name} {c.last_name}</option>)}
                       </select>

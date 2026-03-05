@@ -1,4 +1,5 @@
 import React from 'react';
+import { SimpleSpinner } from '../../components/AppLoaders';
 
 interface GoogleLoginButtonProps {
   onClick: () => void;
@@ -21,7 +22,7 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
         className="w-full inline-flex items-center justify-center gap-3 bg-white hover:bg-gray-50 border-2 border-gray-300 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-all"
       >
         {loading ? (
-          <i className="fa-solid fa-circle-notch fa-spin"></i>
+          <SimpleSpinner size="sm" />
         ) : (
           <>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -45,7 +46,7 @@ export const GoogleLoginButton: React.FC<GoogleLoginButtonProps> = ({
       className="w-full inline-flex items-center justify-center gap-3 bg-slate-800 hover:bg-slate-900 text-white px-6 py-3 rounded-lg font-semibold transition-all shadow-md hover:shadow-lg disabled:opacity-70"
     >
       {loading ? (
-        <i className="fa-solid fa-circle-notch fa-spin"></i>
+        <SimpleSpinner size="sm" />
       ) : (
         <>
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

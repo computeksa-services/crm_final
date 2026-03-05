@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { MarketingList } from '../../../types';
 import Toast from '../../Toast';
 import { marketingApi } from '../../../services/marketingApi';
+import { SimpleSpinner } from '../../AppLoaders';
 
 interface AudienceListModalProps {
   isOpen: boolean;
@@ -222,7 +223,7 @@ const AudienceListModal: React.FC<AudienceListModalProps> = ({
               disabled={submitting}
             >
               {submitting ? (
-                <i className="fas fa-circle-notch fa-spin"></i>
+                <SimpleSpinner size="sm" />
               ) : (
                 <>{isEditing ? 'Actualizar' : 'Crear Audiencia'}</>
               )}

@@ -10,6 +10,14 @@ const SIZE_MAP: Record<LoaderSize, string> = {
   xl: 'w-14 h-14'
 };
 
+const SIMPLE_SIZE_MAP: Record<LoaderSize, string> = {
+  xs: 'w-3 h-3',
+  sm: 'w-4 h-4',
+  md: 'w-5 h-5',
+  lg: 'w-6 h-6',
+  xl: 'w-8 h-8'
+};
+
 const ICON_SIZE_MAP: Record<LoaderSize, string> = {
   xs: 'w-2.5 h-2.5',
   sm: 'w-3 h-3',
@@ -23,10 +31,30 @@ interface BrandSpinnerProps {
   className?: string;
 }
 
+interface SimpleSpinnerProps {
+  size?: LoaderSize;
+  className?: string;
+}
+
+export function SimpleSpinner({
+  size = 'sm',
+  className = ''
+}: SimpleSpinnerProps) {
+  return (
+    <span className={`inline-flex items-center justify-center ${SIMPLE_SIZE_MAP[size]} ${className}`}>
+      <span className="w-full h-full rounded-full border-2 border-brand-100 border-t-brand-600 animate-spin" />
+    </span>
+  );
+}
+
 export function BrandSpinner({
   size = 'md',
   className = ''
 }: BrandSpinnerProps) {
+  if (size === 'xs') {
+    return <SimpleSpinner size="sm" className={className} />;
+  }
+
   return (
     <span className={`relative inline-flex items-center justify-center ${SIZE_MAP[size]} ${className}`}>
       <span className="absolute inset-0 rounded-full border-2 border-brand-100 border-t-brand-600 animate-spin" />
@@ -41,14 +69,14 @@ interface PageLoaderProps {
 }
 
 export const PageLoader: React.FC<PageLoaderProps> = ({
-  message = 'Cargando...',
+  message = '',
   fullscreen = true
 }) => {
   return (
     <div className={`${fullscreen ? 'min-h-screen' : 'h-full'} bg-slate-50 dark:bg-slate-600 flex items-center justify-center`}>
       <div className="text-center">
         <BrandSpinner size="xl" className="mb-4" />
-        <p className="text-slate-600 dark:text-slate-300">{message}</p>
+        {message ? <p className="text-slate-600 dark:text-slate-300">{message}</p> : null}
       </div>
     </div>
   );
@@ -60,13 +88,13 @@ interface SectionLoaderProps {
 }
 
 export const SectionLoader: React.FC<SectionLoaderProps> = ({
-  message = 'Cargando...',
+  message = '',
   className = ''
 }) => {
   return (
     <div className={`py-10 text-center ${className}`}>
       <BrandSpinner size="md" className="mb-2" />
-      <p className="text-xs text-gray-400">{message}</p>
+      {message ? <p className="text-xs text-gray-400">{message}</p> : null}
     </div>
   );
 };
@@ -80,7 +108,7 @@ export const ButtonLoader: React.FC<ButtonLoaderProps> = ({
   size = 'sm',
   className = ''
 }) => {
-  return <BrandSpinner size={size} className={className} />;
+  return <SimpleSpinner size={size} className={className} />;
 };
 
 interface SkeletonLoaderProps {
@@ -112,8 +140,7 @@ export const AppLoadingFallback: React.FC = () => {
   return (
     <div className="min-h-[50vh] flex items-center justify-center">
       <div className="text-center">
-        <BrandSpinner size="lg" className="mb-3" />
-        <p className="text-sm text-slate-500 dark:text-slate-400">Cargando módulo...</p>
+        <BrandSpinner size="lg" />
       </div>
     </div>
   );

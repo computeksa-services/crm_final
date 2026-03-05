@@ -6,6 +6,7 @@ import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import IconPicker from '../components/IconPicker';
 import { apiFetch } from '../services/apiClient';
+import { SimpleSpinner } from '../components/AppLoaders';
 
 // Paleta de colores estándar
 const PRESET_COLORS = [
@@ -192,7 +193,7 @@ const SettingsQuoteStatuses: React.FC = () => {
 
   if (cacheLoading) return (
       <div className="flex justify-center p-8">
-          <i className="fa-solid fa-circle-notch fa-spin text-brand-500"></i>
+        <SimpleSpinner size="md" />
       </div>
   );
 
@@ -321,7 +322,7 @@ const SettingsQuoteStatuses: React.FC = () => {
               disabled={savingOrder}
               className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-4 py-2 rounded-xl shadow-sm font-medium transition-all flex items-center"
             >
-              {savingOrder ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-floppy-disk mr-2"></i>}
+              {savingOrder ? <SimpleSpinner size="sm" className="mr-2" /> : <i className="fa-solid fa-floppy-disk mr-2"></i>}
               Guardar orden
             </button>
           )}

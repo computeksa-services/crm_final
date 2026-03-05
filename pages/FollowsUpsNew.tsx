@@ -594,10 +594,7 @@ const FollowUpsPage: React.FC = () => {
   if (loading)
     return (
       <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <BrandSpinner size="lg" className="mb-3" />
-          <p className="text-sm text-gray-400">Cargando seguimientos...</p>
-        </div>
+        <BrandSpinner size="lg" />
       </div>
     );
 
@@ -721,7 +718,7 @@ const FollowUpsPage: React.FC = () => {
               <table className="w-full text-left min-w-[900px]">
                 <thead className="border-b border-gray-100 bg-gray-50">
                   <tr>
-                    {['Entidad / Empresa', 'Estado', 'Próxima acción', 'Equipo', 'Última gestión', ''].map((h, i) => (
+                    {['Cliente', 'Estado', 'Próxima acción', 'Equipo', 'Última gestión', ''].map((h, i) => (
                       <th key={i} className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
                         {h}
                       </th>

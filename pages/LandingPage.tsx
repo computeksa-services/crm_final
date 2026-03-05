@@ -38,10 +38,7 @@ const LandingPage: React.FC = () => {
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
-        <div className="text-center">
-          <BrandSpinner size="xl" className="mb-4" />
-          <p className="text-slate-600">Cargando...</p>
-        </div>
+        <BrandSpinner size="xl" />
       </div>
     );
   }

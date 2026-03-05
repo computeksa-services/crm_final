@@ -6,7 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { MarketingList } from '../../types';
 import JoditEditor from 'jodit-react';
 import Toast from '../Toast';
-import { BrandSpinner } from '../AppLoaders';
+import { BrandSpinner, SimpleSpinner } from '../AppLoaders';
 import { apiFetch } from '../../services/apiClient';
 import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
 import { useEmailSendPolicy } from '../../src/hooks/useEmailSendPolicy';
@@ -543,7 +543,7 @@ const CampaignWizard: React.FC = () => {
                         title={hasUnsavedChanges ? "Tienes cambios sin guardar" : "Todos los cambios guardados"}
                     >
                         {isSaving ? (
-                            <i className="fa-solid fa-spinner fa-spin"></i> 
+                            <SimpleSpinner size="sm" />
                         ) : hasUnsavedChanges ? (
                             <i className="fa-solid fa-floppy-disk"></i> 
                         ) : (
@@ -964,7 +964,7 @@ const CampaignWizard: React.FC = () => {
                         }`}
                         title={!isCreator ? 'Solo el creador puede enviar campañas' : !canSendCampaign ? 'Activa permisos de envio en Integraciones o Workspace' : !isValidForSending ? 'Completa todos los campos obligatorios para enviar' : ''}
                     >
-                        {isSaving ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-paper-plane"></i>} 
+                        {isSaving ? <SimpleSpinner size="sm" /> : <i className="fa-solid fa-paper-plane"></i>} 
                         Enviar Ahora
                     </button>
                 </div>

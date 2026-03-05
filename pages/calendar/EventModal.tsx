@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import { ClientContact, User, Deal } from '../../types';
-import { SectionLoader, ButtonLoader } from '../../components/AppLoaders';
+import { SectionLoader, ButtonLoader, SimpleSpinner } from '../../components/AppLoaders';
 
 // ── TYPES ──────────────────────────────────────────────────────────────────
 interface Attendee {
@@ -480,7 +480,7 @@ export const EventModal: React.FC<EventModalProps> = ({
                 {showDealSuggestions && (
                   <div className="absolute z-50 top-full left-8 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                     {dealsLoading
-                      ? <div className="p-2 text-xs text-gray-500">Cargando...</div>
+                      ? <div className="p-2 flex justify-center"><SimpleSpinner size="sm" /></div>
                       : (() => {
                           const normalizeText = (value: string) =>
                             value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');

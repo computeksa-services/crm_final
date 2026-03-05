@@ -333,10 +333,7 @@ const ClientCompanyDetail: React.FC = () => {
   // --- RENDER ---
   if (loading) return (
     <div className="flex h-64 items-center justify-center">
-      <div className="flex flex-col items-center space-y-3">
-        <BrandSpinner size="xl" />
-        <p className="text-slate-500 font-medium animate-pulse">Cargando...</p>
-      </div>
+      <BrandSpinner size="xl" />
     </div>
   );
   

@@ -9,6 +9,7 @@ import Toast from '../../../components/Toast';
 import ConfirmModal from '../../../components/ConfirmModal';
 import { PermissionToggle } from './PermissionToggle';
 import { oauthRedirectUri } from '../../../services/oauthConfig';
+import { SimpleSpinner } from '../../../components/AppLoaders';
 
 interface TenantEmailSettingsProps {
     user: User;
@@ -442,7 +443,7 @@ export const TenantEmailSettings: React.FC<TenantEmailSettingsProps> = ({ user }
 
             {loading ? (
                 <div className="text-center py-8 text-slate-500 text-sm">
-                    <i className="fa-solid fa-spinner fa-spin mb-2"></i>
+                    <div className="flex justify-center mb-2"><SimpleSpinner size="md" /></div>
                     <p>Cargando configuración...</p>
                 </div>
             ) : !tenantData?.corporate_email_address ? (
@@ -455,7 +456,7 @@ export const TenantEmailSettings: React.FC<TenantEmailSettingsProps> = ({ user }
                             className="w-full px-4 py-2.5 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {actionLoading ? (
-                                <i className="fa-solid fa-spinner fa-spin"></i>
+                                <SimpleSpinner size="sm" />
                             ) : (
                                 <i className="fa-brands fa-google text-base text-[#4285F4]"></i>
                             )}
@@ -467,7 +468,7 @@ export const TenantEmailSettings: React.FC<TenantEmailSettingsProps> = ({ user }
                             className="w-full px-4 py-2.5 border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium flex items-center justify-center gap-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {actionLoading ? (
-                                <i className="fa-solid fa-spinner fa-spin"></i>
+                                <SimpleSpinner size="sm" />
                             ) : (
                                 <img src="https://upload.wikimedia.org/wikipedia/commons/4/44/Microsoft_logo.svg" alt="M" className="w-4 h-4" />
                             )}

@@ -6,7 +6,7 @@ import { marketingApi } from '../../services/marketingApi';
 import { useAuth } from '../../contexts/AuthContext';
 import ConfirmModal from '../ConfirmModal';
 import Toast from '../Toast';
-import { BrandSpinner } from '../AppLoaders';
+import { BrandSpinner, SimpleSpinner } from '../AppLoaders';
 
 // Tipos adicionales para la nueva data
 interface AudienceMember {
@@ -398,7 +398,11 @@ const CampaignDetail: React.FC = () => {
         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between relative overflow-hidden">
            <div className="flex justify-between items-start z-10 relative">
                <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Estado / Progreso</p>
-               <i className={`fa-solid ${['SENDING', 'PROCESSING'].includes(normalizeStatus(campaign.status)) ? 'fa-spinner fa-spin text-blue-400' : normalizeStatus(campaign.status) === 'COMPLETED' ? 'fa-check-circle text-green-400' : 'fa-circle text-slate-300'}`}></i>
+               {['SENDING', 'PROCESSING'].includes(normalizeStatus(campaign.status)) ? (
+                 <SimpleSpinner size="sm" />
+               ) : (
+                 <i className={`fa-solid ${normalizeStatus(campaign.status) === 'COMPLETED' ? 'fa-check-circle text-green-400' : 'fa-circle text-slate-300'}`}></i>
+               )}
            </div>
            <div className="mt-2 z-10 relative">
                 <p className="text-2xl font-bold text-slate-800">{toNumber(campaign.progress_percentage)}%</p>

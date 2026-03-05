@@ -144,10 +144,7 @@ const AccountSettings: React.FC = () => {
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <BrandSpinner size="xl" className="mb-4" />
-          <p className="text-slate-600 dark:text-slate-400">Cargando...</p>
-        </div>
+        <BrandSpinner size="xl" />
       </div>
     );
   }

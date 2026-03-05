@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
 import { ClientContact, User } from '../types';
-import { X, LoaderCircle, ArrowRightLeft } from 'lucide-react';
+import { X, ArrowRightLeft } from 'lucide-react';
+import { SimpleSpinner } from './AppLoaders';
 
 interface ReassignModalProps {
   isOpen: boolean;
@@ -125,7 +126,7 @@ const ReassignModal: React.FC<ReassignModalProps> = ({ isOpen, onClose, onSucces
               disabled={isSubmitting || !newOwnerId}
               className="px-5 py-2 bg-brand-600 text-white font-bold rounded-lg hover:bg-brand-700 disabled:opacity-50 flex items-center gap-2"
             >
-              {isSubmitting && <LoaderCircle size={16} className="animate-spin" />}
+              {isSubmitting && <SimpleSpinner size="sm" />}
               {isSubmitting ? 'Reasignando...' : 'Reasignar'}
             </button>
           </div>

@@ -6,7 +6,7 @@ import { Product, ProductType } from '../types';
 import Toast from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 import { apiFetch } from '../services/apiClient';
-import { BrandSpinner } from '../components/AppLoaders';
+import { BrandSpinner, SimpleSpinner } from '../components/AppLoaders';
 
 const ProductsList: React.FC = () => {
   const { user } = useAuth();
@@ -605,7 +605,7 @@ const ProductsList: React.FC = () => {
               <div className="flex justify-end pt-4 gap-3 border-t border-slate-100">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-all">Cancelar</button>
                 <button type="submit" disabled={submitting} className="px-5 py-2.5 rounded-xl bg-brand-600 text-white hover:bg-brand-700 shadow-lg shadow-brand-200 font-medium flex items-center transition-all disabled:opacity-70">
-                  {submitting ? <i className="fa-solid fa-circle-notch fa-spin mr-2"></i> : <i className="fa-solid fa-check mr-2"></i>}
+                  {submitting ? <SimpleSpinner size="sm" className="mr-2" /> : <i className="fa-solid fa-check mr-2"></i>}
                   Guardar
                 </button>
               </div>
