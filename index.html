@@ -10,6 +10,20 @@
     <link rel="apple-touch-icon" sizes="180x180" href="/favicon/apple-touch-icon.png" />
     <link rel="manifest" href="/favicon/site.webmanifest" />
     <meta name="theme-color" content="#ffffff" />
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      (function (w, d, s, l, i) {
+        if (!i || !i.startsWith('GTM-')) return;
+        w[l] = w[l] || [];
+        w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+        const firstScript = d.getElementsByTagName(s)[0];
+        const gtmScript = d.createElement(s);
+        const dl = l !== 'dataLayer' ? '&l=' + l : '';
+        gtmScript.async = true;
+        gtmScript.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
+        firstScript.parentNode.insertBefore(gtmScript, firstScript);
+      })(window, document, 'script', 'dataLayer', '%VITE_GTM_ID%');
+    </script>
     <!-- Tailwind CSS (CDN para desarrollo rápido, idealmente configurar PostCSS luego) -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">

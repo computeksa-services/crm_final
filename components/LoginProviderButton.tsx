@@ -26,17 +26,17 @@ export const LoginProviderButton: React.FC<LoginProviderButtonProps> = ({
       type="button"
       disabled={disabled || isLoading}
       onClick={onClick}
-      aria-label={isLoading ? `Conectando con ${config.name}` : `Continuar con ${config.name}`}
-      className={`w-full inline-flex items-center justify-center gap-3 py-2.5 px-4 border border-slate-200 dark:border-slate-400 rounded-lg shadow-sm bg-white dark:bg-slate-400 text-sm font-semibold text-slate-700 dark:text-slate-900 hover:bg-slate-50 dark:hover:bg-slate-300 transition ${
+      aria-label={isLoading ? `Conectando ${config.name}` : `Ingresar con ${config.name}`}
+      className={`w-full inline-flex items-center justify-center gap-3 py-3 px-4 border border-slate-300 rounded-xl shadow-sm bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-all ${
         isLoading ? 'opacity-70 cursor-wait' : ''
       } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     >
       {isLoading ? <ButtonLoader size="sm" /> : isImage ? (
-        <img src={config.icon} alt={config.name} className="w-5 h-5" />
+        <img src={config.icon} alt={config.name} className="w-5 h-5" loading="lazy" decoding="async" />
       ) : (
-        <i className={`${config.icon} ${config.color}`}></i>
+        <i className={`${config.icon} ${config.color} text-base`}></i>
       )}
-      {!isLoading && `Continuar con ${config.name}`}
+      {!isLoading && `Ingresar con ${config.name}`}
     </button>
   );
 };
