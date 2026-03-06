@@ -8,6 +8,7 @@ import Toast from '../../components/Toast';
 import ShareModal from '../../components/ShareModal';
 import ConfirmModal from '../../components/ConfirmModal';
 import { BrandSpinner } from '../../components/AppLoaders';
+import Avatar from '../../components/Avatar';
 import { canUserAction, canEditInline } from '../../utils/permissions';
 import {
   useReactTable,
@@ -70,9 +71,50 @@ const formatCurrency = (value: number | string) => {
 
 const formatDateTime = (value?: string) => {
   if (!value) return '';
-  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
-  const [date, time = ''] = normalized.split('T');
-  return `${date}${time ? ` ${time.slice(0, 5)}` : ''}`;
+
+  let parsedDate: Date | null = null;
+
+  // Formato DD/MM/YYYY o DD/MM/YYYY HH:mm
+  if (value.includes('/')) {
+    const [datePart] = value.split(' ');
+    const [dayStr, monthStr, yearStr] = datePart.split('/');
+    const day = Number(dayStr);
+    const month = Number(monthStr);
+    const year = Number(yearStr);
+
+    if (day && month && year) {
+      parsedDate = new Date(year, month - 1, day);
+    }
+  }
+
+  // Formatos ISO o compatibles con Date
+  if (!parsedDate) {
+    const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+    const d = new Date(normalized);
+    if (!Number.isNaN(d.getTime())) {
+      parsedDate = d;
+    }
+  }
+
+  if (!parsedDate || Number.isNaN(parsedDate.getTime())) {
+    return value;
+  }
+
+  const weekday = new Intl.DateTimeFormat('es-EC', { weekday: 'short' })
+    .format(parsedDate)
+    .replace('.', '')
+    .toLowerCase();
+
+  const datePart = new Intl.DateTimeFormat('es-EC', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric'
+  })
+    .format(parsedDate)
+    .replace('.', '')
+    .toLowerCase();
+
+  return `${weekday}, ${datePart}`;
 };
 
 // --- HELPER PARA CELDA DE GRUPO (Actualizado) ---
@@ -690,28 +732,22 @@ const QuotesList: React.FC = () => {
                 <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
                     {sorted.map((collab: any, idx: number) => {
                         const user = users.find(u => u.id_user === collab.id);
-                        const avatarUrl = user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=random`;
                         const userName = user?.name_user || 'Usuario';
                         const isOwner = collab.is_owner;
                         const isPrincipal = collab.access_level === 'EDIT' && !isOwner;
                         const isSecondary = collab.access_level === 'VIEW';
                         
-                        // Determinar estilo según nivel
-                        let borderColor = 'border-slate-200';
-                        let badgeIcon = null;
+                        let badgeType: 'OWNER' | 'EDIT' | 'VIEW' = 'VIEW';
                         let tooltipLevel = '';
                         
                         if (isOwner) {
-                            borderColor = 'border-amber-400 shadow-amber-200';
-                            badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-amber-400 rounded-full flex items-center justify-center"><i className="fa-solid fa-star text-white text-[6px]"></i></div>;
+                            badgeType = 'OWNER';
                             tooltipLevel = 'Creador';
                         } else if (isPrincipal) {
-                            borderColor = 'border-indigo-400 shadow-indigo-200';
-                            badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-indigo-500 rounded-full flex items-center justify-center"><i className="fa-solid fa-crown text-white text-[6px]"></i></div>;
+                            badgeType = 'EDIT';
                             tooltipLevel = 'Principal';
                         } else if (isSecondary) {
-                            borderColor = 'border-slate-300';
-                            badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-slate-400 rounded-full flex items-center justify-center"><i className="fa-solid fa-eye text-white text-[6px]"></i></div>;
+                            badgeType = 'VIEW';
                             tooltipLevel = 'Secundario';
                         }
                         
@@ -721,12 +757,12 @@ const QuotesList: React.FC = () => {
                                 className="relative inline-block group/avatar"
                             >
                                 <div className="relative cursor-pointer transition-all duration-200 hover:scale-125 hover:z-10">
-                                    <img 
-                                        src={avatarUrl} 
-                                        alt={userName}
-                                        className={`w-8 h-8 rounded-full border-2 shadow-sm ${borderColor}`}
+                                    <Avatar
+                                        src={user?.avatar_url || null}
+                                        name={userName}
+                                        size="sm"
+                                        badge={{ type: badgeType }}
                                     />
-                                    {badgeIcon}
                                 </div>
                                 {/* Tooltip fuera del contenedor que se escala */}
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/avatar:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
@@ -745,33 +781,28 @@ const QuotesList: React.FC = () => {
     {
       accessorKey: 'fecha_emision',
       header: 'Emisión',
-      size: 120,
+      size: 150,
+      minSize: 150,
+      maxSize: 150,
       filterFn: dateRangeFilter,
       cell: ({ row }) => {
         if (row.getIsGrouped()) return null;
         const fecha = row.original.fecha_emision_fmt || row.original.fecha_emision;
-        return <span className="text-xs text-slate-500">{fecha}</span>;
+        return <span className="text-xs text-slate-500 whitespace-nowrap">{formatDateTime(fecha)}</span>;
       }
     },
     {
       accessorKey: 'created_at',
       header: 'Creado',
-      size: 140,
+      size: 150,
+      minSize: 150,
+      maxSize: 150,
       enableColumnFilter: true,
       filterFn: dateRangeFilter,
       cell: ({ row }) => {
         if (row.getIsGrouped()) return null;
-        // Preferir el campo formateado si existe, si no, formatear localmente
-        let fecha = row.original.created_at_fmt;
-        if (!fecha && row.original.created_at) {
-          const d = new Date(row.original.created_at);
-          fecha = d.toLocaleDateString();
-        }
-        // Si viene con hora desde el backend, extraer solo la fecha
-        if (fecha && fecha.includes(' ')) {
-          fecha = fecha.split(' ')[0];
-        }
-        return <span className="text-xs text-slate-500">{fecha}</span>;
+        const fecha = row.original.created_at_fmt || row.original.created_at;
+        return <span className="text-xs text-slate-500 whitespace-nowrap">{formatDateTime(fecha)}</span>;
       }
     },
     {
@@ -787,7 +818,13 @@ const QuotesList: React.FC = () => {
         // Colores según días de inactividad
         let colorClass = 'text-slate-600';
         let bgClass = 'bg-slate-100';
-        if (days > 30) {
+        let displayText = `${days} ${days === 1 ? 'día' : 'días'}`;
+        
+        if (days === 0) {
+          colorClass = 'text-green-700';
+          bgClass = 'bg-green-100';
+          displayText = 'Al día';
+        } else if (days > 30) {
           colorClass = 'text-red-600';
           bgClass = 'bg-red-50';
         } else if (days > 15) {
@@ -803,7 +840,7 @@ const QuotesList: React.FC = () => {
         
         return (
           <span className={`text-xs font-bold px-2 py-1 rounded ${bgClass} ${colorClass}`}>
-            {days} {days === 1 ? 'día' : 'días'}
+            {displayText}
           </span>
         );
       }
@@ -839,6 +876,7 @@ const QuotesList: React.FC = () => {
   const table = useReactTable({
     data: quotes,
     columns,
+    paginateExpandedRows: false,
     state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -869,7 +907,7 @@ const QuotesList: React.FC = () => {
   const totalFiltered = useMemo(() => filteredRows.reduce((s, r) => s + (r.getIsGrouped() ? 0 : parseFloat(String(r.original.total || 0))), 0), [filteredRows]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-58px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
+    <div className="flex flex-col h-full bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
       
       {/* TOOLBAR RESPONSIVO MEJORADO */}
       <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3">

@@ -358,13 +358,20 @@ export interface Deal {
   contact_full_name?: string;
   owner_name?: string;
   owner_avatar?: string;
+  collaborators?: any[];
   contact_email?: string;
   contact_phone?: string;
   contact_position?: string;
+  estado_nombre?: string;
+  estado_color?: string;
+  estado_categoria?: string;
+  estado_icon?: string;
   interes_icon?: string;
   interes_color?: string;
   interes_nombre?: string;
   updated_at?: string;
+  created_at?: string;
+  days_inactive?: number | null;
 }
 
 export interface DealPermission {
@@ -680,4 +687,10 @@ export interface CampaignTemplate {
   html_content: string;
   created_at: string;
   is_default?: boolean;
+}
+
+export interface WinningQuoteSelection {
+  id_trato: string;
+  id_cotizacion_ganadora: string;
+  crear_en_cartera?: boolean;
 }

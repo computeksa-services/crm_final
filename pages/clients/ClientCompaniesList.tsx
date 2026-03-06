@@ -458,6 +458,7 @@ const ClientCompaniesList: React.FC = () => {
   const table = useReactTable({
     data: tableData,
     columns,
+    paginateExpandedRows: false,
     state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination, columnSizing },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -476,7 +477,7 @@ const ClientCompaniesList: React.FC = () => {
   });
 
   return (
-    <div className="flex flex-col h-[calc(100vh-58px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans">
+    <div className="flex flex-col h-full bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans">
       <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div className="relative order-3 lg:order-1 w-full lg:flex-1">
           <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>

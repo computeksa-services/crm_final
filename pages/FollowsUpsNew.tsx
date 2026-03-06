@@ -10,6 +10,7 @@ import ReassignModal from '../components/ReassignModal';
 import Toast from '../components/Toast';
 import { BrandSpinner } from '../components/AppLoaders';
 import { useDataCache } from '../contexts/DataCacheContext';
+import Avatar from '../components/Avatar';
 
 // ── ICONS ──────────────────────────────────────────────────────────────────
 const IconWhatsApp = () => (
@@ -148,36 +149,43 @@ function getInitials(collab: any) {
 const roleLabels: Record<string, string> = { OWNER: 'Propietario', EDIT: 'Edición', VIEW: 'Solo lectura', BLOCKED: 'Bloqueado' };
 
 // ── AVATAR GROUP ───────────────────────────────────────────────────────────
-function AvatarGroup({ collaborators, users }: { collaborators?: any[]; users?: any[] }) {
-  if (!collaborators?.length) return null;
-  const sorted = [...collaborators].sort((a, b) => {
-    const levelOrder: Record<string, number> = { OWNER: 0, EDIT: 1, VIEW: 2 };
-    return (levelOrder[a.access_level] ?? 3) - (levelOrder[b.access_level] ?? 3);
-  });
+function AvatarGroupContent({ collaborators, users }: { collaborators?: any[]; users?: any[] }) {
+  // Memoizar la búsqueda de cada usuario para no buscar en cada render
+  const collaboratorUsers = useMemo(() => {
+    if (!collaborators?.length || !users?.length) return [];
+    return collaborators
+      .sort((a, b) => {
+        const levelOrder: Record<string, number> = { OWNER: 0, EDIT: 1, VIEW: 2 };
+        return (levelOrder[a.access_level] ?? 3) - (levelOrder[b.access_level] ?? 3);
+      })
+      .slice(0, 3)
+      .reverse()
+      .map(c => ({
+        collab: c,
+        user: users.find(u => u.id_user === c.id)
+      }));
+  }, [collaborators, users]);
+
+  if (!collaboratorUsers.length) return null;
+
   return (
     <div className="flex -space-x-2 items-center overflow-visible">
-      {sorted.slice(0, 3).reverse().map((c, i) => {
-        const user = users?.find(u => u.id_user === c.id);
-        const avatarUrl = user?.avatar_url || `https://ui-avatars.com/api/?name=${user?.name_user || 'U'}&background=random`;
+      {collaboratorUsers.map(({ collab: c, user }, i) => {
         const isOwner = c.access_level === 'OWNER';
         const isPrincipal = c.access_level === 'EDIT' && !isOwner;
         const isSecondary = c.access_level === 'VIEW';
         
-        let borderColor = 'border-white';
-        let badgeIcon = null;
+        let badgeType: 'OWNER' | 'EDIT' | 'VIEW' = 'VIEW';
         let tooltipText = user?.name_user || 'Usuario';
         
         if (isOwner) {
-          borderColor = 'border-amber-400';
-          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-star text-white text-[6px]"></i></div>;
+          badgeType = 'OWNER';
           tooltipText = `${user?.name_user || 'Usuario'} (Creador)`;
         } else if (isPrincipal) {
-          borderColor = 'border-indigo-400';
-          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-crown text-white text-[6px]"></i></div>;
+          badgeType = 'EDIT';
           tooltipText = `${user?.name_user || 'Usuario'} (Principal)`;
         } else if (isSecondary) {
-          borderColor = 'border-slate-300';
-          badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-slate-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-eye text-white text-[6px]"></i></div>;
+          badgeType = 'VIEW';
           tooltipText = `${user?.name_user || 'Usuario'} (Secundario)`;
         }
         
@@ -188,12 +196,12 @@ function AvatarGroup({ collaborators, users }: { collaborators?: any[]; users?: 
             title={tooltipText}
           >
             <div className="relative transition-all group-hover/collab:scale-125 group-hover/collab:z-30">
-              <img 
-                src={avatarUrl} 
-                alt={user?.name_user || 'Usuario'}
-                className={`w-8 h-8 rounded-full border-2 shadow-sm ${borderColor} bg-white relative`}
+              <Avatar 
+                src={user?.avatar_url || null}
+                name={user?.name_user || 'Usuario'}
+                size="sm"
+                badge={{ type: badgeType }}
               />
-              {badgeIcon}
             </div>
             
             {/* Tooltip personalizado */}
@@ -206,14 +214,23 @@ function AvatarGroup({ collaborators, users }: { collaborators?: any[]; users?: 
           </div>
         );
       })}
-      {sorted.length > 3 && (
-        <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center shadow-sm hover:scale-110 transition-all hover:z-20" title={`+${sorted.length - 3} más`}>
-          <span className="text-[8px] font-black text-slate-500">+{sorted.length - 3}</span>
-        </div>
-      )}
+      {(() => {
+        const total = collaborators?.length ?? 0;
+        if (total > 3) {
+          return (
+            <div className="w-8 h-8 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center shadow-sm hover:scale-110 transition-all hover:z-20" title={`+${total - 3} más`}>
+              <span className="text-[8px] font-black text-slate-500">+{total - 3}</span>
+            </div>
+          );
+        }
+        return null;
+      })()}
     </div>
   );
 }
+
+// Memoizar el componente para evitar re-renders innecesarios
+const AvatarGroup = React.memo(AvatarGroupContent);
 
 // ── STAT CARD ──────────────────────────────────────────────────────────────
 function Stat({ label, value, dark }: { label: string; value: number; dark?: boolean }) {
@@ -303,11 +320,11 @@ function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: F
         <div className="flex items-start gap-2.5">
           <div className="relative">
             {(item as any).last_management_user_avatar || (item as any).last_management_user_name ? (
-              <img 
-                src={(item as any).last_management_user_avatar || `https://ui-avatars.com/api/?name=${(item as any).last_management_user_name || 'U'}&background=random`}
-                alt={(item as any).last_management_user_name || 'Usuario'}
-                title={(item as any).last_management_user_name || 'Usuario'}
-                className="w-6 h-6 rounded-full shrink-0 border border-gray-200"
+              <Avatar
+                src={(item as any).last_management_user_avatar || null}
+                name={(item as any).last_management_user_name || 'Usuario'}
+                size="xs"
+                className="rounded-full border border-gray-200 shrink-0"
               />
             ) : (
               <div className="mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-white shrink-0" style={{ backgroundColor: (item as any).last_management_channel_color || '#d1d5db' }}>

@@ -12,9 +12,8 @@ import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
 import SelectWinningQuoteModal from '../../components/SelectWinningQuoteModal';
 import DealEditModal from '../../components/DealEditModal';
-import DealViewToggle from '../../components/DealViewToggle';
 import DealsKanban from './DealsKanban';
-import DealsTable from './DealsTable';
+import DealsTable, { DealsTableHandle } from './DealsTable';
 import DealsListView from './DealsListView';
 import {
   SortingState,
@@ -23,34 +22,56 @@ import {
   ExpandedState,
 } from '@tanstack/react-table';
 
-// ─── TOOLBAR ─────────────────────────────────────────────────────────────────
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
 const GROUP_OPTIONS = [
   { id: 'client_company_name', label: 'Cliente',  icon: 'fa-building'   },
   { id: 'estado_nombre',       label: 'Estado',   icon: 'fa-list-check' },
   { id: 'interes_nombre',      label: 'Interés',  icon: 'fa-star'       },
 ];
 
-const ToolbarGroupDropdown: React.FC<{
+const VIEW_OPTIONS = [
+  { id: 'table',  label: 'Tabla',  icon: 'fa-table-cells' },
+  { id: 'list',   label: 'Lista',  icon: 'fa-list'        },
+  { id: 'kanban', label: 'Kanban', icon: 'fa-columns'     },
+] as const;
+
+// ─── TOOLBAR ─────────────────────────────────────────────────────────────────
+const ToolbarViewMenu: React.FC<{
   grouping: string[];
   onGroupingChange: (g: string[]) => void;
+  columnFilters: ColumnFiltersState;
   globalFilter: string;
   onGlobalFilterChange: (v: string) => void;
   showArchived: boolean;
   onToggleArchived: () => void;
   onNew: () => void;
-  onExpandAll?: () => void;
-  onCollapseAll?: () => void;
+  onClearFilters: () => void;
   viewMode: 'table' | 'list' | 'kanban';
   onViewModeChange: (mode: 'table' | 'list' | 'kanban') => void;
-}> = ({ grouping, onGroupingChange, globalFilter, onGlobalFilterChange, showArchived, onToggleArchived, onNew, onExpandAll, onCollapseAll, viewMode, onViewModeChange }) => {
+}> = ({
+  grouping, onGroupingChange, columnFilters, globalFilter, onGlobalFilterChange,
+  showArchived, onToggleArchived, onNew,
+  onClearFilters, viewMode, onViewModeChange,
+}) => {
   const [open, setOpen] = useState(false);
+  const [submenuOpen, setSubmenuOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const activeGroup = GROUP_OPTIONS.find(o => grouping.includes(o.id));
+
+  const activeView        = VIEW_OPTIONS.find(o => o.id === viewMode)!;
+  const activeGroup       = GROUP_OPTIONS.find(o => grouping.includes(o.id));
+  const hasActiveGroup    = grouping.length > 0;
+  const hasActiveFilters  = columnFilters.length > 0;
+  const hasActiveOptions  = showArchived || hasActiveFilters;
+  // Badge total de configs activas para mostrar en el botón principal
+  const activeConfigCount = (hasActiveGroup ? 1 : 0) + (showArchived ? 1 : 0) + columnFilters.length;
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setSubmenuOpen(false); return; }
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+        setSubmenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -58,7 +79,8 @@ const ToolbarGroupDropdown: React.FC<{
 
   return (
     <div className="border-b border-slate-200 px-3 py-2 flex items-center gap-2 bg-white">
-      {/* Search */}
+
+      {/* ── BÚSQUEDA ── */}
       <div className="relative flex-1 min-w-0">
         <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none" />
         <input
@@ -74,79 +96,149 @@ const ToolbarGroupDropdown: React.FC<{
         )}
       </div>
 
-      {/* View Toggle */}
-      <DealViewToggle viewMode={viewMode} onChange={onViewModeChange} />
-
-      {/* Agrupar por */}
+      {/* ── MENÚ DE VISTA — dropdown principal ── */}
       <div className="relative flex-shrink-0" ref={ref}>
         <button
           onClick={() => setOpen(o => !o)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all whitespace-nowrap
-            ${activeGroup ? 'bg-slate-700 text-white border-slate-700' : 'text-slate-500 border-slate-200 hover:bg-slate-50 hover:border-slate-300'}`}
+          className={`
+            relative flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-all whitespace-nowrap
+            ${open ? 'bg-slate-50 border-slate-300 text-slate-700' : 'text-slate-500 border-slate-200 hover:bg-slate-50'}
+          `}
         >
-          <i className={`fa-solid ${activeGroup ? activeGroup.icon : 'fa-layer-group'} text-[10px]`} />
-          <span className="hidden sm:inline">{activeGroup ? activeGroup.label : 'Agrupar'}</span>
-          <i className={`fa-solid fa-chevron-down text-[8px] transition-transform duration-150 ${open ? 'rotate-180' : ''} opacity-50`} />
+          <i className={`fa-solid ${activeView.icon} text-[10px]`} />
+          <span className="hidden sm:inline">{activeView.label}</span>
+          <i className={`fa-solid fa-chevron-down text-[8px] opacity-50 transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+
+          {/* Badge con número de configs activas */}
+          {activeConfigCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center leading-none border-2 border-white">
+              {activeConfigCount}
+            </span>
+          )}
         </button>
 
         {open && (
-          <div className="absolute top-full mt-1 right-0 w-44 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50">
-            <p className="px-3 pt-1 pb-1 text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Agrupar por</p>
-            {GROUP_OPTIONS.map(opt => {
-              const isActive = grouping.includes(opt.id);
+          <div className="absolute top-full mt-1 right-0 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50 w-52">
+
+            {/* ── SECCIÓN VISTA ── */}
+            <p className="px-3 pt-1.5 pb-1 text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Vista</p>
+            {VIEW_OPTIONS.map(opt => {
+              const isActive = viewMode === opt.id;
               return (
-                <button key={opt.id}
-                  onClick={() => { onGroupingChange(isActive ? [] : [opt.id]); setOpen(false); }}
-                  className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs transition-colors text-left
-                    ${isActive ? 'bg-slate-50 text-slate-800 font-semibold' : 'text-slate-600 hover:bg-slate-50'}`}
-                >
-                  <i className={`fa-solid ${opt.icon} text-[10px] w-3.5 text-center ${isActive ? 'text-slate-600' : 'text-slate-400'}`} />
-                  {opt.label}
-                  {isActive && <i className="fa-solid fa-check text-[9px] ml-auto text-slate-400" />}
-                </button>
+                <div key={opt.id}>
+                  <button
+                    onClick={() => {
+                      onViewModeChange(opt.id);
+                      if (opt.id === 'table' || opt.id === 'list') setSubmenuOpen(s => !s);
+                      else { setOpen(false); setSubmenuOpen(false); }
+                    }}
+                    onMouseEnter={() => (opt.id === 'table' || opt.id === 'list') && setSubmenuOpen(true)}
+                    className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs transition-colors text-left
+                      ${isActive ? 'bg-slate-50 text-slate-800 font-semibold' : 'text-slate-600 hover:bg-slate-50'}`}
+                  >
+                    <i className={`fa-solid ${opt.icon} text-[10px] w-3.5 text-center ${isActive ? 'text-slate-600' : 'text-slate-300'}`} />
+                    {opt.label}
+                    {isActive && <i className="fa-solid fa-check text-[9px] ml-auto text-slate-400" />}
+                    {(opt.id === 'table' || opt.id === 'list') && <i className="fa-solid fa-chevron-right text-[8px] ml-auto text-slate-300" />}
+                  </button>
+
+                  {/* ── SUBMENU AGRUPAR — se despliega inline bajo "Tabla" ── */}
+                  {(opt.id === 'table' || opt.id === 'list') && viewMode === opt.id && submenuOpen && (
+                    <div className="ml-3 border-l-2 border-slate-100 pl-2 py-1 space-y-0.5">
+                      <p className="px-2 pt-0.5 pb-1 text-[8px] font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                        <i className="fa-solid fa-layer-group text-[8px]" /> Agrupar por
+                      </p>
+                      {GROUP_OPTIONS.map(groupOpt => {
+                        const isGroupActive = grouping.includes(groupOpt.id);
+                        return (
+                          <button key={groupOpt.id}
+                            onClick={() => { onGroupingChange(isGroupActive ? [] : [groupOpt.id]); setOpen(false); setSubmenuOpen(false); }}
+                            className={`w-full flex items-center gap-2 px-2 py-1 text-xs rounded transition-colors text-left
+                              ${isGroupActive ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}
+                          >
+                            <i className={`fa-solid ${groupOpt.icon} text-[9px] w-3 text-center ${isGroupActive ? 'text-blue-400' : 'text-slate-300'}`} />
+                            <span className="text-[11px]">{groupOpt.label}</span>
+                            {isGroupActive && <i className="fa-solid fa-check text-[8px] ml-auto text-blue-400" />}
+                          </button>
+                        );
+                      })}
+                      {hasActiveGroup && (
+                        <button onClick={() => { onGroupingChange([]); setOpen(false); setSubmenuOpen(false); }}
+                          className="w-full flex items-center gap-2 px-2 py-1 text-[11px] text-red-400 hover:bg-red-50 rounded transition-colors text-left">
+                          <i className="fa-solid fa-xmark text-[9px] w-3 text-center" /> Sin agrupar
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
               );
             })}
-            {activeGroup && (
-              <>
-                <div className="border-t border-slate-100 my-1" />
-                <button onClick={() => { onGroupingChange([]); setOpen(false); }}
-                  className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-red-400 hover:bg-red-50 transition-colors text-left">
-                  <i className="fa-solid fa-xmark text-[10px] w-3.5 text-center" /> Sin agrupar
+
+            {/* ── SECCIÓN OPCIONES ── */}
+            <div className="border-t border-slate-100 mt-1 pt-1">
+              <p className="px-3 pt-0.5 pb-1 text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Opciones</p>
+
+              {/* Toggle archivados */}
+              <button
+                onClick={() => { onToggleArchived(); setOpen(false); }}
+                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs transition-colors text-left
+                  ${showArchived ? 'text-amber-600 bg-amber-50' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <i className={`fa-solid fa-box-archive text-[10px] w-3.5 text-center ${showArchived ? 'text-amber-400' : 'text-slate-300'}`} />
+                {showArchived ? 'Viendo archivados' : 'Ver archivados'}
+                {showArchived && <i className="fa-solid fa-check text-[9px] ml-auto text-amber-400" />}
+              </button>
+
+              {/* Quitar agrupación — solo si hay agrupación activa */}
+              {hasActiveGroup && (
+                <button
+                  onClick={() => { onGroupingChange([]); setOpen(false); setSubmenuOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 transition-colors text-left"
+                >
+                  <i className="fa-solid fa-layer-group text-[10px] w-3.5 text-center text-slate-300" />
+                  <span>Quitar agrupación</span>
+                  <i className="fa-solid fa-xmark text-[9px] ml-auto text-slate-300" />
                 </button>
-              </>
-            )}
-            <div className="border-t border-slate-100 my-1" />
-            <button onClick={() => { onToggleArchived(); setOpen(false); }}
-              className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-xs transition-colors text-left
-                ${showArchived ? 'text-amber-600 bg-amber-50' : 'text-slate-600 hover:bg-slate-50'}`}
-            >
-              <i className={`fa-solid fa-box-archive text-[10px] w-3.5 text-center ${showArchived ? 'text-amber-400' : 'text-slate-300'}`} />
-              {showArchived ? 'Ver activos' : 'Ver archivados'}
-              {showArchived && <i className="fa-solid fa-check text-[9px] ml-auto text-amber-400" />}
-            </button>
+              )}
+
+              {/* Limpiar filtros de columna — solo si hay filtros activos */}
+              {hasActiveFilters && (
+                <button
+                  onClick={() => { onClearFilters(); setOpen(false); }}
+                  className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 transition-colors text-left"
+                >
+                  <i className="fa-solid fa-filter text-[10px] w-3.5 text-center text-slate-300" />
+                  <span>Limpiar {columnFilters.length} filtro{columnFilters.length > 1 ? 's' : ''}</span>
+                  <i className="fa-solid fa-xmark text-[9px] ml-auto text-slate-300" />
+                </button>
+              )}
+
+              {/* Resetear todo — solo si hay más de una config activa */}
+              {activeConfigCount > 1 && (
+                <>
+                  <div className="border-t border-slate-100 mx-3 my-1" />
+                  <button
+                    onClick={() => {
+                      onGroupingChange([]);
+                      onClearFilters();
+                      if (showArchived) onToggleArchived();
+                      setOpen(false);
+                      setSubmenuOpen(false);
+                    }}
+                    className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 transition-colors text-left font-medium"
+                  >
+                    <i className="fa-solid fa-rotate-left text-[10px] w-3.5 text-center text-red-400" />
+                    Resetear todo
+                  </button>
+                </>
+              )}
+            </div>
+
           </div>
         )}
       </div>
 
-      {/* Expandir / Contraer */}
-      {activeGroup && (
-        <div className="flex-shrink-0 flex items-center border border-slate-200 rounded-md overflow-hidden">
-          <button onClick={onExpandAll}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors border-r border-slate-200 whitespace-nowrap"
-            title="Expandir todo">
-            <i className="fa-solid fa-angles-down text-[10px]" />
-            <span className="hidden sm:inline">Expandir</span>
-          </button>
-          <button onClick={onCollapseAll}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors whitespace-nowrap"
-            title="Contraer todo">
-            <i className="fa-solid fa-angles-up text-[10px]" />
-            <span className="hidden sm:inline">Contraer</span>
-          </button>
-        </div>
-      )}
-
-      {/* Nuevo trato */}
+      {/* ── NUEVO TRATO ── */}
       <button onClick={onNew}
         className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 text-white rounded-md text-xs font-medium hover:bg-slate-700 transition-colors whitespace-nowrap">
         <i className="fa-solid fa-plus text-[10px]" />
@@ -156,11 +248,12 @@ const ToolbarGroupDropdown: React.FC<{
   );
 };
 
-const DealsList: React.FC = () => {
+// ─── DEALS CONTAINER ──────────────────────────────────────────────────────────
+const Deals: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { dealStatuses: cachedDealStatuses, dealInterests: cachedDealInterests, users } = useDataCache();
-  const { setDeals: setContextDeals, setDealStatuses: setContextDealStatuses } = useDealFilters();
+  const { setDeals: setContextDeals } = useDealFilters();
 
   const [deals, setDeals] = useState<Deal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,6 +264,7 @@ const DealsList: React.FC = () => {
     try { return saved ? JSON.parse(saved) : []; } catch { return []; }
   });
   const [globalFilter, setGlobalFilter] = useState('');
+
   const VALID_GROUP_IDS = ['client_company_name', 'estado_nombre', 'interes_nombre'];
   const [grouping, setGrouping] = useState<GroupingState>(() => {
     const saved = localStorage.getItem('dealsListGrouping');
@@ -182,28 +276,27 @@ const DealsList: React.FC = () => {
     return saved ? JSON.parse(saved) : {};
   });
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
-
   const [showArchived, setShowArchived] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'list' | 'kanban'>(() => {
     const saved = localStorage.getItem('dealsListViewMode');
     return (saved === 'table' || saved === 'list' || saved === 'kanban') ? saved : 'table';
   });
+
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editingDeal, setEditingDeal] = useState<Partial<Deal> | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [selectedDealForEdit, setSelectedDealForEdit] = useState<Deal | null>(null);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareDealId, setShareDealId] = useState<string | null>(null);
-  const [shareDealName, setShareDealName] = useState<string>('');
-  const [shareDealCreator, setShareDealCreator] = useState<string>('');
+  const [shareDealName, setShareDealName] = useState('');
+  const [shareDealCreator, setShareDealCreator] = useState('');
   const [shareDealCollaborators, setShareDealCollaborators] = useState<any[]>([]);
-  const [submitting, setSubmitting] = useState(false);
   const [confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, isDestructive: false });
   const [selectWinnerModal, setSelectWinnerModal] = useState<{
     isOpen: boolean; deal: Deal | null; quotes: Quote[]; pendingStatusId: string;
   }>({ isOpen: false, deal: null, quotes: [], pendingStatusId: '' });
+
+  // Ref para métodos expuestos por DealsTable (expandAll / collapseAll)
+  const dealsTableRef = useRef<DealsTableHandle>(null);
 
   // ─── FETCH ──────────────────────────────────────────────────────────────────
   const fetchData = useCallback(async (force = false) => {
@@ -227,7 +320,7 @@ const DealsList: React.FC = () => {
     setLoading(true);
     try {
       const response = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals`);
-      if (!response.ok) throw new Error('No se pudo cargar tratos');
+      if (!response.ok) throw new Error();
       const text = await response.text();
       const raw = text ? JSON.parse(text) : {};
 
@@ -242,12 +335,11 @@ const DealsList: React.FC = () => {
           }
           if (input.every((it: any) => it && (it.id_trato || it.nombre_trato))) return input;
           return [];
-        } else {
-          if (Array.isArray(input?.response?.tratos)) return input.response.tratos;
-          if (Array.isArray(input?.data?.tratos)) return input.data.tratos;
-          if (Array.isArray(input?.tratos)) return input.tratos;
-          return [];
         }
+        if (Array.isArray(input?.response?.tratos)) return input.response.tratos;
+        if (Array.isArray(input?.data?.tratos)) return input.data.tratos;
+        if (Array.isArray(input?.tratos)) return input.tratos;
+        return [];
       };
 
       const normalizeDeals = (list: any[] = []) => Array.isArray(list)
@@ -304,7 +396,7 @@ const DealsList: React.FC = () => {
   useEffect(() => { localStorage.setItem('dealsListColumnFilters', JSON.stringify(columnFilters)); }, [columnFilters]);
   useEffect(() => { localStorage.setItem('dealsListViewMode', viewMode); }, [viewMode]);
 
-  // Helper functions
+  // ─── HELPERS ────────────────────────────────────────────────────────────────
   const parseDealValue = (value: Deal['valor_trato']) => {
     if (typeof value === 'number') return value;
     if (typeof value === 'string') {
@@ -313,18 +405,6 @@ const DealsList: React.FC = () => {
       return Number.isFinite(parsed) ? parsed : 0;
     }
     return 0;
-  };
-
-  const resolveUser = (users: any[], collabId: string) => {
-    if (!collabId) return undefined;
-    return users.find(u =>
-      u.id_user === collabId ||
-      u.id === collabId ||
-      u.username === collabId ||
-      u.user_id === collabId ||
-      (u.id_user && u.id_user.includes(collabId)) ||
-      (collabId && collabId.includes(u.id_user))
-    );
   };
 
   const handleGroupingChange = (newGrouping: string[]) => {
@@ -337,7 +417,7 @@ const DealsList: React.FC = () => {
   const openShareModal = async (deal: Deal) => {
     setShareDealId(deal.id_trato);
     setShareDealName(deal.nombre_trato || '');
-    setShareDealCreator(deal.owner_name || '');
+    setShareDealCreator((deal as any).owner_name || '');
     try {
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share?id_trato=${deal.id_trato}`);
       const text = await res.text();
@@ -351,41 +431,12 @@ const DealsList: React.FC = () => {
           avatar: u.avatar_url || u.avatar || null,
           permission_level: level === 'NONE' ? 'BLOCKED' : level,
           rol_user: u.rol_user,
-          is_owner: u.is_owner
+          is_owner: u.is_owner,
         };
       });
       setShareDealCollaborators(mapped);
     } catch { setShareDealCollaborators([]); }
     setShareModalOpen(true);
-  };
-
-  const getFacetedValues = (columnId: string) => {
-    const counts = new Map<string, number>();
-    deals.forEach(deal => {
-      if (columnId === 'collaborators') {
-        const collaborators = (deal as any).collaborators || [];
-        if (collaborators.length === 0) {
-          counts.set('Sin asignar', (counts.get('Sin asignar') || 0) + 1);
-        } else {
-          collaborators.forEach((collab: any) => {
-            const u = resolveUser(users, collab.id ?? collab.id_user ?? collab.user_id ?? '');
-            const userName = u?.name_user || 'Usuario';
-            counts.set(userName, (counts.get(userName) || 0) + 1);
-          });
-        }
-        return;
-      }
-      if (columnId === 'client_company_name') {
-        const comp = (deal as any).client_company_name || '(Vacío)';
-        const contact = (deal as any).contact_full_name || 'Sin contacto';
-        counts.set(`🏢 ${comp}`, (counts.get(`🏢 ${comp}`) || 0) + 1);
-        counts.set(`👤 ${contact}`, (counts.get(`👤 ${contact}`) || 0) + 1);
-        return;
-      }
-      const val = (deal as any)[columnId] || '(Vacío)';
-      counts.set(val, (counts.get(val) || 0) + 1);
-    });
-    return Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   };
 
   const handleEdit = (deal: Deal) => { setSelectedDealForEdit(deal); setIsEditModalOpen(true); };
@@ -398,24 +449,11 @@ const DealsList: React.FC = () => {
     try {
       await apiFetch(GATEWAY_CONFIG.API.DEALS.ARCHIVED, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_trato: deal.id_trato, id_tenant: user?.id_tenant, id_user: user?.id_user, archived: !deal.archived })
+        body: JSON.stringify({ id_trato: deal.id_trato, id_tenant: user?.id_tenant, id_user: user?.id_user, archived: !deal.archived }),
       });
       fetchData(true);
       setToast({ message: deal.archived ? 'Trato desarchivado.' : 'Trato archivado.', type: 'success' });
     } catch { setToast({ message: 'Error al archivar.', type: 'error' }); }
-  };
-
-  const handleFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const payload = { ...editingDeal, valor_trato: parseDealValue(editingDeal?.valor_trato ?? 0), id_tenant: user?.id_tenant, id_user: user?.id_user };
-      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/${isEditMode ? 'update' : ''}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-      });
-      if (res.ok) { setToast({ message: 'Guardado.', type: 'success' }); setIsModalOpen(false); fetchData(true); }
-    } catch { setToast({ message: 'Error al procesar', type: 'error' }); }
-    finally { setSubmitting(false); }
   };
 
   const handleInlineUpdate = async (deal: Deal, updates: Partial<Deal>) => {
@@ -423,9 +461,9 @@ const DealsList: React.FC = () => {
     if (updates.id_deal_status && updates.id_deal_status === deal.id_deal_status) return;
     if (updates.id_interest && updates.id_interest === deal.id_interest) return;
 
-    const isStatusChange = updates.id_deal_status && updates.id_deal_status !== deal.id_deal_status;
-    const isInterestChange = updates.id_interest && updates.id_interest !== deal.id_interest;
-    const targetStatus = isStatusChange ? cachedDealStatuses.find((s) => s.id_status === updates.id_deal_status) : undefined;
+    const isStatusChange = !!(updates.id_deal_status && updates.id_deal_status !== deal.id_deal_status);
+    const isInterestChange = !!(updates.id_interest && updates.id_interest !== deal.id_interest);
+    const targetStatus = isStatusChange ? cachedDealStatuses.find(s => s.id_status === updates.id_deal_status) : undefined;
 
     const runUpdate = async () => {
       try {
@@ -454,12 +492,12 @@ const DealsList: React.FC = () => {
 
     if (isStatusChange) {
       const isLostStatus = targetStatus?.status_category === 'LOST';
-      const isWonStatus = targetStatus?.status_category === 'WON' ||
+      const isWonStatus  = targetStatus?.status_category === 'WON' ||
         targetStatus?.name?.toUpperCase().includes('GANADO') ||
         targetStatus?.name?.toUpperCase().includes('CERRADO');
 
       if (isWonStatus) {
-        const fetchQuotes = async () => {
+        (async () => {
           try {
             const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${deal.id_trato}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
             if (!res.ok) throw new Error();
@@ -492,8 +530,8 @@ const DealsList: React.FC = () => {
             }));
             setSelectWinnerModal({ isOpen: true, deal, quotes: mappedQuotes, pendingStatusId: updates.id_deal_status || '' });
           } catch { setToast({ message: 'Error al cargar cotizaciones', type: 'error' }); }
-        };
-        fetchQuotes(); return;
+        })();
+        return;
       }
 
       const messageContent = (
@@ -514,7 +552,7 @@ const DealsList: React.FC = () => {
       setConfirmState({
         isOpen: true,
         title: isLostStatus ? 'Marcar como Perdido' : 'Confirmar cambio',
-        message: messageContent,
+        message: messageContent as any,
         isDestructive: isLostStatus,
         onConfirm: () => { runUpdate(); setConfirmState(p => ({ ...p, isOpen: false })); },
       });
@@ -532,13 +570,13 @@ const DealsList: React.FC = () => {
       if (!selectedQuote) throw new Error();
       const resStatus = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_trato: deal.id_trato, id_deal_status: pendingStatusId, id_user: user.id_user, id_cotizacion: selectedQuoteId })
+        body: JSON.stringify({ id_trato: deal.id_trato, id_deal_status: pendingStatusId, id_user: user.id_user, id_cotizacion: selectedQuoteId }),
       });
       if (!resStatus.ok) throw new Error();
       if (selectedQuote.id_quote_status) {
         await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/quotes`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id_cotizacion: selectedQuoteId, id_quote_status: selectedQuote.id_quote_status, id_user: user.id_user })
+          body: JSON.stringify({ id_cotizacion: selectedQuoteId, id_quote_status: selectedQuote.id_quote_status, id_user: user.id_user }),
         });
       }
       fetchData(true);
@@ -554,63 +592,51 @@ const DealsList: React.FC = () => {
       onConfirm: async () => {
         await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/delete`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id_trato: id, id_tenant: user?.id_tenant, id_user: user?.id_user })
+          body: JSON.stringify({ id_trato: id, id_tenant: user?.id_tenant, id_user: user?.id_user }),
         });
         fetchData(true); setConfirmState(p => ({ ...p, isOpen: false }));
-      }
+      },
     });
   };
 
-  // Filtered deals with global search applied for list and kanban views
-  const filteredDealsForSimpleViews = useMemo(() => {
-    if (!globalFilter) return deals;
-    const lowerSearch = globalFilter.toLowerCase();
-    return deals.filter(deal => 
-      deal.nombre_trato?.toLowerCase().includes(lowerSearch) ||
-      deal.client_company_name?.toLowerCase().includes(lowerSearch) ||
-      deal.contact_full_name?.toLowerCase().includes(lowerSearch) ||
-      deal.estado_actual?.name?.toLowerCase().includes(lowerSearch) ||
-      deal.interes_actual?.name?.toLowerCase().includes(lowerSearch)
-    );
-  }, [deals, globalFilter]);
-
-  // Handler for status changes that require quote selection
   const handleStatusChangeWithQuotes = (deal: Deal, statusId: string, quotes: Quote[], pendingStatusId: string) => {
     setSelectWinnerModal({ isOpen: true, deal, quotes, pendingStatusId });
   };
 
-  // Handler for interest changes
   const handleInterestChange = async (deal: Deal, interestId: string) => {
     try {
       await apiFetch(GATEWAY_CONFIG.API.DEALS.UPDATE, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...deal, id_interest: interestId, id_tenant: user?.id_tenant, id_user: user?.id_user }),
       });
       fetchData(true);
       setToast({ message: 'Interés actualizado.', type: 'success' });
-    } catch {
-      setToast({ message: 'Error al actualizar interés', type: 'error' });
-    }
+    } catch { setToast({ message: 'Error al actualizar interés', type: 'error' }); }
   };
 
-  // (Column definitions moved to DealsTable.tsx)
+  // Filtrado manual para Lista y Kanban (no usan TanStack)
+  const filteredDealsForSimpleViews = useMemo(() => {
+    if (!globalFilter) return deals;
+    const q = globalFilter.toLowerCase();
+    return deals.filter(d =>
+      d.nombre_trato?.toLowerCase().includes(q) ||
+      d.client_company_name?.toLowerCase().includes(q) ||
+      d.contact_full_name?.toLowerCase().includes(q) ||
+      d.estado_actual?.name?.toLowerCase().includes(q) ||
+      ((d as any).estado_nombre?.toLowerCase().includes(q)) ||
+      (d as any).interes_actual?.name?.toLowerCase().includes(q) ||
+      (d.interes_nombre?.toLowerCase().includes(q))
+    );
+  }, [deals, globalFilter]);
 
-  // Expand/collapse handlers for table view
-  const handleExpandAll = () => {
-    // This will be passed to DealsTable, but logic is there
-  };
-
-  const handleCollapseAll = () => {
-    // This will be passed to DealsTable, but logic is there
-  };
-
+  // ─── RENDER ──────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full bg-white overflow-hidden font-sans text-slate-700">
 
-      <ToolbarGroupDropdown
+      <ToolbarViewMenu
         grouping={grouping}
         onGroupingChange={handleGroupingChange}
+        columnFilters={columnFilters}
         globalFilter={globalFilter}
         onGlobalFilterChange={setGlobalFilter}
         showArchived={showArchived}
@@ -618,15 +644,7 @@ const DealsList: React.FC = () => {
         onNew={() => navigate('/app/deals/new')}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        onExpandAll={() => {
-          const next: ExpandedState = {};
-          setExpanded(next);
-          localStorage.setItem('dealsListExpanded', JSON.stringify(next));
-        }}
-        onCollapseAll={() => {
-          setExpanded({});
-          localStorage.setItem('dealsListExpanded', JSON.stringify({}));
-        }}
+        onClearFilters={() => setColumnFilters([])}
       />
 
       {loading ? (
@@ -635,6 +653,7 @@ const DealsList: React.FC = () => {
         </div>
       ) : viewMode === 'table' ? (
         <DealsTable
+          ref={dealsTableRef}
           deals={deals}
           cachedDealStatuses={cachedDealStatuses}
           cachedDealInterests={cachedDealInterests}
@@ -659,6 +678,8 @@ const DealsList: React.FC = () => {
           onDelete={handleDelete}
           onStatusChange={handleStatusChangeWithQuotes}
           onInterestChange={handleInterestChange}
+          onExpandAll={() => dealsTableRef.current?.expandAll()}
+          onCollapseAll={() => dealsTableRef.current?.collapseAll()}
         />
       ) : viewMode === 'list' ? (
         <DealsListView
@@ -666,108 +687,60 @@ const DealsList: React.FC = () => {
           cachedDealStatuses={cachedDealStatuses}
           cachedDealInterests={cachedDealInterests}
           showArchived={showArchived}
+          user={user}
+          grouping={grouping}
+          onEdit={handleEdit}
+          onShare={openShareModal}
+          onArchive={handleArchive}
+          onDelete={handleDelete}
+          onStatusChange={handleStatusChangeWithQuotes}
+          onInterestChange={handleInterestChange}
+          onRefresh={() => fetchData(true)}
         />
       ) : (
         <DealsKanban
           deals={filteredDealsForSimpleViews.filter(d => showArchived ? d.archived : !d.archived)}
           dealStatuses={cachedDealStatuses}
+          cachedUsers={users}
           onRefresh={() => fetchData(true)}
         />
       )}
 
-      {isModalOpen && editingDeal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="px-5 py-3.5 border-b border-slate-100 flex justify-between items-center">
-              <h2 className="text-sm font-semibold text-slate-700">{isEditMode ? 'Editar trato' : 'Nuevo trato'}</h2>
-              <button onClick={() => setIsModalOpen(false)} className="w-7 h-7 flex items-center justify-center rounded hover:bg-slate-100 text-slate-400 transition-colors">
-                <i className="fa-solid fa-xmark text-sm" />
-              </button>
-            </div>
-            <form onSubmit={handleFormSubmit} className="p-5 space-y-4 overflow-y-auto">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">Nombre</label>
-                    <input required value={editingDeal.nombre_trato || ''} onChange={e => setEditingDeal({ ...editingDeal, nombre_trato: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-slate-300" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">Empresa</label>
-                    <select required value={editingDeal.id_client_company || ''} onChange={e => setEditingDeal({ ...editingDeal, id_client_company: e.target.value })}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-slate-300">
-                      <option value="">Seleccionar…</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">Valor</label>
-                    <input type="number" required value={editingDeal.valor_trato ?? ''} onChange={e => { const raw = e.target.value; setEditingDeal(p => ({ ...p, valor_trato: raw === '' ? '' : parseDealValue(raw) })); }}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-mono outline-none focus:ring-1 focus:ring-slate-300" />
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">Estado</label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {cachedDealStatuses.map((s: any) => (
-                        <button key={s.id_status} type="button" onClick={() => setEditingDeal({ ...editingDeal, id_deal_status: s.id_status })}
-                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-medium flex items-center gap-1.5 transition-all text-white ${editingDeal.id_deal_status === s.id_status ? 'ring-2 ring-offset-1 ring-slate-400' : 'opacity-60 hover:opacity-90'}`}
-                          style={{ backgroundColor: s.color }}>
-                          <i className={s.icon} /> {s.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mb-1">Interés</label>
-                    <div className="grid grid-cols-2 gap-1.5">
-                      {cachedDealInterests.map((i: any) => (
-                        <button key={i.id_interest} type="button" onClick={() => setEditingDeal({ ...editingDeal, id_interest: i.id_interest })}
-                          className={`px-2.5 py-1.5 rounded-lg text-[10px] font-medium flex items-center gap-1.5 transition-all text-white ${editingDeal.id_interest === i.id_interest ? 'ring-2 ring-offset-1 ring-slate-400' : 'opacity-60 hover:opacity-90'}`}
-                          style={{ backgroundColor: i.color }}>
-                          <i className={i.icon} /> {i.name}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-xs font-medium text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">Cancelar</button>
-                <button type="submit" disabled={submitting} className="px-5 py-2 bg-slate-800 text-white text-xs font-medium rounded-lg hover:bg-slate-700 disabled:opacity-50 flex items-center gap-2 transition-colors">
-                  {submitting ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-check text-[10px]" />} Guardar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {shareModalOpen && shareDealId && (
-        <ShareModal entity="deal" id={shareDealId} entityName={shareDealName || `Trato #${shareDealId}`}
+        <ShareModal
+          entity="deal" id={shareDealId}
+          entityName={shareDealName || `Trato #${shareDealId}`}
           creatorName={shareDealCreator} isOpen={shareModalOpen}
           onClose={() => { setShareModalOpen(false); setShareDealId(null); setShareDealName(''); setShareDealCreator(''); setShareDealCollaborators([]); }}
           onShared={() => { setToast({ message: 'Asignaciones actualizadas.', type: 'success' }); fetchData(true); }}
-          currentCollaborators={shareDealCollaborators} />
+          currentCollaborators={shareDealCollaborators}
+        />
       )}
 
       {selectedDealForEdit && (
-        <DealEditModal isOpen={isEditModalOpen} onClose={() => { setIsEditModalOpen(false); setSelectedDealForEdit(null); }}
-          initialData={selectedDealForEdit} onSuccess={handleEditModalSuccess} />
+        <DealEditModal
+          isOpen={isEditModalOpen}
+          onClose={() => { setIsEditModalOpen(false); setSelectedDealForEdit(null); }}
+          initialData={selectedDealForEdit}
+          onSuccess={handleEditModalSuccess}
+        />
       )}
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} onClose={() => setConfirmState(p => ({ ...p, isOpen: false }))} />
 
       {selectWinnerModal.isOpen && selectWinnerModal.deal && (
-        <SelectWinningQuoteModal isOpen={selectWinnerModal.isOpen}
+        <SelectWinningQuoteModal
+          isOpen={selectWinnerModal.isOpen}
           onClose={() => setSelectWinnerModal({ isOpen: false, deal: null, quotes: [], pendingStatusId: '' })}
-          onConfirm={handleWinningQuoteConfirm} quotes={selectWinnerModal.quotes}
+          onConfirm={handleWinningQuoteConfirm}
+          quotes={selectWinnerModal.quotes}
           dealName={selectWinnerModal.deal.nombre_trato || `Trato #${selectWinnerModal.deal.id_trato}`}
-          hasCarteraAccess={user?.module_access?.financials || user?.rol_user === 'admin' || user?.rol_user === 'superadmin'} />
+          hasCarteraAccess={user?.module_access?.financials || user?.rol_user === 'admin' || user?.rol_user === 'superadmin'}
+        />
       )}
     </div>
   );
 };
 
-export default DealsList;
+export default Deals;

@@ -43,6 +43,30 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isWorkspaceOwner = user?.is_owner === true;
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
+  const mobileCurrentRouteLabel = useMemo(() => {
+    const pathSegments = location.pathname.split('/').filter(Boolean);
+    const lastSegment = pathSegments[pathSegments.length - 1] || 'dashboard';
+    const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'account-settings', 'integrations', 'workspace-settings', 'settings', 'calendar', 'dashboard', 'new', 'edit', 'marketing'];
+
+    if (location.pathname === '/app/followups') {
+      return 'Seguimiento';
+    }
+
+    if (lastSegment === 'edit' && pathSegments.length > 1) {
+      return location.state?.breadcrumb || 'Edición';
+    }
+
+    if (!knownRoutes.includes(lastSegment) && pathSegments.length > 1) {
+      return location.state?.breadcrumb || 'Detalle';
+    }
+
+    if (lastSegment === 'new' && pathSegments.length > 1) {
+      return 'Nuevo';
+    }
+
+    return PAGE_NAMES[lastSegment] || lastSegment.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  }, [location.pathname, location.state]);
+
   const visibleNavGroups = useMemo(() => {
     if (!user) return NAV_GROUPS;
     if (user.is_owner) return NAV_GROUPS;
@@ -125,10 +149,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           to={item.path}
           onClick={() => setIsMobileSidebarOpen(false)}
           className={`
-            flex items-center gap-2.5 rounded-md transition-all duration-150 select-none
+            flex items-center gap-2 rounded-md transition-all duration-150 select-none
             ${isCollapsed ? 'justify-center px-0 py-1.5 mx-1' : 'px-2.5 py-1.5 mx-1'}
             ${isActive
-              ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-semibold'
+              ? 'bg-slate-200 dark:bg-slate-700/90 text-slate-900 dark:text-white font-semibold border border-slate-300 dark:border-slate-600'
               : 'text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-slate-200'
             }
           `}
@@ -175,32 +199,32 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           bg-white dark:bg-slate-900
           border-r border-slate-200 dark:border-slate-800
           flex flex-col transition-all duration-200 ease-in-out
-          ${isMobileSidebarOpen ? 'translate-x-0 w-48' : '-translate-x-full md:translate-x-0'}
-          ${isDesktopSidebarOpen ? 'md:w-48' : 'md:w-11'}
+          ${isMobileSidebarOpen ? 'translate-x-0 w-44' : '-translate-x-full md:translate-x-0'}
+          ${isDesktopSidebarOpen ? 'md:w-44' : 'md:w-11'}
         `}
       >
         {/* Logo */}
         <div
           className={`flex items-center border-b border-slate-200 dark:border-slate-800 cursor-pointer shrink-0
-            ${isDesktopSidebarOpen ? 'h-[52px] px-3.5 justify-start' : 'h-[52px] px-0 justify-center'}
+            ${isDesktopSidebarOpen ? 'h-[52px] px-2 justify-start' : 'h-[52px] px-0 justify-center'}
           `}
           onClick={() => navigate('/app/dashboard')}
         >
           {isDesktopSidebarOpen ? (
-            <img src="/logo_large.png" alt="COMPUTEKSA" className="h-6 object-contain" />
+            <img src="/logo_large2.png" alt="COMPUTEKSA" className="w-full h-7 object-contain object-left" />
           ) : (
             <img src="/logo.png" alt="COMPUTEKSA" className="w-6 h-6 object-contain" />
           )}
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 py-3 overflow-y-auto overflow-x-hidden scrollbar-none">
+        <nav className="flex-1 py-2 overflow-y-auto overflow-x-hidden scrollbar-none">
           <ul className="space-y-0.5">
             {visibleNavGroups.map((group, idx) => (
               <div key={idx}>
                 {/* Group label */}
                 {isDesktopSidebarOpen && group.title && (
-                  <p className="px-3.5 pt-3 pb-1 text-[10px] font-semibold text-slate-400 dark:text-slate-600 uppercase tracking-widest select-none">
+                  <p className="px-3.5 pt-1.5 pb-1 text-[10px] font-semibold text-slate-400 dark:text-slate-600 uppercase tracking-widest select-none">
                     {group.title}
                   </p>
                 )}
@@ -222,7 +246,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {user && (user.rol_user === 'admin' || user.rol_user === 'superadmin') && (
               <div>
                 {isDesktopSidebarOpen && (
-                  <p className="px-3.5 pt-3 pb-1 text-[10px] font-semibold text-slate-400 dark:text-slate-600 uppercase tracking-widest select-none">
+                  <p className="px-3.5 pt-1.5 pb-1 text-[10px] font-semibold text-slate-400 dark:text-slate-600 uppercase tracking-widest select-none">
                     Administración
                   </p>
                 )}
@@ -241,13 +265,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                       setIsMobileSidebarOpen(false);
                     }}
                     className={`
-                      flex items-center gap-2.5 rounded-md transition-all duration-150 select-none mx-1
+                      flex items-center gap-2 rounded-md transition-all duration-150 select-none mx-1
                       ${(!isMobileSidebarOpen ? !isDesktopSidebarOpen : false)
                         ? 'justify-center px-0 py-1.5'
                         : 'px-2.5 py-1.5'
                       }
                       ${location.pathname.startsWith('/app/account-settings')
-                        ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-white font-semibold'
+                        ? 'bg-slate-200 dark:bg-slate-700/90 text-slate-900 dark:text-white font-semibold border border-slate-300 dark:border-slate-600'
                         : 'text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-slate-200'
                       }
                     `}
@@ -332,58 +356,64 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             </button>
 
             {/* Breadcrumb */}
-            <div className="hidden sm:flex items-center gap-1.5 text-sm">
-              {(() => {
-                const pathSegments = location.pathname.split('/').filter(Boolean);
-                const lastSegment = pathSegments[pathSegments.length - 1] || 'dashboard';
-                if (location.pathname === '/app/followups') {
-                  return <span className="text-slate-800 dark:text-slate-100 font-medium text-[13px]">Seguimiento</span>;
-                }
-                const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'account-settings', 'integrations', 'workspace-settings', 'settings', 'calendar', 'dashboard', 'new', 'edit', 'marketing'];
-                let breadcrumbs: { label: string; path: string; isActive: boolean }[] = [];
-                if (lastSegment === 'edit' && pathSegments.length > 1) {
-                  const collectionKey = pathSegments[pathSegments.length - 2];
-                  const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                  breadcrumbs = [
-                    { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
-                    { label: location.state?.breadcrumb || 'Edición', path: location.pathname, isActive: true }
-                  ];
-                } else if (!knownRoutes.includes(lastSegment) && pathSegments.length > 1) {
-                  const collectionKey = pathSegments[pathSegments.length - 2];
-                  const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                  breadcrumbs = [
-                    { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
-                    { label: location.state?.breadcrumb || 'Detalle', path: location.pathname, isActive: true }
-                  ];
-                } else if (lastSegment === 'new' && pathSegments.length > 1) {
-                  const collectionKey = pathSegments[pathSegments.length - 2];
-                  const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                  breadcrumbs = [
-                    { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
-                    { label: 'Nuevo', path: location.pathname, isActive: true }
-                  ];
-                } else {
-                  const pageName = PAGE_NAMES[lastSegment] || lastSegment.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                  breadcrumbs = [{ label: pageName, path: location.pathname, isActive: true }];
-                }
-                return breadcrumbs.map((crumb, idx) => (
-                  <React.Fragment key={crumb.path}>
-                    {idx > 0 && (
-                      <i className="fa-solid fa-chevron-right text-[9px] text-slate-300 dark:text-slate-600 mx-0.5"></i>
-                    )}
-                    {crumb.isActive ? (
-                      <span className="text-slate-800 dark:text-slate-100 font-medium text-[13px]">{crumb.label}</span>
-                    ) : (
-                      <Link
-                        to={crumb.path}
-                        className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-[13px] transition-colors"
-                      >
-                        {crumb.label}
-                      </Link>
-                    )}
-                  </React.Fragment>
-                ));
-              })()}
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="sm:hidden text-slate-800 dark:text-slate-100 font-medium text-[12px] truncate max-w-[160px]">
+                {mobileCurrentRouteLabel}
+              </span>
+
+              <div className="hidden sm:flex items-center gap-1.5 text-sm">
+                {(() => {
+                  const pathSegments = location.pathname.split('/').filter(Boolean);
+                  const lastSegment = pathSegments[pathSegments.length - 1] || 'dashboard';
+                  if (location.pathname === '/app/followups') {
+                    return <span className="text-slate-800 dark:text-slate-100 font-medium text-[13px]">Seguimiento</span>;
+                  }
+                  const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'account-settings', 'integrations', 'workspace-settings', 'settings', 'calendar', 'dashboard', 'new', 'edit', 'marketing'];
+                  let breadcrumbs: { label: string; path: string; isActive: boolean }[] = [];
+                  if (lastSegment === 'edit' && pathSegments.length > 1) {
+                    const collectionKey = pathSegments[pathSegments.length - 2];
+                    const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    breadcrumbs = [
+                      { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
+                      { label: location.state?.breadcrumb || 'Edición', path: location.pathname, isActive: true }
+                    ];
+                  } else if (!knownRoutes.includes(lastSegment) && pathSegments.length > 1) {
+                    const collectionKey = pathSegments[pathSegments.length - 2];
+                    const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    breadcrumbs = [
+                      { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
+                      { label: location.state?.breadcrumb || 'Detalle', path: location.pathname, isActive: true }
+                    ];
+                  } else if (lastSegment === 'new' && pathSegments.length > 1) {
+                    const collectionKey = pathSegments[pathSegments.length - 2];
+                    const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    breadcrumbs = [
+                      { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
+                      { label: 'Nuevo', path: location.pathname, isActive: true }
+                    ];
+                  } else {
+                    const pageName = PAGE_NAMES[lastSegment] || lastSegment.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    breadcrumbs = [{ label: pageName, path: location.pathname, isActive: true }];
+                  }
+                  return breadcrumbs.map((crumb, idx) => (
+                    <React.Fragment key={crumb.path}>
+                      {idx > 0 && (
+                        <i className="fa-solid fa-chevron-right text-[9px] text-slate-300 dark:text-slate-600 mx-0.5"></i>
+                      )}
+                      {crumb.isActive ? (
+                        <span className="text-slate-800 dark:text-slate-100 font-medium text-[13px]">{crumb.label}</span>
+                      ) : (
+                        <Link
+                          to={crumb.path}
+                          className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-[13px] transition-colors"
+                        >
+                          {crumb.label}
+                        </Link>
+                      )}
+                    </React.Fragment>
+                  ));
+                })()}
+              </div>
             </div>
           </div>
 
@@ -397,11 +427,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             )}
 
             {user?.name_tenant && (
-              <div className="hidden sm:flex flex-col items-end leading-none">
-                <span className="text-[12px] font-semibold text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+              <div className="flex flex-col items-end leading-none">
+                <span className="text-[11px] sm:text-[12px] font-semibold text-slate-900 dark:text-slate-100 tracking-wide">
                   {user.name_tenant}
                 </span>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">Enterprise</span>
+                <span className="text-[9px] sm:text-[10px] italic text-slate-500 dark:text-slate-400 mt-0.5">Workspace</span>
               </div>
             )}
 
@@ -410,7 +440,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <button
                 ref={userMenuButtonRef}
                 onClick={() => setUserMenuOpen(o => !o)}
-                className={`flex items-center gap-2 px-2 py-1.5 rounded-lg transition-all duration-150 border
+                className={`relative flex items-center justify-center p-1 rounded-full transition-all duration-150 border
                   ${userMenuOpen
                     ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
                     : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700'
@@ -420,20 +450,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 <img
                   src={getImageUrl(user?.avatar_url) || 'https://ui-avatars.com/api/?name=User&background=random'}
                   alt="User"
-                  className="w-6 h-6 rounded-full object-cover"
+                  className="w-8 h-8 rounded-full object-cover"
                   referrerPolicy="no-referrer"
                 />
-                <span className="hidden sm:block text-[13px] font-medium text-slate-700 dark:text-slate-200 max-w-[100px] truncate">
-                  {user?.name_user || 'Usuario'}
-                </span>
-                <i className={`fa-solid fa-chevron-down text-[9px] text-slate-400 transition-transform duration-150 ${userMenuOpen ? 'rotate-180' : ''}`}></i>
+                <span className="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-white dark:border-slate-900"></span>
               </button>
             </div>
           </div>
         </header>
 
         {/* Scrollable content */}
-        <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-800/30 p-1 md:p-2 scroll-smooth">
+        <main className="flex-1 min-h-0 overflow-y-auto bg-slate-50/50 dark:bg-slate-800/30 p-1 md:p-2 scroll-smooth">
           <div className="w-full h-full">
             {children}
           </div>
@@ -463,7 +490,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                     {user?.name_user || 'Usuario'}
                   </p>
                   {user?.name_tenant && (
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{user.name_tenant}</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500">{user.name_tenant}</p>
                   )}
                 </div>
               </div>
@@ -474,7 +501,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <MenuItem
                 icon="fa-regular fa-user"
                 label="Perfil"
-                description="Datos personales"
                 onClick={() => openAccountSettings('profile')}
               />
             </MenuSection>

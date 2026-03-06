@@ -114,7 +114,22 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       localStorage.removeItem(`cache_${user.id_tenant}`);
     } catch (e) {}
 
-    const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
+    const CACHE_VERSION = '2.0'; // 🔄 Incrementar cuando cambien estructuras de datos
+    const cachedKey = `cache_${user.id_tenant}_${user.id_user}_v${CACHE_VERSION}`;
+    
+    // Limpiar versiones antiguas del cache
+    Object.keys(localStorage).forEach(key => {
+      if (key.startsWith(`cache_${user.id_tenant}_${user.id_user}_`) && key !== cachedKey) {
+        console.log('🧹 Limpiando cache antiguo:', key);
+        localStorage.removeItem(key);
+      }
+      // También limpiar cache sin versión
+      if (key === `cache_${user.id_tenant}_${user.id_user}`) {
+        console.log('🧹 Limpiando cache sin versión:', key);
+        localStorage.removeItem(key);
+      }
+    });
+    
     const cached = localStorage.getItem(cachedKey);
     if (cached) {
       try {
@@ -133,6 +148,19 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           dealChannels: cachedDealChannels,
           financialsCache: cachedFinancialsCache
         } = JSON.parse(cached);
+
+        // ⚠️ Validar integridad de estados (deben tener status_category)
+        const dealStatusesValid = Array.isArray(cachedDealStatuses) && 
+          cachedDealStatuses.length > 0 && 
+          cachedDealStatuses.some((s: any) => s.status_category);
+        
+        if (!dealStatusesValid && cachedDealStatuses?.length > 0) {
+          console.warn('⚠️ Cache de dealStatuses sin status_category - invalidando cache completo');
+          localStorage.removeItem(cachedKey);
+          // Forzar recarga completa después de invalidar
+          setTimeout(() => loadData(true), 100);
+          return;
+        }
 
         setCompanies(Array.isArray(cachedCompanies) ? cachedCompanies : []);
         setCompanyLabelsMap(cachedCompanyLabelsMap || {});
@@ -269,6 +297,15 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           case 'dealStatuses': {
             const dealStatusesData = await safeJson(res, []);
             const dealStatusesArray = Array.isArray(dealStatusesData) ? dealStatusesData.filter((item: any) => item.id_status || item.status_name) : [];
+            console.log('📋 DEBUG DataCache: Estados recibidos del backend:', dealStatusesArray.map((s: any) => ({ name: s.name || s.status_name, category: s.status_category, has_category: !!s.status_category })));
+            
+            // ⚠️ Validar que los estados tengan status_category (dato crítico)
+            const hasValidCategories = dealStatusesArray.some((s: any) => s.status_category);
+            if (!hasValidCategories && dealStatusesArray.length > 0) {
+              console.warn('⚠️ Estados sin status_category - invalidando cache');
+              localStorage.removeItem(`data_cache_dealStatuses_${user?.id_tenant}`);
+            }
+            
             setDealStatuses(dealStatusesArray);
             fetchedData.dealStatuses = dealStatusesArray;
             break;

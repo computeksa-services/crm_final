@@ -23,7 +23,7 @@ import ClientCompaniesList from './pages/clients/ClientCompaniesList';
 import ClientCompanyDetail from './pages/clients/ClientCompanyDetail';
 import ClientContactsList from './pages/clients/ClientContactsList';
 import ClientContactDetail from './pages/clients/ClientContactDetail';
-import DealsList from './pages/deals/DealsList';
+import Deals from './pages/deals/Deals';
 import DealDetail from './pages/deals/DealDetail';
 import DealCreate from './pages/deals/DealCreate';
 import ProductsList from './pages/ProductsList';
@@ -131,7 +131,7 @@ const App: React.FC = () => {
               <Route path="quotes/new" element={<QuoteCreate />} />
               <Route path="quotes/edit" element={<QuoteCreate />} />
               <Route path="quotes/:id" element={<QuoteDetail />} />
-              <Route path="deals" element={<DealFiltersProvider><DealsList /></DealFiltersProvider>} />
+              <Route path="deals" element={<DealFiltersProvider><Deals /></DealFiltersProvider>} />
               <Route path="deals/new" element={<DealCreate />} />
               <Route path="deals/edit" element={<DealCreate />} />
               <Route path="deals/:id" element={<DealDetail />} />

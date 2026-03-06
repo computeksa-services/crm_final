@@ -235,22 +235,15 @@ const Dashboard: React.FC = () => {
         color: 'text-amber-600',
         info: 'Cotizaciones en Borrador o Enviadas'
       },
-      { 
-        label: 'Transacciones', 
-        value: (financial.transacciones_mes || 0).toString(), 
-        icon: 'fa-receipt', 
-        color: 'text-cyan-600',
-        info: 'Cotizaciones cerradas con éxito este mes'
-      },
     ];
   }, [financial, ventaMesActual, ventaMesAnterior]);
 
     return (
-        <div className="p-3 md:p-6 bg-slate-50 min-h-screen font-sans text-slate-800">
+        <div className="pt-1 pb-3 px-3 md:pt-2 md:pb-6 md:px-6 bg-slate-50 min-h-screen font-sans text-slate-800">
             {/* HEADER */}
             <div className="mb-6 md:mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-slate-900">Bienvenido de nuevo, {user?.name_user?.split(' ')[0]}</h1>
+                    <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-slate-900">Bienvenido de nuevo, <span className="font-serif italic">{user?.name_user?.split(' ')[0]}</span></h1>
                 </div>
                 {/* KPIs Header */}
                 {user?.module_access?.crm && (
@@ -303,26 +296,26 @@ const Dashboard: React.FC = () => {
                     {/* 1. TARJETAS DE KPIs */}
                       {user?.module_access?.crm && metricCards.length > 0 && (
                                                 <div
-                                                    className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 md:gap-4 mb-4 md:mb-6"
+                                                    className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-4 md:mb-6"
                                                 >
                             {/* Tarjetas comerciales */}
                                                         {metricCards.map((stat, idx) => (
                                                             <div
                                                                 key={idx}
-                                                                className="bg-white flex items-center gap-3 md:gap-4 p-3 md:p-4 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-default min-w-0"
+                                                                className="bg-white flex flex-col p-3 md:p-4 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-default min-w-0"
                                                             >
-                                                                <i className={`fa-solid ${stat.icon} ${stat.color} text-xl md:text-2xl flex-shrink-0`}></i>
-                                                                <div className="flex flex-col flex-1 min-w-0">
-                                                                    <div className="flex items-center gap-1.5 mb-1">
-                                                                        <p className="text-xs text-slate-500 font-medium truncate">{stat.label}</p>
-                                                                        <div className="group relative flex-shrink-0">
-                                                                            <i className="fa-solid fa-circle-info text-[10px] text-slate-400 cursor-help"></i>
-                                                                            <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-slate-800 text-white text-xs rounded shadow-lg z-10">
-                                                                                {stat.info}
-                                                                            </div>
+                                                                <div className="flex items-center gap-3 mb-2 min-w-0">
+                                                                    <i className={`fa-solid ${stat.icon} ${stat.color} text-xl md:text-2xl flex-shrink-0`}></i>
+                                                                    <p className="text-2xl font-bold text-slate-800 truncate">{stat.value}</p>
+                                                                </div>
+                                                                <div className="flex items-center gap-1.5 min-w-0">
+                                                                    <p className="text-sm text-slate-500 font-medium truncate">{stat.label}</p>
+                                                                    <div className="group relative flex-shrink-0">
+                                                                        <i className="fa-solid fa-circle-info text-[10px] text-slate-400 cursor-help"></i>
+                                                                        <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-48 p-2 bg-slate-800 text-white text-xs rounded shadow-lg z-10">
+                                                                            {stat.info}
                                                                         </div>
                                                                     </div>
-                                                                    <p className="text-base md:text-lg font-bold text-slate-800 truncate">{stat.value}</p>
                                                                 </div>
                                                             </div>
                                                         ))}
@@ -452,14 +445,28 @@ const Dashboard: React.FC = () => {
                                             Productos más vendidos y su valor total
                                         </div>
                                     </h2>
-                                    <div style={{ height: `${Math.max(topProducts.length * 50, 220)}px` }} className="w-full">
+                                    <div style={{ height: `${Math.max(topProducts.length * 60, 280)}px` }} className="w-full">
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={topProducts} layout="vertical" margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
+                                            <BarChart data={topProducts} layout="vertical" margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
                                                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#e2e8f0" />
                                                 <XAxis type="number" hide />
-                                                <YAxis type="category" dataKey="producto" width={150} tick={{ fontSize: 10, fill: '#64748b' }} interval={0} />
-                                                <Tooltip formatter={(value: any) => [`$${Number(value).toLocaleString('es-EC')}`, 'Ventas']} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
-                                                <Bar dataKey="total_ventas" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={30} />
+                                                <YAxis 
+                                                    type="category" 
+                                                    dataKey="producto" 
+                                                    width={220} 
+                                                    tick={{ fontSize: 12, fill: '#475569' }} 
+                                                    interval={0}
+                                                    tickFormatter={(value) => {
+                                                        const maxLength = 30;
+                                                        return value.length > maxLength ? value.substring(0, maxLength) + '...' : value;
+                                                    }}
+                                                />
+                                                <Tooltip 
+                                                    formatter={(value: any) => [`$${Number(value).toLocaleString('es-EC')}`, 'Ventas']} 
+                                                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                                    labelFormatter={(label) => label}
+                                                />
+                                                <Bar dataKey="total_ventas" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={35} />
                                             </BarChart>
                                         </ResponsiveContainer>
                                     </div>

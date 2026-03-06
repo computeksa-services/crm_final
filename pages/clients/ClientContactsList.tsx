@@ -481,6 +481,7 @@ const ClientContactsList: React.FC = () => {
   const table = useReactTable({
     data: contacts,
     columns,
+    paginateExpandedRows: false,
     state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination, columnSizing },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -501,7 +502,7 @@ const ClientContactsList: React.FC = () => {
   });
 
   return (
-    <div className="flex flex-col h-[calc(100vh-58px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans">
+    <div className="flex flex-col h-full bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans">
       
       {/* TOOLBAR RESPONSIVO */}
       <div className="bg-slate-50 border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">

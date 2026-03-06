@@ -96,6 +96,14 @@ const StatusSelector: React.FC<{
     name: 'Desconocido', color: '#94a3b8', icon: 'fa-circle'
   };
 
+  const currentIndex = statuses.findIndex(s => s.id_status === currentStatusId);
+  const itemsAbove = currentIndex > 0 ? statuses.slice(0, currentIndex) : [];
+  const itemsBelow = currentIndex >= 0 && currentIndex < statuses.length - 1
+    ? statuses.slice(currentIndex + 1)
+    : currentIndex === -1
+      ? statuses
+      : [];
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -129,7 +137,26 @@ const StatusSelector: React.FC<{
       {isOpen && !disabled && (
         <div className="absolute right-0 mt-1 w-full sm:w-56 bg-white rounded-lg shadow-xl border border-slate-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
           <div className="py-1 max-h-60 overflow-y-auto">
-            {statuses.map((status) => (
+            {itemsAbove.map((status) => (
+              <button
+                key={status.id_status}
+                onClick={() => { onSelect(status.id_status); setIsOpen(false); }}
+                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2 transition-colors border-b border-slate-50 last:border-0"
+              >
+                <i className={`${status.icon || 'fa-solid fa-circle'} text-[10px]`} style={{ color: status.color }}></i>
+                <span className="text-xs font-bold text-slate-700 uppercase">{status.name}</span>
+              </button>
+            ))}
+
+            {currentIndex >= 0 && (
+              <div className="w-full text-left px-4 py-2.5 bg-slate-50 border-y border-slate-200 flex items-center gap-2 opacity-60 cursor-not-allowed">
+                <i className={`${current.icon || 'fa-solid fa-circle'} text-[10px]`} style={{ color: current.color }}></i>
+                <span className="text-xs font-bold text-slate-700 uppercase">{current.name}</span>
+                <i className="fa-solid fa-check text-[9px] text-slate-400 ml-auto"></i>
+              </div>
+            )}
+
+            {itemsBelow.map((status) => (
               <button
                 key={status.id_status}
                 onClick={() => { onSelect(status.id_status); setIsOpen(false); }}
@@ -403,6 +430,13 @@ const QuoteDetail: React.FC = () => {
 
   // --- HANDLERS: ESTADO ---
   const handleStatusChange = (newStatusId: string) => {
+    if (!quote) return;
+
+    // Prevenir cambio al mismo estado
+    if (newStatusId === quote.id_quote_status) {
+      return;
+    }
+
     const newStatus = quoteStatuses.find(s => s.id_status === newStatusId);
     setConfirmState({
       isOpen: true,

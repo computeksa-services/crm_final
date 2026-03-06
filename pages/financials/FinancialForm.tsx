@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { BrandSpinner } from '../../components/AppLoaders';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -12,6 +12,62 @@ import type { ClientCompany, FinancialTransaction, Quote } from '../../types';
 const formatCurrency = (val: number | string) => {
   const num = Number(val) || 0;
   return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+};
+
+const suggestInvoiceNumber = (dealId?: string | null) => {
+  const baseDate = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const suffix = (dealId || '').replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase() || 'DRAFT';
+  return `BORR-${baseDate}-${suffix}`;
+};
+
+const normalizeQuotesResponse = (raw: any): Quote[] => {
+  const list = Array.isArray(raw)
+    ? (raw[0]?.response?.quotes || raw)
+    : Array.isArray(raw?.response?.quotes)
+      ? raw.response.quotes
+    : Array.isArray(raw?.response)
+      ? raw.response
+      : Array.isArray(raw?.data)
+        ? raw.data
+        : Array.isArray(raw?.quotes)
+          ? raw.quotes
+          : [];
+
+  return list.map((q: any) => ({
+    ...(q || {}),
+    id_cotizacion: q?.id_cotizacion || q?.id || '',
+    id_client_company: q?.id_client_company || q?.id_empresa_cliente || q?.company_id || q?.id_company || q?.id_cliente || q?.id_client || '',
+    no_cotizacion: q?.no_cotizacion || q?.numero || 0,
+    formatted_no_cotizacion: q?.formatted_no_cotizacion || q?.numero || '',
+    total: q?.total ?? q?.total_amount ?? q?.valor_total ?? '0',
+  }));
+};
+
+const getQuoteClientId = (q: any) =>
+  String(
+    q?.id_client_company || q?.id_empresa_cliente || q?.company_id || q?.id_company || q?.id_cliente || q?.id_client || ''
+  ).trim();
+
+const normalizeText = (value: any) =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toUpperCase();
+
+const getQuoteCompanyName = (q: any) =>
+  String(
+    q?.client_company_name || q?.company_name || q?.nombre_empresa || q?.empresa || ''
+  ).trim();
+
+const getQuoteLabel = (q: any) => {
+  const quoteNumber = q?.formatted_no_cotizacion || q?.no_cotizacion || q?.numero || '';
+  const quoteName = q?.nombre_cotizacion || q?.name || '';
+
+  if (quoteNumber && quoteName) return `${quoteNumber} - ${quoteName}`;
+  if (quoteNumber) return String(quoteNumber);
+  if (quoteName) return quoteName;
+  return `Cotización ${String(q?.id_cotizacion || q?.id || '').slice(0, 8)}`;
 };
 
 type SelectedRecipient = {
@@ -40,6 +96,9 @@ const FinancialForm: React.FC = () => {
   // Obtener el ID de los query params
   const queryParams = new URLSearchParams(location.search);
   const id = queryParams.get('id');
+  const fromDealId = queryParams.get('from_deal');
+  const fromQuoteId = queryParams.get('quote_id');
+  const fromClientId = queryParams.get('client_id');
   const { user } = useAuth();
   const { companies: cachedCompanies, contacts: cachedContacts, users: cachedUsers, loading: cacheLoading } = useDataCache();
   
@@ -60,13 +119,24 @@ const FinancialForm: React.FC = () => {
   const [selectedRecipients, setSelectedRecipients] = useState<SelectedRecipient[]>([]);
   const [externalEmail, setExternalEmail] = useState('');
   const [externalName, setExternalName] = useState('');
+  const dealPrefillAppliedRef = useRef(false);
 
 
   // --- FILTRADO DINÁMICO ---
   const filteredQuotes = useMemo(() => {
     if (!transaction.id_client_company) return [];
-    return quotes.filter(q => String(q.id_client_company) === String(transaction.id_client_company));
-  }, [transaction.id_client_company, quotes]);
+    const selectedClientId = String(transaction.id_client_company).trim();
+    const selectedCompany = clientCompanies.find((c: any) => String(c.id_client_company) === selectedClientId);
+    const selectedCompanyName = normalizeText(selectedCompany?.name_company);
+
+    return quotes.filter(q => {
+      const byId = getQuoteClientId(q) === selectedClientId;
+      if (byId) return true;
+      if (!selectedCompanyName) return false;
+      const quoteCompanyName = normalizeText(getQuoteCompanyName(q));
+      return quoteCompanyName === selectedCompanyName;
+    });
+  }, [transaction.id_client_company, quotes, clientCompanies]);
 
   const filteredContacts = useMemo(() => {
     if (!transaction.id_client_company) return [];
@@ -158,6 +228,56 @@ const FinancialForm: React.FC = () => {
     setTeamMembers(mappedTeam);
   }, [cachedUsers]);
 
+  const applyDealPrefill = useCallback(async (allQuotes: Quote[]) => {
+    if (isEditMode || dealPrefillAppliedRef.current || !fromDealId) return;
+
+    const selectedQuote = fromQuoteId
+      ? allQuotes.find((q: any) => String(q.id_cotizacion) === String(fromQuoteId))
+      : undefined;
+
+    let dealName = '';
+    try {
+      if (user?.id_tenant && user?.id_user) {
+        const dealRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${fromDealId}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+        if (dealRes.ok) {
+          const dealText = await dealRes.text();
+          const parsedDeal = dealText ? JSON.parse(dealText) : null;
+          const payload = Array.isArray(parsedDeal) ? (parsedDeal[0] || null) : parsedDeal;
+          dealName = payload?.nombre_trato || payload?.title || '';
+        }
+      }
+    } catch {
+      // continuar sin bloquear el formulario
+    }
+
+    setTransaction(prev => {
+      const subtotalValue = selectedQuote?.total ? String(selectedQuote.total) : (prev.subtotal || '');
+      const quoteLabel = selectedQuote
+        ? getQuoteLabel(selectedQuote)
+        : 'cotización seleccionada';
+      const sourceNote = dealName
+        ? `Registro generado desde trato ganado (${dealName}) y ${quoteLabel}.`
+        : `Registro generado desde trato/cotización ganada (${quoteLabel}).`;
+
+      return {
+        ...prev,
+        invoice_number: prev.invoice_number || suggestInvoiceNumber(fromDealId),
+        id_client_company: fromClientId || prev.id_client_company,
+        id_related_quote: fromQuoteId || prev.id_related_quote,
+        subtotal: subtotalValue,
+        total_value: selectedQuote?.total ? Number(selectedQuote.total) : prev.total_value,
+        description: prev.description || `Registro desde trato ganado${dealName ? `: ${dealName}` : ''}`,
+        notes: prev.notes || sourceNote,
+      };
+    });
+
+    dealPrefillAppliedRef.current = true;
+
+    if (!selectedQuote) {
+      setToast({ message: 'No se encontró la cotización en catálogo. Se cargó borrador parcial.', type: 'success' });
+    }
+  }, [isEditMode, fromDealId, fromQuoteId, fromClientId, user?.id_tenant, user?.id_user]);
+
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
     
@@ -167,8 +287,16 @@ const FinancialForm: React.FC = () => {
     
     try {
       // Fetch only quotes; companies/contacts/users come from cache effects above
-      const quotesRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`);
-      const qData = quotesRes.ok ? await quotesRes.json() : [];
+      const quotesResScoped = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`);
+      const quotesRawScoped = quotesResScoped.ok ? await quotesResScoped.json() : [];
+      let qData = normalizeQuotesResponse(quotesRawScoped);
+
+      if (!qData.length) {
+        const quotesResGlobal = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`);
+        const quotesRawGlobal = quotesResGlobal.ok ? await quotesResGlobal.json() : [];
+        qData = normalizeQuotesResponse(quotesRawGlobal);
+      }
+
       setQuotes(qData);
 
       // Si es modo edición, cargar los datos de la transacción
@@ -228,13 +356,14 @@ const FinancialForm: React.FC = () => {
         }
       } else {
         setDefaults();
+        await applyDealPrefill(qData);
       }
     } catch (error) {
       setToast({ message: 'Error al cargar recursos.', type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [user, location.search, navigate]);
+  }, [user, location.search, navigate, applyDealPrefill]);
 
   const setDefaults = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -533,8 +662,8 @@ const FinancialForm: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><i className="fa-solid fa-link text-[10px]"></i> Relaciones</h2>
             <div className="space-y-4">
-                <div><label className="text-xs font-bold text-slate-600 mb-1.5 block">Cliente/Proveedor <span className="text-red-500">*</span></label><select name="id_client_company" value={transaction.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none appearance-none cursor-pointer"><option value="">-- Seleccionar --</option>{clientCompanies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}</select></div>
-                <div><label className="text-xs font-bold text-slate-600 mb-1.5 block">Vincular Cotización</label><select name="id_related_quote" value={transaction.id_related_quote || ''} onChange={handleInputChange} disabled={!transaction.id_client_company} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white disabled:bg-slate-50"><option value="">-- {transaction.id_client_company ? 'Opcional (Ninguna)' : 'Seleccione cliente'} --</option>{filteredQuotes.map(q => <option key={q.id_cotizacion} value={q.id_cotizacion}>{q.formatted_no_cotizacion || q.no_cotizacion}</option>)}</select></div>
+                <div><label className="text-xs font-bold text-slate-600 mb-1.5 block">Cliente/Proveedor <span className="text-red-500">*</span></label><select name="id_client_company" value={transaction.id_client_company || ''} onChange={handleInputChange} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white outline-none appearance-none cursor-pointer"><option value="">-- Seleccionar --</option>{transaction.id_client_company && !clientCompanies.some(c => String(c.id_client_company) === String(transaction.id_client_company)) && (<option value={String(transaction.id_client_company)}>{`Cliente precargado (${transaction.id_client_company})`}</option>)}{clientCompanies.map(c => <option key={c.id_client_company} value={c.id_client_company}>{c.name_company}</option>)}</select></div>
+                <div><label className="text-xs font-bold text-slate-600 mb-1.5 block">Vincular Cotización</label><select name="id_related_quote" value={transaction.id_related_quote || ''} onChange={handleInputChange} disabled={!transaction.id_client_company} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white disabled:bg-slate-50"><option value="">-- {transaction.id_client_company ? 'Opcional (Ninguna)' : 'Seleccione cliente'} --</option>{transaction.id_related_quote && !filteredQuotes.some(q => String(q.id_cotizacion) === String(transaction.id_related_quote)) && (<option value={String(transaction.id_related_quote)}>{`Cotización precargada (${transaction.id_related_quote})`}</option>)}{filteredQuotes.map(q => <option key={q.id_cotizacion} value={q.id_cotizacion}>{getQuoteLabel(q)}</option>)}</select></div>
             </div>
           </div>
 

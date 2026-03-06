@@ -599,6 +599,7 @@ const FinancialsList: React.FC = () => {
   const table = useReactTable({
     data: transactions,
     columns,
+        paginateExpandedRows: false,
     state: { sorting, columnFilters, globalFilter, grouping, expanded, pagination },
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -617,7 +618,7 @@ const FinancialsList: React.FC = () => {
   if (!user || (user.rol_user !== 'admin' && user.rol_user !== 'superadmin')) return null;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-58px)] bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
+    <div className="flex flex-col h-full bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
       
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 

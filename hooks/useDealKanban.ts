@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { DragEndEvent } from '@dnd-kit/core';
-import { Deal, DealStatus } from '../types';
+import { Deal, DealStatus, Quote } from '../types';
 import { apiFetch } from '../services/apiClient';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -15,7 +15,8 @@ export interface KanbanColumn {
 export const useDealKanban = (
   deals: Deal[],
   dealStatuses: DealStatus[],
-  onUpdate: () => void
+  onUpdate: () => void,
+  onBeforeStatusChange?: (deal: Deal, targetStatus: DealStatus) => Promise<boolean>
 ) => {
   const { user } = useAuth();
   const [draggedDeal, setDraggedDeal] = useState<Deal | null>(null);
@@ -93,6 +94,16 @@ export const useDealKanban = (
         }
       }
 
+      // Ejecutar callback antes del cambio de estado (para interceptar cambios a WON, etc.)
+      if (onBeforeStatusChange) {
+        const shouldProceed = await onBeforeStatusChange(deal, targetStatus);
+        if (!shouldProceed) {
+          setDraggedDeal(null);
+          setIsUpdating(false);
+          return;
+        }
+      }
+
       // Actualización optimista
       setIsUpdating(true);
       const previousDeals = [...deals];
@@ -116,7 +127,7 @@ export const useDealKanban = (
           throw new Error('Error al actualizar el estado del trato');
         }
 
-        // Recargar los datos
+        // Recargar los datos, onBeforeStatusChange
         onUpdate();
       } catch (error) {
         console.error('Error updating deal status:', error);

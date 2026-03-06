@@ -9,6 +9,7 @@ import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
+import SelectWinningQuoteModal from '../../components/SelectWinningQuoteModal';
 import DealShareList from '../../components/DealShareList';
 import NewInteractionForm from '../../components/NewInteractionForm';
 import NewInteractionModal from '../../components/NewInteractionModal';
@@ -68,6 +69,14 @@ const StatusSelector: React.FC<{
     is_default: false
   };
 
+  const currentIndex = statuses.findIndex(s => s.id_status === currentStatusId);
+  const itemsAbove = currentIndex > 0 ? statuses.slice(0, currentIndex) : [];
+  const itemsBelow = currentIndex >= 0 && currentIndex < statuses.length - 1
+    ? statuses.slice(currentIndex + 1)
+    : currentIndex === -1
+      ? statuses
+      : [];
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -104,7 +113,32 @@ const StatusSelector: React.FC<{
       {isOpen && !disabled && (
         <div className="absolute right-0 mt-1 w-full sm:w-56 bg-white rounded-lg shadow-xl border border-slate-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
           <div className="py-1 max-h-60 overflow-y-auto">
-            {statuses.map((status) => (
+            {itemsAbove.map((status) => (
+              <button
+                key={status.id_status}
+                onClick={() => { onSelect(status.id_status); setIsOpen(false); }}
+                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2 transition-colors border-b border-slate-50 last:border-0"
+              >
+                <i className={`${status.icon || 'fa-solid fa-circle'} text-[10px]`} style={{ color: status.color }}></i>
+                <span className="text-xs font-bold text-slate-700 uppercase">{status.name}</span>
+                {status.notify_client && (
+                  <i className="fa-solid fa-envelope text-[8px] text-blue-500 ml-auto" title="Notificación por correo activada"></i>
+                )}
+              </button>
+            ))}
+
+            {currentIndex >= 0 && (
+              <div className="w-full text-left px-4 py-2.5 bg-slate-50 border-y border-slate-200 flex items-center gap-2 opacity-60 cursor-not-allowed">
+                <i className={`${current.icon || 'fa-solid fa-circle'} text-[10px]`} style={{ color: current.color }}></i>
+                <span className="text-xs font-bold text-slate-700 uppercase">{current.name}</span>
+                {current.notify_client && (
+                  <i className="fa-solid fa-envelope text-[8px] text-blue-500 ml-auto" title="Notificación por correo activada"></i>
+                )}
+                <i className="fa-solid fa-check text-[9px] text-slate-400 ml-1"></i>
+              </div>
+            )}
+
+            {itemsBelow.map((status) => (
               <button
                 key={status.id_status}
                 onClick={() => { onSelect(status.id_status); setIsOpen(false); }}
@@ -199,6 +233,10 @@ const DealDetail: React.FC = () => {
       onConfirm: () => {},
       onCancel: () => {},
     });
+  const [selectWinnerModal, setSelectWinnerModal] = useState({
+    isOpen: false,
+    pendingStatusId: '',
+  });
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -304,25 +342,35 @@ const DealDetail: React.FC = () => {
         color: s.color,
         status_order: idx,
         icon: s.icon || 'fa-solid fa-circle',
-        is_default: false
+        is_default: false,
+        status_category: s.status_category || s.category, // ⚠️ AGREGAR ESTE CAMPO
+        notify_client: s.notify_client || false // ⚠️ AGREGAR ESTE CAMPO
       }));
-      const mappedQuotes: Quote[] = (payload.cotizaciones_activas || []).map((q: any) => ({
-        id_cotizacion: q.id,
+      console.log('📋 Estados mapeados con categorías:', mappedStatuses.map(s => ({ name: s.name, category: s.status_category })));
+      // Buscar cotizaciones en varios posibles campos del payload
+      const quotesRaw = payload.cotizaciones_activas || payload.cotizaciones || payload.quotes || [];
+      console.log('🔍 DEBUG: Cotizaciones encontradas en trato:', quotesRaw.length, quotesRaw);
+      
+      const mappedQuotes: Quote[] = quotesRaw.map((q: any) => ({
+        id_cotizacion: q.id || q.id_cotizacion,
         id_tenant: tenantId,
         id_user: payload.owner_id,
         id_client_company: payload.id_client_company || '',
         id_contact: payload.id_contact || '',
-        no_cotizacion: Number(q.numero) || 0,
-        formatted_no_cotizacion: q.numero,
-        nombre_cotizacion: q.nombre,
-        fecha_emision: q.fecha, 
+        no_cotizacion: Number(q.numero || q.no_cotizacion) || 0,
+        formatted_no_cotizacion: q.numero || q.formatted_no_cotizacion,
+        nombre_cotizacion: q.nombre || q.nombre_cotizacion,
+        fecha_emision: q.fecha || q.fecha_emision, 
         total: String(q.total),
-        version: 1,
-        id_quote_status: '', 
+        version: q.version || 1,
+        id_quote_status: q.id_quote_status || '', 
         id_trato: payload.id_trato,
-        is_private: false,
-        estado: q.estado,
-        estado_color: q.color_estado,
+        is_private: q.is_private || false,
+        estado: q.estado || q.estado_nombre,
+        estado_color: q.color_estado || q.estado_color,
+        estado_decision: q.estado_decision || 'PENDIENTE',
+        created_at: q.created_at || '',
+        updated_at: q.updated_at || '',
         client_company_name: cachedCompany?.name_company || '',
         contact_full_name: contactName,
       }));
@@ -460,7 +508,40 @@ const DealDetail: React.FC = () => {
 
   const handleStatusChange = (newStatusId: string) => {
     if (!deal) return;
+
+    // Prevenir cambio al mismo estado (mismo comportamiento que DealsList)
+    if (newStatusId === deal.id_deal_status) {
+      return;
+    }
+
     const newStatus = dealStatuses.find(s => s.id_status === newStatusId);
+    
+    // Si el nuevo estado es WON y hay cotizaciones activas, mostrar modal de selección
+    // Verificar por categoría WON o por nombre GANADO (fix temporal)
+    const isWonStatus = newStatus?.status_category === 'WON' || 
+                        newStatus?.name?.toUpperCase().includes('GANADO') ||
+                        newStatus?.name?.toUpperCase().includes('CERRADO');
+    
+    console.log('🎯 DEBUG: Cambiando estado:', {
+      newStatusId,
+      newStatusName: newStatus?.name,
+      statusCategory: newStatus?.status_category,
+      quotesLength: quotes.length,
+      isWonStatus,
+      conditionQuotes: quotes.length > 0,
+      shouldShowModal: isWonStatus && quotes.length > 0
+    });
+    
+    if (isWonStatus && quotes.length > 0) {
+      console.log('✅ Mostrando modal de selección de cotización ganadora');
+      setSelectWinnerModal({
+        isOpen: true,
+        pendingStatusId: newStatusId,
+      });
+      return;
+    } else if (isWonStatus) {
+      console.log('⚠️ Estado WON pero no hay cotizaciones. Continúa cambio de estado normal.');
+    }
     
     // Enriquecer mensaje con información de notificación por correo
     const messageContent = (
@@ -512,6 +593,89 @@ const DealDetail: React.FC = () => {
       },
       onCancel: () => setConfirmState(prev => ({...prev, isOpen: false}))
     });
+  };
+
+  const handleWinningQuoteConfirm = async (selectedQuoteId: string, createInCartera: boolean) => {
+    if (!deal || !selectWinnerModal.pendingStatusId || !user?.id_user) return;
+    
+    setSelectWinnerModal({ isOpen: false, pendingStatusId: '' });
+    setProcessing(true);
+    
+    try {
+      const selectedQuote = quotes.find(q => q.id_cotizacion === selectedQuoteId);
+      if (!selectedQuote) throw new Error('Cotización no encontrada');
+      
+      // 1. Cambiar el estado del deal a ganado (el backend se encarga de rechazar otras cotizaciones)
+      const resStatus = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_trato: deal.id_trato,
+          id_deal_status: selectWinnerModal.pendingStatusId,
+          id_user: user.id_user,
+          id_cotizacion: selectedQuoteId
+        })
+      });
+      
+      if (!resStatus.ok) throw new Error('Error al cambiar estado del deal');
+      
+      // 2. Cambiar el estado de la cotización a aceptada (si tiene status)
+      if (selectedQuote.id_quote_status) {
+        await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/quotes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id_cotizacion: selectedQuoteId,
+            id_quote_status: selectedQuote.id_quote_status,
+            id_user: user.id_user
+          })
+        });
+      }
+      
+      // 3. Actualizar el estado local del deal y obtener info del nuevo status
+      const newStatus = dealStatuses.find(s => s.id_status === selectWinnerModal.pendingStatusId);
+      setDeal(prev => prev ? {
+        ...prev, 
+        id_deal_status: selectWinnerModal.pendingStatusId,
+        estado_nombre: newStatus?.name,
+        estado_color: newStatus?.color,
+        estado_icon: newStatus?.icon
+      } : null);
+      
+      // 4. Refrescar datos para reflejar cambios
+      await fetchData();
+      
+      const quoteNumber = selectedQuote.formatted_no_cotizacion || selectedQuote.no_cotizacion;
+      
+      // Construir mensaje de éxito con notificaciones activadas si aplica
+      let successMessage = `Cotización #${quoteNumber} marcada como ganadora. Las demás cotizaciones fueron rechazadas.`;
+      
+      const notifications: string[] = [];
+      if (newStatus?.notify_client) {
+        notifications.push('Cliente notificado por correo');
+      }
+      if (createInCartera) {
+        notifications.push('Abriendo formulario de cartera');
+      }
+      
+      if (notifications.length > 0) {
+        successMessage += ` [${notifications.join(', ')}]`;
+      }
+      
+      setToast({ message: successMessage, type: 'success' });
+      
+      // 5. Si debe crear en cartera, redirigir al formulario
+      if (createInCartera) {
+        setTimeout(() => {
+          navigate(`/app/financials/new?from_deal=${deal.id_trato}&quote_id=${selectedQuoteId}&client_id=${deal.id_client_company}`);
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error al marcar cotización ganadora:', error);
+      setToast({ message: 'No se pudo completar la operación.', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleInterestChange = (newInterestId: string) => {
@@ -1194,6 +1358,17 @@ const DealDetail: React.FC = () => {
           message={confirmState.message}
           onConfirm={confirmState.onConfirm}
           onClose={confirmState.onCancel}
+        />
+      )}
+
+      {selectWinnerModal.isOpen && deal && (
+        <SelectWinningQuoteModal
+          isOpen={selectWinnerModal.isOpen}
+          onClose={() => setSelectWinnerModal({ isOpen: false, pendingStatusId: '' })}
+          onConfirm={handleWinningQuoteConfirm}
+          quotes={quotes}
+          dealName={deal.nombre_trato || `Trato #${deal.id_trato}`}
+          hasCarteraAccess={user?.module_access?.financials || user?.rol_user === 'admin' || user?.rol_user === 'superadmin'}
         />
       )}
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DealFollowUpItem } from '../types';
 import { Mail, Briefcase, ChevronRight, DollarSign, Phone, MessageSquare, Calendar } from 'lucide-react';
@@ -7,6 +7,7 @@ import { useDataCache } from '../contexts/DataCacheContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
 import { GATEWAY_CONFIG } from '../services/gatewayConfig';
+import Avatar from './Avatar';
 
 interface DealFollowUpCardProps {
   deal: DealFollowUpItem;
@@ -80,48 +81,49 @@ const DealFollowUpCard: React.FC<DealFollowUpCardProps> = ({ deal, onManageClick
                         const collaborators = deal.collaborators || [];
                         if (collaborators.length === 0) return null;
                         
-                        // Ordenar: Owner primero, luego EDIT, luego VIEW
-                        const sorted = [...collaborators].sort((a, b) => {
-                            const levelOrder = { OWNER: 1, EDIT: 2, VIEW: 3, BLOCKED: 4 };
-                            return (levelOrder[a.access_level as keyof typeof levelOrder] || 4) - (levelOrder[b.access_level as keyof typeof levelOrder] || 4);
-                        });
+                        // Memoizar búsqueda de usuarios para evitar recalcular en renders
+                        // eslint-disable-next-line react-hooks/exhaustive-deps
+                        const collaboratorUsers = useMemo(() => {
+                            const sorted = [...collaborators].sort((a, b) => {
+                                const levelOrder = { OWNER: 1, EDIT: 2, VIEW: 3, BLOCKED: 4 };
+                                return (levelOrder[a.access_level as keyof typeof levelOrder] || 4) - (levelOrder[b.access_level as keyof typeof levelOrder] || 4);
+                            });
+                            
+                            return sorted.slice(0, 3).reverse().map((collab: any) => ({
+                                collab,
+                                user: cachedUsers.find(u => u.id_user === collab.id)
+                            }));
+                        }, [collaborators, cachedUsers]);
                         
-                        // Invertir para que el Owner (primero en la lista) aparezca a la derecha con -space-x
-                        return sorted.slice(0, 3).reverse().map((collab: any, idx: number) => {
-                            const collabUser = cachedUsers.find(u => u.id_user === collab.id);
-                            const avatarUrl = collabUser?.avatar_url || `https://ui-avatars.com/api/?name=${collabUser?.name_user || 'U'}&background=random`;
-                            const userName = collabUser?.name_user || 'Usuario';
+                        return collaboratorUsers.map(({ collab, user }, idx: number) => {
+                            const userName = user?.name_user || 'Usuario';
                             const isOwner = collab.access_level === 'OWNER';
                             const isPrincipal = collab.access_level === 'EDIT';
                             const isSecondary = collab.access_level === 'VIEW';
                             
-                            let borderColor = 'border-white';
-                            let badgeIcon = null;
+                            let badgeType: 'OWNER' | 'EDIT' | 'VIEW' = 'VIEW';
                             let tooltipText = userName;
                             
                             if (isOwner) {
-                                borderColor = 'border-amber-400';
-                                badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-amber-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-star text-white text-[6px]"></i></div>;
+                                badgeType = 'OWNER';
                                 tooltipText = `${userName} (Creador)`;
                             } else if (isPrincipal) {
-                                borderColor = 'border-indigo-400';
-                                badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-indigo-500 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-crown text-white text-[6px]"></i></div>;
+                                badgeType = 'EDIT';
                                 tooltipText = `${userName} (Principal)`;
                             } else if (isSecondary) {
-                                borderColor = 'border-slate-300';
-                                badgeIcon = <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-slate-400 rounded-full flex items-center justify-center shadow-sm"><i className="fa-solid fa-eye text-white text-[6px]"></i></div>;
+                                badgeType = 'VIEW';
                                 tooltipText = `${userName} (Secundario)`;
                             }
                             
                             return (
                                 <div key={collab.id || idx} className="relative group/collab" title={tooltipText}>
                                     <div className="relative transition-all group-hover/collab:scale-125 group-hover/collab:z-30">
-                                        <img 
-                                            src={avatarUrl} 
-                                            alt={userName}
-                                            className={`w-8 h-8 rounded-full border-2 shadow-sm ${borderColor} bg-white relative`}
+                                        <Avatar
+                                            src={user?.avatar_url || null}
+                                            name={userName}
+                                            size="sm"
+                                            badge={{ type: badgeType }}
                                         />
-                                        {badgeIcon}
                                     </div>
                                 </div>
                             );
@@ -202,4 +204,4 @@ const DealFollowUpCard: React.FC<DealFollowUpCardProps> = ({ deal, onManageClick
     );
 };
 
-export default DealFollowUpCard;
+export default React.memo(DealFollowUpCard);
