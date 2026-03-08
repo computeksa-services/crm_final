@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useDataCache } from '../contexts/DataCacheContext';
-import { getImageUrl } from '../utils/imageUtils';
 import { NAV_GROUPS, PAGE_NAMES } from '../services/routes.config';
 import { ButtonLoader } from './AppLoaders';
+import Avatar from './Avatar';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -33,6 +33,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
+  const [collapsedNavHover, setCollapsedNavHover] = useState<{ label: string; top: number; left: number } | null>(null);
   const userMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { user, logout } = useAuth();
@@ -41,6 +42,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const userRole = user?.rol_user || 'usuario';
   const isWorkspaceOwner = user?.is_owner === true;
+  const isSidebarCollapsed = !isDesktopSidebarOpen && !isMobileSidebarOpen;
   const userMenuRef = useRef<HTMLDivElement | null>(null);
 
   const mobileCurrentRouteLabel = useMemo(() => {
@@ -108,6 +110,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   }, [userMenuOpen]);
 
+  useEffect(() => {
+    if (isDesktopSidebarOpen || isMobileSidebarOpen) {
+      setCollapsedNavHover(null);
+    }
+  }, [isDesktopSidebarOpen, isMobileSidebarOpen]);
+
   const handleLogout = () => {
     setUserMenuOpen(false);
     setShowLogoutConfirm(true);
@@ -144,13 +152,23 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     const isActive = location.pathname.startsWith(item.path);
 
     return (
-      <li className="relative group">
+      <li
+        className={`relative group ${isCollapsed ? 'flex justify-center' : ''}`}
+        onMouseEnter={(e) => {
+          if (!isCollapsed) return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          setCollapsedNavHover({ label: item.label, top: rect.top + rect.height / 2, left: rect.right + 10 });
+        }}
+        onMouseLeave={() => { if (isCollapsed) setCollapsedNavHover(null); }}
+      >
         <Link
           to={item.path}
-          onClick={() => setIsMobileSidebarOpen(false)}
+          onClick={() => { setIsMobileSidebarOpen(false); setCollapsedNavHover(null); }}
           className={`
-            flex items-center gap-2 rounded-md transition-all duration-150 select-none
-            ${isCollapsed ? 'justify-center px-0 py-1.5 mx-1' : 'px-2.5 py-1.5 mx-1'}
+            flex items-center rounded-lg transition-all duration-150 select-none
+            ${isCollapsed
+              ? 'gap-0 px-0 py-0 w-10 h-10 justify-center rounded-full'
+              : 'gap-2 px-3 py-1.5 mx-2 w-auto'}
             ${isActive
               ? 'bg-slate-200 dark:bg-slate-700/90 text-slate-900 dark:text-white font-semibold border border-slate-300 dark:border-slate-600'
               : 'text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-slate-200'
@@ -158,153 +176,278 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           `}
         >
           {/* Icon */}
-          <span className={`flex-shrink-0 flex items-center justify-center ${isCollapsed ? 'w-5 h-5' : 'w-5 h-5'}`}>
+          <span className="flex-shrink-0 flex items-center justify-center w-5 h-5">
             <i className={`fa-solid ${item.icon} text-[13px] ${isActive ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-500 group-hover:text-slate-700 dark:group-hover:text-slate-300'}`}></i>
           </span>
 
-          {/* Label */}
-          {!isCollapsed && (
-            <span className="text-[13px] leading-none whitespace-nowrap">
-              {item.label}
-            </span>
-          )}
-
-          {/* Tooltip para modo contraído */}
-          {isCollapsed && (
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2.5 bg-slate-800 dark:bg-slate-900 text-white text-xs px-2.5 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-lg">
-              {item.label}
-              <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-800 dark:border-r-slate-900"></span>
-            </div>
-          )}
+          {/* Label - ocultar cuando contraído */}
+          <span className={`text-[13px] leading-none whitespace-nowrap transition-opacity duration-200 ${isCollapsed ? 'hidden' : 'block'}`}>
+            {item.label}
+          </span>
         </Link>
       </li>
     );
   };
 
   return (
-    <div className="flex h-screen bg-white dark:bg-slate-900 overflow-hidden font-sans">
+    <div className="flex h-screen w-screen bg-white dark:bg-slate-900 overflow-hidden font-sans flex-col">
 
-      {/* ── Mobile overlay ──────────────────────────────────────────────────── */}
-      {isMobileSidebarOpen && (
-        <div
-          className="fixed inset-0 z-[45] bg-black/20 backdrop-blur-[2px] md:hidden"
-          onClick={() => setIsMobileSidebarOpen(false)}
-        />
-      )}
+      {/* ── HEADER FIJO ──────────────────────────────────────────────────────── */}
+      <header className="h-[52px] bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between z-[60] px-4 flex-shrink-0">
+        
+        {/* Hamburguesa + Logo */}
+        <div className="flex items-center gap-3">
+{/* Mobile hamburger to toggle sidebar overlay */}
+          <button
+            onClick={() => setIsMobileSidebarOpen(o => !o)}
+            className="md:hidden flex items-center justify-center w-8 h-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-all"
+          >
+            <i className="fa-solid fa-bars text-lg"></i>
+          </button>
 
-      {/* ── Sidebar ─────────────────────────────────────────────────────────── */}
-      <aside
-        className={`
-          fixed md:static inset-y-0 left-0 z-50
-          bg-white dark:bg-slate-900
-          border-r border-slate-200 dark:border-slate-800
-          flex flex-col transition-all duration-200 ease-in-out
-          ${isMobileSidebarOpen ? 'translate-x-0 w-44' : '-translate-x-full md:translate-x-0'}
-          ${isDesktopSidebarOpen ? 'md:w-44' : 'md:w-11'}
-        `}
-      >
-        {/* Logo */}
-        <div
-          className={`flex items-center border-b border-slate-200 dark:border-slate-800 cursor-pointer shrink-0
-            ${isDesktopSidebarOpen ? 'h-[52px] px-2 justify-start' : 'h-[52px] px-0 justify-center'}
-          `}
-          onClick={() => navigate('/app/dashboard')}
-        >
-          {isDesktopSidebarOpen ? (
-            <img src="/logo_large2.png" alt="COMPUTEKSA" className="w-full h-7 object-contain object-left" />
-          ) : (
-            <img src="/logo.png" alt="COMPUTEKSA" className="w-6 h-6 object-contain" />
-          )}
+          {/* Desktop toggle */}
+          <button
+            onClick={() => setIsDesktopSidebarOpen(!isDesktopSidebarOpen)}
+            className="hidden md:flex items-center justify-center w-8 h-8 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-all"
+          >
+            <i className="fa-solid fa-bars text-lg"></i>
+          </button>
+
+          {/* Logo: show small favicon on mobile, full logo on md+ */}
+          <img 
+            src="/favicon.png" 
+            alt="COMPUTEK" 
+            className="w-8 h-8 object-contain cursor-pointer block md:hidden" 
+            onClick={() => navigate('/app/dashboard')}
+          />
+          <img 
+            src="/logo_large2.png" 
+            alt="COMPUTEKSA" 
+            className="w-24 h-auto object-contain cursor-pointer hidden md:block" 
+            onClick={() => navigate('/app/dashboard')}
+          />
         </div>
 
-        {/* Nav */}
-        <nav className="flex-1 py-2 overflow-y-auto overflow-x-hidden scrollbar-none">
-          <ul className="space-y-0.5">
-            {visibleNavGroups.map((group, idx) => (
-              <div key={idx}>
-                {/* Group label */}
-                {isDesktopSidebarOpen && group.title && (
-                  <p className="px-3.5 pt-1.5 pb-1 text-[10px] font-semibold text-slate-400 dark:text-slate-600 uppercase tracking-widest select-none">
-                    {group.title}
-                  </p>
-                )}
-                {!isDesktopSidebarOpen && idx > 0 && (
-                  <div className="h-px bg-slate-200 dark:bg-slate-800 mx-3 my-2" />
-                )}
+        <div className="flex items-center gap-6 flex-1 ml-3 md:ml-4 border-l border-slate-200 dark:border-slate-800 pl-5 md:pl-6">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="sm:hidden text-slate-800 dark:text-slate-100 font-medium text-[12px] truncate max-w-[160px]">
+              {mobileCurrentRouteLabel}
+            </span>
 
-                {group.items.map(item => (
-                  <NavLinkItem
-                    key={item.path}
-                    item={item}
-                    isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false}
-                  />
-                ))}
-              </div>
-            ))}
+            <div className="hidden sm:flex items-center gap-1.5 text-sm">
+              {(() => {
+                const pathSegments = location.pathname.split('/').filter(Boolean);
+                const lastSegment = pathSegments[pathSegments.length - 1] || 'dashboard';
+                if (location.pathname === '/app/followups') {
+                  return <span className="text-slate-800 dark:text-slate-100 font-medium text-[13px]">Seguimiento</span>;
+                }
+                const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'account-settings', 'integrations', 'workspace-settings', 'settings', 'calendar', 'dashboard', 'new', 'edit', 'marketing'];
+                let breadcrumbs: { label: string; path: string; isActive: boolean }[] = [];
+                if (lastSegment === 'edit' && pathSegments.length > 1) {
+                  const collectionKey = pathSegments[pathSegments.length - 2];
+                  const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  breadcrumbs = [
+                    { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
+                    { label: location.state?.breadcrumb || 'Edición', path: location.pathname, isActive: true }
+                  ];
+                } else if (!knownRoutes.includes(lastSegment) && pathSegments.length > 1) {
+                  const collectionKey = pathSegments[pathSegments.length - 2];
+                  const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  breadcrumbs = [
+                    { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
+                    { label: location.state?.breadcrumb || 'Detalle', path: location.pathname, isActive: true }
+                  ];
+                } else if (lastSegment === 'new' && pathSegments.length > 1) {
+                  const collectionKey = pathSegments[pathSegments.length - 2];
+                  const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  breadcrumbs = [
+                    { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
+                    { label: 'Nuevo', path: location.pathname, isActive: true }
+                  ];
+                } else {
+                  const pageName = PAGE_NAMES[lastSegment] || lastSegment.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  breadcrumbs = [{ label: pageName, path: location.pathname, isActive: true }];
+                }
+                return breadcrumbs.map((crumb, idx) => (
+                  <React.Fragment key={crumb.path}>
+                    {idx > 0 && (
+                      <i className="fa-solid fa-chevron-right text-[9px] text-slate-300 dark:text-slate-600 mx-0.5"></i>
+                    )}
+                    {crumb.isActive ? (
+                      <span className="text-slate-800 dark:text-slate-100 font-medium text-[13px]">{crumb.label}</span>
+                    ) : (
+                      <Link
+                        to={crumb.path}
+                        className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-[13px] transition-colors"
+                      >
+                        {crumb.label}
+                      </Link>
+                    )}
+                  </React.Fragment>
+                ));
+              })()}
+            </div>
+          </div>
+        </div>
 
-            {/* Admin section */}
-            {user && (user.rol_user === 'admin' || user.rol_user === 'superadmin') && (
-              <div>
-                {isDesktopSidebarOpen && (
-                  <p className="px-3.5 pt-1.5 pb-1 text-[10px] font-semibold text-slate-400 dark:text-slate-600 uppercase tracking-widest select-none">
-                    Administración
-                  </p>
-                )}
-                {!isDesktopSidebarOpen && (
-                  <div className="h-px bg-slate-200 dark:bg-slate-800 mx-3 my-2" />
-                )}
+        {/* Right side */}
+        <div className="flex items-center gap-3 ml-auto">
+          {cacheLoading && (
+            <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+              <ButtonLoader size="xs" />
+              <span className="hidden sm:block">Cargando...</span>
+            </div>
+          )}
 
-                {/* Configuración */}
-                <li className="relative group list-none">
-                  <Link
-                    to="/app/account-settings"
-                    onClick={() => {
-                      if (typeof window !== 'undefined' && window.innerWidth >= 768) {
-                        setIsDesktopSidebarOpen(false);
-                      }
-                      setIsMobileSidebarOpen(false);
+          {user?.name_tenant && (
+            <div className="flex flex-col items-end leading-none">
+              <span className="text-[11px] sm:text-[12px] font-semibold text-slate-900 dark:text-slate-100 tracking-wide">
+                {user.name_tenant}
+              </span>
+              <span className="text-[9px] sm:text-[10px] italic text-slate-500 dark:text-slate-400 mt-0.5">Workspace</span>
+            </div>
+          )}
+
+          {/* Avatar button */}
+          <div className="relative flex items-center" ref={userMenuRef}>
+            <button
+              ref={userMenuButtonRef}
+              onClick={() => setUserMenuOpen(o => !o)}
+              className={`relative flex items-center justify-center p-1 rounded-full transition-all duration-150 border
+                ${userMenuOpen
+                  ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
+                  : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700'
+                }
+              `}
+            >
+              <Avatar src={user?.avatar_url || null} name={user?.name_user || 'Usuario'} size="sm" />
+              <span className="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-white dark:border-slate-900"></span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* ── CONTENEDOR PRINCIPAL (Sidebar + Content) ──────────────────────────── */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* ── Mobile overlay ──────────────────────────────────────────────────── */}
+        {isMobileSidebarOpen && (
+          <div
+            className="fixed inset-0 z-[45] bg-black/20 backdrop-blur-[2px] md:hidden"
+            onClick={() => setIsMobileSidebarOpen(false)}
+          />
+        )}
+
+        {/* ── SIDEBAR ──────────────────────────────────────────────────────────── */}
+        <aside
+          onMouseLeave={() => { setCollapsedNavHover(null); if (isMobileSidebarOpen) setIsMobileSidebarOpen(false); }}
+          className={`
+            bg-white dark:bg-slate-900
+            border-r border-slate-200 dark:border-slate-800
+            flex flex-col shrink-0 transition-all duration-200 ease-in-out
+            fixed md:relative inset-y-0 left-0 top-[52px] md:top-0 z-[50]
+            ${isMobileSidebarOpen ? 'translate-x-0 w-44' : '-translate-x-full md:translate-x-0'}
+            ${isDesktopSidebarOpen ? 'md:w-48' : 'md:w-16'}
+          `}
+        >
+          {/* Nav */}
+          <nav className={`flex-1 py-2 scrollbar-none ${isSidebarCollapsed ? 'overflow-visible' : 'overflow-y-auto overflow-x-hidden'}`}>
+            <ul className="space-y-0.5">
+              {visibleNavGroups.map((group, idx) => (
+                <div key={idx}>
+                  {/* Group label - solo cuando expandido */}
+                  {!isSidebarCollapsed && group.title && (
+                    <p className="px-3.5 pt-1.5 pb-1 text-[10px] font-semibold text-slate-400 dark:text-slate-600 uppercase tracking-widest select-none">
+                      {group.title}
+                    </p>
+                  )}
+
+                  {group.items.map(item => (
+                    <NavLinkItem
+                      key={item.path}
+                      item={item}
+                      isCollapsed={isSidebarCollapsed}
+                    />
+                  ))}
+                </div>
+              ))}
+
+              {/* Admin section */}
+              {user && (user.rol_user === 'admin' || user.rol_user === 'superadmin') && (
+                <div>
+                  {!isSidebarCollapsed && (
+                    <p className="px-3.5 pt-1.5 pb-1 text-[10px] font-semibold text-slate-400 dark:text-slate-600 uppercase tracking-widest select-none">
+                      Administración
+                    </p>
+                  )}
+
+                  {user?.rol_user === 'superadmin' && (
+                    <NavLinkItem item={{ label: 'Usuarios', path: '/app/users', icon: 'fa-users-cog', roles: ['superadmin'] }} isCollapsed={isSidebarCollapsed} />
+                  )}
+                  {(user?.rol_user === 'superadmin' || currentUser?.module_access?.crm) && (
+                    <NavLinkItem item={{ label: 'Productos', path: '/app/products', icon: 'fa-box-archive', roles: ['admin', 'superadmin'] }} isCollapsed={isSidebarCollapsed} />
+                  )}
+                  {userRole === 'superadmin' && (
+                    <NavLinkItem item={{ label: 'Tenants', path: '/app/companies', icon: 'fa-server', roles: ['superadmin'] }} isCollapsed={isSidebarCollapsed} />
+                  )}
+
+                  {/* Configuración */}
+                  <li
+                    className={`relative group list-none ${isSidebarCollapsed ? 'flex justify-center' : ''}`}
+                    onMouseEnter={(e) => {
+                      if (!isSidebarCollapsed) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setCollapsedNavHover({ label: 'Configuración', top: rect.top + rect.height / 2, left: rect.right + 10 });
                     }}
-                    className={`
-                      flex items-center gap-2 rounded-md transition-all duration-150 select-none mx-1
-                      ${(!isMobileSidebarOpen ? !isDesktopSidebarOpen : false)
-                        ? 'justify-center px-0 py-1.5'
-                        : 'px-2.5 py-1.5'
-                      }
-                      ${location.pathname.startsWith('/app/account-settings')
-                        ? 'bg-slate-200 dark:bg-slate-700/90 text-slate-900 dark:text-white font-semibold border border-slate-300 dark:border-slate-600'
-                        : 'text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-slate-200'
-                      }
-                    `}
+                    onMouseLeave={() => { if (isSidebarCollapsed) setCollapsedNavHover(null); }}
                   >
-                    <span className={`flex-shrink-0 flex items-center justify-center w-5 h-5`}>
-                      <i className={`fa-solid fa-sliders text-[13px] ${location.pathname.startsWith('/app/account-settings') ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-500 group-hover:text-slate-700'}`}></i>
-                    </span>
-                    {(!isMobileSidebarOpen ? isDesktopSidebarOpen : true) && (
-                      <span className="text-[13px] leading-none whitespace-nowrap">Configuración</span>
-                    )}
-                    {(!isMobileSidebarOpen ? !isDesktopSidebarOpen : false) && (
-                      <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2.5 bg-slate-800 dark:bg-slate-900 text-white text-xs px-2.5 py-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none shadow-lg">
+                    <Link
+                      to="/app/account-settings"
+                      onClick={() => { setIsMobileSidebarOpen(false); setCollapsedNavHover(null); }}
+                      className={`
+                        flex items-center rounded-lg transition-all duration-150 select-none
+                        ${isSidebarCollapsed
+                          ? 'gap-0 px-0 py-0 w-10 h-10 justify-center rounded-full'
+                          : 'gap-2 px-3 py-1.5 mx-2 w-auto'}
+                        ${location.pathname.startsWith('/app/account-settings')
+                          ? 'bg-slate-200 dark:bg-slate-700/90 text-slate-900 dark:text-white font-semibold border border-slate-300 dark:border-slate-600'
+                          : 'text-slate-700 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 hover:text-slate-900 dark:hover:text-slate-200'
+                        }
+                      `}
+                    >
+                      <span className="flex-shrink-0 flex items-center justify-center w-5 h-5">
+                        <i className={`fa-solid fa-sliders text-[13px] ${location.pathname.startsWith('/app/account-settings') ? 'text-slate-800 dark:text-slate-100' : 'text-slate-500 dark:text-slate-500 group-hover:text-slate-700'}`}></i>
+                      </span>
+                      <span className={`text-[13px] leading-none whitespace-nowrap transition-opacity duration-200 ${isSidebarCollapsed ? 'hidden' : 'block'}`}>
                         Configuración
-                        <span className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent border-r-slate-800 dark:border-r-slate-900"></span>
-                      </div>
-                    )}
-                  </Link>
-                </li>
+                      </span>
+                    </Link>
+                  </li>
+                </div>
+              )}
+            </ul>
+          </nav>
+        </aside>
 
-                {user?.rol_user === 'superadmin' && (
-                  <NavLinkItem item={{ label: 'Usuarios', path: '/app/users', icon: 'fa-users-cog', roles: ['superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
-                )}
-                {(user?.rol_user === 'superadmin' || currentUser?.module_access?.financials) && (
-                  <NavLinkItem item={{ label: 'Cartera', path: '/app/financials', icon: 'fa-wallet', roles: ['admin', 'superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
-                )}
-                {userRole === 'superadmin' && (
-                  <NavLinkItem item={{ label: 'Tenants', path: '/app/companies', icon: 'fa-server', roles: ['superadmin'] }} isCollapsed={!isMobileSidebarOpen ? !isDesktopSidebarOpen : false} />
-                )}
-              </div>
-            )}
-          </ul>
-        </nav>
-      </aside>
+        {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
+        <main className="flex-1 overflow-y-auto bg-slate-50/50 dark:bg-slate-800/30">
+          <div className="w-full h-full">
+            {children}
+          </div>
+        </main>
+      </div>
+
+      {collapsedNavHover && !isDesktopSidebarOpen && !isMobileSidebarOpen && (
+        <div
+          className="fixed z-[80] pointer-events-none"
+          style={{ top: `${collapsedNavHover.top}px`, left: `${collapsedNavHover.left}px` }}
+        >
+          <div className="-translate-y-1/2 px-2.5 py-1.5 rounded-lg border border-slate-200/90 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur-sm text-[12px] font-medium text-slate-700 dark:text-slate-100 shadow-[0_8px_24px_rgba(15,23,42,0.16)] whitespace-nowrap">
+            {collapsedNavHover.label}
+          </div>
+        </div>
+      )}
 
       {/* ── Logout Confirm Modal ─────────────────────────────────────────────── */}
       {showLogoutConfirm && (
@@ -333,231 +476,92 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </div>
       )}
 
-      {/* ── Main content ────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
-
-        {/* Header */}
-        <header className="h-[52px] bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 z-20 shrink-0">
-          <div className="flex items-center gap-3">
-            {/* Hamburger (mobile) */}
-            <button
-              onClick={() => setIsMobileSidebarOpen(true)}
-              className="md:hidden text-slate-400 hover:text-slate-700 dark:hover:text-white p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              <i className="fa-solid fa-bars text-base"></i>
-            </button>
-
-            {/* Toggle (desktop) */}
-            <button
-              onClick={() => setIsDesktopSidebarOpen(!isDesktopSidebarOpen)}
-              className="hidden md:flex items-center justify-center w-7 h-7 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-all"
-            >
-              <i className={`fa-solid fa-indent text-sm transition-transform duration-200 ${!isDesktopSidebarOpen ? 'rotate-180' : ''}`}></i>
-            </button>
-
-            {/* Breadcrumb */}
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="sm:hidden text-slate-800 dark:text-slate-100 font-medium text-[12px] truncate max-w-[160px]">
-                {mobileCurrentRouteLabel}
-              </span>
-
-              <div className="hidden sm:flex items-center gap-1.5 text-sm">
-                {(() => {
-                  const pathSegments = location.pathname.split('/').filter(Boolean);
-                  const lastSegment = pathSegments[pathSegments.length - 1] || 'dashboard';
-                  if (location.pathname === '/app/followups') {
-                    return <span className="text-slate-800 dark:text-slate-100 font-medium text-[13px]">Seguimiento</span>;
-                  }
-                  const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'account-settings', 'integrations', 'workspace-settings', 'settings', 'calendar', 'dashboard', 'new', 'edit', 'marketing'];
-                  let breadcrumbs: { label: string; path: string; isActive: boolean }[] = [];
-                  if (lastSegment === 'edit' && pathSegments.length > 1) {
-                    const collectionKey = pathSegments[pathSegments.length - 2];
-                    const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    breadcrumbs = [
-                      { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
-                      { label: location.state?.breadcrumb || 'Edición', path: location.pathname, isActive: true }
-                    ];
-                  } else if (!knownRoutes.includes(lastSegment) && pathSegments.length > 1) {
-                    const collectionKey = pathSegments[pathSegments.length - 2];
-                    const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    breadcrumbs = [
-                      { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
-                      { label: location.state?.breadcrumb || 'Detalle', path: location.pathname, isActive: true }
-                    ];
-                  } else if (lastSegment === 'new' && pathSegments.length > 1) {
-                    const collectionKey = pathSegments[pathSegments.length - 2];
-                    const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    breadcrumbs = [
-                      { label: collectionName, path: `/app/${collectionKey}`, isActive: false },
-                      { label: 'Nuevo', path: location.pathname, isActive: true }
-                    ];
-                  } else {
-                    const pageName = PAGE_NAMES[lastSegment] || lastSegment.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-                    breadcrumbs = [{ label: pageName, path: location.pathname, isActive: true }];
-                  }
-                  return breadcrumbs.map((crumb, idx) => (
-                    <React.Fragment key={crumb.path}>
-                      {idx > 0 && (
-                        <i className="fa-solid fa-chevron-right text-[9px] text-slate-300 dark:text-slate-600 mx-0.5"></i>
-                      )}
-                      {crumb.isActive ? (
-                        <span className="text-slate-800 dark:text-slate-100 font-medium text-[13px]">{crumb.label}</span>
-                      ) : (
-                        <Link
-                          to={crumb.path}
-                          className="text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 text-[13px] transition-colors"
-                        >
-                          {crumb.label}
-                        </Link>
-                      )}
-                    </React.Fragment>
-                  ));
-                })()}
+      {/* ── User dropdown portal ───────────────────────────────────────────── */}
+      {userMenuOpen && menuPosition && createPortal(
+        <div
+          onMouseDown={(e) => e.stopPropagation()}
+          className="fixed w-60 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 z-[99999]"
+          style={{
+            top: `${menuPosition.top}px`,
+            right: `${menuPosition.right}px`,
+          }}
+        >
+          {/* User info */}
+          <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-700/80 mb-1">
+            <div className="flex items-center gap-2.5">
+              <Avatar src={user?.avatar_url || null} name={user?.name_user || 'Usuario'} size="sm" className="flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 truncate">
+                  {user?.name_user || 'Usuario'}
+                </p>
+                {user?.name_tenant && (
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500">{user.name_tenant}</p>
+                )}
               </div>
             </div>
           </div>
 
-          {/* Right side */}
-          <div className="flex items-center gap-3">
-            {cacheLoading && (
-              <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                <ButtonLoader size="xs" />
-                <span className="hidden sm:block">Cargando...</span>
-              </div>
-            )}
+          {/* Mi Cuenta */}
+          <MenuSection label="Mi cuenta">
+            <MenuItem
+              icon="fa-regular fa-user"
+              label="Perfil"
+              onClick={() => openAccountSettings('profile')}
+            />
+          </MenuSection>
 
-            {user?.name_tenant && (
-              <div className="flex flex-col items-end leading-none">
-                <span className="text-[11px] sm:text-[12px] font-semibold text-slate-900 dark:text-slate-100 tracking-wide">
-                  {user.name_tenant}
-                </span>
-                <span className="text-[9px] sm:text-[10px] italic text-slate-500 dark:text-slate-400 mt-0.5">Workspace</span>
-              </div>
-            )}
+          <MenuDivider />
 
-            {/* Avatar button */}
-            <div className="relative flex items-center" ref={userMenuRef}>
-              <button
-                ref={userMenuButtonRef}
-                onClick={() => setUserMenuOpen(o => !o)}
-                className={`relative flex items-center justify-center p-1 rounded-full transition-all duration-150 border
-                  ${userMenuOpen
-                    ? 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700'
-                    : 'border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 hover:border-slate-200 dark:hover:border-slate-700'
-                  }
-                `}
-              >
-                <img
-                  src={getImageUrl(user?.avatar_url) || 'https://ui-avatars.com/api/?name=User&background=random'}
-                  alt="User"
-                  className="w-8 h-8 rounded-full object-cover"
-                  referrerPolicy="no-referrer"
+          {/* Integraciones */}
+          <MenuSection label="Integraciones">
+            <MenuItem
+              icon="fa-solid fa-plug"
+              label="Integraciones personales"
+              onClick={() => openAccountSettings('personalIntegrations')}
+            />
+          </MenuSection>
+
+          {isWorkspaceOwner && (
+            <>
+              <MenuDivider />
+              <MenuSection label="Workspace">
+                <MenuItem
+                  icon="fa-solid fa-building"
+                  label="Integraciones del workspace"
+                  onClick={() => openAccountSettings('tenantIntegrations')}
                 />
-                <span className="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-white dark:border-slate-900"></span>
-              </button>
-            </div>
-          </div>
-        </header>
+              </MenuSection>
+            </>
+          )}
 
-        {/* Scrollable content */}
-        <main className="flex-1 min-h-0 overflow-y-auto bg-slate-50/50 dark:bg-slate-800/30 p-1 md:p-2 scroll-smooth">
-          <div className="w-full h-full">
-            {children}
-          </div>
-        </main>
+          <MenuDivider />
 
-        {/* ── User dropdown portal ───────────────────────────────────────────── */}
-        {userMenuOpen && menuPosition && createPortal(
-          <div
-            onMouseDown={(e) => e.stopPropagation()}
-            className="fixed w-60 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl py-1.5 z-[99999]"
-            style={{
-              top: `${menuPosition.top}px`,
-              right: `${menuPosition.right}px`,
-            }}
+          {/* Preferencias */}
+          <button
+            type="button"
+            onClick={() => { setIsDarkMode((prev) => !prev); setUserMenuOpen(false); }}
+            className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors rounded-md mx-auto"
+            style={{ width: 'calc(100% - 8px)', marginLeft: 4, marginRight: 4 }}
           >
-            {/* User info */}
-            <div className="px-3 py-2.5 border-b border-slate-100 dark:border-slate-700/80 mb-1">
-              <div className="flex items-center gap-2.5">
-                <img
-                  src={getImageUrl(user?.avatar_url) || 'https://ui-avatars.com/api/?name=User&background=random'}
-                  alt="User"
-                  className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="min-w-0">
-                  <p className="text-[13px] font-semibold text-slate-800 dark:text-slate-100 truncate">
-                    {user?.name_user || 'Usuario'}
-                  </p>
-                  {user?.name_tenant && (
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500">{user.name_tenant}</p>
-                  )}
-                </div>
-              </div>
-            </div>
+            <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'} w-4 text-center text-slate-400 text-[12px]`}></i>
+            <span>{isDarkMode ? 'Modo claro' : 'Modo oscuro'}</span>
+          </button>
 
-            {/* Mi Cuenta */}
-            <MenuSection label="Mi cuenta">
-              <MenuItem
-                icon="fa-regular fa-user"
-                label="Perfil"
-                onClick={() => openAccountSettings('profile')}
-              />
-            </MenuSection>
+          <MenuDivider />
 
-            <MenuDivider />
-
-            {/* Integraciones */}
-            <MenuSection label="Integraciones">
-              <MenuItem
-                icon="fa-solid fa-plug"
-                label="Integraciones personales"
-                onClick={() => openAccountSettings('personalIntegrations')}
-              />
-            </MenuSection>
-
-            {isWorkspaceOwner && (
-              <>
-                <MenuDivider />
-                <MenuSection label="Workspace">
-                  <MenuItem
-                    icon="fa-solid fa-building"
-                    label="Integraciones del workspace"
-                    onClick={() => openAccountSettings('tenantIntegrations')}
-                  />
-                </MenuSection>
-              </>
-            )}
-
-            <MenuDivider />
-
-            {/* Preferencias */}
-            <button
-              type="button"
-              onClick={() => { setIsDarkMode((prev) => !prev); setUserMenuOpen(false); }}
-              className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors rounded-md mx-auto"
-              style={{ width: 'calc(100% - 8px)', marginLeft: 4, marginRight: 4 }}
-            >
-              <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'} w-4 text-center text-slate-400 text-[12px]`}></i>
-              <span>{isDarkMode ? 'Modo claro' : 'Modo oscuro'}</span>
-            </button>
-
-            <MenuDivider />
-
-            {/* Logout */}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors rounded-md"
-              style={{ width: 'calc(100% - 8px)', marginLeft: 4, marginRight: 4 }}
-            >
-              <i className="fa-solid fa-arrow-right-from-bracket w-4 text-center text-[12px]"></i>
-              <span>Cerrar sesión</span>
-            </button>
-          </div>,
-          document.body
-        )}
-      </div>
+          {/* Logout */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors rounded-md"
+            style={{ width: 'calc(100% - 8px)', marginLeft: 4, marginRight: 4 }}
+          >
+            <i className="fa-solid fa-arrow-right-from-bracket w-4 text-center text-[12px]"></i>
+            <span>Cerrar sesión</span>
+          </button>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

@@ -14,6 +14,7 @@ import ConfirmModal from '../../components/ConfirmModal';
 import UserModal from '../../components/UserModal';
 import { apiFetch } from '../../services/apiClient';
 import { handleApiResponse } from '../../utils/apiResponseHandler';
+import { getImageUrl, getLocalAvatarDataUrl } from '../../utils/imageUtils';
 
 const UsersList: React.FC = () => {
   const { user } = useAuth();
@@ -369,7 +370,7 @@ const UsersList: React.FC = () => {
                                 <div className="relative flex-shrink-0">
                                   <img 
                                     className="h-10 w-10 rounded-full object-cover border-2 border-white shadow-sm" 
-                                    src={u.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name_user)}&background=random&size=100`} 
+                                    src={getImageUrl(u.avatar_url) || getLocalAvatarDataUrl(u.name_user)} 
                                     alt="" 
                                   />
                                   {u.is_owner && (
@@ -518,7 +519,7 @@ const UsersList: React.FC = () => {
                           <div className="relative">
                             <img 
                               className="h-10 w-10 rounded-full object-cover border-2 border-white shadow-sm" 
-                              src={u.avatar_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name_user)}&background=random&size=100`} 
+                              src={getImageUrl(u.avatar_url) || getLocalAvatarDataUrl(u.name_user)} 
                               alt="" 
                             />
                             {u.is_owner && (

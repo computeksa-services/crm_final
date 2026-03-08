@@ -38,14 +38,8 @@ export const NAV_GROUPS = [
   {
     title: 'Ventas',
     items: [
-      { label: 'Cotizaciones', path: '/app/quotes', icon: 'fa-file-invoice-dollar', roles: ['superadmin', 'admin', 'usuario'], module: 'crm' },
       { label: 'Tratos', path: '/app/deals', icon: 'fa-handshake', roles: ['superadmin', 'admin', 'usuario'], module: 'crm' },
-    ]
-  },
-  {
-    title: 'Marketing',
-    items: [
-      { label: 'Marketing Center', path: '/app/marketing', icon: 'fa-bullseye', roles: ['superadmin', 'admin', 'usuario'], module: 'marketing' },
+      { label: 'Cotizaciones', path: '/app/quotes', icon: 'fa-file-invoice-dollar', roles: ['superadmin', 'admin', 'usuario'], module: 'crm' },
     ]
   },
   {
@@ -56,9 +50,15 @@ export const NAV_GROUPS = [
     ]
   },
   {
-    title: 'Inventario',
+    title: 'Marketing',
     items: [
-      { label: 'Productos', path: '/app/products', icon: 'fa-box-archive', roles: ['superadmin', 'admin', 'usuario'], module: 'crm' },
+      { label: 'Marketing Center', path: '/app/marketing', icon: 'fa-bullseye', roles: ['superadmin', 'admin', 'usuario'], module: 'marketing' },
+    ]
+  },
+  {
+    title: 'Finanzas',
+    items: [
+      { label: 'Cartera', path: '/app/financials', icon: 'fa-wallet', roles: ['superadmin', 'admin'], module: 'financials' },
     ]
   }
 ];

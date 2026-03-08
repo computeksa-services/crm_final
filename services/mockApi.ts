@@ -42,7 +42,7 @@ let mockUsers: User[] = [
     rol_user: 'superadmin',
     status_user: 'Activo',
     job_title: 'Gerente General',
-    avatar_url: 'https://ui-avatars.com/api/?name=Admin',
+    avatar_url: '',
     googleConnected: false,
     outlookConnected: false
   }

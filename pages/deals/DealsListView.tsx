@@ -1,13 +1,16 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Deal, DealStatus, DealInterest, Quote } from '../../types';
 import { apiFetch } from '../../services/apiClient';
-import { canEditInline, canUserAction } from '../../utils/permissions';
+import DealActionsMenu from '../../components/DealActionsMenu';
+import { canEditInline } from '../../utils/permissions';
+import Avatar from '../../components/Avatar';
 
 interface DealsListViewProps {
   deals: Deal[];
   cachedDealStatuses: DealStatus[];
   cachedDealInterests: DealInterest[];
+  cachedUsers?: any[];
   showArchived: boolean;
   grouping: string[];
   user: any;
@@ -17,10 +20,11 @@ interface DealsListViewProps {
   onDelete: (id: string) => void;
   onStatusChange: (deal: Deal, statusId: string, quotes: Quote[], pendingStatusId: string) => void;
   onInterestChange: (deal: Deal, interestId: string) => void;
+  onInlineUpdate: (deal: Deal, updates: Partial<Deal>) => Promise<void>;
   onRefresh: () => void;
 }
 
-// ─── UTILS ───────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ UTILS ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 const parseDealValue = (value: Deal['valor_trato']) => {
   if (typeof value === 'number') return value;
   if (typeof value === 'string') {
@@ -56,14 +60,40 @@ const formatDate = (value?: string | null): string | null => {
 
 const inactiveMeta = (days: number | null | undefined) => {
   if (days === null || days === undefined) return null;
-  if (days === 0)    return { label: 'Al día',   cls: 'text-emerald-500' };
+  if (days === 0)    return { label: 'Al d├¡a',   cls: 'text-emerald-500' };
   if (days <= 7)     return { label: `${days}d`, cls: 'text-emerald-400' };
   if (days <= 15)    return { label: `${days}d`, cls: 'text-amber-400'   };
   if (days <= 30)    return { label: `${days}d`, cls: 'text-orange-400'  };
   return               { label: `${days}d`, cls: 'text-red-500'     };
 };
 
-// ─── INLINE BADGE SELECTOR (igual que en DealsTable) ─────────────────────────
+const resolveUser = (users: any[] = [], id: string | number | undefined | null) => {
+  if (!id) return null;
+  return users.find(u =>
+    String(u?.id_user ?? '') === String(id) ||
+    String(u?.id ?? '') === String(id)
+  ) || null;
+};
+
+const getGroupVisual = (
+  activeGroup: string,
+  label: string,
+  statuses: DealStatus[],
+  interests: DealInterest[]
+): { color?: string; icon?: string; text: string } => {
+  const text = label || 'Sin asignar';
+  if (activeGroup === 'estado_nombre') {
+    const match = statuses.find(s => s.name?.toUpperCase() === text.toUpperCase());
+    return { color: match?.color, icon: match?.icon, text };
+  }
+  if (activeGroup === 'interes_nombre') {
+    const match = interests.find(i => i.name?.toUpperCase() === text.toUpperCase());
+    return { color: match?.color, icon: match?.icon, text };
+  }
+  return { text };
+};
+
+// ÔöÇÔöÇÔöÇ INLINE BADGE SELECTOR (igual que en DealsTable) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 const InlineBadgeSelector: React.FC<{
   valueId: string;
   items: { id: string; name: string; color?: string; icon?: string; notify_client?: boolean }[];
@@ -112,7 +142,7 @@ const InlineBadgeSelector: React.FC<{
         style={{ backgroundColor: current?.color || '#94a3b8', color: '#fff' }}
       >
         {current?.icon && <i className={`${current.icon} text-[8px]`} />}
-        <span>{current?.name || '—'}</span>
+        <span>{current?.name || 'ÔÇö'}</span>
         {current?.notify_client && <i className="fa-solid fa-envelope text-[8px] opacity-70" />}
         {!disabled && <i className="fa-solid fa-chevron-down text-[7px] opacity-60 ml-0.5" />}
       </button>
@@ -140,7 +170,7 @@ const InlineBadgeSelector: React.FC<{
                 <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: current?.color || '#94a3b8' }}>
                   <i className={`${current?.icon || 'fa-solid fa-tag'} text-[8px] text-white`} />
                 </div>
-                <span className="text-[11px] font-medium text-slate-700">{current?.name || '—'}</span>
+                <span className="text-[11px] font-medium text-slate-700">{current?.name || 'ÔÇö'}</span>
                 {current?.notify_client && renderNotifyBadge()}
                 <i className="fa-solid fa-check text-[8px] ml-auto text-slate-400" />
               </div>
@@ -163,98 +193,12 @@ const InlineBadgeSelector: React.FC<{
   );
 };
 
-// ─── ACTIONS MENU ─────────────────────────────────────────────────────────────
-const ActionsMenu: React.FC<{
-  deal: Deal;
-  user: any;
-  onEdit: (deal: Deal) => void;
-  onShare: (deal: Deal) => void;
-  onArchive: (deal: Deal) => void;
-  onDelete: (id: string) => void;
-}> = ({ deal, user, onEdit, onShare, onArchive, onDelete }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef   = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
-
-  const canEdit   = canUserAction(user, deal, 'edit');
-  const canDelete = canUserAction(user, deal, 'delete');
-  const canShare  = canUserAction(user, deal, 'share');
-
-  const openMenu = (e: React.MouseEvent) => {
-    e.stopPropagation(); e.preventDefault();
-    if (!buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const menuH = 180;
-    const top = window.innerHeight - rect.bottom < menuH ? rect.top - menuH - 4 : rect.bottom + 4;
-    setMenuStyle({ position: 'fixed', top, left: rect.left, zIndex: 9999 });
-    setIsOpen(p => !p);
-  };
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handler   = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node) &&
-          buttonRef.current && !buttonRef.current.contains(e.target as Node)) setIsOpen(false);
-    };
-    const onScroll  = () => setIsOpen(false);
-    const onKey     = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
-    document.addEventListener('mousedown', handler);
-    document.addEventListener('scroll', onScroll, true);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', handler);
-      document.removeEventListener('scroll', onScroll, true);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [isOpen]);
-
-  return (
-    <>
-      <button ref={buttonRef} onClick={openMenu}
-        className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all flex-shrink-0"
-        title="Opciones">
-        <i className="fa-solid fa-ellipsis-vertical text-[11px]" />
-      </button>
-      {isOpen && (
-        <div ref={menuRef} style={menuStyle} className="w-44 bg-white border border-slate-200 rounded-lg shadow-xl py-1 text-sm">
-          {canEdit && (
-            <button onMouseDown={e => { e.stopPropagation(); onEdit(deal); setIsOpen(false); }}
-              className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-600 flex items-center gap-2.5 text-xs transition-colors">
-              <i className="fa-solid fa-pen text-slate-300 w-3.5" /> Editar
-            </button>
-          )}
-          {canShare && (
-            <button onMouseDown={e => { e.stopPropagation(); onShare(deal); setIsOpen(false); }}
-              className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-600 flex items-center gap-2.5 text-xs transition-colors">
-              <i className="fa-solid fa-user-plus text-slate-300 w-3.5" /> Compartir
-            </button>
-          )}
-          <button onMouseDown={e => { e.stopPropagation(); onArchive(deal); setIsOpen(false); }}
-            className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-600 flex items-center gap-2.5 text-xs transition-colors">
-            <i className={`fa-solid ${deal.archived ? 'fa-box-open' : 'fa-box-archive'} text-slate-300 w-3.5`} />
-            {deal.archived ? 'Desarchivar' : 'Archivar'}
-          </button>
-          {canDelete && (
-            <>
-              <div className="border-t border-slate-100 my-1" />
-              <button onMouseDown={e => { e.stopPropagation(); onDelete(deal.id_trato); setIsOpen(false); }}
-                className="w-full text-left px-3 py-1.5 hover:bg-red-50 text-red-500 flex items-center gap-2.5 text-xs transition-colors">
-                <i className="fa-solid fa-trash text-red-300 w-3.5" /> Eliminar
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </>
-  );
-};
-
-// ─── DEAL CARD ────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ DEAL CARD ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 const DealCard: React.FC<{
   deal: Deal;
   cachedDealStatuses: DealStatus[];
   cachedDealInterests: DealInterest[];
+  cachedUsers: any[];
   user: any;
   onNavigate: (id: string) => void;
   onEdit: (deal: Deal) => void;
@@ -263,7 +207,7 @@ const DealCard: React.FC<{
   onDelete: (id: string) => void;
   onStatusSelect: (deal: Deal, id: string) => void;
   onInterestSelect: (deal: Deal, id: string) => void;
-}> = ({ deal, cachedDealStatuses, cachedDealInterests, user, onNavigate,
+}> = ({ deal, cachedDealStatuses, cachedDealInterests, cachedUsers, user, onNavigate,
         onEdit, onShare, onArchive, onDelete, onStatusSelect, onInterestSelect }) => {
 
   const status = cachedDealStatuses.find(s =>
@@ -280,6 +224,13 @@ const DealCard: React.FC<{
   const updated  = formatDate(deal.updated_at);
   const inactive = inactiveMeta(deal.days_inactive);
   const canEdit  = canEditInline(user, deal);
+  const collaborators = (deal as any).collaborators || [];
+
+  const sortedCollaborators = [...collaborators].sort((a: any, b: any) => {
+    if (a.is_owner !== b.is_owner) return b.is_owner ? 1 : -1;
+    const levelOrder = { EDIT: 1, VIEW: 2, BLOCKED: 3 };
+    return (levelOrder[a.access_level as keyof typeof levelOrder] || 3) - (levelOrder[b.access_level as keyof typeof levelOrder] || 3);
+  });
 
   return (
     <div
@@ -291,23 +242,67 @@ const DealCard: React.FC<{
 
       <div className="p-3 flex flex-col gap-2.5 flex-1">
 
-        {/* ── HEADER: actions + estado seleccionable ── */}
+        {/* ÔöÇÔöÇ HEADER: estado + colaboradores + acciones ÔöÇÔöÇ */}
         <div className="flex items-center justify-between gap-2" onClick={e => e.stopPropagation()}>
-          <InlineBadgeSelector
-            valueId={deal.id_deal_status || ''}
-            items={cachedDealStatuses.map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon, notify_client: s.notify_client }))}
-            onSelect={id => onStatusSelect(deal, id)}
-            disabled={!canEdit}
-          />
-          <ActionsMenu deal={deal} user={user} onEdit={onEdit} onShare={onShare} onArchive={onArchive} onDelete={onDelete} />
+          <div className="flex items-center gap-2 min-w-0">
+            <InlineBadgeSelector
+              valueId={deal.id_deal_status || ''}
+              items={cachedDealStatuses.map(s => ({ id: s.id_status, name: s.name, color: s.color, icon: s.icon, notify_client: s.notify_client }))}
+              onSelect={id => onStatusSelect(deal, id)}
+              disabled={!canEdit}
+            />
+
+            {sortedCollaborators.length > 0 && (
+              <div className="flex items-center gap-1 min-w-0">
+                {sortedCollaborators.slice(0, 3).map((collab: any, idx: number) => {
+                  const collabId = collab.id ?? collab.id_user ?? collab.user_id ?? collab.userId;
+                  const u = resolveUser(cachedUsers, collabId);
+                  const userName = u?.name_user || collab?.name || collab?.user_name || collab?.email || 'Usuario';
+                  const userAvatar =
+                    u?.avatar_url ||
+                    (u as any)?.avatar ||
+                    collab?.avatar_url ||
+                    collab?.avatar ||
+                    collab?.user_avatar ||
+                    null;
+                  const isOwner = !!collab.is_owner;
+                  const isPrincipal = collab.access_level === 'EDIT' && !isOwner;
+                  const badgeType: 'OWNER' | 'EDIT' | 'VIEW' = isOwner ? 'OWNER' : isPrincipal ? 'EDIT' : 'VIEW';
+                  const tooltipLevel = isOwner ? 'Creador' : isPrincipal ? 'Principal' : 'Secundario';
+
+                  return (
+                    <div key={collab.id ?? collab.id_user ?? idx} className="inline-flex items-center">
+                      <Avatar
+                        src={userAvatar}
+                        name={userName}
+                        size="xs"
+                        className="cursor-pointer"
+                        badgeInset
+                        badge={{ type: badgeType }}
+                        enableHoverZoom
+                        hoverScale={1.18}
+                        showTooltip
+                        tooltipRole={tooltipLevel}
+                        tooltipPosition="bottom"
+                      />
+                    </div>
+                  );
+                })}
+                {sortedCollaborators.length > 3 && (
+                  <span className="text-[10px] text-slate-400 font-medium ml-0.5">+{sortedCollaborators.length - 3}</span>
+                )}
+              </div>
+            )}
+          </div>
+          <DealActionsMenu deal={deal} user={user} onEdit={onEdit} onShare={onShare} onArchive={onArchive} onDelete={onDelete} anchor="auto-left" />
         </div>
 
-        {/* ── NOMBRE ── */}
+        {/* ÔöÇÔöÇ NOMBRE ÔöÇÔöÇ */}
         <h3 className="text-sm font-semibold text-slate-800 line-clamp-2 leading-snug group-hover:text-slate-900">
           {deal.nombre_trato || 'Sin nombre'}
         </h3>
 
-        {/* ── CLIENTE + CONTACTO ── */}
+        {/* ÔöÇÔöÇ CLIENTE + CONTACTO ÔöÇÔöÇ */}
         <div className="space-y-0.5">
           {deal.client_company_name && (
             <div className="flex items-center gap-1.5">
@@ -323,7 +318,7 @@ const DealCard: React.FC<{
           )}
         </div>
 
-        {/* ── INTERÉS seleccionable ── */}
+        {/* ÔöÇÔöÇ INTER├ëS seleccionable ÔöÇÔöÇ */}
         {(deal.id_interest || deal.interes_nombre) && (
           <div onClick={e => e.stopPropagation()}>
             <InlineBadgeSelector
@@ -335,7 +330,7 @@ const DealCard: React.FC<{
           </div>
         )}
 
-        {/* ── FOOTER: valor + fechas + inactividad ── */}
+        {/* ÔöÇÔöÇ FOOTER: valor + fechas + inactividad ÔöÇÔöÇ */}
         <div className="flex items-end justify-between gap-2 pt-2 border-t border-slate-100 mt-auto">
           {valor > 0 ? (
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
@@ -343,7 +338,7 @@ const DealCard: React.FC<{
               <span className="text-[11px] font-semibold text-slate-800 tabular-nums">{formatAmount(valor)}</span>
             </span>
           ) : (
-            <span className="text-xs text-slate-300">—</span>
+            <span className="text-xs text-slate-300">ÔÇö</span>
           )}
 
           <div className="flex items-center gap-2">
@@ -369,15 +364,15 @@ const DealCard: React.FC<{
   );
 };
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ MAIN COMPONENT ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 const DealsListView: React.FC<DealsListViewProps> = ({
-  deals, cachedDealStatuses, cachedDealInterests,
+  deals, cachedDealStatuses, cachedDealInterests, cachedUsers = [],
   showArchived, grouping, user,
-  onEdit, onShare, onArchive, onDelete, onStatusChange, onInterestChange, onRefresh,
+  onEdit, onShare, onArchive, onDelete, onStatusChange, onInterestChange, onInlineUpdate, onRefresh,
 }) => {
   const navigate = useNavigate();
 
-  // ─── LOCAL STATE FOR GROUP COLLAPSE ──────────────────────────────────────
+  // ÔöÇÔöÇÔöÇ LOCAL STATE FOR GROUP COLLAPSE ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
     const saved = localStorage.getItem('dealsListCollapsedGroups');
     try { return new Set(saved ? JSON.parse(saved) : []); } catch { return new Set(); }
@@ -416,7 +411,7 @@ const DealsListView: React.FC<DealsListViewProps> = ({
       } else if (activeGroup === 'estado_nombre') {
         key = (deal as any).estado_nombre || deal.estado_actual?.name || 'Sin estado';
       } else if (activeGroup === 'interes_nombre') {
-        key = deal.interes_nombre || deal.interes_actual?.name || 'Sin interés';
+        key = deal.interes_nombre || deal.interes_actual?.name || 'Sin inter├®s';
       }
 
       const current = groups.get(key) || [];
@@ -447,11 +442,7 @@ const DealsListView: React.FC<DealsListViewProps> = ({
     }
 
     try {
-      await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_trato: deal.id_trato, id_deal_status: newStatusId, id_user: user?.id_user }),
-      });
-      onRefresh();
+      await onInlineUpdate(deal, { id_deal_status: newStatusId });
     } catch (e) { console.error(e); }
   };
 
@@ -500,7 +491,21 @@ const DealsListView: React.FC<DealsListViewProps> = ({
                   className="w-full flex items-center gap-2 px-1 py-1 hover:bg-slate-50 rounded transition-colors text-left"
                 >
                   <i className={`fa-solid fa-chevron-down text-[10px] text-slate-400 transition-transform ${collapsedGroups.has(group.key) ? '-rotate-90' : ''}`} />
-                  <span className="text-xs font-semibold text-slate-600">{group.key}</span>
+                  {(() => {
+                    const visual = getGroupVisual(activeGroup, group.key, cachedDealStatuses, cachedDealInterests);
+                    if ((activeGroup === 'estado_nombre' || activeGroup === 'interes_nombre') && visual.color) {
+                      return (
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold"
+                          style={{ backgroundColor: visual.color, color: '#fff' }}
+                        >
+                          {visual.icon && <i className={`${visual.icon} text-[9px]`} />}
+                          <span>{visual.text}</span>
+                        </span>
+                      );
+                    }
+                    return <span className="text-xs font-semibold text-slate-600">{group.key}</span>;
+                  })()}
                   <span className="text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-full">{group.deals.length}</span>
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-slate-200 bg-slate-50" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
                     <span className="text-[10px] font-semibold text-slate-700">$</span>
@@ -515,6 +520,7 @@ const DealsListView: React.FC<DealsListViewProps> = ({
                         deal={deal}
                         cachedDealStatuses={cachedDealStatuses}
                         cachedDealInterests={cachedDealInterests}
+                        cachedUsers={cachedUsers}
                         user={user}
                         onNavigate={id => navigate(`/app/deals/${id}`)}
                         onEdit={onEdit}
@@ -538,6 +544,7 @@ const DealsListView: React.FC<DealsListViewProps> = ({
                 deal={deal}
                 cachedDealStatuses={cachedDealStatuses}
                 cachedDealInterests={cachedDealInterests}
+                cachedUsers={cachedUsers}
                 user={user}
                 onNavigate={id => navigate(`/app/deals/${id}`)}
                 onEdit={onEdit}

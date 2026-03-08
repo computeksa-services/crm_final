@@ -9,6 +9,7 @@ import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
 import QuoteFormModal from '../../components/QuoteFormModal';
+import { getImageUrl, getLocalAvatarDataUrl } from '../../utils/imageUtils';
 
 // --- TIPOS EXTENDIDOS ---
 interface Attachment {
@@ -1300,7 +1301,7 @@ const QuoteDetail: React.FC = () => {
                       <div key={collaborator.id_user} className="flex items-center justify-between text-xs p-2 rounded-lg hover:bg-slate-50 transition-colors">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           {collaborator.avatar ? (
-                            <img src={collaborator.avatar} alt={collaborator.name} className="w-6 h-6 rounded-full border border-slate-200" />
+                            <img src={getImageUrl(collaborator.avatar) || getLocalAvatarDataUrl(collaborator.name)} alt={collaborator.name} className="w-6 h-6 rounded-full border border-slate-200" />
                           ) : (
                             <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
                               {(collaborator.name || 'U').charAt(0)}

@@ -372,6 +372,7 @@ export interface Deal {
   updated_at?: string;
   created_at?: string;
   days_inactive?: number | null;
+  inactive_time_text?: string;
 }
 
 export interface DealPermission {
@@ -384,6 +385,7 @@ export interface DealPermission {
 
 // 8. COTIZACIONES (QUOTES)
 export interface Quote {
+  archived?: boolean;
   id_cotizacion: string;
   id_tenant: string;
   id_user: string; // Vendedor/Owner

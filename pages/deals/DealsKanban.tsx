@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+﻿import React, { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DndContext, DragOverlay, PointerSensor, TouchSensor,
@@ -11,9 +11,8 @@ import {
 } from '@dnd-kit/sortable';
 import { useDroppable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { Deal, DealStatus, Quote } from '../../types';
+import { Deal, DealStatus, DealInterest, Quote } from '../../types';
 import { canEditInline } from '../../utils/permissions';
-import { useAuth } from '../../contexts/AuthContext';
 import { apiFetch } from '../../services/apiClient';
 import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
 import { quotesService } from '../../services/quotes.service';
@@ -21,6 +20,7 @@ import { BrandSpinner } from '../../components/AppLoaders';
 import SelectWinningQuoteModal from '../../components/SelectWinningQuoteModal';
 import Toast from '../../components/Toast';
 import Avatar from '../../components/Avatar';
+import DealActionsMenu from '../../components/DealActionsMenu';
 
 // Componente DropZone para zonas de drop
 const DropZone: React.FC<{ id: string; icon: string; label: string; color: string }> = ({ id, icon, label, color }) => {
@@ -47,18 +47,49 @@ const DropZone: React.FC<{ id: string; icon: string; label: string; color: strin
 interface DealsKanbanProps {
   deals: Deal[];
   dealStatuses: DealStatus[];
+  dealInterests?: DealInterest[];
   cachedUsers?: any[];
+  user: any;
+  onEdit: (deal: Deal) => void;
+  onShare: (deal: Deal) => void;
+  onArchive: (deal: Deal) => void;
+  onDelete: (id: string) => void;
   onRefresh: () => void;
 }
 
-// ─── UTILS ───────────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ UTILS ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 const formatValue = (value?: number | string) => {
   const n = typeof value === 'string' ? parseFloat(value) : (value ?? 0);
   if (!n || isNaN(n)) return null;
   return new Intl.NumberFormat('es-EC', {
     style: 'currency', currency: 'USD',
-    minimumFractionDigits: 0, maximumFractionDigits: 0,
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
   }).format(n);
+};
+
+const formatShortDate = (value?: string | null) => {
+  if (!value) return null;
+  let d: Date;
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(value.trim())) {
+    const [dd, mm, yyyy] = value.trim().split('/');
+    d = new Date(`${yyyy}-${mm}-${dd}`);
+  } else {
+    d = new Date(value.includes('T') ? value : value.replace(' ', 'T'));
+  }
+  if (isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat('es-EC', { day: 'numeric', month: 'short' })
+    .format(d)
+    .replace(/\./g, '')
+    .toLowerCase();
+};
+
+const normalizeFaIcon = (icon?: string | null) => {
+  const raw = (icon || '').trim();
+  if (!raw) return 'fa-solid fa-bullseye';
+  if (raw.includes('fa-')) {
+    return raw.startsWith('fa-') ? `fa-solid ${raw}` : raw;
+  }
+  return `fa-solid fa-${raw}`;
 };
 
 const parseDealValue = (value?: number | string) => {
@@ -71,7 +102,7 @@ const parseDealValue = (value?: number | string) => {
   return 0;
 };
 
-// Agrupar estados por categoría para columnas
+// Agrupar estados por categor├¡a para columnas
 const CATEGORY_ORDER = ['DRAFT', 'PROGRESS', 'PAUSED', 'WON', 'LOST'];
 
 const normalizeCategory = (category?: string | null) => {
@@ -91,6 +122,20 @@ const categoryMeta: Record<string, { headerBg: string; accent: string; emptyIcon
   PAUSED:   { headerBg: 'bg-amber-50',    accent: '#f59e0b', emptyIcon: 'fa-pause'       },
   WON:      { headerBg: 'bg-emerald-50',  accent: '#10b981', emptyIcon: 'fa-trophy'      },
   LOST:     { headerBg: 'bg-red-50',      accent: '#ef4444', emptyIcon: 'fa-xmark'       },
+};
+
+const getReadableTextColor = (hex?: string) => {
+  if (!hex) return '#ffffff';
+  const normalized = hex.replace('#', '').trim();
+  if (normalized.length !== 6) return '#ffffff';
+
+  const r = parseInt(normalized.slice(0, 2), 16);
+  const g = parseInt(normalized.slice(2, 4), 16);
+  const b = parseInt(normalized.slice(4, 6), 16);
+  if ([r, g, b].some(v => Number.isNaN(v))) return '#ffffff';
+
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.62 ? '#0f172a' : '#ffffff';
 };
 
 const resolveUser = (users: any[] = [], collabId: any) => {
@@ -138,7 +183,7 @@ const getCachedUsersFromLocalStorage = (tenantId?: string, userId?: string) => {
   return [];
 };
 
-// ─── COLLABORATOR AVATARS ─────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ COLLABORATOR AVATARS ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 const CollaboratorAvatars: React.FC<{ deal: Deal; cachedUsers?: any[] }> = ({ deal, cachedUsers = [] }) => {
   const collaborators = deal.collaborators ?? [];
   if (collaborators.length === 0) {
@@ -148,7 +193,19 @@ const CollaboratorAvatars: React.FC<{ deal: Deal; cachedUsers?: any[] }> = ({ de
     if (!name) return null;
     return (
       <div className="flex items-center gap-1.5">
-        <Avatar src={avatar} name={name} size="xs" badge={{ type: 'OWNER' }} />
+        <Avatar
+          src={avatar}
+          name={name}
+          size="xs"
+          className="cursor-pointer"
+          badgeInset
+          badge={{ type: 'OWNER' }}
+          enableHoverZoom
+          hoverScale={1.18}
+          showTooltip
+          tooltipRole="Creador"
+          tooltipPosition="bottom"
+        />
         <span className="text-[10px] text-slate-400 truncate max-w-[80px]">{name.split(' ')[0]}</span>
       </div>
     );
@@ -167,8 +224,8 @@ const CollaboratorAvatars: React.FC<{ deal: Deal; cachedUsers?: any[] }> = ({ de
   const extra   = sorted.length - visible.length;
 
   return (
-    <div className="flex items-center gap-1">
-      <div className="flex -space-x-1.5">
+    <div className="flex items-center gap-1 leading-none">
+      <div className="flex items-center gap-0.5">
         {visible.map((c, i) => {
           const collabId = c.id ?? c.id_user ?? c.user_id ?? c.userId ?? c.id_user_owner;
           const resolvedUser = resolveUser(cachedUsers, collabId);
@@ -186,14 +243,21 @@ const CollaboratorAvatars: React.FC<{ deal: Deal; cachedUsers?: any[] }> = ({ de
             null;
           const level = String(c.access_level || 'VIEW').toUpperCase();
           const badgeType: 'OWNER' | 'EDIT' | 'VIEW' = c.is_owner ? 'OWNER' : level === 'EDIT' ? 'EDIT' : 'VIEW';
+          const tooltipLevel = c.is_owner ? 'Creador' : level === 'EDIT' ? 'Principal' : 'Secundario';
           return (
-            <div key={c.id ?? c.id_user ?? i} className="relative" title={name}>
+            <div key={c.id ?? c.id_user ?? i} className="relative">
               <Avatar
                 src={avatar}
                 name={name}
                 size="xs"
-                className="ring-2 ring-white"
+                className="ring-1 ring-white block cursor-pointer"
+                badgeInset
                 badge={{ type: badgeType }}
+                enableHoverZoom
+                hoverScale={1.18}
+                showTooltip
+                tooltipRole={tooltipLevel}
+                tooltipPosition="bottom"
               />
             </div>
           );
@@ -206,15 +270,21 @@ const CollaboratorAvatars: React.FC<{ deal: Deal; cachedUsers?: any[] }> = ({ de
   );
 };
 
-// ─── KANBAN CARD ──────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ KANBAN CARD ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 const KanbanCard: React.FC<{
   deal: Deal;
+  dealInterests?: DealInterest[];
   cachedUsers?: any[];
+  user: any;
+  onEdit: (deal: Deal) => void;
+  onShare: (deal: Deal) => void;
+  onArchive: (deal: Deal) => void;
+  onDelete: (id: string) => void;
   isDraggable: boolean;
   isOverlay?: boolean;
-  onClick: () => void;
+  onOpen: () => void;
   style?: React.CSSProperties;
-}> = ({ deal, cachedUsers = [], isDraggable, isOverlay, onClick, style }) => {
+}> = ({ deal, dealInterests = [], cachedUsers = [], user, onEdit, onShare, onArchive, onDelete, isDraggable, isOverlay, onOpen, style }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: deal.id_trato, disabled: !isDraggable });
 
@@ -225,44 +295,76 @@ const KanbanCard: React.FC<{
     ...(isDragging ? { opacity: 0.5 } : {}),
   };
 
-  const valor = formatValue(deal.valor_trato);
+  const valorNumber = parseDealValue(deal.valor_trato);
+  const valor = valorNumber > 0 ? formatValue(valorNumber) : null;
+
+  const interestFromCatalog = (dealInterests || []).find(i =>
+    i.id_interest === deal.id_interest ||
+    i.name?.toUpperCase() === (deal.interes_nombre || deal.interes_actual?.name || '').toUpperCase()
+  ) || (deal.catalogo_intereses || []).find(i =>
+    i.id_interest === deal.id_interest ||
+    i.name?.toUpperCase() === (deal.interes_nombre || deal.interes_actual?.name || '').toUpperCase()
+  );
+
+  const interestName = deal.interes_nombre || deal.interes_actual?.name || null;
+  const interestIcon = normalizeFaIcon(
+    deal.interes_icon ||
+    deal.interes_actual?.icon ||
+    interestFromCatalog?.icon
+  );
+  const interestColor =
+    deal.interes_color ||
+    deal.interes_actual?.color ||
+    interestFromCatalog?.color ||
+    '#94a3b8';
+
+  const expectedClose = formatShortDate((deal as any).fecha_cierre_esperada);
+  const inactiveLabel = (deal.inactive_time_text || '').trim() || (deal.days_inactive === 0 ? 'Al día' : deal.days_inactive != null ? `${deal.days_inactive}d` : '');
 
   return (
     <div
       ref={setNodeRef}
       style={mergedStyle}
-      onClick={onClick}
+      onClick={onOpen}
       {...(isDraggable ? { ...attributes, ...listeners } : {})}
       className={`
-        bg-white border rounded-lg overflow-hidden select-none
+        bg-white border rounded-lg overflow-visible select-none
         transition-all duration-150
         ${isDragging ? 'opacity-50 shadow-none' : 'shadow-sm hover:shadow-md hover:border-slate-300'}
         ${isOverlay ? 'rotate-1 shadow-xl scale-105 border-slate-300 opacity-50' : 'border-slate-200'}
         ${isDraggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}
       `}
     >
-      {/* Drag handle — franja superior */}
+      {/* Drag handle ÔÇö franja superior */}
       {/* Eliminar drag handle, ahora toda la tarjeta es draggable */}
 
-      <div className="p-3 space-y-2">
-        {/* Nombre */}
-        <p className="text-xs font-semibold text-slate-800 line-clamp-2 leading-snug">
-          {deal.nombre_trato || 'Sin nombre'}
-        </p>
+      <div className="p-2.5 space-y-1.5">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[12px] font-semibold text-slate-800 line-clamp-2 leading-4 flex-1 min-w-0">
+            {deal.nombre_trato || 'Sin nombre'}
+          </p>
+          {valor && (
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-700 tabular-nums whitespace-nowrap"
+              style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
+            >
+              {valor}
+            </span>
+          )}
+        </div>
 
-        {/* Empresa + contacto */}
         <div className="space-y-0.5">
           {(deal.client_company_name || deal.empresa_cliente?.name) && (
-            <div className="flex items-center gap-1.5">
-              <i className="fa-solid fa-building text-[9px] text-slate-300 w-3 text-center" />
+            <div className="flex items-center gap-1.5 min-w-0">
+              <i className="fa-solid fa-building text-[9px] text-slate-300 w-3 text-center flex-shrink-0" />
               <span className="text-[11px] text-slate-600 truncate">
                 {deal.client_company_name || deal.empresa_cliente?.name}
               </span>
             </div>
           )}
           {(deal.contact_full_name || deal.contacto_cliente?.name) && (
-            <div className="flex items-center gap-1.5">
-              <i className="fa-solid fa-user text-[9px] text-slate-300 w-3 text-center" />
+            <div className="flex items-center gap-1.5 min-w-0">
+              <i className="fa-solid fa-user text-[9px] text-slate-300 w-3 text-center flex-shrink-0" />
               <span className="text-[11px] text-slate-400 truncate">
                 {deal.contact_full_name || deal.contacto_cliente?.name}
               </span>
@@ -270,47 +372,73 @@ const KanbanCard: React.FC<{
           )}
         </div>
 
-        {/* Valor */}
-        {valor && (
-          <div className="flex items-baseline gap-0.5 pt-1"
-            style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
-            <span className="text-[10px] text-slate-400">$</span>
-            <span className="text-sm font-semibold text-slate-800 tabular-nums">
-              {valor.replace('$', '').trim()}
-            </span>
+        {(interestName || expectedClose) && (
+          <div className="flex flex-wrap items-center gap-1">
+            {interestName && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-slate-200 bg-slate-50 text-[10px] font-medium text-slate-600 max-w-full">
+                <i className={`${interestIcon} text-[8px] flex-shrink-0`} style={{ color: interestColor }} />
+                <span className="truncate max-w-[112px]">{interestName}</span>
+              </span>
+            )}
+            {expectedClose && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-slate-200 bg-slate-50 text-[10px] font-medium text-slate-600">
+                <i className="fa-solid fa-calendar-days text-[8px] text-slate-400" />
+                <span>{expectedClose}</span>
+              </span>
+            )}
           </div>
         )}
 
-        {/* Footer: colaboradores + inactividad */}
         <div className="flex items-center justify-between pt-1.5 border-t border-slate-100">
           <CollaboratorAvatars deal={deal} cachedUsers={cachedUsers} />
-          {deal.days_inactive != null && (
-            <span className={`text-[10px] font-semibold ${
-              deal.days_inactive === 0 ? 'text-emerald-500' :
-              deal.days_inactive <= 7  ? 'text-emerald-400' :
-              deal.days_inactive <= 15 ? 'text-amber-400' :
-              deal.days_inactive <= 30 ? 'text-orange-400' : 'text-red-500'
-            }`}>
-              {deal.days_inactive === 0 ? 'Al día' : `${deal.days_inactive}d`}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5">
+            {inactiveLabel && (
+              <span className={`inline-flex items-center h-6 px-1.5 rounded-md border border-slate-200 bg-slate-50 text-[10px] font-semibold leading-none ${
+                deal.days_inactive === 0 ? 'text-emerald-500' :
+                deal.days_inactive <= 7  ? 'text-emerald-400' :
+                deal.days_inactive <= 15 ? 'text-amber-400' :
+                deal.days_inactive <= 30 ? 'text-orange-400' : 'text-red-500'
+              }`}>
+                {inactiveLabel}
+              </span>
+            )}
+            <DealActionsMenu
+              deal={deal}
+              user={user}
+              onEdit={onEdit}
+              onShare={onShare}
+              onArchive={onArchive}
+              onDelete={onDelete}
+              anchor="top-right"
+              triggerClassName="w-6 h-6 rounded-md border border-slate-200 bg-white text-slate-500 hover:text-slate-700 hover:bg-slate-50 transition-colors flex items-center justify-center"
+              showTrigger={!isOverlay}
+            />
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-// ─── KANBAN COLUMN ────────────────────────────────────────────────────────────
+// ÔöÇÔöÇÔöÇ KANBAN COLUMN ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 const KanbanColumn: React.FC<{
   status: DealStatus;
   deals: Deal[];
+  dealInterests?: DealInterest[];
   cachedUsers?: any[];
+  user: any;
+  onEdit: (deal: Deal) => void;
+  onShare: (deal: Deal) => void;
+  onArchive: (deal: Deal) => void;
+  onDelete: (id: string) => void;
   onCardClick: (deal: Deal) => void;
   canDrag: (deal: Deal) => boolean;
-}> = ({ status, deals, cachedUsers = [], onCardClick, canDrag }) => {
+}> = ({ status, deals, dealInterests = [], cachedUsers = [], user, onEdit, onShare, onArchive, onDelete, onCardClick, canDrag }) => {
   const { setNodeRef, isOver } = useDroppable({ id: status.id_status });
   const normalizedCategory = normalizeCategory(status.status_category);
   const meta = categoryMeta[normalizedCategory] ?? categoryMeta.DRAFT;
+  const headerColor = status.color || meta.accent;
+  const headerTextColor = getReadableTextColor(headerColor);
 
   const total = deals.reduce((s, d) => s + parseDealValue(d.valor_trato), 0);
   const totalFmt = total > 0 ? formatValue(total) : null;
@@ -318,24 +446,46 @@ const KanbanColumn: React.FC<{
   return (
     <div className="flex flex-col h-full min-h-0 w-72 flex-shrink-0">
       {/* Header */}
-      <div className={`${meta.headerBg} rounded-t-xl px-3 py-2.5 border border-b-0 border-slate-200`}>
+      <div
+        className="rounded-t-xl px-3 py-2.5 border border-b-0"
+        style={{ backgroundColor: headerColor, borderColor: `${headerColor}66` }}
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             {status.icon && (
-              <div className="w-5 h-5 rounded flex items-center justify-center"
-                style={{ backgroundColor: `${status.color}20` }}>
-                <i className={`${status.icon} text-[10px]`} style={{ color: status.color }} />
+              <div
+                className="w-5 h-5 rounded flex items-center justify-center"
+                style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
+              >
+                <i className={`${status.icon} text-[10px]`} style={{ color: headerTextColor }} />
               </div>
             )}
-            <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+            <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: headerTextColor }}>
               {status.name}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
             {totalFmt && (
-              <span className="text-[10px] font-medium text-slate-400">{totalFmt}</span>
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold tabular-nums"
+                style={{
+                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+                  color: headerTextColor,
+                  backgroundColor: 'rgba(255,255,255,0.18)',
+                  borderColor: 'rgba(255,255,255,0.35)'
+                }}
+              >
+                <span>{totalFmt}</span>
+              </span>
             )}
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white text-slate-500 border border-slate-200">
+            <span
+              className="text-[10px] font-bold px-1.5 py-0.5 rounded-full border"
+              style={{
+                color: headerTextColor,
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                borderColor: 'rgba(255,255,255,0.35)'
+              }}
+            >
               {deals.length}
             </span>
           </div>
@@ -365,9 +515,15 @@ const KanbanColumn: React.FC<{
               <KanbanCard
                 key={deal.id_trato}
                 deal={deal}
+                dealInterests={dealInterests}
                 cachedUsers={cachedUsers}
+                user={user}
+                onEdit={onEdit}
+                onShare={onShare}
+                onArchive={onArchive}
+                onDelete={onDelete}
                 isDraggable={canDrag(deal)}
-                onClick={() => onCardClick(deal)}
+                onOpen={() => onCardClick(deal)}
               />
             ))
           )}
@@ -377,10 +533,9 @@ const KanbanColumn: React.FC<{
   );
 };
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
-const DealsKanban: React.FC<DealsKanbanProps> = ({ deals, dealStatuses, cachedUsers = [], onRefresh }) => {
+// ÔöÇÔöÇÔöÇ MAIN COMPONENT ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+const DealsKanban: React.FC<DealsKanbanProps> = ({ deals, dealStatuses, dealInterests = [], cachedUsers = [], user, onEdit, onShare, onArchive, onDelete, onRefresh }) => {
   const navigate = useNavigate();
-  const { user } = useAuth();
 
   const cachedUsersFromStorage = useMemo(
     () => getCachedUsersFromLocalStorage(user?.id_tenant, user?.id_user),
@@ -426,7 +581,7 @@ const DealsKanban: React.FC<DealsKanbanProps> = ({ deals, dealStatuses, cachedUs
     useSensor(TouchSensor,   { activationConstraint: { delay: 200, tolerance: 8 } }),
   );
 
-  // Construir columnas desde dealStatuses ordenados por categoría
+  // Construir columnas desde dealStatuses ordenados por categor├¡a
   const columns = React.useMemo(() => {
     const sorted = [...dealStatuses].sort((a, b) => {
       const ai = CATEGORY_ORDER.indexOf(normalizeCategory(a.status_category));
@@ -507,7 +662,7 @@ const DealsKanban: React.FC<DealsKanbanProps> = ({ deals, dealStatuses, cachedUs
     if (overIsStatus) {
       targetStatusId = over.id as string;
     } else {
-      // over es un deal — buscar en qué columna está
+      // over es un deal ÔÇö buscar en qu├® columna est├í
       const overDeal = localDeals.find(d => d.id_trato === over.id);
       if (!overDeal) return;
       targetStatusId = overDeal.id_deal_status || '';
@@ -542,7 +697,7 @@ const DealsKanban: React.FC<DealsKanbanProps> = ({ deals, dealStatuses, cachedUs
           }
           return;
         }
-      } catch { /* continúa con cambio normal */ }
+      } catch { /* contin├║a con cambio normal */ }
     }
 
     setIsUpdating(true);
@@ -583,7 +738,7 @@ const DealsKanban: React.FC<DealsKanbanProps> = ({ deals, dealStatuses, cachedUs
       onRefresh();
 
       const quoteNumber = result?.quote?.formatted_no_cotizacion || result?.quote?.no_cotizacion || selectedQuoteId;
-      let successMessage = `Cotización #${quoteNumber} marcada como ganadora.`;
+      let successMessage = `Cotizaci├│n #${quoteNumber} marcada como ganadora.`;
       const notifications: string[] = [];
       if (result?.notifications?.client_notified) notifications.push('Cliente notificado por correo');
       if (createInCartera) notifications.push('Abriendo formulario de cartera');
@@ -621,7 +776,7 @@ const DealsKanban: React.FC<DealsKanbanProps> = ({ deals, dealStatuses, cachedUs
         <div className="absolute inset-0 bg-white/60 backdrop-blur-sm z-50 flex items-center justify-center rounded-xl">
           <div className="bg-white rounded-xl shadow-lg px-5 py-3 flex items-center gap-3 border border-slate-200">
             <BrandSpinner size="sm" />
-            <span className="text-xs font-semibold text-slate-600">Actualizando…</span>
+            <span className="text-xs font-semibold text-slate-600">ActualizandoÔÇª</span>
           </div>
         </div>
       )}
@@ -639,7 +794,13 @@ const DealsKanban: React.FC<DealsKanbanProps> = ({ deals, dealStatuses, cachedUs
               key={status.id_status}
               status={status}
               deals={colDeals}
+              dealInterests={dealInterests}
               cachedUsers={usersSource}
+              user={user}
+              onEdit={onEdit}
+              onShare={onShare}
+              onArchive={onArchive}
+              onDelete={onDelete}
               onCardClick={d => navigate(`/app/deals/${d.id_trato}`)}
               canDrag={d => canEditInline(user, d)}
             />
@@ -650,10 +811,16 @@ const DealsKanban: React.FC<DealsKanbanProps> = ({ deals, dealStatuses, cachedUs
           {activeDeal && (
             <KanbanCard
               deal={activeDeal}
+              dealInterests={dealInterests}
               cachedUsers={usersSource}
+              user={user}
+              onEdit={onEdit}
+              onShare={onShare}
+              onArchive={onArchive}
+              onDelete={onDelete}
               isDraggable={true}
               isOverlay
-              onClick={() => {}}
+              onOpen={() => {}}
             />
           )}
         </DragOverlay>

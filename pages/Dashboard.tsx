@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
 import { BrandSpinner } from '../components/AppLoaders';
+import { getImageUrl, getLocalAvatarDataUrl } from '../utils/imageUtils';
 import { 
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, 
   AreaChart, Area 
@@ -569,7 +570,7 @@ const Dashboard: React.FC = () => {
                                         <li key={i} className="flex items-center gap-3 md:gap-4 border-b border-slate-100 pb-3 last:border-0 last:pb-0">
                                             <div className="relative flex-shrink-0">
                                                 <img
-                                                    src={vendedor.avatar_url || 'https://via.placeholder.com/40'}
+                                                    src={getImageUrl(vendedor.avatar_url) || getLocalAvatarDataUrl(vendedor.nombre)}
                                                     alt={vendedor.nombre}
                                                     className="w-9 h-9 md:w-10 md:h-10 rounded-full object-cover border-2 border-yellow-300"
                                                 />

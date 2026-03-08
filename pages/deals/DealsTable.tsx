@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Deal, DealStatus, DealInterest, Quote } from '../../types';
 import { apiFetch } from '../../services/apiClient';
 import Avatar from '../../components/Avatar';
-import { canUserAction, canEditInline } from '../../utils/permissions';
+import DealActionsMenu from '../../components/DealActionsMenu';
+import { canEditInline } from '../../utils/permissions';
 import {
   useReactTable,
   getCoreRowModel,
@@ -49,6 +50,7 @@ interface DealsTableProps {
   onDelete: (id: string) => void;
   onStatusChange: (deal: Deal, statusId: string, quotes: Quote[], pendingStatusId: string) => void;
   onInterestChange: (deal: Deal, interestId: string) => void;
+  onInlineUpdate: (deal: Deal, updates: Partial<Deal>) => Promise<void>;
   onExpandAll?: () => void;
   onCollapseAll?: () => void;
 }
@@ -111,21 +113,22 @@ const resolveUser = (users: any[], collabId: any) => {
 const formatAmount = (amount: number): string =>
   amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+const formatCurrency = (amount: number): string =>
+  amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
 const MoneyValue: React.FC<{ amount: number; size?: string; accounting?: boolean }> = ({ amount, size = 'text-sm', accounting = false }) => {
   const numStr = formatAmount(amount);
-  const style = { fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" };
   if (accounting) {
     return (
-      <span className={`flex items-baseline w-full tabular-nums tracking-tight font-semibold text-slate-800 ${size}`} style={style}>
+      <span className={`flex items-baseline w-full tabular-nums font-semibold text-slate-800 ${size}`}>
         <span className="select-none">$</span>
         <span className="flex-1 text-right">{numStr}</span>
       </span>
     );
   }
   return (
-    <span className={`inline-flex items-baseline gap-[1px] tabular-nums tracking-tight font-semibold text-slate-800 ${size}`} style={style}>
-      <span>$</span>
-      <span>{numStr}</span>
+    <span className={`inline-flex items-baseline tabular-nums font-semibold text-slate-800 ${size}`}>
+      {formatCurrency(amount)}
     </span>
   );
 };
@@ -198,16 +201,28 @@ const InlineBadgeSelector: React.FC<{
         type="button"
         onClick={(e) => { e.stopPropagation(); if (!disabled) setIsOpen(!isOpen); }}
         className={`
-          flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold 
+          inline-flex items-center gap-1.5 px-2 py-0.5 min-h-[20px] rounded text-[10px] font-semibold
           transition-all whitespace-nowrap
           ${disabled ? 'cursor-default' : 'hover:opacity-90 cursor-pointer'}
         `}
         style={{ backgroundColor: current?.color || '#94a3b8', color: '#ffffff' }}
       >
-        {current?.icon && <i className={`${current.icon} text-[9px]`} />}
+        {current?.icon && (
+          <span className="inline-flex w-3.5 h-3.5 items-center justify-center leading-none">
+            <i className={`${current.icon} text-[9px] leading-none`} />
+          </span>
+        )}
         <span>{current?.name || '—'}</span>
-        {current?.notify_client && <i className="fa-solid fa-envelope text-[8px] opacity-70" />}
-        {!disabled && <i className="fa-solid fa-chevron-down text-[8px] opacity-60 ml-0.5" />}
+        {current?.notify_client && (
+          <span className="inline-flex w-3.5 h-3.5 items-center justify-center leading-none opacity-70">
+            <i className="fa-solid fa-envelope text-[8px] leading-none" />
+          </span>
+        )}
+        {!disabled && (
+          <span className="inline-flex w-3.5 h-3.5 items-center justify-center leading-none ml-0.5 opacity-60">
+            <i className="fa-solid fa-chevron-down text-[7px] leading-none" />
+          </span>
+        )}
       </button>
 
       {isOpen && (
@@ -256,95 +271,6 @@ const InlineBadgeSelector: React.FC<{
   );
 };
 
-// ─── ACTIONS MENU ─────────────────────────────────────────────────────────────
-const ActionsMenu: React.FC<{
-  deal: Deal;
-  user: any;
-  onEdit: (deal: Deal) => void;
-  onShare: (deal: Deal) => void;
-  onArchive: (deal: Deal) => void;
-  onDelete: (id: string) => void;
-}> = ({ deal, user, onEdit, onShare, onArchive, onDelete }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
-
-  const canEdit   = canUserAction(user, deal, 'edit');
-  const canDelete = canUserAction(user, deal, 'delete');
-  const canShare  = canUserAction(user, deal, 'share');
-
-  const openMenu = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    if (!buttonRef.current) return;
-    const rect = buttonRef.current.getBoundingClientRect();
-    const menuH = 180;
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const top = spaceBelow < menuH ? rect.top - menuH - 4 : rect.bottom + 4;
-    setMenuStyle({ position: 'fixed', top, left: rect.left, zIndex: 9999 });
-    setIsOpen(prev => !prev);
-  };
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleOutside = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node) &&
-          buttonRef.current && !buttonRef.current.contains(e.target as Node)) setIsOpen(false);
-    };
-    const handleScroll = () => setIsOpen(false);
-    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsOpen(false); };
-    document.addEventListener('mousedown', handleOutside);
-    document.addEventListener('scroll', handleScroll, true);
-    document.addEventListener('keydown', handleKey);
-    return () => {
-      document.removeEventListener('mousedown', handleOutside);
-      document.removeEventListener('scroll', handleScroll, true);
-      document.removeEventListener('keydown', handleKey);
-    };
-  }, [isOpen]);
-
-  return (
-    <>
-      <button ref={buttonRef} onClick={openMenu}
-        className="w-6 h-6 flex items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-all flex-shrink-0"
-        title="Opciones">
-        <i className="fa-solid fa-ellipsis-vertical text-[11px]" />
-      </button>
-      {isOpen && (
-        <div ref={menuRef} style={menuStyle} className="w-44 bg-white border border-slate-200 rounded-lg shadow-xl py-1 text-sm">
-          {canEdit && (
-            <button onMouseDown={(e) => { e.stopPropagation(); onEdit(deal); setIsOpen(false); }}
-              className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-600 flex items-center gap-2.5 transition-colors text-xs">
-              <i className="fa-solid fa-pen text-slate-300 w-3.5" /> Editar
-            </button>
-          )}
-          {canShare && (
-            <button onMouseDown={(e) => { e.stopPropagation(); onShare(deal); setIsOpen(false); }}
-              className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-600 flex items-center gap-2.5 transition-colors text-xs">
-              <i className="fa-solid fa-user-plus text-slate-300 w-3.5" /> Compartir
-            </button>
-          )}
-          <button onMouseDown={(e) => { e.stopPropagation(); onArchive(deal); setIsOpen(false); }}
-            className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-600 flex items-center gap-2.5 transition-colors text-xs">
-            <i className={`fa-solid ${deal.archived ? 'fa-box-open' : 'fa-box-archive'} text-slate-300 w-3.5`} />
-            {deal.archived ? 'Desarchivar' : 'Archivar'}
-          </button>
-          {canDelete && (
-            <>
-              <div className="border-t border-slate-100 my-1" />
-              <button onMouseDown={(e) => { e.stopPropagation(); onDelete(deal.id_trato); setIsOpen(false); }}
-                className="w-full text-left px-3 py-1.5 hover:bg-red-50 text-red-500 flex items-center gap-2.5 transition-colors text-xs">
-                <i className="fa-solid fa-trash text-red-300 w-3.5" /> Eliminar
-              </button>
-            </>
-          )}
-        </div>
-      )}
-    </>
-  );
-};
-
 // ─── MAIN COMPONENT (forwardRef para exponer expandAll/collapseAll) ────────────
 const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
   deals,
@@ -371,6 +297,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
   onDelete,
   onStatusChange,
   onInterestChange,
+  onInlineUpdate,
   onExpandAll,
   onCollapseAll
 }, ref) => {
@@ -378,16 +305,6 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
   const [activeFilterMenu, setActiveFilterMenu] = useState<string | null>(null);
   const filterMenuRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
-
-  useEffect(() => {
-    const groupedBy = grouping[0];
-    if (!groupedBy) {
-      if (sorting.length > 0) setSorting([]);
-      return;
-    }
-    if (sorting[0]?.id === groupedBy) return;
-    setSorting([{ id: groupedBy, desc: false }]);
-  }, [grouping, sorting, setSorting]);
 
   const applyUpdater = <T,>(updater: Updater<T>, current: T): T => {
     return typeof updater === 'function' ? (updater as (old: T) => T)(current) : updater;
@@ -407,21 +324,13 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
       } catch { /* fall through to standard update */ }
     }
     try {
-      await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_trato: deal.id_trato, id_deal_status: newStatusId, id_user: user.id_user })
-      });
-      onRefresh();
+      await onInlineUpdate(deal, { id_deal_status: newStatusId });
     } catch (e) { console.error('Error updating status:', e); }
   };
 
   const handleInlineInterestUpdate = async (deal: Deal, newInterestId: string) => {
     try {
-      await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/update`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id_trato: deal.id_trato, id_interest: newInterestId, id_user: user.id_user })
-      });
-      onRefresh();
+      await onInlineUpdate(deal, { id_interest: newInterestId });
     } catch (e) { console.error('Error updating interest:', e); }
   };
 
@@ -483,7 +392,9 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
           <span className="font-semibold text-slate-700 text-xs">{label || 'Sin asignar'}</span>
         )}
         <span className="text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-full">{row.subRows.length}</span>
-        <MoneyValue amount={subtotal} size="text-xs" />
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50">
+          <MoneyValue amount={subtotal} size="text-xs" />
+        </span>
       </div>
     );
   };
@@ -493,7 +404,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
     {
       accessorKey: 'estado_nombre',
       header: 'Estado',
-      size: 210,
+      size: 190,
       enableColumnFilter: true,
       filterFn: (row, columnId, filterValue: string[]) => {
         if (!filterValue || filterValue.length === 0) return true;
@@ -506,7 +417,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
         }
         return (
           <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-            <ActionsMenu deal={row.original} user={user} onEdit={onEdit} onShare={onShare} onArchive={onArchive} onDelete={onDelete} />
+            <DealActionsMenu deal={row.original} user={user} onEdit={onEdit} onShare={onShare} onArchive={onArchive} onDelete={onDelete} anchor="auto-left" />
             <InlineBadgeSelector
               valueId={row.original.id_deal_status || ''}
               items={cachedDealStatuses.map(s => ({ ...s, id: s.id_status }))}
@@ -555,9 +466,9 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
         const companyName = getValue() as string;
         const contactName = row.original.contact_full_name || '';
         return (
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[13px] text-slate-800 font-semibold truncate" style={{ maxWidth: 180 }}>{companyName}</span>
-            {contactName && <span className="text-[11px] text-slate-600 truncate" style={{ maxWidth: 180 }}>{contactName}</span>}
+          <div className="flex flex-col gap-0">
+            <span className="text-[13px] leading-tight text-slate-800 font-semibold truncate" style={{ maxWidth: 180 }}>{companyName}</span>
+            {contactName && <span className="text-[10px] leading-tight text-slate-600 truncate" style={{ maxWidth: 180 }}>{contactName}</span>}
           </div>
         );
       }
@@ -570,7 +481,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
       cell: ({ getValue, row }) => {
         if (row.getIsGrouped()) return null;
         return (
-          <span className="inline-flex items-center px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50">
+          <span className="inline-flex items-center px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50">
             <MoneyValue amount={parseDealValue(getValue() as Deal['valor_trato'])} size="text-[11px]" />
           </span>
         );
@@ -579,7 +490,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
     {
       accessorKey: 'interes_nombre',
       header: 'Interés',
-      size: 160,
+      size: 145,
       enableColumnFilter: true,
       filterFn: (row, columnId, filterValue: string[]) => {
         if (!filterValue || filterValue.length === 0) return true;
@@ -627,25 +538,42 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
           return (lo[a.access_level as keyof typeof lo] || 3) - (lo[b.access_level as keyof typeof lo] || 3);
         });
         return (
-          <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-1 h-8 leading-none" onClick={e => e.stopPropagation()}>
             {sorted.slice(0, 4).map((collab: any, idx: number) => {
               const collabId = collab.id ?? collab.id_user ?? collab.user_id ?? collab.userId;
               const u = resolveUser(cachedUsers, collabId);
-              const userName = u?.name_user || 'Usuario';
-              const badgeType: 'OWNER' | 'EDIT' | 'VIEW' = collab.is_owner ? 'OWNER' : collab.access_level === 'EDIT' ? 'EDIT' : 'VIEW';
+              const userName = u?.name_user || collab?.name || collab?.user_name || collab?.email || 'Usuario';
+              const userAvatar =
+                u?.avatar_url ||
+                (u as any)?.avatar ||
+                collab?.avatar_url ||
+                collab?.avatar ||
+                collab?.user_avatar ||
+                null;
+              const isOwner = !!collab.is_owner;
+              const isPrincipal = collab.access_level === 'EDIT' && !isOwner;
+              const badgeType: 'OWNER' | 'EDIT' | 'VIEW' = isOwner ? 'OWNER' : isPrincipal ? 'EDIT' : 'VIEW';
+              const tooltipLevel = isOwner ? 'Creador' : isPrincipal ? 'Principal' : 'Secundario';
               return (
-                <div key={collab.id ?? collab.id_user ?? idx} className="relative group/av">
-                  <div className="transition-transform hover:scale-110 hover:z-10 relative cursor-default">
-                    <Avatar src={u?.avatar_url || null} name={userName} size="sm" badge={{ type: badgeType }} />
-                  </div>
-                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2 py-1 bg-slate-800 text-white text-[10px] rounded-md whitespace-nowrap opacity-0 group-hover/av:opacity-100 transition-opacity pointer-events-none z-50">
-                    {userName}
-                  </div>
+                <div key={collab.id ?? collab.id_user ?? idx} className="inline-flex items-center">
+                  <Avatar
+                    src={userAvatar}
+                    name={userName}
+                    size="sm"
+                    className="cursor-pointer"
+                    badgeInset
+                    badge={{ type: badgeType }}
+                    enableHoverZoom
+                    hoverScale={1.25}
+                    showTooltip
+                    tooltipRole={tooltipLevel}
+                    tooltipPosition="bottom"
+                  />
                 </div>
               );
             })}
             {sorted.length > 4 && (
-              <span className="text-[10px] text-slate-400 font-medium ml-0.5">+{sorted.length - 4}</span>
+              <span className="inline-flex items-center text-[10px] leading-none text-slate-400 font-medium ml-0.5">+{sorted.length - 4}</span>
             )}
           </div>
         );
@@ -679,14 +607,18 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
       cell: ({ row }) => {
         if (row.getIsGrouped()) return null;
         const days = row.original.days_inactive;
-        if (days === undefined || days === null) return <span className="text-xs text-slate-300">—</span>;
+        const inactiveText = row.original.inactive_time_text;
+        if (days === undefined || days === null) {
+          return <span className="text-xs text-slate-300">{inactiveText || '—'}</span>;
+        }
         let color = 'text-slate-400';
-        let text = `${days}d`;
-        if (days === 0)       { color = 'text-emerald-500'; text = 'Al día'; }
+        const fallbackText = days === 0 ? 'Al día' : `${days}d`;
+        if (days === 0)       color = 'text-emerald-500';
         else if (days > 30)   color = 'text-red-500';
         else if (days > 15)   color = 'text-orange-400';
         else if (days > 7)    color = 'text-amber-400';
         else                  color = 'text-emerald-400';
+        const text = inactiveText || fallbackText;
         return <span className={`text-xs font-medium ${color}`}>{text}</span>;
       }
     },
@@ -712,11 +644,11 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
       const nextGrouping = applyUpdater(updater, grouping);
       setGrouping(nextGrouping);
 
+      // Keep user-selected header sorting. If grouping is enabled and no sort exists,
+      // set a sensible default once.
       const groupedBy = nextGrouping[0];
-      if (groupedBy) {
+      if (groupedBy && sorting.length === 0) {
         setSorting([{ id: groupedBy, desc: false }]);
-      } else {
-        setSorting([]);
       }
     },
     onExpandedChange: (updater) => {
@@ -894,7 +826,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
                     ${isGrouped ? 'bg-slate-50 hover:bg-slate-100' : 'bg-white hover:bg-blue-50/70'}`}
                 >
                   {isGrouped ? (
-                    <td colSpan={row.getVisibleCells().length} className="px-4 py-1.5">
+                    <td colSpan={row.getVisibleCells().length} className="px-4 py-1">
                       {(() => {
                         const groupedCell = row.getVisibleCells().find(cell => cell.column.id === row.groupingColumnId);
                         const label = groupedCell ? String(groupedCell.getValue() ?? '') : '';
@@ -903,7 +835,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
                     </td>
                   ) : (
                     row.getVisibleCells().map(cell => (
-                      <td key={cell.id} className="px-4 py-1.5">
+                      <td key={cell.id} className="px-4 py-1 align-middle">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))
@@ -922,7 +854,9 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
             <span className="font-semibold shrink-0">{deals.length} registros</span>
             <span className="inline-flex items-center justify-between sm:justify-start gap-1.5 px-2 py-1 rounded-md bg-slate-50 border border-slate-200 min-w-0 w-[190px] sm:w-auto">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</span>
-              <MoneyValue amount={totalFiltered} size="text-[11px] sm:text-[12px]" />
+              <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800">
+                {totalFiltered.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+              </span>
             </span>
           </div>
           <div className="flex items-center justify-end sm:justify-start gap-1 text-xs text-slate-600 shrink-0">

@@ -7,6 +7,7 @@ import { apiFetch } from '../../services/apiClient';
 import AudienceMembersModal from '../marketing_center/audiences/AudienceMembersModal';
 import ConfirmModal from '../ConfirmModal';
 import { BrandSpinner } from '../AppLoaders';
+import { getImageUrl, getLocalAvatarDataUrl } from '../../utils/imageUtils';
 
 interface SharedUser {
   id_user: string;
@@ -584,7 +585,7 @@ const ListDetail: React.FC = () => {
                   {sharedUsers.map(user => (
                     <div key={user.id_user} className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <img src={user.avatar || 'https://via.placeholder.com/32'} alt={user.name} className="w-8 h-8 rounded-full bg-slate-200" />
+                          <img src={getImageUrl(user.avatar) || getLocalAvatarDataUrl(user.name)} alt={user.name} className="w-8 h-8 rounded-full bg-slate-200" />
                           <div className="leading-tight">
                             <p className="text-sm font-semibold text-slate-700">{user.name}</p>
                             <p className="text-[10px] text-slate-400">{user.email}</p>

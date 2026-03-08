@@ -3,7 +3,7 @@ import { User } from '../types';
 /**
  * Tipo de acciones sobre registros
  */
-export type RecordAction = 'edit' | 'delete' | 'share' | 'view';
+export type RecordAction = 'edit' | 'delete' | 'share' | 'view' | 'archive';
 
 /**
  * Tipo de acceso a un registro
@@ -81,6 +81,10 @@ export function canUserAction(
 
     case 'share':
       // Solo puede compartir si es creador (ya validado arriba) o tiene EDIT
+      return accessLevel === 'EDIT' || accessLevel === 'OWNER';
+
+    case 'archive':
+      // Archivado sigue la misma regla que edición
       return accessLevel === 'EDIT' || accessLevel === 'OWNER';
 
     default:

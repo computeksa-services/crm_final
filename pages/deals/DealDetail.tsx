@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
-import { Deal, Quote, DealStatus } from '../../types';
+import { Deal, DealStatus } from '../../types';
 import { apiFetch } from '../../services/apiClient';
 import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
 
@@ -10,145 +10,234 @@ import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
 import SelectWinningQuoteModal from '../../components/SelectWinningQuoteModal';
-import DealShareList from '../../components/DealShareList';
-import NewInteractionForm from '../../components/NewInteractionForm';
 import NewInteractionModal from '../../components/NewInteractionModal';
-import { BrandSpinner } from '../../components/AppLoaders';
+import Avatar from '../../components/Avatar';
+import DealActionsMenu from '../../components/DealActionsMenu';
 
-// --- HELPER: Obtener Iniciales (Nombre + Apellido) ---
-const getInitials = (fullName?: string) => {
-  if (!fullName) return '?';
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+const getInitials = (n?: string) => n ? n.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase() : '?';
+
+const formatCurrency = (val: string | number | undefined) => {
+  const num = typeof val === 'string' ? parseFloat(val) : val;
+  if (num === undefined || isNaN(num)) return '$0.00';
+  return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
 };
 
-// --- HELPER: Obtener Color para Avatar ---
-const getAvatarColor = (name: string = '') => {
-  const colors = [
-    { bg: '#F0E6E6', text: '#A67C7C' },
-    { bg: '#F5EAF0', text: '#B397AA' },
-    { bg: '#EDE4F5', text: '#9B7DB0' },
-    { bg: '#E8E0F0', text: '#8B7BA3' },
-    { bg: '#E1E8F5', text: '#7A8FB5' },
-    { bg: '#DFF0ED', text: '#7BA89C' },
-    { bg: '#E9F0E8', text: '#7FA08A' },
-    { bg: '#EEF2E7', text: '#92A680' },
-    { bg: '#F5F2E1', text: '#B8AC5B' },
-    { bg: '#F7EFEA', text: '#B88263' },
-    { bg: '#EFE8E4', text: '#8B7B6F' },
-    { bg: '#E8E8E8', text: '#707070' },
-  ];
+const SYSTEM_CATEGORY_COLORS: Record<string, string> = {
+  DRAFT: '#6b7280',
+  PROGRESS: '#10b981',
+  PAUSED: '#f59e0b',
+  WON: '#3b82f6',
+  LOST: '#ef4444',
+};
 
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = ((hash << 5) - hash) + name.charCodeAt(i);
-    hash = hash & hash;
+const splitDateTime = (value?: string) => {
+  if (!value) return { date: '', time: '' };
+  const parts = value.trim().split(/\s+/);
+  if (parts.length >= 2) {
+    return { date: parts[0], time: parts[1] };
+  }
+  return { date: value, time: '' };
+};
+
+const formatHistoryDate = (iso?: string) => {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('es-EC', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date);
+};
+
+const formatHistoryTime = (iso?: string) => {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('es-EC', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date);
+};
+
+const parseCommonDate = (value?: string) => {
+  if (!value) return null;
+  const raw = value.trim();
+  if (!raw) return null;
+
+  const isoCandidate = new Date(raw);
+  if (!Number.isNaN(isoCandidate.getTime())) return isoCandidate;
+
+  const dmYhm = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
+  if (dmYhm) {
+    const [, dd, mm, yyyy, hh = '00', mi = '00'] = dmYhm;
+    const d = new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi));
+    if (!Number.isNaN(d.getTime())) return d;
   }
 
-  return colors[Math.abs(hash) % colors.length];
+  return null;
 };
 
-// --- COMPONENTE: Selector de Estado ---
-const StatusSelector: React.FC<{
-  currentStatusId: string;
-  statuses: DealStatus[];
-  onSelect: (id: string) => void;
-  disabled: boolean;
-}> = ({ currentStatusId, statuses, onSelect, disabled }) => {
+const toReadableDate = (value?: string) => {
+  const parsed = parseCommonDate(value);
+  if (!parsed) return value || '';
+  return new Intl.DateTimeFormat('es-EC', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(parsed);
+};
+
+const toReadableTime = (value?: string) => {
+  const parsed = parseCommonDate(value);
+  if (!parsed) return '';
+  return new Intl.DateTimeFormat('es-EC', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  }).format(parsed);
+};
+
+const normalizeHistoryResponse = (raw: any) => {
+  const groups = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw?.history)
+      ? raw.history
+      : Array.isArray(raw?.data)
+        ? raw.data
+        : [];
+
+  return groups.map((group: any) => ({
+    group_id: group?.group_id || '',
+    group_name: group?.group_name || 'Historial',
+    interactions: (Array.isArray(group?.interactions) ? group.interactions : []).map((item: any) => ({
+      ...item,
+      date_fmt: toReadableDate(item?.date_fmt) || formatHistoryDate(item?.date_iso),
+      time_fmt: item?.time_fmt || toReadableTime(item?.date_fmt) || formatHistoryTime(item?.date_iso),
+      time_ago_text: item?.time_ago_text || '',
+      planned_date: item?.planned_date || formatHistoryDate(item?.planned_date_iso),
+      channel_name: item?.channel_name || '',
+      channel_icon: item?.channel_icon || '',
+      channel_color: item?.channel_color || '',
+    })),
+  }));
+};
+
+const DealDetailSkeleton = () => (
+  <div className="min-h-screen bg-[#F9F9F8] p-8 animate-pulse space-y-8">
+    <div className="h-20 bg-white rounded-xl border border-zinc-200"></div>
+    <div className="grid grid-cols-12 gap-8">
+      <div className="col-span-4 h-96 bg-white rounded-xl border border-zinc-200"></div>
+      <div className="col-span-8 h-96 bg-white rounded-xl border border-zinc-200"></div>
+    </div>
+  </div>
+);
+
+const StatusSelector: React.FC<{ currentStatusId: string; statuses: DealStatus[]; onSelect: (id: string) => void; disabled: boolean; }> = ({ currentStatusId, statuses, onSelect, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  const current = statuses.find(s => s.id_status === currentStatusId) || {
-    id_status: '',
-    name: 'Sin estado',
-    color: '#94a3b8',
-    icon: 'fa-solid fa-circle',
-    id_tenant: '',
-    status_order: 0,
-    is_default: false
-  };
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
+  const current = statuses.find(s => s.id_status === currentStatusId) || { id_status: '', name: 'Sin valor', color: '#94a3b8', icon: 'fa-solid fa-circle', notify_client: false };
+
+  const renderNotifyBadge = () => (
+    <span className="ml-auto inline-flex items-center gap-1 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[9px] font-bold text-sky-600">
+      <i className="fa-solid fa-envelope text-[8px]" />
+    </span>
+  );
 
   const currentIndex = statuses.findIndex(s => s.id_status === currentStatusId);
-  const itemsAbove = currentIndex > 0 ? statuses.slice(0, currentIndex) : [];
-  const itemsBelow = currentIndex >= 0 && currentIndex < statuses.length - 1
-    ? statuses.slice(currentIndex + 1)
-    : currentIndex === -1
-      ? statuses
-      : [];
+  const statusesAbove = currentIndex > 0 ? statuses.slice(0, currentIndex) : [];
+  const statusesBelow = currentIndex < statuses.length - 1 ? statuses.slice(currentIndex + 1) : [];
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition(window.innerHeight - rect.bottom < 200 && rect.top > 200 ? 'top' : 'bottom');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setIsOpen(false); };
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isOpen]);
 
   return (
-    <div className="relative inline-block text-left w-full sm:w-auto" ref={dropdownRef}>
+    <div className="relative inline-flex max-w-full items-center align-middle" ref={dropdownRef}>
       <button
+        ref={buttonRef}
         type="button"
-        disabled={disabled}
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 px-3 py-2.5 rounded-lg font-bold text-xs border transition-all ${disabled ? 'opacity-70 cursor-not-allowed' : 'hover:brightness-95 active:scale-95'}`}
-        style={{
-          backgroundColor: `${current.color}15`,
-          color: current.color,
-          borderColor: `${current.color}40`
-        }}
+        onClick={(e) => { e.stopPropagation(); if (!disabled) setIsOpen(!isOpen); }}
+        className={`
+          inline-flex items-center gap-1.5 px-2 py-0.5 min-h-[20px] rounded text-[10px] font-semibold
+          transition-all whitespace-nowrap
+          ${disabled ? 'cursor-default' : 'hover:brightness-95 cursor-pointer'}
+        `}
+        style={{ backgroundColor: current.color || '#94a3b8', color: '#ffffff' }}
       >
-        <div className="flex items-center gap-2 truncate">
-            <i className={`${current.icon || 'fa-solid fa-circle'} text-[10px]`}></i>
-            <span className="uppercase tracking-wide truncate">{current.name}</span>
-            {current.notify_client && (
-              <i className="fa-solid fa-envelope text-[8px] text-blue-500" title="Notificación por correo activada"></i>
-            )}
+        <div className="flex items-center gap-1.5 truncate">
+          <span className="inline-flex w-3.5 h-3.5 items-center justify-center leading-none">
+            <i className={`${current.icon || 'fa-solid fa-circle'} text-[9px] leading-none`} />
+          </span>
+          <span>{current.name || 'Sin valor'}</span>
+          {(current as any).notify_client && (
+            <span className="inline-flex w-3.5 h-3.5 items-center justify-center leading-none text-white">
+              <i className="fa-solid fa-envelope text-[8px] leading-none" />
+            </span>
+          )}
         </div>
-        {!disabled && <i className="fa-solid fa-chevron-down text-[10px] ml-1 opacity-70"></i>}
+        {!disabled && (
+          <span className="inline-flex w-3.5 h-3.5 items-center justify-center leading-none ml-0.5 text-white">
+            <i className="fa-solid fa-chevron-down text-[7px] leading-none" />
+          </span>
+        )}
       </button>
 
       {isOpen && !disabled && (
-        <div className="absolute right-0 mt-1 w-full sm:w-56 bg-white rounded-lg shadow-xl border border-slate-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-          <div className="py-1 max-h-60 overflow-y-auto">
-            {itemsAbove.map((status) => (
+        <div
+          onMouseLeave={() => setIsOpen(false)}
+          className={`absolute z-[200] ${dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'} 
+            left-0 w-52 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden`}
+        >
+          <div className="max-h-64 overflow-y-auto py-1">
+            {statusesAbove.map(s => (
               <button
-                key={status.id_status}
-                onClick={() => { onSelect(status.id_status); setIsOpen(false); }}
-                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2 transition-colors border-b border-slate-50 last:border-0"
+                key={s.id_status}
+                onClick={(e) => { e.stopPropagation(); onSelect(s.id_status); setIsOpen(false); }}
+                className="w-full px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors"
               >
-                <i className={`${status.icon || 'fa-solid fa-circle'} text-[10px]`} style={{ color: status.color }}></i>
-                <span className="text-xs font-bold text-slate-700 uppercase">{status.name}</span>
-                {status.notify_client && (
-                  <i className="fa-solid fa-envelope text-[8px] text-blue-500 ml-auto" title="Notificación por correo activada"></i>
-                )}
+                <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: s.color || '#94a3b8' }}>
+                  <i className={`${s.icon || 'fa-solid fa-tag'} text-[8px] text-white`} />
+                </div>
+                <span className="text-[11px] font-medium text-slate-700">{s.name}</span>
+                {s.notify_client && renderNotifyBadge()}
               </button>
             ))}
-
-            {currentIndex >= 0 && (
-              <div className="w-full text-left px-4 py-2.5 bg-slate-50 border-y border-slate-200 flex items-center gap-2 opacity-60 cursor-not-allowed">
-                <i className={`${current.icon || 'fa-solid fa-circle'} text-[10px]`} style={{ color: current.color }}></i>
-                <span className="text-xs font-bold text-slate-700 uppercase">{current.name}</span>
-                {current.notify_client && (
-                  <i className="fa-solid fa-envelope text-[8px] text-blue-500 ml-auto" title="Notificación por correo activada"></i>
-                )}
-                <i className="fa-solid fa-check text-[9px] text-slate-400 ml-1"></i>
+            <div className="bg-slate-50 border-y border-slate-100 px-3 py-1.5">
+              <div className="flex items-center gap-2 text-slate-500 cursor-not-allowed">
+                <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: current.color || '#94a3b8' }}>
+                  <i className={`${current.icon || 'fa-solid fa-tag'} text-[8px] text-white`} />
+                </div>
+                <span className="text-[11px] font-medium text-slate-700">{current.name || 'Sin valor'}</span>
+                {(current as any).notify_client && renderNotifyBadge()}
+                <i className="fa-solid fa-check text-[8px] ml-auto text-slate-400" />
               </div>
-            )}
-
-            {itemsBelow.map((status) => (
+            </div>
+            {statusesBelow.map(s => (
               <button
-                key={status.id_status}
-                onClick={() => { onSelect(status.id_status); setIsOpen(false); }}
-                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2 transition-colors border-b border-slate-50 last:border-0"
+                key={s.id_status}
+                onClick={(e) => { e.stopPropagation(); onSelect(s.id_status); setIsOpen(false); }}
+                className="w-full px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors"
               >
-                <i className={`${status.icon || 'fa-solid fa-circle'} text-[10px]`} style={{ color: status.color }}></i>
-                <span className="text-xs font-bold text-slate-700 uppercase">{status.name}</span>
-                {status.notify_client && (
-                  <i className="fa-solid fa-envelope text-[8px] text-blue-500 ml-auto" title="Notificación por correo activada"></i>
-                )}
+                <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: s.color || '#94a3b8' }}>
+                  <i className={`${s.icon || 'fa-solid fa-tag'} text-[8px] text-white`} />
+                </div>
+                <span className="text-[11px] font-medium text-slate-700">{s.name}</span>
+                {s.notify_client && renderNotifyBadge()}
               </button>
             ))}
           </div>
@@ -158,64 +247,94 @@ const StatusSelector: React.FC<{
   );
 };
 
-// --- COMPONENTE: Selector de Interés ---
-const InterestSelector: React.FC<{
-  currentInterestId: string;
-  interests: any[];
-  onSelect: (id: string) => void;
-  disabled: boolean;
-}> = ({ currentInterestId, interests, onSelect, disabled }) => {
+const InterestSelector: React.FC<{ currentInterestId: string; interests: any[]; onSelect: (id: string) => void; disabled: boolean; }> = ({ currentInterestId, interests, onSelect, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  
-  const current = interests.find(i => i.id_interest === currentInterestId) || {
-    id_interest: '',
-    name: 'Sin interés',
-    color: '#94a3b8',
-    icon: 'fa-solid fa-circle'
-  };
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
+  const current = interests.find(i => i.id_interest === currentInterestId) || { id_interest: '', name: 'Sin valor', icon: 'fa-solid fa-circle', color: '#94a3b8' };
+
+  const currentIndex = interests.findIndex(i => i.id_interest === currentInterestId);
+  const interestsAbove = currentIndex > 0 ? interests.slice(0, currentIndex) : [];
+  const interestsBelow = currentIndex < interests.length - 1 ? interests.slice(currentIndex + 1) : [];
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition(window.innerHeight - rect.bottom < 200 && rect.top > 200 ? 'top' : 'bottom');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => { if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setIsOpen(false); };
+    if (isOpen) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  }, [isOpen]);
 
   return (
-    <div className="relative inline-block text-left w-full sm:w-auto" ref={dropdownRef}>
+    <div className="relative inline-flex max-w-full items-center align-middle" ref={dropdownRef}>
       <button
+        ref={buttonRef}
         type="button"
-        disabled={disabled}
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 px-3 py-2.5 rounded-lg font-bold text-xs border transition-all ${disabled ? 'opacity-70 cursor-not-allowed' : 'hover:brightness-95 active:scale-95'}`}
-        style={{
-          backgroundColor: `${current.color}15`,
-          color: current.color,
-          borderColor: `${current.color}40`
-        }}
+        onClick={(e) => { e.stopPropagation(); if (!disabled) setIsOpen(!isOpen); }}
+        className={`
+          inline-flex items-center gap-1.5 px-2 py-0.5 min-h-[20px] rounded text-[10px] font-semibold
+          transition-all whitespace-nowrap
+          ${disabled ? 'cursor-default' : 'hover:brightness-95 cursor-pointer'}
+        `}
+        style={{ backgroundColor: current.color || '#94a3b8', color: '#ffffff' }}
       >
-        <div className="flex items-center gap-2 truncate">
-            <i className={`${current.icon || 'fa-solid fa-circle'} text-[10px]`}></i>
-            <span className="uppercase tracking-wide truncate">{current.name}</span>
+        <div className="flex items-center gap-1.5 truncate">
+          <span className="inline-flex w-3.5 h-3.5 items-center justify-center leading-none">
+            <i className={`${current.icon || 'fa-solid fa-circle'} text-[9px] leading-none`} />
+          </span>
+          <span>{current.name || 'Sin valor'}</span>
         </div>
-        {!disabled && <i className="fa-solid fa-chevron-down text-[10px] ml-1 opacity-70"></i>}
+        {!disabled && (
+          <span className="inline-flex w-3.5 h-3.5 items-center justify-center leading-none ml-0.5 text-white">
+            <i className="fa-solid fa-chevron-down text-[7px] leading-none" />
+          </span>
+        )}
       </button>
 
       {isOpen && !disabled && (
-        <div className="absolute right-0 mt-1 w-full sm:w-56 bg-white rounded-lg shadow-xl border border-slate-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-          <div className="py-1 max-h-60 overflow-y-auto">
-            {interests.map((interest) => (
+        <div
+          onMouseLeave={() => setIsOpen(false)}
+          className={`absolute z-[200] ${dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'} 
+            left-0 w-52 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden`}
+        >
+          <div className="max-h-64 overflow-y-auto py-1">
+            {interestsAbove.map(i => (
               <button
-                key={interest.id_interest}
-                onClick={() => { onSelect(interest.id_interest); setIsOpen(false); }}
-                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2 transition-colors border-b border-slate-50 last:border-0"
+                key={i.id_interest}
+                onClick={(e) => { e.stopPropagation(); onSelect(i.id_interest); setIsOpen(false); }}
+                className="w-full px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors"
               >
-                <i className={`${interest.icon || 'fa-solid fa-circle'} text-[10px]`} style={{ color: interest.color }}></i>
-                <span className="text-xs font-bold text-slate-700 uppercase">{interest.name}</span>
+                <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: i.color || '#94a3b8' }}>
+                  <i className={`${i.icon || 'fa-solid fa-tag'} text-[8px] text-white`} />
+                </div>
+                <span className="text-[11px] font-medium text-slate-700">{i.name || 'Sin valor'}</span>
+              </button>
+            ))}
+            <div className="bg-slate-50 border-y border-slate-100 px-3 py-1.5">
+              <div className="flex items-center gap-2 text-slate-500 cursor-not-allowed">
+                <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: current.color || '#94a3b8' }}>
+                  <i className={`${current.icon || 'fa-solid fa-tag'} text-[8px] text-white`} />
+                </div>
+                <span className="text-[11px] font-medium text-slate-700">{current.name || 'Sin valor'}</span>
+                <i className="fa-solid fa-check text-[8px] ml-auto text-slate-400" />
+              </div>
+            </div>
+            {interestsBelow.map(i => (
+              <button
+                key={i.id_interest}
+                onClick={(e) => { e.stopPropagation(); onSelect(i.id_interest); setIsOpen(false); }}
+                className="w-full px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors"
+              >
+                <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: i.color || '#94a3b8' }}>
+                  <i className={`${i.icon || 'fa-solid fa-tag'} text-[8px] text-white`} />
+                </div>
+                <span className="text-[11px] font-medium text-slate-700">{i.name || 'Sin valor'}</span>
               </button>
             ))}
           </div>
@@ -226,1185 +345,985 @@ const InterestSelector: React.FC<{
 };
 
 const DealDetail: React.FC = () => {
-    const [confirmState, setConfirmState] = useState({
-      isOpen: false,
-      title: '',
-      message: '',
-      onConfirm: () => {},
-      onCancel: () => {},
-    });
-  const [selectWinnerModal, setSelectWinnerModal] = useState({
-    isOpen: false,
-    pendingStatusId: '',
-  });
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { dealStatuses: cachedDealStatuses, dealInterests: cachedDealInterests, companies: cachedCompanies, contacts: cachedContacts, users: cachedUsers } = useDataCache();
+  const {
+    dealStatuses: cachedDealStatuses,
+    dealInterests: cachedDealInterests,
+    dealChannels: cachedDealChannels,
+    users: cachedUsers,
+  } = useDataCache();
   
-  // Leer ID de parámetros de ruta o query string
-  const routeParams = useParams<{ id: string }>();
-  const queryParams = new URLSearchParams(location.search);
-  const id = routeParams.id || queryParams.get('id');
-  const [deal, setDeal] = useState<Deal | null>(null);
-  const [quotes, setQuotes] = useState<Quote[]>([]);
+  const id = useParams<{ id: string }>().id || new URLSearchParams(location.search).get('id');
+
+  const [deal, setDeal] = useState<any>(null);
+  const [quotes, setQuotes] = useState<any[]>([]);
   const [dealStatuses, setDealStatuses] = useState<DealStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'activity' | 'quotes' | 'files'>('activity');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [shareCollaborators, setShareCollaborators] = useState<any[]>([]);
-  const [refreshPermissions, setRefreshPermissions] = useState(0);
-  const [refreshTimelineKey, setRefreshTimelineKey] = useState(0);
-  const [isTimelineVisible, setIsTimelineVisible] = useState(true);
-  const [history, setHistory] = useState<any[]>([]);
+  const[history, setHistory] = useState<any[]>([]);
   const [emailHistory, setEmailHistory] = useState<any[]>([]);
+  const [activityView, setActivityView] = useState<'ALL' | 'INTERACTIONS' | 'EMAILS'>('ALL');
   const [showNewInteractionModal, setShowNewInteractionModal] = useState(false);
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({
-    FASE_PROSPECCION: true
-  });
+  const [refreshTimelineKey, setRefreshTimelineKey] = useState(0);
+  const[confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '' as React.ReactNode, onConfirm: () => {}, onCancel: () => {} });
+  const [selectWinnerModal, setSelectWinnerModal] = useState({ isOpen: false, pendingStatusId: '' });
+
+  const getChannelDisplay = useCallback((channelValue: unknown) => {
+    if (channelValue === null || channelValue === undefined) {
+      return { name: '', icon: '' };
+    }
+
+    const raw = String(channelValue).trim();
+    if (!raw) {
+      return { name: '', icon: '' };
+    }
+
+    const channelMatch = cachedDealChannels?.find((c: any) => {
+      const id = String(c.id_channel || c.id || '').trim();
+      const channelName = String(c.name || c.channel_name || '').trim();
+      return id === raw || channelName.toUpperCase() === raw.toUpperCase();
+    });
+
+    if (channelMatch) {
+      const channelMatchAny = channelMatch as any;
+      return {
+        name: channelMatch.name || channelMatchAny.channel_name || raw,
+        icon: channelMatch.icon || channelMatchAny.channel_icon || '',
+      };
+    }
+
+    return { name: raw, icon: '' };
+  }, [cachedDealChannels]);
 
   const refreshShareCollaborators = useCallback(async () => {
     if (!deal) return;
     try {
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share?id_trato=${deal.id_trato}`);
-      const text = await res.text();
-      const data = text ? JSON.parse(text) : [];
+      const data = await res.json();
       const list = Array.isArray(data) ? data : (data.users || []);
       const mapped = list.map((u: any) => {
-        const level = (u.permission_level || '').toUpperCase();
+        const cachedUser = cachedUsers?.find((cu: any) => String(cu.id_user) === String(u.id_user));
         return {
           id_user: u.id_user,
-          name: u.name_user || u.name || u.full_name || u.email || 'Usuario',
-          avatar: u.avatar_url || u.avatar || null,
-          permission_level: level === 'NONE' ? 'BLOCKED' : level,
-          rol_user: u.rol_user,
-          is_owner: u.is_owner
+          name: u.name || u.name_user || cachedUser?.name_user || cachedUser?.email_user || u.id_user,
+          avatar: u.avatar || u.avatar_url || cachedUser?.avatar_url || null,
+          permission_level: (u.permission_level || '').toUpperCase() || 'VIEW',
+          rol_user: u.rol_user || cachedUser?.rol_user,
+          is_owner: Boolean(u.is_owner || (u.permission_level || '').toUpperCase() === 'OWNER'),
         };
       });
       setShareCollaborators(mapped);
-    } catch {
-      setShareCollaborators([]);
-    }
-  }, [deal]);
+    } catch { setShareCollaborators([]); }
+  }, [deal, cachedUsers]);
 
   const refreshDealCollaborators = useCallback(async () => {
     if (!id || !user?.id_tenant || !user?.id_user) return;
     try {
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${id}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
       if (!res.ok) return;
-      const text = await res.text();
-      const parsed = text ? JSON.parse(text) : null;
-      const payload = Array.isArray(parsed) ? (parsed[0] || null) : parsed;
-      const collaborators = Array.isArray(payload?.collaborators) ? payload.collaborators : [];
-      setDeal(prev => (prev ? ({ ...(prev as any), collaborators } as any) : prev));
-    } catch {
-      // keep current state on error
-    }
-  }, [id, user?.id_tenant, user?.id_user]);
+      const parsed = JSON.parse(await res.text());
+      const payload = Array.isArray(parsed) ? parsed[0] : parsed;
+      const mapped = (payload?.collaborators || []).map((c: any) => ({
+        id_user: c.id_user,
+        name: c.name || c.name_user || c.id_user,
+        avatar: c.avatar || c.avatar_url || null,
+        permission_level: (c.permission_level || '').toUpperCase() || 'VIEW',
+        is_owner: Boolean(c.is_owner || (c.permission_level || '').toUpperCase() === 'OWNER'),
+      }));
 
-  const openShareModal = async () => {
-    if (!deal) return;
-    if (!shareCollaborators.length) {
-      await refreshShareCollaborators();
+      setDeal((prev: any) => (prev ? { ...prev, collaborators: mapped } : prev));
+      setShareCollaborators(mapped);
+    } catch {
+      // Keep UI state if refresh fails.
     }
-    setIsShareOpen(true);
-  };
+  }, [id, user]);
+
   const fetchData = useCallback(async () => {
-    if (!id || !user?.id_tenant || !user?.id_user) return;
+    if (!id || !user) return;
     setLoading(true);
-    const tenantId = user.id_tenant;
-    const userId = user.id_user;
-    const url = `${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${id}&id_tenant=${tenantId}&id_user=${userId}`;
-    console.log('Llamando a:', url);
     try {
-      const res = await apiFetch(url);
-      if (!res.ok) throw new Error('Error de red');
-      const text = await res.text();
-      const parsed = text ? JSON.parse(text) : null;
-      const payload = Array.isArray(parsed) ? (parsed[0] || null) : parsed;
-      if (!payload) {
-        setDeal(null);
-        return;
-      }
-      const cachedCompany = cachedCompanies?.find((c: any) => String(c.id_client_company || c.id_company) === String(payload.id_client_company));
-      const cachedContact = cachedContacts?.find((c: any) => String(c.id_contact) === String(payload.id_contact));
-      const cachedOwner = cachedUsers?.find((u: any) => String(u.id_user) === String(payload.owner_id));
-      const contactName = cachedContact
-        ? [cachedContact.first_name, cachedContact.last_name].filter(Boolean).join(' ') || cachedContact.title || cachedContact.email || ''
-        : '';
-      const estadoActual = payload.estado_actual || {};
-      const interesActual = payload.interes_actual || {};
-      const mappedStatuses: DealStatus[] = (payload.catalogo_estados || []).map((s: any, idx: number) => ({
-        id_status: s.id,
-        id_tenant: tenantId,
-        name: s.name,
-        color: s.color,
-        status_order: idx,
-        icon: s.icon || 'fa-solid fa-circle',
-        is_default: false,
-        status_category: s.status_category || s.category, // ⚠️ AGREGAR ESTE CAMPO
-        notify_client: s.notify_client || false // ⚠️ AGREGAR ESTE CAMPO
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/detail?id_trato=${id}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+      const parsed = JSON.parse(await res.text());
+      const payload = Array.isArray(parsed) ? parsed[0] : parsed;
+      if (!payload) { setDeal(null); return; }
+
+      const channelDisplay = getChannelDisplay(payload.channel);
+      const mappedCollaborators = (payload.collaborators || []).map((c: any) => ({
+        id_user: c.id_user,
+        name: c.name || c.name_user || c.id_user,
+        avatar: c.avatar || c.avatar_url || null,
+        permission_level: (c.permission_level || '').toUpperCase() || 'VIEW',
+        is_owner: Boolean(c.is_owner || (c.permission_level || '').toUpperCase() === 'OWNER'),
       }));
-      console.log('📋 Estados mapeados con categorías:', mappedStatuses.map(s => ({ name: s.name, category: s.status_category })));
-      // Buscar cotizaciones en varios posibles campos del payload
-      const quotesRaw = payload.cotizaciones_activas || payload.cotizaciones || payload.quotes || [];
-      console.log('🔍 DEBUG: Cotizaciones encontradas en trato:', quotesRaw.length, quotesRaw);
-      
-      const mappedQuotes: Quote[] = quotesRaw.map((q: any) => ({
-        id_cotizacion: q.id || q.id_cotizacion,
-        id_tenant: tenantId,
-        id_user: payload.owner_id,
-        id_client_company: payload.id_client_company || '',
-        id_contact: payload.id_contact || '',
-        no_cotizacion: Number(q.numero || q.no_cotizacion) || 0,
-        formatted_no_cotizacion: q.numero || q.formatted_no_cotizacion,
-        nombre_cotizacion: q.nombre || q.nombre_cotizacion,
-        fecha_emision: q.fecha || q.fecha_emision, 
-        total: String(q.total),
-        version: q.version || 1,
-        id_quote_status: q.id_quote_status || '', 
-        id_trato: payload.id_trato,
-        is_private: q.is_private || false,
-        estado: q.estado || q.estado_nombre,
-        estado_color: q.color_estado || q.estado_color,
-        estado_decision: q.estado_decision || 'PENDIENTE',
-        created_at: q.created_at || '',
-        updated_at: q.updated_at || '',
-        client_company_name: cachedCompany?.name_company || '',
-        contact_full_name: contactName,
-      }));
-      
-      const mappedDeal: Deal = {
-        id_trato: payload.id_trato,
-        id_tenant: payload.id_tenant || tenantId,
-        owner_id: payload.owner_id,
-        valor_numeric: payload.valor_numeric,
-        deal_description: payload.deal_description,
-        updated_at_fmt: payload.updated_at_fmt,
-        id_user_owner: payload.owner_id,
-        id_user: payload.owner_id,
-        id_client_company: payload.id_client_company || '',
-        id_contact: payload.id_contact || '',
-        id_deal_status: payload.estado_actual?.id || '',
-        id_interest: payload.interes_actual?.id || '',
-        channel: payload.channel || '',
-        nombre_trato: payload.nombre_trato,
-        valor_trato: payload.valor_numeric,
-        descripcion: payload.deal_description,
-        created_at_fmt: payload.created_at_fmt,
-        updated_at: payload.updated_at_fmt,
-        access_level: payload.access_level,
-        client_company_name: cachedCompany?.name_company || payload.client_company_name || payload.empresa_cliente?.name || '',
-        contact_full_name: contactName || payload.contact_full_name || payload.contacto_cliente?.name || '',
-        contact_email: cachedContact?.email || payload.contact_email || payload.contacto_cliente?.email || '',
-        contact_phone: cachedContact?.phone || payload.contact_phone || payload.contacto_cliente?.phone || '',
-        contact_position: cachedContact?.position || payload.contact_position || payload.contacto_cliente?.position || '',
-        owner_name: cachedOwner?.name_user || cachedOwner?.email_user || 'Usuario',
-        owner_avatar: cachedOwner?.avatar_url || '',
-        interes_nombre: interesActual?.name || '',
-        interes_color: interesActual?.color || '',
-        interes_icon: interesActual?.icon || '',
+
+      const mappedStatuses: DealStatus[] = Array.isArray(payload.catalogo_estados)
+        ? payload.catalogo_estados.map((s: any, idx: number) => ({
+            id_status: s.id_status || s.id || '',
+            id_tenant: s.id_tenant || user.id_tenant,
+            name: s.name || '',
+            color: s.color || '#94a3b8',
+            status_order: s.status_order ?? idx,
+            icon: s.icon || 'fa-solid fa-circle',
+            is_default: Boolean(s.is_default),
+            status_category: s.status_category || s.category,
+            notify_client: Boolean(s.notify_client),
+          }))
+        : [];
+
+      const mappedDeal = {
+        ...payload,
+        archived: Boolean(payload.archived),
+        id_client_company: payload.company_details?.id || payload.id_client_company || '',
+        id_contact: payload.contact_details?.id || payload.id_contact || '',
+        id_deal_status: payload.estado_actual?.id || payload.id_deal_status || '',
+        id_interest: payload.interes_actual?.id || payload.id_interest || '',
+        owner_name: payload.owner_details?.name || payload.owner_name || '',
+        owner_avatar: payload.owner_details?.avatar || payload.owner_avatar || '',
+        client_company_name: payload.company_details?.name || payload.client_company_name || '',
+        contact_full_name: payload.contact_details?.full_name || payload.contact_full_name || '',
+        contact_email: payload.contact_details?.email || payload.contact_email || '',
+        company_details: payload.company_details || {},
+        contact_details: payload.contact_details || {},
+        owner_details: payload.owner_details || {},
+        timeline_info: payload.timeline_info || {},
         estado_actual: {
-          id: estadoActual?.id || '',
-          icon: estadoActual?.icon || 'fa-solid fa-circle',
-          name: estadoActual?.name || '',
-          color: estadoActual?.color || '#94a3b8',
-          category: estadoActual?.category || 'PROGRESS'
+          id: payload.estado_actual?.id || '',
+          name: payload.estado_actual?.name || 'Sin estado',
+          color: payload.estado_actual?.color || '#94a3b8',
+          category: payload.estado_actual?.category || 'PROGRESS',
+          icon: payload.estado_actual?.icon || 'fa-solid fa-circle',
         },
         interes_actual: {
-          id: interesActual?.id || '',
-          icon: interesActual?.icon || 'fa-solid fa-circle',
-          name: interesActual?.name || '',
-          color: interesActual?.color || '#94a3b8'
+          id: payload.interes_actual?.id || '',
+          icon: payload.interes_actual?.icon || 'fa-solid fa-circle',
+          name: payload.interes_actual?.name || 'Sin interés',
+          color: payload.interes_actual?.color || '#94a3b8',
         },
-        owner_details: {
-          name: cachedOwner?.name_user || cachedOwner?.email_user || 'Usuario',
-          email: cachedOwner?.email_user || '',
-          avatar: cachedOwner?.avatar_url || ''
-        },
-        empresa_cliente: {
-          id: cachedCompany?.id_client_company || payload.id_client_company || '',
-          city: cachedCompany?.city || '',
-          name: cachedCompany?.name_company || '',
-          email: cachedCompany?.email_company || '',
-          phone: cachedCompany?.phone_company || '',
-          address: cachedCompany?.address || ''
-        },
-        contacto_cliente: {
-          id: cachedContact?.id_contact || payload.id_contact || '',
-          name: contactName,
-          email: cachedContact?.email || '',
-          phone: cachedContact?.phone || '',
-          position: cachedContact?.position || ''
-        },
-        catalogo_estados: mappedStatuses.length ? mappedStatuses : cachedDealStatuses,
-        catalogo_intereses: cachedDealInterests,
-        timeline_unificado: []
+        channel_display: channelDisplay.name,
+        channel_icon: channelDisplay.icon,
+        collaborators: mappedCollaborators,
       };
-      const mappedCollaborators = Array.isArray(payload.collaborators)
-        ? payload.collaborators.map((u: any) => {
-            const cachedUser = cachedUsers?.find((cu: any) => cu.id_user === u.id_user);
-            return {
-              id_user: u.id_user,
-              name: cachedUser?.name_user || cachedUser?.email_user || 'Usuario',
-              avatar: cachedUser?.avatar_url || null,
-              permission_level: u.permission_level === 'NONE' ? 'BLOCKED' : u.permission_level,
-              rol_user: cachedUser?.rol_user || '',
-              is_owner: u.is_owner
-            };
-          })
-        : [];
-      (mappedDeal as any).collaborators = mappedCollaborators;
-      setDeal(mappedDeal);
-      setQuotes(mappedQuotes);
-      setDealStatuses(cachedDealStatuses);
-      
-      // Load collaborators from response - map from cache by id_user
-      if (mappedCollaborators.length) {
-        setShareCollaborators(mappedCollaborators);
-      }
-      
-      // Load email history from historial_envios
-      if (payload?.historial_envios && Array.isArray(payload.historial_envios)) {
-        setEmailHistory(payload.historial_envios);
-      }
-      
-      navigate(location.pathname, { 
-        state: { breadcrumb: mappedDeal.nombre_trato }, 
-        replace: true 
-      });
-    } catch (e) {
-      setToast({ message: 'Error al cargar los detalles.', type: 'error' });
-      setDeal(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [id, user?.id_tenant, user?.id_user, location.pathname, cachedCompanies, cachedContacts, cachedUsers]);
 
-  // Carga del historial (muro de actividad)
+      setDeal(mappedDeal);
+      setQuotes(Array.isArray(payload.cotizaciones_activas) ? payload.cotizaciones_activas : []);
+      const normalizedEmails = Array.isArray(payload.historial_envios)
+        ? payload.historial_envios.map((em: any) => ({
+            ...em,
+            fecha_human: toReadableDate(em?.fecha_fmt || em?.fecha),
+            time_human: em?.time_fmt || toReadableTime(em?.fecha_fmt || em?.fecha),
+          }))
+        : [];
+      setEmailHistory(normalizedEmails);
+      setDealStatuses(mappedStatuses.length ? mappedStatuses : cachedDealStatuses);
+      setShareCollaborators(mappedCollaborators);
+    } catch { setDeal(null); } finally { setLoading(false); }
+  },[id, user, cachedDealStatuses, getChannelDisplay]);
+
   const fetchHistory = useCallback(async () => {
     if (!id) return;
     try {
-      const url = buildUrl(GATEWAY_CONFIG.API.DEALS.HISTORY, { id_trato: id });
-      const response = await apiFetch(url);
-      // El backend ya debe devolver el array de interacciones directamente
-      const data = await response.json();
-      setHistory(Array.isArray(data) ? data : []);
-    } catch {
-      setHistory([]);
-    }
+      const res = await apiFetch(buildUrl(GATEWAY_CONFIG.API.DEALS.HISTORY, { id_trato: id }));
+      const text = await res.text();
+      const parsed = text ? JSON.parse(text) : [];
+      setHistory(normalizeHistoryResponse(parsed));
+    } catch { setHistory([]); }
   }, [id]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { fetchHistory(); }, [fetchHistory, refreshTimelineKey]);
-
-  // Refrescar datos cuando se vuelve de editar
-  useEffect(() => {
-    if (location.state?.refresh) {
-      fetchData();
-    }
-  }, [location.state, fetchData]);
+  useEffect(() => { if (location.state?.refresh) fetchData(); }, [location.state, fetchData]);
 
   const handleStatusChange = (newStatusId: string) => {
-    if (!deal) return;
-
-    // Prevenir cambio al mismo estado (mismo comportamiento que DealsList)
-    if (newStatusId === deal.id_deal_status) {
-      return;
-    }
-
+    if (!deal || newStatusId === deal.estado_actual?.id) return;
     const newStatus = dealStatuses.find(s => s.id_status === newStatusId);
-    
-    // Si el nuevo estado es WON y hay cotizaciones activas, mostrar modal de selección
-    // Verificar por categoría WON o por nombre GANADO (fix temporal)
-    const isWonStatus = newStatus?.status_category === 'WON' || 
-                        newStatus?.name?.toUpperCase().includes('GANADO') ||
-                        newStatus?.name?.toUpperCase().includes('CERRADO');
-    
-    console.log('🎯 DEBUG: Cambiando estado:', {
-      newStatusId,
-      newStatusName: newStatus?.name,
-      statusCategory: newStatus?.status_category,
-      quotesLength: quotes.length,
-      isWonStatus,
-      conditionQuotes: quotes.length > 0,
-      shouldShowModal: isWonStatus && quotes.length > 0
-    });
-    
-    if (isWonStatus && quotes.length > 0) {
-      console.log('✅ Mostrando modal de selección de cotización ganadora');
-      setSelectWinnerModal({
-        isOpen: true,
-        pendingStatusId: newStatusId,
-      });
+    if ((newStatus?.status_category === 'WON' || newStatus?.name?.toUpperCase().includes('GANADO')) && quotes.length > 0) {
+      setSelectWinnerModal({ isOpen: true, pendingStatusId: newStatusId });
       return;
-    } else if (isWonStatus) {
-      console.log('⚠️ Estado WON pero no hay cotizaciones. Continúa cambio de estado normal.');
     }
-    
-    // Enriquecer mensaje con información de notificación por correo
-    const messageContent = (
-      <div className="space-y-3">
-        <p>¿Cambiar el estado del trato a "{newStatus?.name}"?</p>
-        {newStatus?.notify_client && (
-          <div className="flex items-center gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
-            <i className="fa-solid fa-envelope text-blue-600"></i>
-            <span className="text-sm text-blue-900 font-medium">Se activará notificación por correo al cliente</span>
-          </div>
-        )}
-      </div>
-    );
-    
     setConfirmState({
       isOpen: true,
       title: 'Actualizar Estado',
-      message: messageContent,
+      message: (
+        <div className="space-y-3 text-sm">
+          <p>¿Cambiar el estado del trato a <span className="font-bold">"{newStatus?.name}"</span>?</p>
+        </div>
+      ),
       onConfirm: async () => {
-        setConfirmState(prev => ({...prev, isOpen: false}));
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
         setProcessing(true);
         try {
           const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id_trato: deal.id_trato,
-              id_deal_status: newStatusId,
-              id_tenant: user?.id_tenant,
-              id_user: user?.id_user
-            })
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_trato: deal.id_trato, id_deal_status: newStatusId, id_tenant: user?.id_tenant, id_user: user?.id_user })
           });
           if (!res.ok) throw new Error();
-          
-          setDeal(prev => prev ? {
-            ...prev, 
+          setDeal((prev: any) => prev ? {
+            ...prev,
             id_deal_status: newStatusId,
-            estado_nombre: newStatus?.name,
-            estado_color: newStatus?.color,
-            estado_icon: newStatus?.icon
+            estado_actual: {
+              ...(prev.estado_actual || {}),
+              id: newStatusId,
+              name: newStatus?.name || prev.estado_actual?.name,
+              color: newStatus?.color || prev.estado_actual?.color,
+              category: newStatus?.status_category || prev.estado_actual?.category,
+            },
           } : null);
-          
           setToast({ message: 'Estado actualizado.', type: 'success' });
-        } catch {
-          setToast({ message: 'No se pudo actualizar el estado.', type: 'error' });
-        } finally {
-          setProcessing(false);
-        }
+        } catch { setToast({ message: 'Error al actualizar el estado.', type: 'error' }); } finally { setProcessing(false); }
       },
-      onCancel: () => setConfirmState(prev => ({...prev, isOpen: false}))
+      onCancel: () => setConfirmState(prev => ({ ...prev, isOpen: false }))
     });
-  };
-
-  const handleWinningQuoteConfirm = async (selectedQuoteId: string, createInCartera: boolean) => {
-    if (!deal || !selectWinnerModal.pendingStatusId || !user?.id_user) return;
-    
-    setSelectWinnerModal({ isOpen: false, pendingStatusId: '' });
-    setProcessing(true);
-    
-    try {
-      const selectedQuote = quotes.find(q => q.id_cotizacion === selectedQuoteId);
-      if (!selectedQuote) throw new Error('Cotización no encontrada');
-      
-      // 1. Cambiar el estado del deal a ganado (el backend se encarga de rechazar otras cotizaciones)
-      const resStatus = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id_trato: deal.id_trato,
-          id_deal_status: selectWinnerModal.pendingStatusId,
-          id_user: user.id_user,
-          id_cotizacion: selectedQuoteId
-        })
-      });
-      
-      if (!resStatus.ok) throw new Error('Error al cambiar estado del deal');
-      
-      // 2. Cambiar el estado de la cotización a aceptada (si tiene status)
-      if (selectedQuote.id_quote_status) {
-        await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/quotes`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id_cotizacion: selectedQuoteId,
-            id_quote_status: selectedQuote.id_quote_status,
-            id_user: user.id_user
-          })
-        });
-      }
-      
-      // 3. Actualizar el estado local del deal y obtener info del nuevo status
-      const newStatus = dealStatuses.find(s => s.id_status === selectWinnerModal.pendingStatusId);
-      setDeal(prev => prev ? {
-        ...prev, 
-        id_deal_status: selectWinnerModal.pendingStatusId,
-        estado_nombre: newStatus?.name,
-        estado_color: newStatus?.color,
-        estado_icon: newStatus?.icon
-      } : null);
-      
-      // 4. Refrescar datos para reflejar cambios
-      await fetchData();
-      
-      const quoteNumber = selectedQuote.formatted_no_cotizacion || selectedQuote.no_cotizacion;
-      
-      // Construir mensaje de éxito con notificaciones activadas si aplica
-      let successMessage = `Cotización #${quoteNumber} marcada como ganadora. Las demás cotizaciones fueron rechazadas.`;
-      
-      const notifications: string[] = [];
-      if (newStatus?.notify_client) {
-        notifications.push('Cliente notificado por correo');
-      }
-      if (createInCartera) {
-        notifications.push('Abriendo formulario de cartera');
-      }
-      
-      if (notifications.length > 0) {
-        successMessage += ` [${notifications.join(', ')}]`;
-      }
-      
-      setToast({ message: successMessage, type: 'success' });
-      
-      // 5. Si debe crear en cartera, redirigir al formulario
-      if (createInCartera) {
-        setTimeout(() => {
-          navigate(`/app/financials/new?from_deal=${deal.id_trato}&quote_id=${selectedQuoteId}&client_id=${deal.id_client_company}`);
-        }, 500);
-      }
-    } catch (error) {
-      console.error('Error al marcar cotización ganadora:', error);
-      setToast({ message: 'No se pudo completar la operación.', type: 'error' });
-    } finally {
-      setProcessing(false);
-    }
   };
 
   const handleInterestChange = (newInterestId: string) => {
     if (!deal) return;
     const newInterest = cachedDealInterests?.find((i: any) => i.id_interest === newInterestId);
-    
     setConfirmState({
-      isOpen: true,
-      title: 'Actualizar Interés',
-      message: `¿Cambiar el interés del trato a "${newInterest?.name}"?`,
+      isOpen: true, title: 'Actualizar Interés', message: `¿Cambiar interés a "${newInterest?.name}"?`,
       onConfirm: async () => {
-        setConfirmState(prev => ({...prev, isOpen: false}));
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
         setProcessing(true);
         try {
-          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/interest/deals`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id_trato: deal.id_trato,
-              id_interest: newInterestId,
-              id_tenant: user?.id_tenant,
-              id_user: user?.id_user
-            })
+          await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/interest/deals`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_trato: deal.id_trato, id_interest: newInterestId, id_tenant: user?.id_tenant, id_user: user?.id_user })
           });
-          if (!res.ok) throw new Error();
-          
-          setDeal(prev => prev ? {
-            ...prev, 
+          setDeal((prev: any) => prev ? {
+            ...prev,
             id_interest: newInterestId,
-            interes_nombre: newInterest?.name,
-            interes_color: newInterest?.color,
-            interes_icon: newInterest?.icon,
             interes_actual: {
-              id: newInterest?.id_interest || '',
-              icon: newInterest?.icon || 'fa-solid fa-circle',
-              name: newInterest?.name || '',
-              color: newInterest?.color || '#94a3b8'
-            }
+              ...(prev.interes_actual || {}),
+              id: newInterestId,
+              name: newInterest?.name || prev.interes_actual?.name,
+              icon: newInterest?.icon || prev.interes_actual?.icon,
+              color: newInterest?.color || prev.interes_actual?.color,
+            },
           } : null);
-          
           setToast({ message: 'Interés actualizado.', type: 'success' });
-        } catch {
-          setToast({ message: 'No se pudo actualizar el interés.', type: 'error' });
-        } finally {
-          setProcessing(false);
-        }
+        } catch { setToast({ message: 'Error al actualizar.', type: 'error' }); } finally { setProcessing(false); }
       },
-      onCancel: () => setConfirmState(prev => ({...prev, isOpen: false}))
+      onCancel: () => setConfirmState(prev => ({ ...prev, isOpen: false }))
     });
   };
 
-  const formatCurrency = (val: string | number | undefined) => {
-    const num = typeof val === 'string' ? parseFloat(val) : val;
-    if (num === undefined || isNaN(num)) return '$0.00';
-    return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  const handleWinningQuoteConfirm = async (selectedQuoteId: string, createInCartera: boolean) => {
+    if (!deal || !selectWinnerModal.pendingStatusId || !user?.id_user) return;
+    setSelectWinnerModal({ isOpen: false, pendingStatusId: '' });
+    setProcessing(true);
+    try {
+      const resStatus = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_trato: deal.id_trato, id_deal_status: selectWinnerModal.pendingStatusId, id_user: user.id_user, id_cotizacion: selectedQuoteId })
+      });
+      if (!resStatus.ok) throw new Error();
+      await fetchData();
+      setToast({ message: 'Cotización ganadora registrada.', type: 'success' });
+      if (createInCartera) setTimeout(() => navigate(`/app/financials/new?from_deal=${deal.id_trato}&quote_id=${selectedQuoteId}&client_id=${deal.id_client_company}`), 500);
+    } catch { setToast({ message: 'Error al procesar victoria.', type: 'error' }); } finally { setProcessing(false); }
   };
 
+  const handleArchiveDeal = async (targetDeal: Deal) => {
+    try {
+      await apiFetch(GATEWAY_CONFIG.API.DEALS.ARCHIVED, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id_trato: targetDeal.id_trato,
+          id_tenant: user?.id_tenant,
+          id_user: user?.id_user,
+          archived: !targetDeal.archived,
+        }),
+      });
 
-  if (loading) return (
-    <div className="flex h-[calc(100vh-200px)] items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
-        <BrandSpinner size="xl" />
-        <p className="text-slate-400 font-medium animate-pulse">Cargando información del trato...</p>
-      </div>
-    </div>
-  );
+      setDeal((prev: any) => (prev ? { ...prev, archived: !Boolean(prev.archived) } : prev));
+      setToast({
+        message: targetDeal.archived ? 'Trato desarchivado.' : 'Trato archivado.',
+        type: 'success',
+      });
+    } catch {
+      setToast({ message: 'Error al archivar el trato.', type: 'error' });
+    }
+  };
 
-  if (!deal && !loading) return (
-    <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] text-center">
-        <h2 className="text-xl font-bold text-slate-800">Trato no encontrado o error de conexión</h2>
-        <p className="text-slate-400 mb-4">Verifica tu conexión o intenta de nuevo.</p>
-        <button onClick={() => navigate('/app/deals')} className="mt-4 px-6 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-all">
-            Volver
-        </button>
-    </div>
-  );
+  const handleDeleteDeal = (idToDelete: string) => {
+    setConfirmState({
+      isOpen: true,
+      title: 'Eliminar trato',
+      message: '¿Estás seguro? Esta acción es irreversible.',
+      onConfirm: async () => {
+        try {
+          await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_trato: idToDelete, id_tenant: user?.id_tenant, id_user: user?.id_user }),
+          });
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
+          navigate('/app/deals');
+        } catch {
+          setToast({ message: 'Error al eliminar el trato.', type: 'error' });
+          setConfirmState(prev => ({ ...prev, isOpen: false }));
+        }
+      },
+      onCancel: () => setConfirmState(prev => ({ ...prev, isOpen: false })),
+    });
+  };
 
-  if (!deal) return null;
+  if (loading) return <DealDetailSkeleton />;
+  if (!deal) return <div className="flex h-screen items-center justify-center text-zinc-500 font-medium">Trato no encontrado.</div>;
 
   const canEdit = deal.access_level === 'EDIT' || user?.rol_user === 'admin';
+  const effectiveStatuses = (dealStatuses && dealStatuses.length > 0) ? dealStatuses : (cachedDealStatuses || []);
+  const statusFromCache = effectiveStatuses.find((s: any) =>
+    String(s.id_status || '').trim() === String(deal.id_deal_status || deal.estado_actual?.id || '').trim() ||
+    String(s.name || '').toUpperCase() === String(deal.estado_actual?.name || '').toUpperCase()
+  );
+  const effectiveStatus = {
+    id: statusFromCache?.id_status || deal.estado_actual?.id || '',
+    name: statusFromCache?.name || deal.estado_actual?.name || 'Sin valor',
+    color: statusFromCache?.color || deal.estado_actual?.color || '#94a3b8',
+    icon: statusFromCache?.icon || deal.estado_actual?.icon || 'fa-solid fa-circle',
+    category: statusFromCache?.status_category || deal.estado_actual?.category || 'PROGRESS',
+    notify_client: Boolean(statusFromCache?.notify_client),
+  };
+
+  const interestFromCache = (cachedDealInterests || []).find((i: any) =>
+    String(i.id_interest || '').trim() === String(deal.id_interest || deal.interes_actual?.id || '').trim() ||
+    String(i.name || '').toUpperCase() === String(deal.interes_actual?.name || '').toUpperCase()
+  );
+  const effectiveInterest = {
+    id: interestFromCache?.id_interest || deal.interes_actual?.id || '',
+    name: interestFromCache?.name || deal.interes_actual?.name || 'Sin valor',
+    icon: interestFromCache?.icon || deal.interes_actual?.icon || 'fa-solid fa-circle',
+    color: interestFromCache?.color || deal.interes_actual?.color || '#94a3b8',
+  };
+
+  const channelBase = getChannelDisplay(deal.channel_display || deal.channel);
+  const channelFromCache = (cachedDealChannels || []).find((c: any) =>
+    String(c.id_channel || '').trim() === String(deal.channel || '').trim() ||
+    String(c.name || '').toUpperCase() === String(channelBase.name || '').toUpperCase() ||
+    String(c.name || '').toUpperCase() === String(deal.channel || '').toUpperCase()
+  );
+  const effectiveChannel = {
+    name: channelFromCache?.name || channelBase.name || '',
+    icon: channelFromCache?.icon || channelBase.icon || '',
+    color: channelFromCache?.color || '#94a3b8',
+  };
+
+  const pipelineCats = ['DRAFT', 'PROGRESS', 'PAUSED', 'WON', 'LOST'];
+  const currentCat = String(effectiveStatus.category || 'PROGRESS').toUpperCase();
+  const catIndex = pipelineCats.indexOf(currentCat);
+  const channelLabel = effectiveChannel.name || 'Sin valor';
+  const channelIcon = effectiveChannel.icon || (String(channelLabel).toUpperCase().includes('WHATSAPP') ? 'fa-brands fa-whatsapp' : '');
+  const createdFromFmt = splitDateTime(deal.timeline_info?.created_at_fmt || deal.created_at_fmt);
+  const updatedFromFmt = splitDateTime(deal.timeline_info?.updated_at_fmt || deal.updated_at_fmt);
+  const createdDateLabel =
+    deal.timeline_info?.created_at_human ||
+    createdFromFmt.date ||
+    '-';
+  const updatedDateLabel =
+    deal.timeline_info?.updated_at_human ||
+    updatedFromFmt.date ||
+    '-';
+  const createdTimeLabel =
+    deal.timeline_info?.created_time ||
+    createdFromFmt.time ||
+    '';
+  const updatedTimeLabel =
+    deal.timeline_info?.updated_time ||
+    updatedFromFmt.time ||
+    '';
+  const showInteractions = activityView !== 'EMAILS';
+  const showEmails = activityView !== 'INTERACTIONS';
+  const hasInteractions = history.length > 0;
+  const hasEmails = emailHistory.length > 0;
+  const interactionCount = history.reduce((acc: number, group: any) => acc + (Array.isArray(group?.interactions) ? group.interactions.length : 0), 0);
+  const emailCount = emailHistory.length;
+  const totalActivityCount = interactionCount + emailCount;
+  const contactEmail = deal.contact_details?.email || deal.contact_email || '';
+  const contactPhoneRaw = deal.contact_details?.phone || '';
+  const contactPhoneDigits = String(contactPhoneRaw).replace(/\D/g, '');
+  const whatsappHref = contactPhoneDigits ? `https://wa.me/${contactPhoneDigits}` : '';
+  const pipelineLabel = (cat: string) => (
+    cat === 'DRAFT' ? 'Borrador' :
+    cat === 'PROGRESS' ? 'En Progreso' :
+    cat === 'PAUSED' ? 'Pausado' :
+    cat === 'WON' ? 'Ganado' :
+    'Perdido'
+  );
 
   return (
-    <div className="w-full px-4 md:px-6 pb-20 animate-fade-in font-sans">
+    <div className="min-h-screen bg-[#F9F9F8] text-zinc-800 pb-20 font-sans selection:bg-orange-100 selection:text-orange-900">
       
-      {/* --- HEADER PRINCIPAL --- */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            
-            {/* Lado Izquierdo: Info Principal */}
-            <div className="flex-1 min-w-0 space-y-3 w-full">
-                <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-bold text-slate-800 tracking-tight leading-tight">
-                        <span className="font-medium text-slate-600 truncate">{deal.nombre_trato}</span>
-                    </h1>
-                </div>
+      {/* HEADER */}
+      <header className="bg-white border-b border-zinc-200 sticky top-0 z-40">
+        <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 tracking-tight truncate">{deal.nombre_trato}</h1>
+                <span
+                  className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border shadow-sm"
+                  style={{
+                    backgroundColor: effectiveStatus.color || '#94a3b8',
+                    borderColor: effectiveStatus.color || '#94a3b8',
+                    color: '#ffffff',
+                  }}
+                >
+                  <i className={`${effectiveStatus.icon || 'fa-solid fa-circle'} text-[9px]`} />
+                  <span>{effectiveStatus.name || 'Sin valor'}</span>
+                  {effectiveStatus.notify_client && <i className="fa-solid fa-envelope text-[8px]" />}
+                </span>
+              </div>
             </div>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 shrink-0">
+              <div className="text-left sm:text-right mr-2">
+                <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-0.5">Valor</div>
+                <div className="text-2xl font-semibold tracking-tight text-zinc-900">
+                  {formatCurrency(deal.valor_numeric).split('.')[0]}<span className="text-zinc-400 text-lg">.{formatCurrency(deal.valor_numeric).split('.')[1] || '00'}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setIsShareOpen(true); refreshShareCollaborators(); }} className="h-9 w-9 flex items-center justify-center rounded-md bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 transition-colors shadow-sm" title="Compartir">
+                  <i className="fa-solid fa-share-nodes text-[13px]"></i>
+                </button>
+                <button onClick={() => navigate(`/app/deals/edit?id=${deal.id_trato}`)} className="h-9 px-4 bg-zinc-900 text-white rounded-md font-medium text-[13px] hover:bg-zinc-800 transition-colors shadow-sm flex items-center gap-2">
+                  <i className="fa-solid fa-pen text-[11px]"></i> Editar
+                </button>
+                <DealActionsMenu
+                  deal={deal as Deal}
+                  user={user}
+                  onEdit={(targetDeal) => navigate(`/app/deals/edit?id=${targetDeal.id_trato}`)}
+                  onShare={() => { setIsShareOpen(true); refreshShareCollaborators(); }}
+                  onArchive={handleArchiveDeal}
+                  onDelete={handleDeleteDeal}
+                  anchor="auto-right"
+                  triggerClassName="h-9 w-9 flex items-center justify-center rounded-md bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 transition-colors shadow-sm"
+                />
+              </div>
+            </div>
+          </div>
 
-            {/* Lado Derecho: Acciones y Valor */}
-            <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
-                <div className="text-left lg:text-right w-full lg:w-auto">
-                    <div className="text-3xl font-mono font-bold text-slate-800 tracking-tight">
-                        {formatCurrency(deal.valor_trato)}
+          {/* PIPELINE */}
+          <div className="mt-5 hidden md:block overflow-x-auto overflow-y-visible scrollbar-hide">
+            <div className="flex min-w-[700px] gap-2.5">
+              {pipelineCats.map((cat, idx) => {
+                const isActive = idx === catIndex;
+                const isCompleted = idx < catIndex && currentCat !== 'LOST'; // Si está perdido, no marca verde los siguientes
+
+                const activeColor = SYSTEM_CATEGORY_COLORS[currentCat] || '#10b981';
+                const completedColor = SYSTEM_CATEGORY_COLORS[cat] || '#6b7280';
+
+                return (
+                  <div key={cat} className={`flex-${isActive ? '[1.5]' : '1'} group cursor-pointer`}>
+                    <div className="h-1.5 w-full rounded-full mb-2 relative" style={{ backgroundColor: isCompleted ? completedColor : isActive ? activeColor : '#e4e4e7' }}>
+                       {isActive && <div className="absolute inset-0 rounded-full" style={{ backgroundColor: activeColor }}></div>}
                     </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
-                    <StatusSelector 
-                        currentStatusId={deal.id_deal_status || ''} 
-                        statuses={dealStatuses} 
-                        onSelect={handleStatusChange} 
-                        disabled={!canEdit || processing}
-                    />
-                    
-                    <InterestSelector 
-                        currentInterestId={deal.id_interest || ''} 
-                        interests={cachedDealInterests || []} 
-                        onSelect={handleInterestChange} 
-                        disabled={!canEdit || processing}
-                    />
-
-                    {canEdit && (
-                        <>
-                            <button 
-                                onClick={() => navigate(`/app/deals/edit?id=${deal.id_trato}`)}
-                                className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:border-brand-200 hover:bg-brand-50 transition-all shadow-sm"
-                            >
-                                <i className="fa-solid fa-pen"></i> Editar
-                            </button>
-                            <button 
-                                onClick={openShareModal}
-                                className="flex-1 sm:flex-none px-3 py-2.5 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 transition-all shadow-sm"
-                            >
-                                <i className="fa-solid fa-share-nodes"></i> Compartir
-                            </button>
-                        </>
-                    )}
-                </div>
-            </div>
-        </div>
-      </div>
-
-      {/* --- GRID DE CONTENIDO (3 COLUMNAS FIJAS) --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        
-        {/* COLUMNA 1: Cliente, Detalles, Asignaciones */}
-        <div className="space-y-6">
-          {/* TARJETA: Cliente */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3 bg-white">
-                    <span className="w-2 h-6 bg-blue-500 rounded-full"></span>
-                    <div><h3 className="font-bold text-slate-800 text-sm">Cliente</h3></div>
-                </div>
-                <div className="p-6 space-y-5">
-                    <div className="flex items-start gap-3 group">
-                        {(() => {
-                          const companyName = deal.client_company_name || 'Empresa';
-                          const color = getAvatarColor(companyName);
-                          return (
-                            <div className="w-10 h-10 rounded-none flex items-center justify-center shrink-0 border" style={{ backgroundColor: color.bg, color: color.text, borderColor: color.text }}>
-                              {getInitials(companyName)}
-                            </div>
-                          );
-                        })()}
-                        <div className="min-w-0">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Empresa</p>
-                            <Link to={`/app/client-companies/${deal.id_client_company}`} className="font-bold text-slate-800 text-sm hover:text-blue-600 hover:underline block truncate">{deal.client_company_name || 'Empresa desconocida'}</Link>
-                        </div>
-                    </div>
-                    <div className="h-px bg-slate-50 w-full"></div>
-                    {deal.id_contact && (
-                        <div className="flex items-start gap-3 group">
-                            {(() => {
-                              const contactName = deal.contact_full_name || 'Contacto';
-                              const color = getAvatarColor(contactName);
-                              return (
-                                <div className="w-10 h-10 rounded-full flex items-center justify-center shrink-0 border" style={{ backgroundColor: color.bg, color: color.text, borderColor: color.text }}>
-                                  {getInitials(contactName)}
-                                </div>
-                              );
-                            })()}
-                            <div className="min-w-0">
-                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Contacto</p>
-                                <Link to={`/app/client-contacts/${deal.id_contact}`} className="font-bold text-slate-800 text-sm hover:text-brand-600 hover:underline block truncate">{deal.contact_full_name || 'Sin nombre'}</Link>
-                                {deal.contact_position && (<p className="text-xs text-slate-500 italic truncate">{deal.contact_position}</p>)}
-                                {deal.contact_email && (<div className="flex items-center gap-1.5 mt-1 text-xs text-slate-500 truncate"><i className="fa-solid fa-envelope opacity-60"></i><span className="truncate">{deal.contact_email}</span></div>)}
-                                {deal.contact_phone && (<div className="flex items-center gap-1.5 mt-1 text-xs text-slate-500"><i className="fa-solid fa-phone opacity-60"></i><span>{deal.contact_phone}</span></div>)}
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </div>
-
-          {/* TARJETA: Detalles del Trato */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
-                  <div className="flex items-center gap-3">
-                    <span className="w-2 h-6 bg-emerald-500 rounded-full"></span>
-                    <div>
-                        <h3 className="font-bold text-slate-800 text-sm">Detalles</h3>
+                    <div className={`flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide ${isActive ? 'font-bold text-zinc-900' : 'text-zinc-400'}`}>
+                      {isCompleted && <i className="fa-solid fa-circle-check text-zinc-400"></i>}
+                      {!isCompleted && !isActive && <i className="fa-regular fa-circle text-[10px]"></i>}
+                      {isActive && (
+                        <span
+                          className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-full border"
+                          style={{
+                            borderColor: activeColor,
+                            backgroundColor: `${activeColor}22`,
+                          }}
+                        >
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: activeColor }}></span>
+                        </span>
+                      )}
+                      <span style={isActive ? { color: activeColor } : undefined}>{pipelineLabel(cat)}</span>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-4 md:hidden">
+            <div className="space-y-3">
+              {pipelineCats.map((cat, idx) => {
+                const isActive = idx === catIndex;
+                const isCompleted = idx < catIndex && currentCat !== 'LOST';
+                const activeColor = SYSTEM_CATEGORY_COLORS[currentCat] || '#10b981';
+                const completedColor = SYSTEM_CATEGORY_COLORS[cat] || '#6b7280';
+
+                return (
+                  <div key={`mobile-${cat}`} className="relative pl-6">
+                    <span className={`absolute left-[6px] top-0 h-full w-[1px] ${idx === pipelineCats.length - 1 ? 'hidden' : 'block'}`} style={{ backgroundColor: '#e4e4e7' }}></span>
+                    <div className="relative flex items-center gap-2">
+                      <span
+                        className="absolute -left-6 mt-0.5 flex h-3 w-3 items-center justify-center rounded-full border"
+                        style={{
+                          backgroundColor: isActive ? activeColor : isCompleted ? completedColor : '#ffffff',
+                          borderColor: isActive ? activeColor : isCompleted ? completedColor : '#d4d4d8',
+                        }}
+                      ></span>
+                      <span className={`text-[12px] font-semibold uppercase tracking-wide ${isActive ? 'font-bold' : isCompleted ? 'text-zinc-700' : 'text-zinc-400'}`} style={isActive ? { color: activeColor } : undefined}>
+                        {pipelineLabel(cat)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* MAIN CONTENT */}
+      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 mt-5 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+        
+        {/* ASIDE PROPIEDADES */}
+        <aside className="lg:col-span-4 space-y-8">
+          
+          {deal.deal_description && (
+            <div>
+              <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">Descripción</h3>
+              <p className="text-[13px] text-zinc-700 leading-relaxed bg-white border border-zinc-200 p-3 rounded-lg shadow-sm whitespace-pre-wrap">
+                {deal.deal_description}
+              </p>
+            </div>
+          )}
+
+          <div>
+            <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+              <span>Acerca del trato</span>
+            </h3>
+            <div className="space-y-1">
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors">
+                <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2"><i className="fa-regular fa-building w-4 text-center"></i> Empresa</div>
+                <div className="w-2/3 text-zinc-900 text-[13px] font-medium truncate">
+                  <Link to={`/app/client-companies/${deal.id_client_company}`} className="inline-flex max-w-full items-center rounded px-1 py-0.5 text-zinc-900 transition-colors hover:bg-zinc-100 no-underline hover:no-underline">
+                    <span className="truncate">{deal.company_details?.name || deal.client_company_name}</span>
+                  </Link>
                 </div>
-                <div className="p-6 space-y-4">
-                    <div>
-                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Fechas</p>
-                      <div className="grid grid-cols-2 gap-2">
-                          <div>
-                            <span className="text-[11px] text-slate-400 block">Creado:</span>
-                            <span className="text-[12px] font-medium text-slate-700">{deal.created_at_fmt || '-'}</span>
-                          </div>
-                          <div>
-                            <span className="text-[11px] text-slate-400 block">Actualizado:</span>
-                            <span className="text-[12px] font-medium text-slate-700">{deal.updated_at || '-'}</span>
-                          </div>
+              </div>
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors">
+                <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2"><i className="fa-regular fa-user w-4 text-center"></i> Contacto</div>
+                <div className="w-2/3 min-w-0 flex items-center gap-2 text-zinc-900 text-[13px] font-medium">
+                  <div className="min-w-0 truncate">
+                    {deal.id_contact ? (
+                      <Link to={`/app/client-contacts/${deal.id_contact}`} className="inline-flex max-w-full items-center rounded px-1 py-0.5 text-zinc-900 transition-colors hover:bg-zinc-100 no-underline hover:no-underline">
+                        <span className="truncate">{deal.contact_details?.full_name || deal.contact_full_name || 'Sin contacto'}</span>
+                      </Link>
+                    ) : (
+                      <span className="text-zinc-500">{deal.contact_details?.full_name || deal.contact_full_name || 'Sin contacto'}</span>
+                    )}
+                  </div>
+                  <div className="shrink-0 flex items-center gap-1">
+                    {whatsappHref && (
+                      <a
+                        href={whatsappHref}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-6 h-6 inline-flex items-center justify-center rounded text-emerald-600 hover:bg-emerald-50 transition-colors"
+                        title="Escribir por WhatsApp"
+                      >
+                        <i className="fa-brands fa-whatsapp text-[12px]" />
+                      </a>
+                    )}
+                    {contactEmail && (
+                      <a
+                        href={`mailto:${contactEmail}`}
+                        className="w-6 h-6 inline-flex items-center justify-center rounded text-sky-600 hover:bg-sky-50 transition-colors"
+                        title="Enviar correo"
+                      >
+                        <i className="fa-regular fa-envelope text-[11px]" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors">
+                <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2"><i className="fa-regular fa-envelope w-4 text-center"></i> Email</div>
+                <div className="w-2/3 text-zinc-600 text-[13px] truncate">
+                  <a href={`mailto:${deal.contact_details?.email || deal.contact_email}`} className="inline-flex max-w-full items-center rounded px-1 py-0.5 text-zinc-600 transition-colors hover:bg-zinc-100 no-underline hover:no-underline">
+                    <span className="truncate">{deal.contact_details?.email || deal.contact_email || 'Sin correo'}</span>
+                  </a>
+                </div>
+              </div>
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors">
+                <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2"><i className="fa-solid fa-bullhorn w-4 text-center"></i> Origen</div>
+                <div className="w-2/3 flex items-center gap-1.5 text-zinc-700 text-[13px]">
+                  {channelIcon ? <i className={`${channelIcon} text-[12px]`} style={{ color: effectiveChannel.color }}></i> : null}
+                  {channelLabel}
+                </div>
+              </div>
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors">
+                <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2"><i className="fa-solid fa-bars-progress w-4 text-center"></i> Estado</div>
+                <div className="w-2/3 flex items-center gap-2 min-h-[24px]">
+                  <StatusSelector currentStatusId={effectiveStatus.id || ''} statuses={effectiveStatuses} onSelect={handleStatusChange} disabled={!canEdit || processing} />
+                </div>
+              </div>
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors">
+                <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2"><i className="fa-regular fa-star w-4 text-center"></i> Interés</div>
+                <div className="w-2/3 flex items-center gap-2 min-h-[24px] text-zinc-700 text-[13px]">
+                   <InterestSelector currentInterestId={effectiveInterest.id || ''} interests={cachedDealInterests || []} onSelect={handleInterestChange} disabled={!canEdit || processing} />
+                </div>
+              </div>
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors mt-2">
+                <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2"><i className="fa-regular fa-calendar-plus w-4 text-center"></i> Creación</div>
+                <div className="w-2/3 text-zinc-700 text-[13px]">
+                  <span className="text-zinc-500">{createdDateLabel}{createdTimeLabel ? `  • ${createdTimeLabel}` : ''}</span>
+                </div>
+              </div>
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors">
+                <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2"><i className="fa-regular fa-calendar-check w-4 text-center"></i> Updated</div>
+                <div className="w-2/3 text-zinc-700 text-[13px]">
+                  <span className="text-zinc-500">{updatedDateLabel}{updatedTimeLabel ? `  • ${updatedTimeLabel}` : ''}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+              <span>Equipo</span>
+              {canEdit && (
+                <button
+                  onClick={() => { setIsShareOpen(true); refreshShareCollaborators(); }}
+                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-700 bg-white border border-zinc-300 rounded-md px-2.5 py-1 shadow-sm hover:bg-zinc-50 hover:border-zinc-400 hover:text-zinc-900 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-300"
+                >
+                  <i className="fa-solid fa-user-gear text-[10px]" />
+                  Gestionar
+                </button>
+              )}
+            </h3>
+            <div className="space-y-2">
+              {(deal.collaborators || [])
+                .slice()
+                .sort((a: any, b: any) => {
+                  const rank = (c: any) => {
+                    const level = String(c?.permission_level || '').toUpperCase();
+                    if (level === 'OWNER' || c?.is_owner) return 0;
+                    if (level === 'EDIT') return 1;
+                    if (level === 'VIEW') return 2;
+                    return 3;
+                  };
+                  return rank(a) - rank(b);
+                })
+                .map((collab: any) => {
+                  const level = String(collab.permission_level || '').toUpperCase();
+                  const isOwner = level === 'OWNER' || collab.is_owner;
+                  const badgeType: 'OWNER' | 'EDIT' | 'VIEW' = isOwner ? 'OWNER' : level === 'EDIT' ? 'EDIT' : 'VIEW';
+
+                  return (
+                    <div key={collab.id_user} className="flex items-center group py-1.5 px-2 -mx-2 hover:bg-zinc-50 rounded-md transition-colors">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Avatar
+                          src={collab.avatar || null}
+                          name={collab.name || collab.id_user || 'Usuario'}
+                          size="sm"
+                          badge={{ type: badgeType }}
+                          badgeInset
+                          enableHoverZoom
+                          hoverScale={1.1}
+                          showTooltip
+                          tooltipRole={isOwner ? 'Creador' : level === 'EDIT' ? 'Principal' : 'Secundario'}
+                          tooltipPosition="bottom"
+                        />
+                        <span className="text-[13px] font-medium text-zinc-900 truncate">{collab.name || collab.id_user}</span>
                       </div>
                     </div>
-                </div>
+                  );
+                })}
             </div>
+          </div>
+        </aside>
 
-          {/* TARJETA: Colaboradores (ASIGNACIONES) */}
-          {canEdit && (
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100 bg-white flex justify-between items-center gap-3">
-                      <div className="flex items-center gap-3">
-                        <span className="w-2 h-6 bg-indigo-500 rounded-full"></span>
-                        <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Asignaciones</h3>
-                      </div>
-                      <button
-                        onClick={openShareModal}
-                        disabled={deal.access_level !== 'EDIT' && user?.rol_user !== 'admin'}
-                        className={`text-xs px-3 py-1.5 rounded-lg font-bold transition-colors flex items-center gap-1 ${
-                          (deal.access_level === 'EDIT' || user?.rol_user === 'admin')
-                          ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'
-                          : 'text-slate-300 cursor-not-allowed'
+        {/* TABS DERECHA */}
+        <section className="lg:col-span-8 relative">
+          <div className="flex gap-6 border-b border-zinc-200 mb-6 overflow-x-auto scrollbar-hide">
+            <button onClick={() => setActiveTab('activity')} className={`pb-3 text-[13px] whitespace-nowrap transition-colors border-b-2 ${activeTab === 'activity' ? 'font-semibold text-zinc-900 border-zinc-900' : 'font-medium text-zinc-500 border-transparent hover:text-zinc-800'}`}>Muro de Actividad</button>
+            <button onClick={() => setActiveTab('quotes')} className={`pb-3 text-[13px] whitespace-nowrap transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'quotes' ? 'font-semibold text-zinc-900 border-zinc-900' : 'font-medium text-zinc-500 border-transparent hover:text-zinc-800'}`}>Cotizaciones <span className="bg-zinc-100 text-zinc-600 px-1.5 rounded-full text-[10px] font-semibold">{quotes.length}</span></button>
+            <button onClick={() => setActiveTab('files')} className={`pb-3 text-[13px] whitespace-nowrap transition-colors border-b-2 ${activeTab === 'files' ? 'font-semibold text-zinc-900 border-zinc-900' : 'font-medium text-zinc-500 border-transparent hover:text-zinc-800'}`}>Archivos</button>
+          </div>
+
+          {/* TAB: MURO DE ACTIVIDAD (DISEÑO EXACTO) */}
+          {activeTab === 'activity' && (
+            <div className="animate-fade-in">
+              <div className="bg-white border border-zinc-200 rounded-lg shadow-sm focus-within:border-zinc-400 focus-within:ring-1 focus-within:ring-zinc-400 transition-all mb-6 cursor-text" onClick={() => setShowNewInteractionModal(true)}>
+                <textarea placeholder="Escribe una nota interna o registra una actividad..." className="w-full text-[13px] p-3 text-zinc-800 bg-transparent border-0 focus:ring-0 resize-none h-16 outline-none pointer-events-none" readOnly spellCheck="false"></textarea>
+                <div className="flex justify-between items-center px-3 py-2 border-t border-zinc-100 bg-zinc-50 rounded-b-lg">
+                  <div className="flex gap-1">
+                    <button type="button" className="w-7 h-7 flex items-center justify-center rounded text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 transition-colors"><i className="fa-solid fa-phone text-[12px]"></i></button>
+                    <button type="button" className="w-7 h-7 flex items-center justify-center rounded text-emerald-500 hover:bg-emerald-100 hover:text-emerald-700 transition-colors bg-emerald-50"><i className="fa-brands fa-whatsapp text-[13px]"></i></button>
+                    <button type="button" className="w-7 h-7 flex items-center justify-center rounded text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 transition-colors"><i className="fa-regular fa-envelope text-[12px]"></i></button>
+                  </div>
+                  <button type="button" className="px-3 py-1.5 bg-zinc-900 text-white text-[12px] font-medium rounded hover:bg-zinc-800 transition-colors shadow-sm">Registrar</button>
+                </div>
+              </div>
+
+              <div className="mb-4 flex items-center gap-2">
+                {[
+                  { key: 'ALL', label: 'Todo', count: totalActivityCount },
+                  { key: 'INTERACTIONS', label: 'Interacciones', count: interactionCount },
+                  { key: 'EMAILS', label: 'Envios', count: emailCount },
+                ].map((seg) => {
+                  const isActive = activityView === seg.key;
+                  return (
+                    <button
+                      key={seg.key}
+                      type="button"
+                      onClick={() => setActivityView(seg.key as 'ALL' | 'INTERACTIONS' | 'EMAILS')}
+                      className={`px-2.5 py-1 rounded-md text-[11px] border transition-colors ${
+                        isActive
+                          ? 'bg-zinc-900 text-white border-zinc-900'
+                          : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50 hover:text-zinc-800'
+                      }`}
+                    >
+                      <span>{seg.label}</span>
+                      <span
+                        className={`ml-1 inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full px-1 text-[10px] font-semibold ${
+                          isActive ? 'bg-white/20 text-white' : 'bg-zinc-100 text-zinc-600'
                         }`}
                       >
-                        <i className="fa-solid fa-gear"></i>Gestionar
-                      </button>
+                        {seg.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="space-y-4 relative before:absolute before:inset-0 before:ml-[15px] before:w-[1px] before:bg-zinc-200">
+                {activityView === 'INTERACTIONS' && !hasInteractions && (
+                  <p className="pl-10 text-[13px] text-zinc-400 italic">No hay interacciones registradas.</p>
+                )}
+                {activityView === 'EMAILS' && !hasEmails && (
+                  <p className="pl-10 text-[13px] text-zinc-400 italic">No hay envios registrados.</p>
+                )}
+                {activityView === 'ALL' && !hasInteractions && !hasEmails && (
+                  <p className="pl-10 text-[13px] text-zinc-400 italic">No hay actividad registrada.</p>
+                )}
+
+                {/* HISTORIAL API */}
+                {showInteractions && history.map((g: any, gIdx: number) => (
+                  <React.Fragment key={g.group_id || gIdx}>
+                    <div className="relative pl-10 pt-1 mb-1">
+                      <div className="absolute left-[-4px] top-3 w-[39px] h-[1px] bg-zinc-200"></div>
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[11px] font-semibold bg-white border border-zinc-200 text-zinc-600 shadow-sm relative z-10 uppercase">
+                        {g.group_name}
+                      </span>
                     </div>
-                    <div className="p-4">
-                      {(deal as any).collaborators && (deal as any).collaborators.length > 0 ? (
-                        <div className="space-y-2">
-                          {[...(deal as any).collaborators].sort((a: any, b: any) => {
-                            const getOrder = (collab: any) => {
-                              const level = (collab.permission_level || '').toUpperCase();
-                              if (level === 'OWNER' || collab.is_owner) return 0; // Creador primero
-                              if (level === 'EDIT') return 1; // Principal segundo
-                              if (level === 'VIEW') return 2; // Secundaria tercero
-                              return 3; // Sin asignación al final
-                            };
-                            return getOrder(a) - getOrder(b);
-                          }).map((collaborator: any) => (
-                            <div key={collaborator.id_user} className="flex items-center justify-between text-xs p-2 rounded-lg hover:bg-slate-50 transition-colors">
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                {collaborator.avatar ? (
-                                  <img src={collaborator.avatar} alt={collaborator.name} className="w-6 h-6 rounded-full border border-slate-200" />
-                                ) : (
-                                  <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
-                                    {(collaborator.name || 'U').charAt(0)}
-                                  </div>
-                                )}
-                                <div className="min-w-0 flex-1">
-                                  <p className="font-medium text-slate-700 truncate flex items-center gap-2">
-                                    {collaborator.name}
-                                    {(collaborator.rol_user || '').toLowerCase() === 'admin' && (
-                                      <span className="inline-flex items-center justify-center w-4 h-4 text-[10px] text-amber-500 leading-none align-middle" title="Control total por admin">
-                                        <i className="fa-solid fa-star"></i>
-                                      </span>
-                                    )}
-                                  </p>
+
+                    {g.interactions?.map((item: any) => {
+                      const isSystem = item.type === 'SYSTEM';
+                      const isWhatsapp = item.channel_name?.toUpperCase() === 'WHATSAPP';
+                      return (
+                        <div key={item.id} className="relative pl-10 group mb-4">
+                          {/* AVATAR FLOTANTE IZQUIERDA */}
+                          <div className="absolute left-0 top-2 w-8 h-8 rounded-full border border-zinc-200 bg-white overflow-hidden z-10 shadow-sm flex items-center justify-center text-zinc-400">
+                            {isSystem ? <i className="fa-solid fa-code-branch text-[11px]"></i> : (item.user_avatar ? <img src={item.user_avatar} alt="av" className="w-full h-full object-cover" /> : <span className="text-[10px] font-medium">{getInitials(item.user_name)}</span>)}
+                          </div>
+                          
+                          {/* CONTENEDOR MENSAJE DERECHA */}
+                          {isSystem ? (
+                            <div className="py-1.5">
+                              <p className="text-[11px] text-zinc-400 font-normal tracking-[0.01em] mb-0.5">{item.date_fmt || '-'}{item.time_fmt ? ` • ${item.time_fmt}` : ''}{item.time_ago_text ? ` • hace ${item.time_ago_text}` : ''}</p>
+                              <p className="text-[13px] text-zinc-600">{item.description}</p>
+                            </div>
+                          ) : (
+                            <div className={`bg-white border rounded-xl p-4 shadow-sm transition-shadow relative ${isWhatsapp ? 'border-emerald-200' : 'border-zinc-200'}`}>
+                              {isWhatsapp && (
+                                <div className="absolute -top-2.5 -right-2.5 w-6 h-6 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-sm border-2 border-white" title="WhatsApp"><i className="fa-brands fa-whatsapp text-[12px]"></i></div>
+                              )}
+                              <div className="flex justify-between items-start gap-3 mb-2">
+                                <p className="text-[13px] font-semibold text-zinc-900 truncate">{item.user_name || 'Usuario'}</p>
+                                <div className="text-right text-[11px] text-zinc-400 font-normal tracking-[0.01em] whitespace-nowrap shrink-0">
+                                  <span className="md:hidden">{item.date_fmt || '-'}</span>
+                                  <span className="hidden md:inline">
+                                    {item.date_fmt || '-'}
+                                    {item.time_fmt ? ` • ${item.time_fmt}` : ''}
+                                    {item.time_ago_text ? ` • hace ${item.time_ago_text}` : ''}
+                                  </span>
                                 </div>
                               </div>
-                              <div className="flex flex-wrap items-center gap-1.5 justify-end">
-                                {(() => {
-                                  const level = (collaborator.permission_level || '').toUpperCase();
-                                  if (level === 'OWNER') {
-                                    return (
-                                      <>
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 inline-flex items-center gap-1">
-                                          <i className="fa-solid fa-crown text-[9px]"></i>Principal
-                                        </span>
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 inline-flex items-center gap-1">
-                                          <i className="fa-solid fa-star text-[9px]"></i>Creador
-                                        </span>
-                                      </>
-                                    );
-                                  }
-                                  if (collaborator.is_owner) {
-                                    return (
-                                      <>
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 inline-flex items-center gap-1">
-                                          <i className="fa-solid fa-crown text-[9px]"></i>Principal
-                                        </span>
-                                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-100 inline-flex items-center gap-1">
-                                          <i className="fa-solid fa-star text-[9px]"></i>Creador
-                                        </span>
-                                      </>
-                                    );
-                                  }
-                                  if (level === 'EDIT') {
-                                    return (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-100 inline-flex items-center gap-1">
-                                        <i className="fa-solid fa-crown text-[9px]"></i>Principal
-                                      </span>
-                                    );
-                                  }
-                                  if (level === 'VIEW') {
-                                    return (
-                                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200 inline-flex items-center gap-1">
-                                        <i className="fa-solid fa-user text-[9px]"></i>Secundaria
-                                      </span>
-                                    );
-                                  }
-                                  return (
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-50 text-slate-400 border border-slate-200 inline-flex items-center gap-1">
-                                      <i className="fa-regular fa-circle text-[9px]"></i>Sin asignación
-                                    </span>
-                                  );
-                                })()}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-400 text-center py-2">Sin asignaciones</p>
-                      )}
-                    </div>
-                </div>
-            )}
-        </div>
-
-        {/* COLUMNA 2: Cotizaciones, Historial Envíos */}
-        <div className="space-y-6">
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white">
-                    <div className="flex items-center gap-3">
-                        <span className="w-2 h-6 bg-orange-500 rounded-full"></span>
-                        <div>
-                            <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                                Cotizaciones 
-                                <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full text-xs">{quotes.length}</span>
-                            </h3>
-                        </div>
-                    </div>
-                    {canEdit && (
-                        <button 
-                            onClick={() => navigate(`/app/quotes/new?dealId=${deal.id_trato}&clientCompanyId=${deal.id_client_company}&contactId=${deal.id_contact}&dealName=${encodeURIComponent(deal.nombre_trato || '')}`)}
-                            className="text-[13px] font-bold text-white bg-brand-600 hover:bg-brand-700 px-3 py-1.5 rounded shadow-sm transition-all"
-                        >
-                            + Nueva Cotización
-                        </button>
-                    )}
-                </div>
-
-                <div className="p-6">
-                    {quotes.length > 0 ? (
-                        <div className="grid grid-cols-1 gap-3">
-                            {quotes.map(quote => (
-                                <Link 
-                                    key={quote.id_cotizacion}
-                                    to={`/app/quotes/${quote.id_cotizacion}`}
-                                    className="group block bg-slate-50 rounded-xl border border-slate-200 p-4 hover:bg-white hover:shadow-md hover:border-brand-200 transition-all"
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-lg bg-white text-slate-400 flex items-center justify-center shrink-0 border border-slate-100 group-hover:text-brand-500">
-                                                <i className="fa-solid fa-file-invoice text-lg"></i>
-                                            </div>
-                                            <div>
-                                                <h3 className="font-bold text-slate-700 text-[15px] group-hover:text-brand-600 transition-colors">
-                                                    Cotización #{quote.formatted_no_cotizacion || String(quote.no_cotizacion).padStart(4,'0')}
-                                                </h3>
-                                                <p className="text-xs text-slate-500">{quote.nombre_cotizacion || 'Sin nombre'}</p>
-                                                <div className="flex items-center gap-3 mt-1 text-[13px] text-slate-500">
-                                                    <span className="flex items-center gap-1">
-                                                        <i className="fa-regular fa-calendar text-[11px]"></i> {quote.fecha_emision}
-                                                    </span>
-                                                    <span className="font-mono bg-white border border-slate-200 px-1.5 rounded text-[11px]">v{quote.version}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-bold text-slate-700 text-[17px]">{formatCurrency(quote.total)}</p>
-                                            <span 
-                                                className="text-[11px] font-bold uppercase inline-block mt-1 px-2 py-0.5 rounded border"
-                                                style={{ 
-                                                    color: quote.estado_color || '#64748b',
-                                                    borderColor: `${quote.estado_color || '#64748b'}30`,
-                                                    backgroundColor: `${quote.estado_color || '#64748b'}10`
-                                                }}
-                                            >
-                                                {quote.estado}
-                                            </span>
-                                        </div>
+                              <p className="text-[13px] text-zinc-700 leading-[1.45] whitespace-pre-line">{item.description}</p>
+                              
+                              {/* TAREA PLANIFICADA O VENCIDA */}
+                              {(item.planned_action || item.planned_date) && (
+                                <div className={`rounded-lg px-3 py-2.5 mt-3 border ${item.is_planned_overdue ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'}`}>
+                                  <div className="flex items-center justify-between gap-3 mb-1">
+                                    <div className="inline-flex items-center gap-1.5 min-w-0">
+                                      <i className={`fa-solid ${item.is_planned_overdue ? 'fa-triangle-exclamation text-red-500' : 'fa-calendar text-blue-500'} text-[11px]`}></i>
+                                      <p className={`text-[11px] font-semibold uppercase tracking-wide truncate ${item.is_planned_overdue ? 'text-red-700' : 'text-blue-700'}`}>
+                                        {item.is_planned_overdue ? 'Acción Planificada (Vencida)' : 'Acción Planificada'}
+                                      </p>
                                     </div>
-                                </Link>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="bg-slate-50/50 border border-dashed border-slate-200 rounded-xl p-8 text-center">
-                            <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm text-slate-300">
-                                <i className="fa-solid fa-file-invoice-dollar text-xl"></i>
+                                    <span className={`text-[11px] font-semibold bg-white border px-1.5 py-0.5 rounded inline-flex items-center gap-1 whitespace-nowrap ${item.is_planned_overdue ? 'text-red-600 border-red-200' : 'text-blue-600 border-blue-200'}`}>
+                                      <i className="fa-regular fa-calendar-check text-[10px]"></i>
+                                      {item.planned_date}
+                                    </span>
+                                  </div>
+                                  <p className={`text-[12px] pl-[18px] leading-[1.4] ${item.is_planned_overdue ? 'text-red-900' : 'text-blue-900'}`}>{item.planned_action}</p>
+                                </div>
+                              )}
                             </div>
-                            <p className="text-[15px] text-slate-500">No hay cotizaciones activas.</p>
+                          )}
                         </div>
-                    )}
-                </div>
-            </div>
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
 
-          {/* TARJETA: Historial de Envíos */}
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white">
-                  <div className="flex items-center gap-3">
-                    <span className="w-2 h-6 bg-slate-500 rounded-full"></span>
-                    <div>
-                        <h3 className="font-bold text-slate-800 text-sm">Historial de Envíos</h3>
+                {/* CORREOS ENVIADOS */}
+                {showEmails && emailHistory.map((em: any, idx: number) => (
+                  <div key={em.id_sent || idx} className="relative pl-10 pt-1 mb-4 group">
+                    <div className="absolute left-0 top-2.5 w-8 h-8 rounded-full bg-blue-50 border border-blue-200 flex items-center justify-center z-10 text-blue-500 shadow-sm"><i className="fa-regular fa-envelope text-[11px]"></i></div>
+                    <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm hover:border-zinc-300 transition-colors relative">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="min-w-0 pr-2">
+                          <p className="text-[13px] text-zinc-900"><span className="font-semibold">{em.enviado_por_name || 'Usuario'}</span> envio cotizacion a <a href={`mailto:${em.enviado_a}`} className="text-blue-600 font-medium hover:underline">{em.enviado_a}</a></p>
+                        </div>
+                        <div className="text-right text-[11px] text-zinc-400 font-normal tracking-[0.01em] whitespace-nowrap shrink-0">
+                          <span className="md:hidden">{em.fecha_human || toReadableDate(em.fecha_fmt || em.fecha) || '-'}</span>
+                          <span className="hidden md:inline">
+                            {em.fecha_human || toReadableDate(em.fecha_fmt || em.fecha) || '-'}
+                            {em.time_human ? ` • ${em.time_human}` : ''}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="bg-zinc-50 border border-zinc-200 rounded-md p-2.5 text-[12px]">
+                        <p className="font-semibold text-zinc-800 mb-1">Asunto: {em.subject}</p>
+                        <div className="flex items-center gap-2 mt-2.5">
+                          <span className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-zinc-200 shadow-sm rounded text-zinc-700 font-medium hover:bg-zinc-50 hover:text-sky-600 cursor-pointer transition-colors">
+                            <i className="fa-solid fa-file-invoice-dollar text-zinc-400"></i> Ver Cotización (v{em.version_no || em.version || 1})
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  {emailHistory.length > 0 && (
-                    <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full text-xs font-bold">{emailHistory.length}</span>
-                  )}
-                </div>
-                <div className="p-6">
-                    {(!emailHistory || emailHistory.length === 0) ? (
-                        <div className="text-center py-4 text-slate-400 text-xs italic">Sin actividad de envíos.</div>
-                    ) : (
-                        <div className="space-y-2">
-                            {emailHistory.map((item: any, idx: number) => (
-                                <div key={item.id_sent || idx} className="rounded-md border bg-slate-50 border-slate-200">
-                                  <div className="px-3 py-2 flex items-center justify-between gap-3">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <i className="fa-solid fa-paper-plane text-slate-500"></i>
-                                      <div className="min-w-0">
-                                        <div className="text-xs text-slate-700 whitespace-normal break-words">
-                                          {item.subject || 'Sin asunto'}
-                                        </div>
-                                        {item.enviado_a && (
-                                          <div className="text-[10px] text-slate-500 mt-0.5 whitespace-normal break-words">
-                                            Para: {item.enviado_a}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 shrink-0">
-                                      {item.version && (
-                                        <span className="text-[10px] text-slate-400 font-mono">v{item.version}</span>
-                                      )}
-                                      <span className="text-[10px] text-slate-400">{item.fecha || '-'}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                ))}
+              </div>
             </div>
-        </div>
+          )}
 
-        {/* COLUMNA 3: Historial Interacciones */}
-        <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col">
-              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <span className="w-2 h-6 bg-blue-400 rounded-full"></span>
-                  <h3 className="font-bold text-slate-800">Historial de Interacciones</h3>
-                </div>
+          {/* TAB 2: COTIZACIONES */}
+          {activeTab === 'quotes' && (
+            <div className="animate-fade-in">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-[14px] font-semibold text-zinc-900">Documentos Financieros</h3>
                 {canEdit && (
-                  <button
-                    onClick={() => setShowNewInteractionModal(true)}
-                    className="h-8 px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white inline-flex items-center gap-2 transition-all shadow-sm hover:shadow group"
-                    title="Añadir actividad"
-                  >
-                    <i className="fa-solid fa-plus text-[12px] group-hover:scale-110 transition-transform"></i>
-                    <span className="text-[12px] font-semibold">Añadir actividad</span>
+                  <button onClick={() => navigate(`/app/quotes/new?dealId=${deal.id_trato}&clientCompanyId=${deal.id_client_company}&contactId=${deal.id_contact}&dealName=${encodeURIComponent(deal.nombre_trato || '')}`)} className="text-[12px] font-medium bg-zinc-900 text-white px-3 py-1.5 rounded-md hover:bg-zinc-800 transition-colors shadow-sm flex items-center gap-2">
+                    <i className="fa-solid fa-plus text-[10px]"></i> Nueva Cotización
                   </button>
                 )}
               </div>
-
-              {isTimelineVisible && (
-                <div className="p-6 pt-4">
-                  {history && history.length > 0 ? (
-                    <div className="space-y-3">
-                      {(() => {
-                        const hasRealContent = (item: any) => {
-                          if (!item) return false;
-                          const description = String(item.description || '').trim();
-                          const itemId = String(item.id || '').trim();
-                          return Boolean(
-                            description ||
-                            itemId ||
-                            item.date_iso ||
-                            item.date_fmt ||
-                            item.planned_action ||
-                            item.channel_name ||
-                            item.channel_icon ||
-                            item.is_new ||
-                            item.is_calendar_scheduled
-                          );
-                        };
-
-                        const normalizedHistory = history
-                          .map((group: any) => ({
-                            ...group,
-                            interactions: (Array.isArray(group.interactions) ? group.interactions : []).filter(hasRealContent)
-                          }))
-                          .filter((group: any) => group.interactions.length > 0);
-
-                        if (normalizedHistory.length === 0) {
-                          return (
-                            <div className="text-center py-6">
-                              <i className="fa-solid fa-clock-rotate-left text-slate-200 text-3xl mb-2"></i>
-                              <p className="text-[13px] text-slate-400 italic">No hay actividad registrada aún.</p>
-                            </div>
-                          );
-                        }
-
-                        // Ordenar: todos menos antecedentes, luego antecedentes
-                        const antecedentes = normalizedHistory.filter(g => g.group_id === 'FASE_PROSPECCION');
-                        const otros = normalizedHistory.filter(g => g.group_id !== 'FASE_PROSPECCION');
-                        const ordered = [...otros, ...antecedentes];
-                        const flatFeed = ordered.flatMap((group: any, gIdx: number) => {
-                          const groupId = group.group_id || `group-${gIdx}`;
-                          const isCollapsed = collapsedGroups[groupId] ?? (group.group_id === 'FASE_PROSPECCION');
-                          const interactions = Array.isArray(group.interactions) ? group.interactions : [];
-
-                          if (isCollapsed) {
-                            return [{
-                              kind: 'header',
-                              groupId,
-                              groupName: group.group_name,
-                              isBackgroundGroup: group.group_id === 'FASE_PROSPECCION',
-                              isCollapsed,
-                              count: interactions.length
-                            }];
-                          }
-
-                          return [
-                            {
-                              kind: 'header',
-                              groupId,
-                              groupName: group.group_name,
-                              isBackgroundGroup: group.group_id === 'FASE_PROSPECCION',
-                              isCollapsed,
-                              count: interactions.length
-                            },
-                            ...interactions.map((item: any, idx: number) => ({
-                              kind: 'item',
-                              groupId,
-                              groupName: group.group_name,
-                              item,
-                              idx
-                            }))
-                          ];
-                        });
-
-                        return flatFeed.map((entry: any, feedIdx: number) => {
-                          if (entry.kind === 'header') {
-                            return (
-                              <button
-                                key={`hdr-${entry.groupId}-${feedIdx}`}
-                                type="button"
-                                onClick={() => setCollapsedGroups(prev => ({ ...prev, [entry.groupId]: !entry.isCollapsed }))}
-                                className="w-full py-1.5 flex items-center justify-between gap-2 hover:opacity-80 transition-opacity"
-                              >
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <h4 className="font-bold text-slate-800 text-sm truncate">{entry.groupName}</h4>
-                                  {entry.isBackgroundGroup && (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-500 border border-slate-200">
-                                      Historial
-                                    </span>
-                                  )}
-                                  <span className="text-[10px] text-slate-400">{entry.count}</span>
-                                </div>
-                                <span className="text-slate-400 text-xs">
-                                  <i className={`fa-solid ${entry.isCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'}`}></i>
-                                </span>
-                              </button>
-                            );
-                          }
-
-                          const item = entry.item;
-                          const interactionType = item.type;
-                          const strongStyle = item.is_deal_interaction ? 'border-emerald-300' : 'border-slate-300';
-                          const textStyle = item.is_deal_interaction ? 'text-slate-800' : 'text-slate-600';
-
-                          return (
-                            <div key={item.id || `itm-${entry.groupId}-${entry.idx}`} className={`flex items-start gap-2.5 border-l-2 ${strongStyle} pl-2.5 py-1 group relative`}>
-                              <div className="relative w-7 h-7">
-                                <img
-                                  src={item.user_avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.user_name || 'S')}&background=random`}
-                                  alt="avatar"
-                                  title={item.user_name || 'Sistema'}
-                                  className="w-7 h-7 rounded-full border border-slate-200 object-cover"
-                                />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="text-xs text-slate-400">
-                                    {item.date_fmt}
-                                    {item.time_fmt && ` · ${item.time_fmt}`}
-                                    {item.relative_label && ` (${item.relative_label})`}
-                                  </span>
-                                  {item.is_new && (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                      NUEVA
-                                    </span>
-                                  )}
-                                  {item.channel_name && item.channel_icon && (
-                                    <span
-                                      className="ml-1 w-6 h-6 rounded-full text-[11px] font-bold inline-flex items-center justify-center"
-                                      style={{ background: item.channel_color || '#e0e7ff', color: item.channel_color ? '#fff' : '#374151' }}
-                                      title={item.channel_name}
-                                    >
-                                      <i className={`${item.channel_icon} text-xs`}></i>
-                                    </span>
-                                  )}
-                                  {item.is_calendar_scheduled && (
-                                    <span className="w-6 h-6 rounded-full text-[11px] font-bold inline-flex items-center justify-center bg-blue-50 text-blue-600 border border-blue-200" title="Agendado en calendario">
-                                      <i className="fa-solid fa-calendar-check text-xs"></i>
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="mt-1">
-                                  {interactionType === 'SYSTEM' ? (
-                                    <div className="italic text-slate-400 text-sm flex items-center gap-2">
-                                      <i className="fa-solid fa-gear"></i>
-                                      {item.description}
-                                    </div>
-                                  ) : (
-                                    <>
-                                      <div className={`text-sm whitespace-pre-line ${textStyle}`}>{item.description}</div>
-                                      {item.planned_action || (item.planned_date && item.is_planned_overdue !== null) ? (
-                                        <div className="mt-1.5 text-xs flex flex-wrap items-center gap-1.5">
-                                          {item.is_planned_overdue !== null && (
-                                            <i className={`fa-solid ${item.is_planned_overdue ? 'fa-triangle-exclamation text-rose-500' : 'fa-list-check text-blue-500'}`}></i>
-                                          )}
-                                          {item.planned_action && (
-                                            <>
-                                              <span className="font-semibold text-slate-600">Próxima:</span>
-                                              <span className="text-slate-700">{item.planned_action}</span>
-                                            </>
-                                          )}
-                                          {item.planned_date && <span className="text-slate-500">({item.planned_date})</span>}
-                                          {item.is_planned_overdue && (
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                              VENCIDA
-                                            </span>
-                                          )}
-                                        </div>
-                                      ) : null}
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        });
-                      })()}
-                    </div>
-                  ) : (
-                    <div className="text-center py-6">
-                      <i className="fa-solid fa-clock-rotate-left text-slate-200 text-3xl mb-2"></i>
-                      <p className="text-[13px] text-slate-400 italic">No hay actividad registrada aún.</p>
-                    </div>
-                  )}
+              {quotes.length > 0 ? (
+                <div className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
+                  <div className="grid grid-cols-12 gap-4 px-4 py-3 border-b border-zinc-200 bg-zinc-50 text-[11px] font-bold text-zinc-500 uppercase tracking-wider">
+                    <div className="col-span-6 md:col-span-5">Cotización</div><div className="col-span-3 hidden md:block">Fecha / Valor</div><div className="col-span-3">Estado</div><div className="col-span-3 md:col-span-1 text-right"></div>
+                  </div>
+                  {quotes.map(q => {
+                    const isRej = q.estado_name?.toUpperCase() === 'RECHAZADO' || q.estado?.toUpperCase() === 'RECHAZADO';
+                    const isApp = q.estado_name?.toUpperCase() === 'APROBADO' || q.estado?.toUpperCase() === 'APROBADO';
+                    return (
+                      <div key={q.id || q.id_cotizacion} onClick={() => navigate(`/app/quotes/${q.id || q.id_cotizacion}`)} className={`grid grid-cols-12 gap-4 px-4 py-3 items-center border-b border-zinc-100 hover:bg-zinc-50 transition-colors group cursor-pointer last:border-0 ${isRej ? 'bg-red-50' : ''}`}>
+                        <div className="col-span-6 md:col-span-5 flex items-center gap-3 min-w-0">
+                          <div className={`w-9 h-9 rounded-md bg-white border border-zinc-200 shadow-sm flex items-center justify-center shrink-0 ${isApp ? 'text-emerald-500 group-hover:border-emerald-200' : isRej ? 'text-red-500 group-hover:border-red-200' : 'text-zinc-400 group-hover:text-sky-500 group-hover:border-sky-200'}`}><i className="fa-solid fa-file-invoice-dollar"></i></div>
+                          <div className="min-w-0 flex-1">
+                            <div className={`text-[13px] font-bold truncate ${isRej ? 'text-zinc-600 line-through group-hover:text-red-600' : isApp ? 'text-zinc-900 group-hover:text-emerald-600' : 'text-zinc-900 group-hover:text-sky-600'}`}>COT-{q.numero || q.formatted_no_cotizacion}</div>
+                            <div className="text-[11px] text-zinc-500 truncate flex items-center gap-1.5 mt-0.5"><span className="font-mono bg-zinc-100 border border-zinc-200 px-1 rounded text-[9px] font-bold text-zinc-600">v{q.version || 1}</span>{q.nombre || q.nombre_cotizacion || 'Sin título'}</div>
+                          </div>
+                        </div>
+                        <div className="col-span-3 hidden md:block"><div className="text-[12px] text-zinc-500 font-medium">{q.fecha || q.fecha_emision}</div><div className={`text-[13px] font-bold mt-0.5 ${isRej ? 'text-zinc-400' : 'text-zinc-900'}`}>{formatCurrency(q.total)}</div></div>
+                        <div className="col-span-3">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${isApp ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : isRej ? 'bg-red-50 text-red-600 border-red-100' : 'bg-sky-50 text-sky-700 border-sky-100'}`}>{q.estado_name || q.estado}</span>
+                          <div className="text-[12px] font-bold text-zinc-900 mt-1 md:hidden">{formatCurrency(q.total)}</div>
+                        </div>
+                        <div className="col-span-3 md:col-span-1 text-right"><button className="text-zinc-400 hover:text-zinc-900 w-7 h-7 inline-flex items-center justify-center rounded-md hover:bg-zinc-200 transition-colors"><i className="fa-solid fa-chevron-right text-[11px]"></i></button></div>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+              ) : (<div className="bg-zinc-50 border border-dashed border-zinc-300 rounded-xl p-12 text-center text-zinc-500"><i className="fa-solid fa-file-invoice-dollar text-2xl text-zinc-300 mb-3"></i><p className="text-[13px] font-medium">No hay cotizaciones activas.</p></div>)}
             </div>
-        </div>
+          )}
 
-      </div>
+         {/* TAB 3: ARCHIVOS */}
+          {activeTab === 'files' && (
+            <div className="animate-fade-in">
+              <div className="border-2 border-dashed border-zinc-300 bg-zinc-50 rounded-xl p-12 text-center hover:bg-zinc-100 transition-colors hover:border-zinc-400 cursor-pointer">
+                 <div className="w-12 h-12 bg-white rounded-full border border-zinc-200 shadow-sm flex items-center justify-center mx-auto mb-3 text-zinc-400 group-hover:text-blue-500 transition-colors">
+                   <i className="fa-solid fa-cloud-arrow-up"></i>
+                 </div>
+                 <h3 className="text-[14px] font-semibold text-zinc-900 mb-1">Sube archivos adjuntos</h3>
+                 <p className="text-[13px] text-zinc-500">Arrastra PDFs, órdenes de compra o especificaciones técnicas aquí.</p>
+              </div>
+            </div>
+          )}
+          
+        </section>
+      </main>
 
       {/* --- MODALES --- */}
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={() => setToast(null)} 
+        />
+      )}
       
       {confirmState.isOpen && (
-        <ConfirmModal
-          isOpen={confirmState.isOpen}
-          title={confirmState.title}
-          message={confirmState.message}
-          onConfirm={confirmState.onConfirm}
-          onClose={confirmState.onCancel}
+        <ConfirmModal 
+          isOpen={confirmState.isOpen} 
+          title={confirmState.title} 
+          message={confirmState.message} 
+          onConfirm={confirmState.onConfirm} 
+          onClose={confirmState.onCancel} 
         />
       )}
 
-      {selectWinnerModal.isOpen && deal && (
-        <SelectWinningQuoteModal
-          isOpen={selectWinnerModal.isOpen}
-          onClose={() => setSelectWinnerModal({ isOpen: false, pendingStatusId: '' })}
-          onConfirm={handleWinningQuoteConfirm}
-          quotes={quotes}
-          dealName={deal.nombre_trato || `Trato #${deal.id_trato}`}
-          hasCarteraAccess={user?.module_access?.financials || user?.rol_user === 'admin' || user?.rol_user === 'superadmin'}
+      {selectWinnerModal.isOpen && (
+        <SelectWinningQuoteModal 
+          isOpen={selectWinnerModal.isOpen} 
+          onClose={() => setSelectWinnerModal({ isOpen: false, pendingStatusId: '' })} 
+          onConfirm={handleWinningQuoteConfirm} 
+          quotes={quotes} 
+          dealName={deal.nombre_trato || ''} 
+          hasCarteraAccess={user?.module_access?.financials || user?.rol_user === 'admin'} 
         />
       )}
 
-      {isShareOpen && deal && (
-        <ShareModal
-          entity="deal"
-          id={deal.id_trato}
-          entityName={deal.nombre_trato || `Trato #${deal.id_trato}`}
-          creatorName={deal.owner_name || ''}
-          isOpen={isShareOpen}
-          onClose={() => { setIsShareOpen(false); }}
-          onShared={() => {
-            setToast({ message: 'Asignaciones actualizadas.', type: 'success' });
-            refreshShareCollaborators();
-            refreshDealCollaborators();
-          }}
-          currentCollaborators={shareCollaborators}
+      {isShareOpen && (
+        <ShareModal 
+          entity="deal" 
+          id={deal.id_trato} 
+          entityName={deal.nombre_trato || ''} 
+          creatorName={deal.owner_details?.name || deal.owner_name || ''} 
+          isOpen={isShareOpen} 
+          onClose={() => setIsShareOpen(false)} 
+          onShared={() => { 
+            setToast({ message: 'Asignaciones actualizadas.', type: 'success' }); 
+            refreshShareCollaborators(); 
+            refreshDealCollaborators(); 
+          }} 
+          currentCollaborators={shareCollaborators} 
         />
       )}
 
-      {deal && (
-        <NewInteractionModal
-          isOpen={showNewInteractionModal}
-          onClose={() => setShowNewInteractionModal(false)}
-          entityId={deal.id_trato}
-          entityType="DEAL"
-          contactName={deal.contact_name || deal.client_company_name}
-          contactEmail={deal.contact_email}
-          collaborators={deal.collaborators || []}
-          onSuccess={() => {
-            setShowNewInteractionModal(false);
-            setRefreshTimelineKey(prev => prev + 1);
-            setToast({ message: 'Gestión registrada.', type: 'success' });
-          }}
-        />
-      )}
+<NewInteractionModal 
+        isOpen={showNewInteractionModal} 
+        onClose={() => setShowNewInteractionModal(false)} 
+        entityId={deal.id_trato} 
+        entityType="DEAL" 
+        contactName={deal.contact_details?.full_name || deal.contact_full_name || ''} 
+        contactEmail={deal.contact_details?.email || deal.contact_email} 
+        collaborators={deal.collaborators}
+        onSuccess={() => {
+          setShowNewInteractionModal(false);
+          setRefreshTimelineKey(prev => prev + 1);
+          setToast({ message: 'Gestión registrada.', type: 'success' });
+        }}
+      />
     </div>
   );
 };

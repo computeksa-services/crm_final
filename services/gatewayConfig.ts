@@ -52,6 +52,7 @@ export const GATEWAY_CONFIG = {
     // Deals/Tratos
     DEALS: {
       LIST: buildFullUrl('/api/deals'),
+      ARCHIVED_LIST: buildFullUrl('/api/deals/archived'),
       DETAIL: buildFullUrl('/api/deals/detail'),
       CREATE: buildFullUrl('/api/deals'),
       UPDATE: buildFullUrl('/api/v1/deals/update'),
@@ -64,10 +65,12 @@ export const GATEWAY_CONFIG = {
     // Quotes/Cotizaciones
     QUOTES: {
       LIST: buildFullUrl('/api/quotes'),
+      ARCHIVED_LIST: buildFullUrl('/api/quotes/archived'),
       DETAIL: buildFullUrl('/api/quotes/detail'),
       CREATE: buildFullUrl('/api/quotes'),
       UPDATE: buildFullUrl('/api/quotes/update'),
       DELETE: buildFullUrl('/api/quotes/delete'),
+      ARCHIVED: buildFullUrl('/api/v1/quotes/archived'),
       GENERATE_PDF: buildFullUrl('/api/quotes/generate-pdf'),
       SEND: buildFullUrl('/api/quotes/send'),
       DECISION: buildFullUrl('/api/quotes/decision'),

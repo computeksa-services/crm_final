@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { BrandSpinner } from './AppLoaders';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
+import { getImageUrl, getLocalAvatarDataUrl } from '../utils/imageUtils';
 
 type PermissionLevel = 'VIEW' | 'EDIT' | 'BLOCKED';
 
@@ -282,7 +283,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
                       <div key={userId} className="grid grid-cols-[1fr_100px_100px_100px] items-center border-t border-slate-100 dark:border-slate-700">
                         <div className="px-4 py-3 flex items-center gap-3 min-w-0">
                           {collab?.avatar ? (
-                            <img src={collab.avatar} alt={collab.name} className="w-7 h-7 rounded-full border border-slate-200 object-cover shrink-0" />
+                            <img src={getImageUrl(collab.avatar) || getLocalAvatarDataUrl(collab.name)} alt={collab.name} className="w-7 h-7 rounded-full border border-slate-200 object-cover shrink-0" />
                           ) : (
                             <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
                               {(collab?.name || 'U').charAt(0)}

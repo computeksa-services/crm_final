@@ -4,6 +4,7 @@ import { apiFetch } from '../services/apiClient';
 import { ClientContact, User } from '../types';
 import { X, ArrowRightLeft } from 'lucide-react';
 import { SimpleSpinner } from './AppLoaders';
+import { getImageUrl, getLocalAvatarDataUrl } from '../utils/imageUtils';
 
 interface ReassignModalProps {
   isOpen: boolean;
@@ -84,7 +85,11 @@ const ReassignModal: React.FC<ReassignModalProps> = ({ isOpen, onClose, onSucces
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
               <span className="text-slate-500">Responsable actual:</span>
               <div className="flex items-center gap-2 mt-1">
-                <img src={currentOwner.avatar_url || `https://ui-avatars.com/api/?name=${currentOwner.name_user}&background=random`} alt={currentOwner.name_user} className="w-6 h-6 rounded-full" />
+                <img
+                  src={getImageUrl(currentOwner.avatar_url) || getLocalAvatarDataUrl(currentOwner.name_user)}
+                  alt={currentOwner.name_user}
+                  className="w-6 h-6 rounded-full"
+                />
                 <span className="font-bold text-slate-700">{currentOwner.name_user}</span>
               </div>
             </div>
