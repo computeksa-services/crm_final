@@ -202,6 +202,13 @@ const Calendar: React.FC = () => {
   const [showRSVPConfirm,     setShowRSVPConfirm]     = useState(false);
   const [rsvpAction,          setRSVPAction]          = useState<'accepted' | 'declined' | 'tentative' | null>(null);
   const [submittingRSVP,      setSubmittingRSVP]      = useState(false);
+  const [pendingOpenEventId,  setPendingOpenEventId]  = useState<string | null>(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('eventId');
+    } catch {
+      return null;
+    }
+  });
 
   const dealsRef = useRef<Deal[]>(deals);
   useEffect(() => { dealsRef.current = deals; }, [deals]);
@@ -624,6 +631,22 @@ const Calendar: React.FC = () => {
     }
     finally { setLoadingDetail(false); }
   }, [user?.id_tenant, user?.id_user]);
+
+  useEffect(() => {
+    if (!pendingOpenEventId) return;
+    fetchEventDetail(pendingOpenEventId);
+
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('eventId');
+      const query = url.searchParams.toString();
+      window.history.replaceState({}, '', `${url.pathname}${query ? `?${query}` : ''}${url.hash || ''}`);
+    } catch {
+      // No-op if URL API is unavailable for any reason.
+    }
+
+    setPendingOpenEventId(null);
+  }, [pendingOpenEventId, fetchEventDetail]);
 
   const handleOpenEditModal = useCallback((event: any) => {
     setEditingEventId(event.id);

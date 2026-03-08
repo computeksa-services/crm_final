@@ -17,6 +17,14 @@ interface NewInteractionModalProps {
     name?: string;
     avatar?: string | null;
   }>;
+  useEventModalCapture?: boolean;
+  eventCaptureDeal?: {
+    id_trato: string;
+    nombre_trato?: string;
+    id_client_company?: string;
+    client_company_name?: string;
+    contact_name?: string;
+  };
   onSuccess: () => void;
 }
 
@@ -28,6 +36,8 @@ const NewInteractionModal: React.FC<NewInteractionModalProps> = ({
   contactEmail,
   contactName,
   collaborators,
+  useEventModalCapture = false,
+  eventCaptureDeal,
   onSuccess,
 }) => {
   return createPortal(
@@ -60,6 +70,8 @@ const NewInteractionModal: React.FC<NewInteractionModalProps> = ({
               contactEmail={contactEmail}
               contactName={contactName}
               collaborators={collaborators}
+              useEventModalCapture={useEventModalCapture}
+              eventCaptureDeal={eventCaptureDeal}
               onSuccess={() => {
                 onSuccess();
                 onClose();

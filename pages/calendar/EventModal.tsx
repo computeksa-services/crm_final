@@ -3,7 +3,7 @@ import { ClientContact, User, Deal } from '../../types';
 import { SectionLoader, ButtonLoader, SimpleSpinner } from '../../components/AppLoaders';
 
 // ── TYPES ──────────────────────────────────────────────────────────────────
-interface Attendee {
+export interface Attendee {
   email: string;
   name?: string;
   type: 'contact' | 'user' | 'external';
@@ -11,7 +11,9 @@ interface Attendee {
   is_organizer?: boolean;
 }
 
-interface EventFormData {
+export type EventAttendee = Attendee;
+
+export interface EventFormData {
   title: string;
   description: string;
   start: string;
@@ -25,6 +27,8 @@ interface EventFormData {
 
 interface EventModalProps {
   isOpen: boolean;
+  mode?: 'create' | 'capture';
+  submitLabel?: string;
   isEditing: boolean;
   submitting: boolean;
   formData: EventFormData;
@@ -41,7 +45,8 @@ interface EventModalProps {
   users: User[];
   currentUserId?: string;
   onClose: () => void;
-  onSubmit: (e: React.FormEvent) => void;
+  onSubmit?: (e: React.FormEvent) => void;
+  onCapture?: (payload: { formData: EventFormData; attendees: Attendee[] }) => void;
   onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => void;
   onAddAttendee: (attendee: Attendee) => void;
   onRemoveAttendee: (email: string) => void;
@@ -217,10 +222,12 @@ const TimeDropdown: React.FC<TimeDropdownProps> = ({ options, selected, startTim
 
 // ── MAIN COMPONENT ─────────────────────────────────────────────────────────
 export const EventModal: React.FC<EventModalProps> = ({
+  mode = 'create',
+  submitLabel,
   isOpen, isEditing, submitting,
   formData, attendees, attendeeInput, showAttendeeSuggestions,
   dealSearchInput, showDealSuggestions, selectedDeal, deals, dealsLoading, dealsLoaded,
-  onClose, onSubmit, onInputChange,
+  onClose, onSubmit, onCapture, onInputChange,
   onAddAttendee, onRemoveAttendee, onAttendeeInputChange, onSetShowAttendeeSuggestions, onAddExternalAttendee,
   onDealSearchChange, onSetShowDealSuggestions, onSelectDeal, onClearDeal, onFetchDeals,
   getAttendeeSuggestions,
@@ -280,6 +287,24 @@ export const EventModal: React.FC<EventModalProps> = ({
 
   if (!isOpen) return null;
 
+  const handleFormSubmit = (e: React.FormEvent) => {
+    // Prevent default browser submit and stop bubbling to parent React forms.
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (mode === 'capture') {
+      onCapture?.({ formData, attendees });
+      return;
+    }
+    onSubmit?.(e);
+  };
+
+  const handleCaptureConfirm = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onCapture?.({ formData, attendees });
+  };
+
   const currentDate = formData.start ? formData.start.split('T')[0] : '';
 
   return (
@@ -310,8 +335,316 @@ export const EventModal: React.FC<EventModalProps> = ({
           </button>
         </div>
 
-        {/* FORM */}
-        <form onSubmit={onSubmit} className="flex-1 overflow-y-auto min-h-0">
+        {/* BODY */}
+        {mode === 'capture' ? (
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="px-6 py-5 space-y-4">
+              <input
+                ref={titleRef}
+                type="text" name="title" required
+                value={formData.title} onChange={onInputChange}
+                className="w-full text-2xl font-semibold text-gray-900 placeholder-gray-400 outline-none border-0 p-0"
+                placeholder="Agregar título"
+              />
+
+              <div className="flex flex-col md:flex-row md:items-center md:gap-6 gap-3">
+                {/* Date */}
+                <div className="flex items-center gap-3 flex-1 md:flex-none">
+                  <IconCalendar className="w-5 h-5 text-gray-400 shrink-0" />
+                  <button
+                    type="button"
+                    onClick={() => dateInputRef.current?.showPicker?.()}
+                    className="text-sm text-gray-700 hover:text-gray-900 font-medium focus:outline-none hover:underline"
+                  >
+                    {formatDateDisplay(formData.start) || 'Selecciona fecha'}
+                  </button>
+                  <input
+                    ref={dateInputRef}
+                    type="date"
+                    value={currentDate}
+                    onChange={e => {
+                      const date = e.target.value;
+                      const startTime = formData.start ? formData.start.split('T')[1] || '09:00' : '09:00';
+                      const endTime = formData.end ? formData.end.split('T')[1] || '10:00' : '10:00';
+                      onInputChange({ target: { name: 'start', value: `${date}T${startTime}` } } as any);
+                      onInputChange({ target: { name: 'end', value: `${date}T${endTime}` } } as any);
+                    }}
+                    className="absolute opacity-0 pointer-events-none"
+                  />
+                </div>
+
+                {!formData.is_all_day && (
+                  <div className="flex items-center gap-3">
+                    {/* Start time */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={startTimeInput}
+                        onChange={e => setStartTimeInput(e.target.value)}
+                        onBlur={e => {
+                          const formatted = formatTimeInput(e.target.value);
+                          if (formatted) {
+                            onInputChange({ target: { name: 'start', value: `${currentDate}T${formatted}` } } as any);
+                            setStartTimeInput(formatted);
+                            adjustEndIfNeeded(formatted, currentDate);
+                          } else {
+                            setStartTimeInput(formatTimeDisplay(formData.start) || '09:00');
+                          }
+                          setTimeout(() => setShowStartTime(false), 150);
+                        }}
+                        onFocus={() => setShowStartTime(true)}
+                        className="w-16 px-2 py-1 text-sm text-center border-0 bg-transparent text-gray-700 hover:bg-gray-100 rounded focus:outline-none"
+                      />
+                      {showStartTime && (
+                        <TimeDropdown
+                          options={timeOptions}
+                          selected={startTimeInput}
+                          onSelect={time => {
+                            onInputChange({ target: { name: 'start', value: `${currentDate}T${time}` } } as any);
+                            setStartTimeInput(time);
+                            adjustEndIfNeeded(time, currentDate);
+                            setShowStartTime(false);
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    <span className="text-gray-400 text-xs">–</span>
+
+                    {/* End time */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={endTimeInput}
+                        onChange={e => setEndTimeInput(e.target.value)}
+                        onBlur={e => {
+                          const formatted = formatTimeInput(e.target.value);
+                          if (formatted) {
+                            const startTime = formatTimeDisplay(formData.start) || '09:00';
+                            const [sH, sM] = startTime.split(':').map(Number);
+                            const [eH, eM] = formatted.split(':').map(Number);
+                            if (eH * 60 + eM > sH * 60 + sM) {
+                              onInputChange({ target: { name: 'end', value: `${currentDate}T${formatted}` } } as any);
+                              setEndTimeInput(formatted);
+                            } else {
+                              adjustEndIfNeeded(startTime, currentDate);
+                            }
+                          } else {
+                            setEndTimeInput(formatTimeDisplay(formData.end) || '10:00');
+                          }
+                          setTimeout(() => setShowEndTime(false), 150);
+                        }}
+                        onFocus={() => setShowEndTime(true)}
+                        className="w-16 px-2 py-1 text-sm text-center border-0 bg-transparent text-gray-700 hover:bg-gray-100 rounded focus:outline-none"
+                      />
+                      {showEndTime && (
+                        <TimeDropdown
+                          options={timeOptions}
+                          selected={endTimeInput}
+                          startTime={formatTimeDisplay(formData.start) || '09:00'}
+                          onSelect={time => {
+                            onInputChange({ target: { name: 'end', value: `${currentDate}T${time}` } } as any);
+                            setEndTimeInput(time);
+                            setShowEndTime(false);
+                          }}
+                          showDiff
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="is_all_day"
+                    checked={formData.is_all_day}
+                    onChange={onInputChange}
+                    className="w-4 h-4 rounded cursor-pointer"
+                  />
+                  <span className="text-xs text-gray-600">Todo el día</span>
+                </label>
+              </div>
+
+              <hr className="border-gray-100" />
+
+              <div className="space-y-3">
+                {/* Trato Relacionado */}
+                <div className="relative">
+                  <div className="flex items-center gap-3">
+                    <IconBriefcase className="w-5 h-5 text-gray-400 shrink-0" />
+                    <div className="flex-1 w-full">
+                      {selectedDeal ? (
+                        <div className="bg-gray-100 px-3 py-2 rounded">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <div className="font-medium text-sm text-gray-900 truncate flex-1">{selectedDeal.nombre_trato}</div>
+                            <button type="button" onClick={onClearDeal} className="text-gray-400 hover:text-red-500 flex-shrink-0">
+                              <IconX size={14} />
+                            </button>
+                          </div>
+                          {selectedDeal.client_company_name && (
+                            <div className="text-xs text-gray-600 truncate mb-1">{selectedDeal.client_company_name}</div>
+                          )}
+                          {(selectedDeal as any).contact_name && (
+                            <div className="text-xs text-gray-500 italic">Contacto principal: {(selectedDeal as any).contact_name}</div>
+                          )}
+                        </div>
+                      ) : (
+                        <input
+                          type="text"
+                          value={dealSearchInput}
+                          onChange={e => { onDealSearchChange(e.target.value); onSetShowDealSuggestions(true); }}
+                          onFocus={() => onSetShowDealSuggestions(true)}
+                          onBlur={() => setTimeout(() => onSetShowDealSuggestions(false), 150)}
+                          placeholder="Buscar trato relacionado"
+                          className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 outline-none focus:border-brand-500"
+                        />
+                      )}
+                    </div>
+                  </div>
+                  {showDealSuggestions && (
+                    <div className="absolute z-50 top-full left-8 right-0 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {dealsLoading
+                        ? <div className="p-2 flex justify-center"><SimpleSpinner size="sm" /></div>
+                        : (() => {
+                            const normalizeText = (value: string) =>
+                              value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+                            const searchTerms = normalizeText(dealSearchInput)
+                              .split(/\s+/)
+                              .filter(Boolean);
+
+                            const filteredDeals = deals.filter(deal => {
+                              const searchableText = normalizeText([
+                                deal.nombre_trato || '',
+                                deal.client_company_name || '',
+                                (deal as any).contact_name || ''
+                              ].join(' '));
+
+                              return searchTerms.every(term => searchableText.includes(term));
+                            });
+
+                            return filteredDeals.length === 0
+                              ? <div className="p-2 text-xs text-gray-400">Sin resultados</div>
+                              : filteredDeals.map(deal => (
+                                  <button key={deal.id_trato} type="button" onMouseDown={() => onSelectDeal(deal)} className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 border-b border-gray-100 last:border-0">
+                                    <div className="font-medium text-gray-900">{deal.nombre_trato}</div>
+                                    {deal.client_company_name && <div className="text-gray-500 text-xs">{deal.client_company_name}</div>}
+                                  </button>
+                                ));
+                          })()
+                      }
+                    </div>
+                  )}
+                </div>
+
+                {/* Invitados */}
+                <div className="flex items-start gap-3">
+                  <IconUsers className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 w-full relative">
+                    <input
+                      type="text"
+                      value={attendeeInput}
+                      onChange={e => onAttendeeInputChange(e.target.value)}
+                      onFocus={() => onSetShowAttendeeSuggestions(true)}
+                      onBlur={() => setTimeout(() => onSetShowAttendeeSuggestions(false), 150)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); onAddExternalAttendee(); } }}
+                      placeholder="Agregar invitados (email)"
+                      className="w-full text-sm border border-gray-200 rounded px-2 py-1.5 outline-none focus:border-brand-500"
+                    />
+                    {attendees.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {attendees.map(att => (
+                          <div key={att.email} className="bg-gray-100 px-2.5 py-1 rounded-full text-xs flex items-center gap-1.5 whitespace-nowrap group relative" title={att.email}>
+                            <span className="truncate flex-1 max-w-[150px]">{att.name || att.email}</span>
+                            <button type="button" onClick={() => onRemoveAttendee(att.email)} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
+                              <IconX />
+                            </button>
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                              {att.email}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {showAttendeeSuggestions && (
+                      <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        {getAttendeeSuggestions().map((s, idx) => (
+                          <button key={idx} type="button" onMouseDown={() => onAddAttendee(s)} className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 border-b border-gray-100 last:border-0">
+                            <div className="font-medium text-gray-900">{s.name || s.email}</div>
+                            <div className="text-gray-500">{s.email}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Video */}
+                <label className="flex items-center gap-3 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded">
+                  <input
+                    type="checkbox"
+                    name="generate_meeting"
+                    checked={formData.generate_meeting}
+                    onChange={onInputChange}
+                    className="w-4 h-4 rounded"
+                  />
+                  <IconVideo className="w-5 h-5 text-gray-400" />
+                  <span className="text-sm text-gray-700">Generar videollamada</span>
+                </label>
+
+                {/* Lugar */}
+                <div className="flex items-center gap-3">
+                  <IconLocation className="w-5 h-5 text-gray-400 shrink-0" />
+                  <input
+                    type="text" name="location"
+                    value={formData.location} onChange={onInputChange}
+                    placeholder="Agregar lugar"
+                    className="flex-1 text-sm border-0 p-0 bg-transparent focus:underline outline-none"
+                  />
+                </div>
+
+                {/* Descripción */}
+                <div className="flex gap-3">
+                  <IconDescription className="w-5 h-5 text-gray-400 shrink-0 mt-0.5" />
+                  <textarea
+                    name="description"
+                    value={formData.description} onChange={onInputChange}
+                    placeholder="Agregar descripción" rows={2}
+                    className="flex-1 text-sm border border-gray-200 rounded p-2 outline-none focus:border-brand-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* FOOTER */}
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between gap-3 shrink-0">
+              <p className="text-xs text-gray-400 hidden sm:flex items-center gap-1.5">
+                <IconShield />
+                Se sincroniza con tu calendario
+              </p>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  type="button" onClick={onClose}
+                  className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCaptureConfirm}
+                  disabled={submitting}
+                  className={`px-5 py-2 text-sm font-bold text-white rounded-lg flex items-center gap-2 ${
+                    submitting ? 'bg-gray-600' : 'bg-gray-900 hover:bg-gray-800'
+                  }`}
+                >
+                  {submitting ? <ButtonLoader size="sm" /> : (submitLabel || 'Usar en gestión')}
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleFormSubmit} className="flex-1 overflow-y-auto min-h-0">
           <div className="px-6 py-5 space-y-4">
             <input
               ref={titleRef}
@@ -460,8 +793,8 @@ export const EventModal: React.FC<EventModalProps> = ({
                         {selectedDeal.client_company_name && (
                           <div className="text-xs text-gray-600 truncate mb-1">{selectedDeal.client_company_name}</div>
                         )}
-                        {selectedDeal.contact_name && (
-                          <div className="text-xs text-gray-500 italic">Contacto principal: {selectedDeal.contact_name}</div>
+                        {(selectedDeal as any).contact_name && (
+                          <div className="text-xs text-gray-500 italic">Contacto principal: {(selectedDeal as any).contact_name}</div>
                         )}
                       </div>
                     ) : (
@@ -493,7 +826,7 @@ export const EventModal: React.FC<EventModalProps> = ({
                             const searchableText = normalizeText([
                               deal.nombre_trato || '',
                               deal.client_company_name || '',
-                              deal.contact_name || ''
+                              (deal as any).contact_name || ''
                             ].join(' '));
 
                             return searchTerms.every(term => searchableText.includes(term));
@@ -611,11 +944,12 @@ export const EventModal: React.FC<EventModalProps> = ({
                   submitting ? 'bg-gray-600' : 'bg-gray-900 hover:bg-gray-800'
                 }`}
               >
-                {submitting ? <ButtonLoader size="sm" /> : 'Guardar'}
+                {submitting ? <ButtonLoader size="sm" /> : (submitLabel || (mode === 'capture' ? 'Usar en gestión' : 'Guardar'))}
               </button>
             </div>
           </div>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );

@@ -10,9 +10,10 @@ import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
 import SelectWinningQuoteModal from '../../components/SelectWinningQuoteModal';
-import NewInteractionModal from '../../components/NewInteractionModal';
+import NewInteractionForm from '../../components/NewInteractionForm';
 import Avatar from '../../components/Avatar';
 import DealActionsMenu from '../../components/DealActionsMenu';
+import { EventDetailModal } from '../calendar/EventDetail';
 
 const getInitials = (n?: string) => n ? n.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase() : '?';
 
@@ -114,6 +115,15 @@ const normalizeHistoryResponse = (raw: any) => {
     group_id: group?.group_id || '',
     group_name: group?.group_name || 'Historial',
     interactions: (Array.isArray(group?.interactions) ? group.interactions : []).map((item: any) => ({
+      calendar_info: item?.calendar_info || {},
+      is_calendar_scheduled: Boolean(
+        item?.is_calendar_scheduled
+        || item?.calendar_synced
+        || item?.calendar_sync_status === 'SYNCED'
+        || item?.calendar_info?.scheduled
+        || item?.calendar_info?.synced
+        || item?.calendar_info?.event_id
+      ),
       ...item,
       date_fmt: toReadableDate(item?.date_fmt) || formatHistoryDate(item?.date_iso),
       time_fmt: item?.time_fmt || toReadableTime(item?.date_fmt) || formatHistoryTime(item?.date_iso),
@@ -369,10 +379,12 @@ const DealDetail: React.FC = () => {
   const[history, setHistory] = useState<any[]>([]);
   const [emailHistory, setEmailHistory] = useState<any[]>([]);
   const [activityView, setActivityView] = useState<'ALL' | 'INTERACTIONS' | 'EMAILS'>('ALL');
-  const [showNewInteractionModal, setShowNewInteractionModal] = useState(false);
   const [refreshTimelineKey, setRefreshTimelineKey] = useState(0);
   const[confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '' as React.ReactNode, onConfirm: () => {}, onCancel: () => {} });
   const [selectWinnerModal, setSelectWinnerModal] = useState({ isOpen: false, pendingStatusId: '' });
+  const [isEventDetailOpen, setIsEventDetailOpen] = useState(false);
+  const [loadingEventDetail, setLoadingEventDetail] = useState(false);
+  const [selectedEventDetail, setSelectedEventDetail] = useState<any[] | null>(null);
 
   const getChannelDisplay = useCallback((channelValue: unknown) => {
     if (channelValue === null || channelValue === undefined) {
@@ -528,15 +540,64 @@ const DealDetail: React.FC = () => {
   const fetchHistory = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await apiFetch(buildUrl(GATEWAY_CONFIG.API.DEALS.HISTORY, { id_trato: id }));
+      const historyUrl = buildUrl(GATEWAY_CONFIG.API.DEALS.HISTORY, {
+        id_trato: id,
+        include_calendar_sync_status: true,
+        include_calendar_info: true,
+        _ts: Date.now(),
+      });
+      const res = await apiFetch(historyUrl, { cache: 'no-store' });
       const text = await res.text();
       const parsed = text ? JSON.parse(text) : [];
       setHistory(normalizeHistoryResponse(parsed));
     } catch { setHistory([]); }
   }, [id]);
 
+  const openEventDetail = useCallback(async (eventId: string) => {
+    if (!eventId) return;
+    setLoadingEventDetail(true);
+    setIsEventDetailOpen(true);
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/detail?id_event=${encodeURIComponent(eventId)}`);
+      if (!res.ok) throw new Error('No se pudo cargar el detalle del evento');
+      const data = await res.json();
+      setSelectedEventDetail(Array.isArray(data) ? data : [data]);
+    } catch {
+      setSelectedEventDetail(null);
+      setToast({ message: 'No se pudo abrir el detalle del evento.', type: 'error' });
+      setIsEventDetailOpen(false);
+    } finally {
+      setLoadingEventDetail(false);
+    }
+  }, []);
+
+  const handleRSVPFromDealDetail = useCallback(async (action: 'accepted' | 'declined' | 'tentative') => {
+    const event = selectedEventDetail?.[0];
+    const eventId = event?.id || event?.id_event;
+    if (!eventId) return;
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events/respond`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_evento: eventId, response: action }),
+      });
+      if (!res.ok) throw new Error('No se pudo actualizar tu respuesta');
+      await openEventDetail(String(eventId));
+      setToast({ message: 'Respuesta al evento actualizada.', type: 'success' });
+    } catch {
+      setToast({ message: 'Error al responder el evento.', type: 'error' });
+    }
+  }, [selectedEventDetail, openEventDetail]);
+
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { fetchHistory(); }, [fetchHistory, refreshTimelineKey]);
+  useEffect(() => {
+    if (!refreshTimelineKey) return;
+    const timer = window.setTimeout(() => {
+      fetchHistory();
+    }, 1800);
+    return () => window.clearTimeout(timer);
+  }, [refreshTimelineKey, fetchHistory]);
   useEffect(() => { if (location.state?.refresh) fetchData(); }, [location.state, fetchData]);
 
   const handleStatusChange = (newStatusId: string) => {
@@ -1049,16 +1110,26 @@ const DealDetail: React.FC = () => {
           {/* TAB: MURO DE ACTIVIDAD (DISEÑO EXACTO) */}
           {activeTab === 'activity' && (
             <div className="animate-fade-in">
-              <div className="bg-white border border-zinc-200 rounded-lg shadow-sm focus-within:border-zinc-400 focus-within:ring-1 focus-within:ring-zinc-400 transition-all mb-6 cursor-text" onClick={() => setShowNewInteractionModal(true)}>
-                <textarea placeholder="Escribe una nota interna o registra una actividad..." className="w-full text-[13px] p-3 text-zinc-800 bg-transparent border-0 focus:ring-0 resize-none h-16 outline-none pointer-events-none" readOnly spellCheck="false"></textarea>
-                <div className="flex justify-between items-center px-3 py-2 border-t border-zinc-100 bg-zinc-50 rounded-b-lg">
-                  <div className="flex gap-1">
-                    <button type="button" className="w-7 h-7 flex items-center justify-center rounded text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 transition-colors"><i className="fa-solid fa-phone text-[12px]"></i></button>
-                    <button type="button" className="w-7 h-7 flex items-center justify-center rounded text-emerald-500 hover:bg-emerald-100 hover:text-emerald-700 transition-colors bg-emerald-50"><i className="fa-brands fa-whatsapp text-[13px]"></i></button>
-                    <button type="button" className="w-7 h-7 flex items-center justify-center rounded text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700 transition-colors"><i className="fa-regular fa-envelope text-[12px]"></i></button>
-                  </div>
-                  <button type="button" className="px-3 py-1.5 bg-zinc-900 text-white text-[12px] font-medium rounded hover:bg-zinc-800 transition-colors shadow-sm">Registrar</button>
-                </div>
+              <div className="mb-6">
+                <NewInteractionForm
+                  entityId={deal.id_trato}
+                  entityType="DEAL"
+                  contactEmail={deal.contact_details?.email || deal.contact_email}
+                  contactName={deal.contact_details?.full_name || deal.contact_full_name || ''}
+                  collaborators={deal.collaborators || []}
+                  useEventModalCapture={true}
+                  eventCaptureDeal={{
+                    id_trato: deal.id_trato,
+                    nombre_trato: deal.nombre_trato,
+                    id_client_company: deal.id_client_company,
+                    client_company_name: deal.client_company_name,
+                    contact_name: deal.contact_details?.full_name || deal.contact_full_name || '',
+                  }}
+                  onSuccess={() => {
+                    setRefreshTimelineKey(prev => prev + 1);
+                    setToast({ message: 'Gestión registrada.', type: 'success' });
+                  }}
+                />
               </div>
 
               <div className="mb-4 flex items-center gap-2">
@@ -1149,20 +1220,69 @@ const DealDetail: React.FC = () => {
                               
                               {/* TAREA PLANIFICADA O VENCIDA */}
                               {(item.planned_action || item.planned_date) && (
-                                <div className={`rounded-lg px-3 py-2.5 mt-3 border ${item.is_planned_overdue ? 'bg-red-50 border-red-100' : 'bg-blue-50 border-blue-100'}`}>
-                                  <div className="flex items-center justify-between gap-3 mb-1">
-                                    <div className="inline-flex items-center gap-1.5 min-w-0">
-                                      <i className={`fa-solid ${item.is_planned_overdue ? 'fa-triangle-exclamation text-red-500' : 'fa-calendar text-blue-500'} text-[11px]`}></i>
-                                      <p className={`text-[11px] font-semibold uppercase tracking-wide truncate ${item.is_planned_overdue ? 'text-red-700' : 'text-blue-700'}`}>
-                                        {item.is_planned_overdue ? 'Acción Planificada (Vencida)' : 'Acción Planificada'}
-                                      </p>
-                                    </div>
-                                    <span className={`text-[11px] font-semibold bg-white border px-1.5 py-0.5 rounded inline-flex items-center gap-1 whitespace-nowrap ${item.is_planned_overdue ? 'text-red-600 border-red-200' : 'text-blue-600 border-blue-200'}`}>
-                                      <i className="fa-regular fa-calendar-check text-[10px]"></i>
-                                      {item.planned_date}
-                                    </span>
+                                <div
+                                  className={`rounded-lg px-3 py-2.5 mt-3 border ${
+                                    item.is_planned_overdue
+                                      ? 'bg-red-50 border-red-100'
+                                      : item.is_calendar_scheduled
+                                        ? 'bg-emerald-50 border-emerald-100'
+                                        : 'bg-blue-50 border-blue-100'
+                                  }`}
+                                >
+                                  {(() => {
+                                    const eventId =
+                                      item?.calendar_info?.id_evento
+                                      || item?.calendar_info?.id_event
+                                      || item?.calendar_info?.event_id
+                                      || item?.id_evento
+                                      || item?.id_event;
+
+                                    return (
+                                  <div className="flex items-center justify-between gap-2 mb-1">
+                                    <p
+                                      className={`text-[12px] leading-[1.4] ${
+                                        item.is_planned_overdue
+                                          ? 'text-red-900'
+                                          : item.is_calendar_scheduled
+                                            ? 'text-emerald-900'
+                                            : 'text-blue-900'
+                                      }`}
+                                    >
+                                      {item.planned_action || ''}
+                                    </p>
+                                    {eventId ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => openEventDetail(String(eventId))}
+                                        className={`text-[11px] font-semibold bg-white border px-2 py-0.5 rounded inline-flex items-center justify-center gap-1 whitespace-nowrap hover:brightness-95 transition-colors ${
+                                          item.is_planned_overdue
+                                            ? 'text-red-600 border-red-200'
+                                            : item.is_calendar_scheduled
+                                              ? 'text-emerald-600 border-emerald-200'
+                                              : 'text-blue-600 border-blue-200'
+                                        }`}
+                                        title="Ver detalle del evento"
+                                      >
+                                        <i className={`fa-regular ${item.is_calendar_scheduled ? 'fa-calendar-check' : 'fa-calendar'} text-[10px]`}></i>
+                                        {item.planned_date}
+                                      </button>
+                                    ) : (
+                                      <span
+                                        className={`text-[11px] font-semibold bg-white border px-2 py-0.5 rounded inline-flex items-center justify-center gap-1 whitespace-nowrap ${
+                                          item.is_planned_overdue
+                                            ? 'text-red-600 border-red-200'
+                                            : item.is_calendar_scheduled
+                                              ? 'text-emerald-600 border-emerald-200'
+                                              : 'text-blue-600 border-blue-200'
+                                        }`}
+                                      >
+                                        <i className={`fa-regular ${item.is_calendar_scheduled ? 'fa-calendar-check' : 'fa-calendar'} text-[10px]`}></i>
+                                        {item.planned_date}
+                                      </span>
+                                    )}
                                   </div>
-                                  <p className={`text-[12px] pl-[18px] leading-[1.4] ${item.is_planned_overdue ? 'text-red-900' : 'text-blue-900'}`}>{item.planned_action}</p>
+                                    );
+                                  })()}
                                 </div>
                               )}
                             </div>
@@ -1310,19 +1430,24 @@ const DealDetail: React.FC = () => {
         />
       )}
 
-<NewInteractionModal 
-        isOpen={showNewInteractionModal} 
-        onClose={() => setShowNewInteractionModal(false)} 
-        entityId={deal.id_trato} 
-        entityType="DEAL" 
-        contactName={deal.contact_details?.full_name || deal.contact_full_name || ''} 
-        contactEmail={deal.contact_details?.email || deal.contact_email} 
-        collaborators={deal.collaborators}
-        onSuccess={() => {
-          setShowNewInteractionModal(false);
-          setRefreshTimelineKey(prev => prev + 1);
-          setToast({ message: 'Gestión registrada.', type: 'success' });
+      <EventDetailModal
+        isOpen={isEventDetailOpen}
+        loadingDetail={loadingEventDetail}
+        selectedEventDetail={selectedEventDetail}
+        currentUserEmail={user?.email_user}
+        onClose={() => {
+          setIsEventDetailOpen(false);
+          setSelectedEventDetail(null);
         }}
+        onEdit={(event) => {
+          const eventId = (event as any)?.id || (event as any)?.id_event;
+          if (!eventId) return;
+          navigate(`/app/calendar?eventId=${encodeURIComponent(String(eventId))}`);
+        }}
+        onDeleteClick={() => {
+          setToast({ message: 'Eliminación disponible desde la vista de calendario.', type: 'error' });
+        }}
+        onRSVPClick={handleRSVPFromDealDetail}
       />
     </div>
   );

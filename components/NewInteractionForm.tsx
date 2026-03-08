@@ -7,6 +7,8 @@ import { addDays, format } from 'date-fns';
 import { CalendarCheck, CalendarPlus, UserPlus, X } from 'lucide-react';
 import Avatar from './Avatar';
 import { BrandSpinner } from './AppLoaders';
+import InteractionEventCaptureModal from './InteractionEventCaptureModal';
+import { EventAttendee, EventFormData } from '../pages/calendar/EventModal';
 
 type InteractionType = 'NOTE' | 'CALL' | 'MEETING';
 
@@ -24,6 +26,14 @@ interface NewInteractionFormProps {
     name?: string;
     avatar?: string | null;
   }>;
+  useEventModalCapture?: boolean;
+  eventCaptureDeal?: {
+    id_trato: string;
+    nombre_trato?: string;
+    id_client_company?: string;
+    client_company_name?: string;
+    contact_name?: string;
+  };
 }
 
 // ── Chip ─────────────────────────────────────────────────────────────────────
@@ -256,6 +266,8 @@ const CalendarPanel: React.FC<CalendarPanelProps> = ({
 // ── Main component ────────────────────────────────────────────────────────────
 const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
   entityId, entityType, onSuccess, onCancel, contactEmail, contactName, collaborators = [],
+  useEventModalCapture = false,
+  eventCaptureDeal,
 }) => {
   const { user } = useAuth();
   const [description, setDescription] = useState('');
@@ -272,7 +284,12 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
   const [collaboratorQuery, setCollaboratorQuery] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const nextDateInputRef = useRef<HTMLInputElement>(null);
   const [eventLocation, setEventLocation] = useState('');
+  const [isEventCaptureOpen, setIsEventCaptureOpen] = useState(false);
+  const [capturedEventFormData, setCapturedEventFormData] = useState<Partial<EventFormData>>({});
+  const [capturedEventAttendees, setCapturedEventAttendees] = useState<EventAttendee[]>([]);
+  const [isChannelLocked, setIsChannelLocked] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { dealChannels, contacts, users } = useDataCache();
@@ -307,6 +324,37 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
   }, [normalizedCollaborators, allUsers]);
 
   const canSyncCalendar = Boolean(user?.sync_calendar || user?.integrations?.sync_calendar);
+  const channelOptions = useMemo(() => (dealChannels || []).filter((c: any) => c?.id_channel), [dealChannels]);
+  const selectedChannel = useMemo(() => {
+    if (selectedType === 'NOTE') {
+      return {
+        id_channel: 'NOTE',
+        name: 'Nota',
+        icon: 'fa-solid fa-file-lines',
+        color: '#18181b',
+      };
+    }
+    return channelOptions.find((c: any) => String(c.id_channel) === String(selectedType)) || null;
+  }, [channelOptions, selectedType]);
+  const canStartNextAction = description.trim().length > 0 && Boolean(selectedType);
+
+  const formatNextActionDateLabel = (dateStr: string) => {
+    if (!dateStr) return 'Selecciona fecha';
+    const date = new Date(`${dateStr}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return 'Selecciona fecha';
+    return new Intl.DateTimeFormat('es-EC', {
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+    }).format(date);
+  };
+
+  const activateNextAction = () => {
+    if (!canStartNextAction) return;
+    setIsScheduling(true);
+    setIsChannelLocked(true);
+    if (!nextContactDate) setNextContactDate(format(addDays(new Date(), 1), 'yyyy-MM-dd'));
+  };
 
   useEffect(() => {
     if (isScheduling) {
@@ -314,7 +362,10 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
     } else {
       setNextContactDate(''); setNextContactTime(''); setEventEndTime('');
       setNextActionDesc(''); setAddToCalendar(false); setIncludeContact(false);
+      setIsChannelLocked(false);
       setSelectedCollaborators([]); setExternalEmails([]); setCollaboratorQuery(''); setEventLocation('');
+      setCapturedEventFormData({});
+      setCapturedEventAttendees([]);
     }
   }, [isScheduling]);
 
@@ -425,8 +476,106 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
   };
 
   const extraAttendees = (includeContact ? 1 : 0) + selectedCollaboratorItems.length + externalEmails.length;
-  const showCalPanel = addToCalendar && canSyncCalendar && isScheduling;
+  const showCalPanel = !useEventModalCapture && addToCalendar && canSyncCalendar && isScheduling;
   const formRef = useRef<HTMLFormElement>(null);
+
+  const capturedStartTime = capturedEventFormData.start?.split('T')[1]?.slice(0, 5) || '';
+  const capturedEndTime = capturedEventFormData.end?.split('T')[1]?.slice(0, 5) || '';
+  const resolvedStartDate = nextContactDate || capturedEventFormData.start?.split('T')[0] || '';
+  const resolvedStartTime = nextContactTime || capturedStartTime || '09:00';
+  const resolvedEndTime = eventEndTime || capturedEndTime || '10:00';
+
+  const initialCaptureFormData: Partial<EventFormData> = {
+    ...capturedEventFormData,
+    title: capturedEventFormData.title ?? nextActionDesc,
+    description: capturedEventFormData.description ?? '',
+    start: resolvedStartDate ? `${resolvedStartDate}T${resolvedStartTime}` : capturedEventFormData.start,
+    end: resolvedStartDate ? `${resolvedStartDate}T${resolvedEndTime}` : capturedEventFormData.end,
+    location: eventLocation,
+    id_trato: eventCaptureDeal?.id_trato || (entityType === 'DEAL' ? entityId : ''),
+    id_client_company: eventCaptureDeal?.id_client_company || '',
+  };
+
+  const initialCaptureAttendees: EventAttendee[] = capturedEventAttendees.length > 0
+    ? capturedEventAttendees
+    : [
+    ...(includeContact && resolvedContactEmail ? [{ email: resolvedContactEmail, name: resolvedContactName, type: 'contact' as const }] : []),
+    ...selectedCollaboratorItems.map(c => ({ email: c.email, name: c.name, type: 'user' as const, id: c.id })),
+    ...externalEmails.map(email => ({ email, type: 'external' as const })),
+  ];
+
+  const applyCapturedEvent = (payload: { formData: EventFormData; attendees: EventAttendee[] }) => {
+    const { formData: capturedForm, attendees: capturedAttendees } = payload;
+
+    const [capturedDate = '', capturedStartTime = ''] = (capturedForm.start || '').split('T');
+    const [, capturedEndTime = ''] = (capturedForm.end || '').split('T');
+
+    setIsScheduling(true);
+    setAddToCalendar(true);
+    setCapturedEventFormData(capturedForm);
+    setCapturedEventAttendees(capturedAttendees);
+    if (capturedDate) setNextContactDate(capturedDate);
+    if (capturedStartTime) setNextContactTime(capturedStartTime.slice(0, 5));
+    if (capturedEndTime) setEventEndTime(capturedEndTime.slice(0, 5));
+    setEventLocation(capturedForm.location || '');
+    if (!nextActionDesc.trim() && capturedForm.title.trim()) setNextActionDesc(capturedForm.title.trim());
+
+    const normalizedEmails = new Set(capturedAttendees.map(a => a.email.trim().toLowerCase()));
+    const contactEmailNormalized = resolvedContactEmail.trim().toLowerCase();
+    setIncludeContact(Boolean(contactEmailNormalized && normalizedEmails.has(contactEmailNormalized)));
+
+    const selectedIds = mergedCollaborators
+      .filter(c => normalizedEmails.has(c.email.trim().toLowerCase()))
+      .map(c => c.id);
+    setSelectedCollaborators(selectedIds);
+
+    const internalEmailSet = new Set([
+      ...mergedCollaborators.map(c => c.email.trim().toLowerCase()),
+      contactEmailNormalized,
+      (user?.email_user || '').trim().toLowerCase(),
+    ]);
+    const externals = Array.from(normalizedEmails).filter(email => email && !internalEmailSet.has(email));
+    setExternalEmails(externals);
+
+    setIsEventCaptureOpen(false);
+  };
+
+  const isRegisterDisabled = isSubmitting
+    || !description.trim()
+    || (isScheduling && (!nextContactDate || !nextActionDesc.trim()));
+
+  const hasCalendarEventConfigured = addToCalendar && Boolean(
+    nextContactTime
+    || eventEndTime
+    || eventLocation.trim()
+    || includeContact
+    || selectedCollaborators.length
+    || externalEmails.length
+  );
+
+  const hasDraft = Boolean(
+    description.trim()
+    || selectedType !== 'NOTE'
+    || isScheduling
+    || nextActionDesc.trim()
+    || addToCalendar
+    || eventLocation.trim()
+    || includeContact
+    || selectedCollaborators.length
+    || externalEmails.length
+  );
+  const hasActivityDraft = description.trim().length > 0;
+
+  const clearDraft = () => {
+    setDescription('');
+    setSelectedType('NOTE');
+    setIsScheduling(false);
+    setAddToCalendar(false);
+    setCapturedEventFormData({});
+    setCapturedEventAttendees([]);
+    setError(null);
+    setIsEventCaptureOpen(false);
+  };
 
   return (
     <form ref={formRef} onSubmit={handleSubmit}>
@@ -434,89 +583,179 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
       {/* ══ MAIN FORM — never changes layout ══════════════════════════════ */}
       <div className="px-5 py-4 space-y-4">
 
-          {/* Descripción */}
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-              ¿Qué sucedió?
-            </label>
+          {/* Editor estilo Activity Wall */}
+          <div className="relative border border-zinc-200 rounded-lg shadow-sm focus-within:border-zinc-400 focus-within:ring-1 focus-within:ring-zinc-400 transition-all overflow-hidden bg-white">
+            {isScheduling && isChannelLocked && selectedChannel && (
+              <button
+                type="button"
+                onClick={() => setIsChannelLocked(false)}
+                className="absolute top-2.5 right-3 w-7 h-7 rounded-full flex items-center justify-center shadow-sm border border-zinc-200 bg-white text-[12px]"
+                style={{ color: selectedChannel.color || '#64748b' }}
+                title="Cambiar canal"
+              >
+                <i className={selectedChannel.icon?.startsWith('fa') ? selectedChannel.icon : `fa-solid ${selectedChannel.icon || 'fa-circle'}`} />
+              </button>
+            )}
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="w-full px-3 py-2.5 text-[13px] text-slate-700 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 placeholder:text-slate-300 transition"
-              placeholder="Describe la gestión realizada…"
+              rows={2}
+              className="w-full text-[13px] p-3 text-zinc-800 bg-transparent border-0 focus:ring-0 resize-none h-16 outline-none placeholder:text-zinc-400"
+              placeholder="Escribe una nota interna o registra una actividad..."
             />
-            {/* Canal selector */}
-            <div className="flex items-center gap-1 mt-2">
-              <button type="button" onClick={() => setSelectedType('NOTE')} title="Nota"
-                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border-2 ${selectedType === 'NOTE' ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-slate-100 text-slate-500 border-transparent hover:bg-slate-200'}`}>
-                <i className="fa-solid fa-file-alt text-[12px]" />
-              </button>
-              {dealChannels?.map(c => (
-                <button key={c.id_channel} type="button" onClick={() => setSelectedType(c.id_channel)} title={c.name}
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all border-2 text-[12px] ${selectedType === c.id_channel ? 'text-white border-transparent shadow-sm' : 'bg-slate-100 border-transparent hover:bg-slate-200'}`}
-                  style={{ color: selectedType === c.id_channel ? '#fff' : c.color, backgroundColor: selectedType === c.id_channel ? c.color : undefined }}>
-                  <i className={c.icon.startsWith('fa') ? c.icon : `fa-solid ${c.icon}`} />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Toggle programar acción */}
-          <label className="flex items-center gap-2 text-[13px] text-slate-600 cursor-pointer font-medium select-none">
-            <input type="checkbox" checked={isScheduling} onChange={(e) => setIsScheduling(e.target.checked)}
-              className="h-3.5 w-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-            Programar siguiente acción
-          </label>
-
-          {/* Campos de programación */}
-          {isScheduling && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                    Fecha
-                  </label>
-                  <input type="date" value={nextContactDate} onChange={(e) => setNextContactDate(e.target.value)}
-                    className="w-full px-3 py-2.5 text-[13px] text-slate-700 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition" />
+            <div className={`flex items-center justify-between px-3 py-2 border-t border-zinc-100 transition-colors duration-200 ${isScheduling ? 'bg-white' : 'bg-zinc-50/50'}`}>
+              <div className="relative flex-1 min-w-0 pr-2 min-h-[32px]">
+                <div className={`flex items-center gap-1 overflow-x-auto scrollbar-hide transition-all duration-200 ease-out ${isScheduling && isChannelLocked ? 'pointer-events-none opacity-0 -translate-x-3 absolute inset-0' : 'opacity-100 translate-x-0 relative'}`}>
+                  <button
+                    type="button"
+                    title="Nota"
+                    onClick={() => setSelectedType('NOTE')}
+                    className={`w-7 h-7 flex items-center justify-center rounded transition-colors text-[12px] ${selectedType === 'NOTE' ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700'}`}
+                  >
+                    <i className="fa-solid fa-file-lines" />
+                  </button>
+                  {channelOptions.map((c: any) => {
+                    const isActive = selectedType === c.id_channel;
+                    return (
+                      <button
+                        key={c.id_channel}
+                        type="button"
+                        title={c.name}
+                        onClick={() => setSelectedType(prev => prev === c.id_channel ? 'NOTE' : c.id_channel)}
+                        className={`w-7 h-7 flex items-center justify-center rounded transition-colors text-[12px] ${isActive ? 'shadow-sm' : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700'}`}
+                        style={isActive
+                          ? { backgroundColor: `${c.color || '#64748b'}1A`, color: c.color || '#64748b' }
+                          : undefined}
+                      >
+                        <i className={c.icon?.startsWith('fa') ? c.icon : `fa-solid ${c.icon || 'fa-circle'}`} />
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={activateNextAction}
+                    disabled={!canStartNextAction}
+                    className="ml-1 inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-800 hover:bg-zinc-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    title={!canStartNextAction ? 'Escribe la actividad y selecciona un canal para continuar' : 'Configurar siguiente acción'}
+                  >
+                    Next action
+                    <i className="fa-solid fa-arrow-right text-[10px]" />
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">
-                    Descripción acción
-                  </label>
-                  <textarea value={nextActionDesc} onChange={(e) => setNextActionDesc(e.target.value)} rows={2}
-                    placeholder="Ej: Llamar para confirmar"
-                    className="w-full px-3 py-2.5 text-[13px] text-slate-700 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 placeholder:text-slate-300 transition" />
+
+                <div className={`flex items-center gap-0 w-full min-w-0 border border-zinc-200 rounded-lg overflow-hidden bg-white transition-all duration-200 ease-out ${isScheduling && isChannelLocked ? 'opacity-100 translate-x-0 relative' : 'pointer-events-none opacity-0 translate-x-3 absolute inset-0'}`}>
+                  <button
+                    type="button"
+                    onClick={() => nextDateInputRef.current?.showPicker?.()}
+                    className="shrink-0 px-2.5 py-1.5 text-[12px] text-zinc-700 bg-zinc-50 hover:bg-zinc-100 border-r border-zinc-200 inline-flex items-center gap-1.5"
+                    title="Seleccionar fecha"
+                  >
+                    <i className="fa-regular fa-calendar text-zinc-400 text-[12px]"></i>
+                    <span className="font-medium">{formatNextActionDateLabel(nextContactDate)}</span>
+                  </button>
+                  <input
+                    ref={nextDateInputRef}
+                    type="date"
+                    value={nextContactDate}
+                    onChange={(e) => setNextContactDate(e.target.value)}
+                    className="absolute opacity-0 pointer-events-none"
+                  />
+
+                  <input
+                    type="text"
+                    value={nextActionDesc}
+                    onChange={(e) => setNextActionDesc(e.target.value)}
+                    placeholder="Siguiente acción..."
+                    className="flex-1 min-w-0 px-2.5 py-1.5 text-[12px] text-zinc-700 bg-white focus:outline-none placeholder:text-zinc-400"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setIsScheduling(false)}
+                    className="w-8 h-8 flex items-center justify-center border-l border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                    title="Cancelar next action"
+                  >
+                    <i className="fa-solid fa-arrow-left text-[11px]"></i>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={!canSyncCalendar}
+                    onClick={() => {
+                      if (!canSyncCalendar) return;
+                      if (useEventModalCapture) {
+                        setIsEventCaptureOpen(true);
+                        return;
+                      }
+                      setAddToCalendar(v => !v);
+                    }}
+                    className={`relative w-8 h-8 flex items-center justify-center border-l border-zinc-200 transition-all duration-200 ${hasCalendarEventConfigured ? 'bg-emerald-50 text-emerald-600 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.28)] ring-1 ring-emerald-200/70' : addToCalendar ? 'bg-zinc-100 text-zinc-700' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700'} ${!canSyncCalendar ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    title={canSyncCalendar ? 'Agregar calendario' : 'Integración de calendario no activa'}
+                  >
+                    <CalendarPlus size={14} />
+                    {hasCalendarEventConfigured && (
+                      <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    )}
+                  </button>
                 </div>
               </div>
-
-              {/* Botón agregar al calendario — abre panel derecho */}
-              {canSyncCalendar && (
-                <button
-                  type="button"
-                  onClick={() => setAddToCalendar(v => !v)}
-                  className={`flex items-center gap-2 text-[13px] font-medium px-3 py-1.5 rounded-lg border transition-all ${
-                    addToCalendar
-                      ? 'bg-blue-50 border-blue-200 text-blue-700'
-                      : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700'
-                  }`}
-                >
-                  {addToCalendar
-                    ? <CalendarCheck size={14} className="text-blue-600" />
-                    : <CalendarPlus size={14} />}
-                  {addToCalendar ? 'En calendario' : 'Agregar al calendario'}
-                  {addToCalendar && extraAttendees > 0 && (
-                    <span className="ml-1 text-[10px] font-semibold text-blue-500">
-                      · +{extraAttendees} invitado{extraAttendees > 1 ? 's' : ''}
-                    </span>
+              {!isScheduling && (
+                <div className="flex items-center gap-2 ml-3 shrink-0">
+                  {hasActivityDraft && (
+                    <button
+                      type="button"
+                      onClick={clearDraft}
+                      disabled={isSubmitting}
+                      className="w-7 h-7 inline-flex items-center justify-center rounded border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Borrar borrador"
+                    >
+                      <i className="fa-regular fa-trash-can text-[12px]"></i>
+                    </button>
                   )}
-                </button>
-              )}
-              {!canSyncCalendar && (
-                <p className="text-[11px] text-slate-400">Activa la sincronización de calendario en ajustes para crear eventos.</p>
+                  <button
+                    type="submit"
+                    disabled={isRegisterDisabled}
+                    className="px-3 py-1.5 bg-zinc-900 text-white text-[12px] font-medium rounded hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-60 flex items-center gap-1.5"
+                  >
+                    {isSubmitting ? <BrandSpinner size="xs" /> : 'Registrar'}
+                  </button>
+                </div>
               )}
             </div>
-          )}
+
+            {/* Acciones de programación dentro del mismo contenedor */}
+            {isScheduling && (
+              <div className="border-t border-zinc-100 bg-zinc-50/50 px-3 py-2 flex items-center justify-end gap-2">
+                {onCancel && (
+                  <button
+                    type="button"
+                    onClick={onCancel}
+                    className="text-[12px] font-medium text-zinc-500 hover:text-zinc-800 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                )}
+                {hasDraft && (
+                  <button
+                    type="button"
+                    onClick={clearDraft}
+                    disabled={isSubmitting}
+                    className="w-8 h-8 inline-flex items-center justify-center rounded border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Borrar borrador"
+                  >
+                    <i className="fa-regular fa-trash-can text-[12px]"></i>
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={isRegisterDisabled}
+                  className="px-3 py-1.5 bg-zinc-900 text-white text-[12px] font-medium rounded hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-60 flex items-center gap-1.5"
+                >
+                  {isSubmitting ? <BrandSpinner size="xs" /> : 'Registrar'}
+                </button>
+              </div>
+            )}
+          </div>
 
           {/* Error */}
           {error && (
@@ -562,19 +801,22 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
         />
       )}
 
-      {/* ══ FOOTER sticky — siempre visible, estándar CRM (HubSpot/Salesforce) ══ */}
-      <div className="sticky bottom-0 bg-white border-t border-slate-100 px-5 py-3 flex justify-end gap-2 z-10">
-        {onCancel && (
-          <button type="button" onClick={onCancel}
-            className="px-4 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
-            Cancelar
-          </button>
-        )}
-        <button type="submit" disabled={isSubmitting || !description.trim()}
-          className="px-4 py-2 text-[13px] font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-60 flex items-center gap-1.5">
-          {isSubmitting ? <BrandSpinner size="xs" /> : 'Registrar gestión'}
-        </button>
-      </div>
+      {useEventModalCapture && canSyncCalendar && (
+        <InteractionEventCaptureModal
+          isOpen={isEventCaptureOpen}
+          onClose={() => setIsEventCaptureOpen(false)}
+          onCapture={applyCapturedEvent}
+          contacts={contacts}
+          users={users}
+          currentUserId={user?.id_user}
+          dealContext={eventCaptureDeal || (entityType === 'DEAL' ? {
+            id_trato: entityId,
+            nombre_trato: contactName,
+          } : undefined)}
+          initialFormData={initialCaptureFormData}
+          initialAttendees={initialCaptureAttendees}
+        />
+      )}
     </form>
   );
 };
