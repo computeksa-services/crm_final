@@ -54,20 +54,24 @@ const SearchableClientSelector: React.FC<{
   emptyText = 'Sin resultados',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [internalQuery, setInternalQuery] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   const current = useMemo(() => options.find(o => o.id === currentId), [options, currentId]);
 
   useEffect(() => {
-    setQuery(current?.label || '');
-  }, [current?.label]);
+    // Update internalQuery when currentId or current.label changes, but only if dropdown is closed
+    if (!isOpen) {
+      setInternalQuery(current?.label || '');
+    }
+  }, [current?.label, currentId, isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
         setIsOpen(false);
-        setQuery(current?.label || '');
+        // Reset internal query to current label if closed by clicking outside
+        setInternalQuery(current?.label || '');
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -75,14 +79,14 @@ const SearchableClientSelector: React.FC<{
   }, [current?.label]);
 
   const filteredOptions = useMemo(() => {
-    const needle = normalizeText(query);
+    const needle = normalizeText(internalQuery);
     if (!needle) return options;
     return options.filter(option => {
       const label = normalizeText(option.label);
       const subLabel = normalizeText(option.subLabel || '');
       return label.includes(needle) || subLabel.includes(needle);
     });
-  }, [options, query]);
+  }, [options, internalQuery]);
 
   const currentIsInResults = useMemo(
     () => filteredOptions.some(option => option.id === currentId),
@@ -101,7 +105,7 @@ const SearchableClientSelector: React.FC<{
             onClick={(e) => {
               e.stopPropagation();
               onClear();
-              setQuery('');
+              setInternalQuery('');
               setIsOpen(false);
             }}
             className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex items-center justify-center w-5 h-5 rounded-full text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors"
@@ -118,16 +122,16 @@ const SearchableClientSelector: React.FC<{
         ) : null}
         <input
           type="text"
-          value={query}
+          value={isOpen ? internalQuery : (current?.label || '')}
           onChange={(e) => {
-            setQuery(e.target.value);
+            setInternalQuery(e.target.value);
             setIsOpen(true);
           }}
           onKeyDown={(e) => {
             if (disabled) return;
             if (e.key === 'Escape') {
               setIsOpen(false);
-              setQuery(current?.label || '');
+              setInternalQuery(current?.label || '');
             }
             if (e.key === 'ArrowDown') {
               setIsOpen(true);
@@ -136,7 +140,7 @@ const SearchableClientSelector: React.FC<{
               e.preventDefault();
               const first = filteredOptions[0];
               onSelect(first.id);
-              setQuery(first.label);
+              setInternalQuery(first.label);
               setIsOpen(false);
             }
           }}
@@ -158,7 +162,7 @@ const SearchableClientSelector: React.FC<{
                 type="button"
                 onClick={() => {
                   onSelect(option.id);
-                  setQuery(option.label);
+                  setInternalQuery(option.label);
                   setIsOpen(false);
                 }}
                 className={`w-full px-3 py-2.5 text-left transition-colors ${
@@ -184,7 +188,7 @@ const SearchableClientSelector: React.FC<{
         </div>
       ) : null}
 
-      {!isOpen && query && !currentIsInResults && !disabled ? (
+      {!isOpen && internalQuery && !currentIsInResults && !disabled ? (
         <p className="mt-1 text-[11px] text-zinc-500">{searchPlaceholder}</p>
       ) : null}
     </div>
@@ -348,7 +352,7 @@ const DealForm: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [isConversion, setIsConversion] = useState(false);
-  const [tentativeCloseDate, setTentativeCloseDate] = useState('');
+  const [expectedCloseDate, setExpectedCloseDate] = useState('');
 
   const [collaboratorPermissions, setCollaboratorPermissions] = useState<Record<string, PermissionLevel>>({});
   const [isPreShareOpen, setIsPreShareOpen] = useState(false);
@@ -386,10 +390,10 @@ const DealForm: React.FC = () => {
           setDeal({
             id_trato: payload.id_trato,
             nombre_trato: payload.nombre_trato,
-            valor_trato: payload.valor_numeric,
+            valor_trato: String(payload.valor_numeric || ''),
             descripcion: payload.deal_description,
-            id_client_company: payload.id_client_company,
-            id_contact: payload.id_contact,
+            id_client_company: payload.company_details?.id || payload.id_client_company,
+            id_contact: payload.contact_details?.id || payload.id_contact,
             id_deal_status: payload.estado_actual?.id || payload.id_deal_status,
             id_interest: payload.interes_actual?.id || payload.id_interest,
             channel: payload.channel,
@@ -397,6 +401,29 @@ const DealForm: React.FC = () => {
             id_user_owner: payload.owner_id,
             id_user: payload.owner_id,
           });
+          
+          // Convertir ISO date a YYYY-MM-DD para input type="date"
+          let closeDate = payload.expected_close_date || '';
+          if (closeDate && closeDate.includes('T')) {
+            closeDate = closeDate.split('T')[0]; // "2027-10-01T00:00:00.000Z" -> "2027-10-01"
+          }
+          setExpectedCloseDate(closeDate);
+
+          const initialCollaboratorPermissions: Record<string, PermissionLevel> = {};
+          const mappedShareCollaborators = (payload.collaborators || []).map((c: any) => {
+            if (String(c.id_user) !== String(user.id_user)) {
+              initialCollaboratorPermissions[c.id_user] = (c.permission_level || '').toUpperCase() as PermissionLevel;
+            }
+            return {
+              id_user: c.id_user,
+              name: c.name || c.name_user || c.id_user,
+              avatar: c.avatar || c.avatar_url || null,
+              permission_level: (c.permission_level || '').toUpperCase() || 'VIEW',
+              is_owner: Boolean(c.is_owner || (c.permission_level || '').toUpperCase() === 'OWNER'),
+            };
+          });
+          setCollaboratorPermissions(initialCollaboratorPermissions);
+          setShareCollaborators(mappedShareCollaborators);
         } catch {
           setToast({ message: 'Error al cargar el trato', type: 'error' });
         }
@@ -641,15 +668,13 @@ const DealForm: React.FC = () => {
     const dealId = queryParams.get('id');
     const isEditMode = !!dealId;
 
-    if (!isEditMode && selectedCollaboratorsCount === 0) {
-      setToast({ message: 'Debes asignar al menos un colaborador antes de guardar.', type: 'error' });
-      return;
-    }
-
+    // El creador siempre cuenta como colaborador, no es necesario asignar más
+    
     setProcessing(true);
     try {
       const payload = {
         ...deal,
+        expected_close_date: expectedCloseDate,
         ...(isEditMode ? {} : { created_at: new Date().toISOString(), is_conversion: isConversion }),
       };
 
@@ -784,8 +809,8 @@ const DealForm: React.FC = () => {
                   <label className="block text-xs font-medium text-zinc-700 mb-1.5">Cierre Estimado</label>
                   <input
                     type="date"
-                    value={tentativeCloseDate}
-                    onChange={(e) => setTentativeCloseDate(e.target.value)}
+                    value={expectedCloseDate}
+                    onChange={(e) => setExpectedCloseDate(e.target.value)}
                     className="w-full px-3 py-2 text-sm font-medium text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg outline-none transition-all shadow-sm cursor-pointer"
                   />
                 </div>

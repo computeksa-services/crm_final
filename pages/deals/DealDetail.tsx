@@ -781,24 +781,13 @@ const DealDetail: React.FC = () => {
   const catIndex = pipelineCats.indexOf(currentCat);
   const channelLabel = effectiveChannel.name || 'Sin valor';
   const channelIcon = effectiveChannel.icon || (String(channelLabel).toUpperCase().includes('WHATSAPP') ? 'fa-brands fa-whatsapp' : '');
-  const createdFromFmt = splitDateTime(deal.timeline_info?.created_at_fmt || deal.created_at_fmt);
-  const updatedFromFmt = splitDateTime(deal.timeline_info?.updated_at_fmt || deal.updated_at_fmt);
-  const createdDateLabel =
-    deal.timeline_info?.created_at_human ||
-    createdFromFmt.date ||
-    '-';
-  const updatedDateLabel =
-    deal.timeline_info?.updated_at_human ||
-    updatedFromFmt.date ||
-    '-';
-  const createdTimeLabel =
-    deal.timeline_info?.created_time ||
-    createdFromFmt.time ||
-    '';
-  const updatedTimeLabel =
-    deal.timeline_info?.updated_time ||
-    updatedFromFmt.time ||
-    '';
+  
+  // Usar directamente los campos formateados del backend
+  const createdDateLabel = deal.timeline_info?.created_at_human || '-';
+  const updatedDateLabel = deal.timeline_info?.updated_at_human || '-';
+  const createdTimeLabel = deal.timeline_info?.created_time || '';
+  const updatedTimeLabel = deal.timeline_info?.updated_time || '';
+  
   const showInteractions = activityView !== 'EMAILS';
   const showEmails = activityView !== 'INTERACTIONS';
   const hasInteractions = history.length > 0;
@@ -1041,6 +1030,22 @@ const DealDetail: React.FC = () => {
                   <span className="text-zinc-500">{updatedDateLabel}{updatedTimeLabel ? `  • ${updatedTimeLabel}` : ''}</span>
                 </div>
               </div>
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors">
+                <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2"><i className="fa-regular fa-calendar w-4 text-center"></i> Cierre Est.</div>
+                <div className="w-2/3 text-zinc-700 text-[13px]">
+                  <span className="text-zinc-500">{deal.timeline_info?.expected_close_date_human || '-'}</span>
+                </div>
+              </div>
+              {(effectiveStatus.category === 'WON' || effectiveStatus.category === 'LOST') && (
+                <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors">
+                  <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2"><i className="fa-regular fa-calendar-check w-4 text-center"></i> Cierre Real</div>
+                  <div className="w-2/3 text-zinc-700 text-[13px]">
+                    <span className={`${deal.timeline_info?.actual_close_date_human === 'Pendiente de cierre' ? 'text-zinc-400 italic' : effectiveStatus.category === 'WON' ? 'text-emerald-600 font-medium' : 'text-red-600 font-medium'}`}>
+                      {deal.timeline_info?.actual_close_date_human || 'Pendiente de cierre'}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1364,7 +1369,7 @@ const DealDetail: React.FC = () => {
                             <div className="text-[11px] text-zinc-500 truncate flex items-center gap-1.5 mt-0.5"><span className="font-mono bg-zinc-100 border border-zinc-200 px-1 rounded text-[9px] font-bold text-zinc-600">v{q.version || 1}</span>{q.nombre || q.nombre_cotizacion || 'Sin título'}</div>
                           </div>
                         </div>
-                        <div className="col-span-3 hidden md:block"><div className="text-[12px] text-zinc-500 font-medium">{q.fecha || q.fecha_emision}</div><div className={`text-[13px] font-bold mt-0.5 ${isRej ? 'text-zinc-400' : 'text-zinc-900'}`}>{formatCurrency(q.total)}</div></div>
+                        <div className="col-span-3 hidden md:block"><div className="text-[12px] text-zinc-500 font-medium">{q.fecha_human || q.fecha || q.fecha_emision}</div><div className={`text-[13px] font-bold mt-0.5 ${isRej ? 'text-zinc-400' : 'text-zinc-900'}`}>{formatCurrency(q.total)}</div></div>
                         <div className="col-span-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${isApp ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : isRej ? 'bg-red-50 text-red-600 border-red-100' : 'bg-sky-50 text-sky-700 border-sky-100'}`}>{q.estado_name || q.estado}</span>
                           <div className="text-[12px] font-bold text-zinc-900 mt-1 md:hidden">{formatCurrency(q.total)}</div>
