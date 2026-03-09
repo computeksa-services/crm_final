@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useDataCache } from '../contexts/DataCacheContext';
 import { apiFetch } from '../services/apiClient';
 import { GATEWAY_CONFIG } from '../services/gatewayConfig';
-import CompanyFormModal from '../pages/clients/CompanyFormModal';
+import CompanyForm from '../pages/clients/CompanyForm';
 import ContactFormModal from '../pages/clients/ContactFormModal';
 import { BrandSpinner } from './AppLoaders';
 
@@ -70,24 +70,40 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
     }
   }, [cachedContacts]);
 
-  // Inicializar form con datos de edición
+  // Inicializar form con datos de edición o limpiar para crear
   useEffect(() => {
-    if (!isOpen || !initialData) return;
-    setFormData({
-      id_trato: initialData.id_trato,
-      nombre_trato: initialData.nombre_trato || '',
-      valor_trato: initialData.valor_trato || '',
-      descripcion: initialData.descripcion || '',
-      id_client_company: initialData.id_client_company ? String(initialData.id_client_company) : '',
-      id_contact: initialData.id_contact ? String(initialData.id_contact) : '',
-      id_deal_status: initialData.id_deal_status ? String(initialData.id_deal_status) : '',
-      id_interest: initialData.id_interest ? String(initialData.id_interest) : '',
-      channel: initialData.id_channel
-        ? String(initialData.id_channel)
-        : initialData.channel
-        ? String(initialData.channel)
-        : '',
-    });
+    if (!isOpen) return;
+    
+    if (initialData && initialData.id_trato) {
+      // Modo edición
+      setFormData({
+        id_trato: initialData.id_trato,
+        nombre_trato: initialData.nombre_trato || '',
+        valor_trato: initialData.valor_trato || '',
+        descripcion: initialData.descripcion || '',
+        id_client_company: initialData.id_client_company ? String(initialData.id_client_company) : '',
+        id_contact: initialData.id_contact ? String(initialData.id_contact) : '',
+        id_deal_status: initialData.id_deal_status ? String(initialData.id_deal_status) : '',
+        id_interest: initialData.id_interest ? String(initialData.id_interest) : '',
+        channel: initialData.id_channel
+          ? String(initialData.id_channel)
+          : initialData.channel
+          ? String(initialData.channel)
+          : '',
+      });
+    } else {
+      // Modo crear - limpiar formulario
+      setFormData({
+        nombre_trato: '',
+        valor_trato: '',
+        descripcion: '',
+        id_client_company: '',
+        id_contact: '',
+        id_deal_status: '',
+        id_interest: '',
+        channel: '',
+      });
+    }
   }, [isOpen, initialData]);
 
   const handleInputChange = (
@@ -96,6 +112,8 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
+
+  const isEditMode = initialData && initialData.id_trato;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,13 +145,19 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
         return;
       }
 
-      // Conectar al backend para edición
+      // Preparar payload
       const payload = {
         ...formData,
         id_tenant: user.id_tenant,
         id_user: user.id_user,
       };
-      const response = await apiFetch(GATEWAY_CONFIG.API.DEALS.UPDATE, {
+
+      // Seleccionar endpoint según modo
+      const endpoint = isEditMode 
+        ? GATEWAY_CONFIG.API.DEALS.UPDATE 
+        : GATEWAY_CONFIG.API.DEALS.CREATE;
+
+      const response = await apiFetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -143,7 +167,11 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
       const result = await response.json();
       const savedDeal = Array.isArray(result) ? result[0] : result;
 
-      setToast({ message: 'Trato actualizado exitosamente.', type: 'success' });
+      const message = isEditMode 
+        ? 'Trato actualizado exitosamente.' 
+        : 'Trato creado exitosamente.';
+      
+      setToast({ message, type: 'success' });
       onSuccess?.(savedDeal);
       onClose();
     } catch (error: any) {
@@ -160,10 +188,14 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-brand-100 text-brand-600">
-              <i className="fa-solid fa-pen-to-square"></i>
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+              isEditMode 
+                ? 'bg-brand-100 text-brand-600' 
+                : 'bg-emerald-100 text-emerald-600'
+            }`}>
+              <i className={`fa-solid ${isEditMode ? 'fa-pen-to-square' : 'fa-plus'}`}></i>
             </div>
-            Editar Trato
+            {isEditMode ? 'Editar Trato' : 'Crear Nuevo Trato'}
           </h2>
           <button
             onClick={onClose}
@@ -359,8 +391,8 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
               disabled={submitting}
               className="px-6 py-2.5 bg-brand-600 text-white text-sm font-bold rounded-xl shadow-lg shadow-brand-200 hover:bg-brand-700 disabled:opacity-50 transition-all flex items-center gap-2"
             >
-              {submitting ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-check"></i>}
-              Guardar Cambios
+              {submitting ? <BrandSpinner size="xs" /> : <i className={`fa-solid ${isEditMode ? 'fa-check' : 'fa-plus'}`}></i>}
+              {isEditMode ? 'Guardar Cambios' : 'Crear Trato'}
             </button>
           </div>
         </form>
@@ -375,9 +407,10 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
       </div>
 
       {/* Modales inline para crear empresa y contacto */}
-      <CompanyFormModal
+      <CompanyForm
         isOpen={isCompanyFormOpen}
         onClose={() => setIsCompanyFormOpen(false)}
+        mode="create"
         onSuccess={(newCompany) => {
           setCompaniesList(prev => [...prev, newCompany]);
           setFormData(prev => ({ ...prev, id_client_company: newCompany.id_client_company }));

@@ -4,7 +4,7 @@ import { Quote, ClientCompany, ClientContact } from '../types';
 import Toast from './Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
-import CompanyFormModal from '../pages/clients/CompanyFormModal';
+import CompanyForm from '../pages/clients/CompanyForm';
 import ContactFormModal from '../pages/clients/ContactFormModal';
 import { BrandSpinner } from './AppLoaders';
 
@@ -472,9 +472,10 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       </div>
 
       {isCompanyFormOpen && (
-        <CompanyFormModal
+        <CompanyForm
           isOpen={isCompanyFormOpen}
           onClose={() => setIsCompanyFormOpen(false)}
+          mode="create"
           onSuccess={company => {
             setCompaniesList(prev => [...prev, company]);
             setFormData(prev => ({ ...prev, id_client_company: company.id_client_company }));

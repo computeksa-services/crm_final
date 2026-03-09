@@ -1,6 +1,7 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import { ClientContact, User, Deal } from '../../types';
 import { SectionLoader, ButtonLoader, SimpleSpinner } from '../../components/AppLoaders';
+import ConfirmModal from '../../components/ConfirmModal';
 
 // ── TYPES ──────────────────────────────────────────────────────────────────
 export interface Attendee {
@@ -240,10 +241,20 @@ export const EventModal: React.FC<EventModalProps> = ({
   const [startTimeInput, setStartTimeInput] = React.useState('09:00');
   const [endTimeInput, setEndTimeInput] = React.useState('10:00');
 
+  // Unsaved changes detection
+  const [initialFormData, setInitialFormData] = useState<EventFormData | null>(null);
+  const [initialAttendees, setInitialAttendees] = useState<Attendee[]>([]);
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
   const timeOptions = React.useMemo(() => generateTimeOptions(), []);
 
+  // Capture initial state when modal opens
   useEffect(() => {
-    if (isOpen) setTimeout(() => titleRef.current?.focus(), 60);
+    if (isOpen) {
+      setTimeout(() => titleRef.current?.focus(), 60);
+      setInitialFormData({ ...formData });
+      setInitialAttendees([...attendees]);
+    }
   }, [isOpen]);
 
   // FIX: Only depend on isOpen to avoid infinite loop if parent doesn't memoize onFetchDeals
@@ -259,18 +270,60 @@ export const EventModal: React.FC<EventModalProps> = ({
     }
   }, [isOpen, formData.start, formData.end]);
 
+  // Detect unsaved changes
+  const hasUnsavedChanges = useMemo(() => {
+    if (!initialFormData || !isOpen) return false;
+    
+    // Compare form fields
+    const formChanged = Object.keys(initialFormData).some(
+      key => formData[key as keyof EventFormData] !== initialFormData[key as keyof EventFormData]
+    );
+    
+    // Compare attendees by email
+    const initialEmails = initialAttendees.map(a => a.email).sort();
+    const currentEmails = attendees.map(a => a.email).sort();
+    const attendeesChanged = JSON.stringify(initialEmails) !== JSON.stringify(currentEmails);
+    
+    return formChanged || attendeesChanged;
+  }, [formData, attendees, initialFormData, initialAttendees, isOpen]);
+
+  // Handle close with unsaved changes check
+  const handleAttemptClose = useCallback(() => {
+    if (hasUnsavedChanges) {
+      setShowDiscardConfirm(true);
+    } else {
+      onClose();
+    }
+  }, [hasUnsavedChanges, onClose]);
+
+  const handleConfirmDiscard = useCallback(() => {
+    setShowDiscardConfirm(false);
+    setInitialFormData(null);
+    setInitialAttendees([]);
+    onClose();
+  }, [onClose]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setShowStartTime(false);
-        setShowEndTime(false);
-        onSetShowDealSuggestions(false);
-        onSetShowAttendeeSuggestions(false);
+        // Close dropdowns first
+        if (showStartTime || showEndTime || showDealSuggestions || showAttendeeSuggestions) {
+          setShowStartTime(false);
+          setShowEndTime(false);
+          onSetShowDealSuggestions(false);
+          onSetShowAttendeeSuggestions(false);
+        } else if (showDiscardConfirm) {
+          // Close discard confirmation
+          setShowDiscardConfirm(false);
+        } else {
+          // Attempt to close modal
+          handleAttemptClose();
+        }
       }
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onSetShowDealSuggestions, onSetShowAttendeeSuggestions]);
+  }, [showStartTime, showEndTime, showDealSuggestions, showAttendeeSuggestions, showDiscardConfirm, handleAttemptClose, onSetShowDealSuggestions, onSetShowAttendeeSuggestions]);
 
   // FIX: Extracted shared end-time adjustment logic to avoid duplication
   const adjustEndIfNeeded = useCallback((startTime: string, date: string) => {
@@ -310,7 +363,7 @@ export const EventModal: React.FC<EventModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-[2px]"
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={e => { if (e.target === e.currentTarget) handleAttemptClose(); }}
     >
       <div
         className="bg-white border border-gray-200 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col overflow-hidden"
@@ -322,12 +375,15 @@ export const EventModal: React.FC<EventModalProps> = ({
             <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-sm ${isEditing ? 'bg-amber-50 text-amber-600' : 'bg-brand-50 text-brand-600'}`}>
               {isEditing ? <IconPen /> : <IconCalendar />}
             </div>
-            <h2 className="text-sm font-semibold text-gray-900">
+            <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
               {isEditing ? 'Editar Evento' : 'Nuevo Evento'}
+              {hasUnsavedChanges && (
+                <span className="w-2 h-2 bg-amber-500 rounded-full" title="Cambios sin guardar"></span>
+              )}
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleAttemptClose}
             className="w-8 h-8 rounded-lg hover:bg-gray-100 text-gray-500 hover:text-gray-700 flex items-center justify-center transition-colors shrink-0"
             title="Cerrar"
           >
@@ -625,7 +681,7 @@ export const EventModal: React.FC<EventModalProps> = ({
               </p>
               <div className="flex items-center gap-2 ml-auto">
                 <button
-                  type="button" onClick={onClose}
+                  type="button" onClick={handleAttemptClose}
                   className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg"
                 >
                   Cancelar
@@ -933,7 +989,7 @@ export const EventModal: React.FC<EventModalProps> = ({
             </p>
             <div className="flex items-center gap-2 ml-auto">
               <button
-                type="button" onClick={onClose}
+                type="button" onClick={handleAttemptClose}
                 className="px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-lg"
               >
                 Cancelar
@@ -944,13 +1000,25 @@ export const EventModal: React.FC<EventModalProps> = ({
                   submitting ? 'bg-gray-600' : 'bg-gray-900 hover:bg-gray-800'
                 }`}
               >
-                {submitting ? <ButtonLoader size="sm" /> : (submitLabel || (mode === 'capture' ? 'Usar en gestión' : 'Guardar'))}
+                {submitting ? <ButtonLoader size="sm" /> : (submitLabel || 'Guardar')}
               </button>
             </div>
           </div>
           </form>
         )}
       </div>
+
+      {/* Unsaved changes confirmation */}
+      <ConfirmModal
+        isOpen={showDiscardConfirm}
+        onClose={() => setShowDiscardConfirm(false)}
+        onConfirm={handleConfirmDiscard}
+        title="¿Descartar cambios?"
+        message="Tienes cambios sin guardar. Si cierras ahora se perderán."
+        confirmText="Descartar"
+        cancelText="Continuar editando"
+        isDestructive={true}
+      />
     </div>
   );
 };

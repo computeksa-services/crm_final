@@ -6,6 +6,8 @@ import { useDataCache } from '../contexts/DataCacheContext';
 import { NAV_GROUPS, PAGE_NAMES } from '../services/routes.config';
 import { ButtonLoader } from './AppLoaders';
 import Avatar from './Avatar';
+import AddMenu from './AddMenu';
+import CompanyForm from '../pages/clients/CompanyForm';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -34,6 +36,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [collapsedNavHover, setCollapsedNavHover] = useState<{ label: string; top: number; left: number } | null>(null);
+  const [isCompanyFormOpen, setIsCompanyFormOpen] = useState(false);
   const userMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { user, logout } = useAuth();
@@ -354,6 +357,20 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           {/* Nav */}
           <nav className={`flex-1 py-2 scrollbar-none ${isSidebarCollapsed ? 'overflow-visible' : 'overflow-y-auto overflow-x-hidden'}`}>
             <ul className="space-y-0.5">
+              {/* Add Menu Button - encima de Dashboard */}
+              <li className={`${isSidebarCollapsed ? 'flex justify-center' : 'px-2'} mb-2`}>
+                <AddMenu
+                  isCollapsed={isSidebarCollapsed}
+                  onAddDeal={() => navigate('/app/deals/new')}
+                  onAddContact={() => { /* TODO: Implementar */ }}
+                  onAddCompany={() => setIsCompanyFormOpen(true)}
+                  onAddQuote={() => { /* TODO: Implementar */ }}
+                  onAddProduct={() => { /* TODO: Implementar */ }}
+                  onAddPortfolio={() => { /* TODO: Implementar */ }}
+                  onAddCampaign={() => { /* TODO: Implementar */ }}
+                />
+              </li>
+
               {visibleNavGroups.map((group, idx) => (
                 <div key={idx}>
                   {/* Group label - solo cuando expandido */}
@@ -448,6 +465,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           </div>
         </div>
       )}
+
+      <CompanyForm
+        isOpen={isCompanyFormOpen}
+        onClose={() => setIsCompanyFormOpen(false)}
+        mode="create"
+        onSuccess={() => setIsCompanyFormOpen(false)}
+      />
+
 
       {/* ── Logout Confirm Modal ─────────────────────────────────────────────── */}
       {showLogoutConfirm && (

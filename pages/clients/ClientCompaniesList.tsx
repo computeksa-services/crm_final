@@ -6,7 +6,7 @@ import { ClientCompany } from '../../types';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
-import CompanyFormModal from './CompanyFormModal';
+import CompanyForm from './CompanyForm';
 import { apiFetch } from '../../services/apiClient';
 import {
   useReactTable,
@@ -645,7 +645,7 @@ const ClientCompaniesList: React.FC = () => {
           </div>
       </div>
 
-      <CompanyFormModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} mode={isEditMode ? 'edit' : 'create'} initialData={editingCompany || undefined} onSuccess={handleModalSuccess} />
+      <CompanyForm isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} mode={isEditMode ? 'edit' : 'create'} initialData={editingCompany || undefined} onSuccess={handleModalSuccess} />
       {shareModalOpen && shareCompanyId && (
         <ShareModal
           entity="company"

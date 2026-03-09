@@ -7,7 +7,7 @@ import { ClientCompany, ClientContact } from '../../types';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import CompanyMap from '../clients/CompanyMap';
-import CompanyFormModal from '../clients/CompanyFormModal';
+import CompanyForm from '../clients/CompanyForm';
 import { apiFetch } from '../../services/apiClient';
 import { BrandSpinner } from '../../components/AppLoaders';
 
@@ -738,7 +738,7 @@ const ClientCompanyDetail: React.FC = () => {
       )}
 
       {/* MODAL EDITAR EMPRESA */}
-      <CompanyFormModal 
+      <CompanyForm 
         isOpen={isCompanyModalOpen} 
         onClose={() => setIsCompanyModalOpen(false)} 
         mode="edit" 

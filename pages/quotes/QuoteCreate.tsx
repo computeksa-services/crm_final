@@ -6,7 +6,7 @@ import { Quote, ClientCompany, ClientContact, QuoteStatus, Deal, UserDecision, C
 import { apiFetch } from '../../services/apiClient';
 import Toast from '../../components/Toast';
 import { BrandSpinner } from '../../components/AppLoaders';
-import CompanyFormModal from '../clients/CompanyFormModal';
+import CompanyForm from '../clients/CompanyForm';
 import ContactFormModal from '../clients/ContactFormModal';
 
 const QuoteCreate: React.FC = () => {
@@ -978,7 +978,7 @@ const QuoteCreate: React.FC = () => {
       </div>
 
       {/* Modals para creación inline */}
-      <CompanyFormModal
+      <CompanyForm
         isOpen={isCompanyModalOpen}
         onClose={() => setIsCompanyModalOpen(false)}
         mode="create"

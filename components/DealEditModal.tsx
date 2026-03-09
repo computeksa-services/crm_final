@@ -5,7 +5,7 @@ import { apiFetch } from '../services/apiClient';
 import { GATEWAY_CONFIG } from '../services/gatewayConfig';
 import { Deal, ClientCompany, ClientContact, CustomStatus, DealChannel } from '../types';
 import Toast from './Toast';
-import CompanyFormModal from '../pages/clients/CompanyFormModal';
+import CompanyForm from '../pages/clients/CompanyForm';
 import ContactFormModal from '../pages/clients/ContactFormModal';
 import { createPortal } from 'react-dom';
 import { BrandSpinner } from './AppLoaders';
@@ -592,7 +592,7 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
       </div>
 
       {/* Modales inline */}
-      <CompanyFormModal
+      <CompanyForm
         isOpen={isCompanyModalOpen}
         onClose={() => setIsCompanyModalOpen(false)}
         mode="create"

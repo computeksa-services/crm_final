@@ -523,7 +523,8 @@ const DealDetail: React.FC = () => {
       };
 
       setDeal(mappedDeal);
-      setQuotes(Array.isArray(payload.cotizaciones_activas) ? payload.cotizaciones_activas : []);
+      const quotesRaw = payload.cotizaciones_activas || payload.cotizaciones || payload.quotes || [];
+      setQuotes(Array.isArray(quotesRaw) ? quotesRaw : []);
       const normalizedEmails = Array.isArray(payload.historial_envios)
         ? payload.historial_envios.map((em: any) => ({
             ...em,
@@ -603,7 +604,10 @@ const DealDetail: React.FC = () => {
   const handleStatusChange = (newStatusId: string) => {
     if (!deal || newStatusId === deal.estado_actual?.id) return;
     const newStatus = dealStatuses.find(s => s.id_status === newStatusId);
-    if ((newStatus?.status_category === 'WON' || newStatus?.name?.toUpperCase().includes('GANADO')) && quotes.length > 0) {
+    const isWonStatus = newStatus?.status_category === 'WON' || newStatus?.name?.toUpperCase().includes('GANADO');
+    const singleQuoteId = quotes.length === 1 ? (quotes[0]?.id_cotizacion || quotes[0]?.id || '') : '';
+
+    if (isWonStatus && quotes.length > 1) {
       setSelectWinnerModal({ isOpen: true, pendingStatusId: newStatusId });
       return;
     }
@@ -619,9 +623,21 @@ const DealDetail: React.FC = () => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
         setProcessing(true);
         try {
+          const statusPayload: Record<string, any> = {
+            id_trato: deal.id_trato,
+            id_deal_status: newStatusId,
+            id_tenant: user?.id_tenant,
+            id_user: user?.id_user,
+          };
+
+          // If only one quote exists, mark it as winner automatically when closing as WON.
+          if (isWonStatus && singleQuoteId) {
+            statusPayload.id_cotizacion = singleQuoteId;
+          }
+
           const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/status/deals`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id_trato: deal.id_trato, id_deal_status: newStatusId, id_tenant: user?.id_tenant, id_user: user?.id_user })
+            body: JSON.stringify(statusPayload)
           });
           if (!res.ok) throw new Error();
           setDeal((prev: any) => prev ? {

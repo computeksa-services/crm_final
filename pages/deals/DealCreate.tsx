@@ -7,7 +7,7 @@ import { apiFetch } from '../../services/apiClient';
 import { GATEWAY_CONFIG } from '../../services/gatewayConfig';
 import Toast from '../../components/Toast';
 import { BrandSpinner } from '../../components/AppLoaders';
-import CompanyFormModal from '../clients/CompanyFormModal';
+import CompanyForm from '../clients/CompanyForm';
 import ContactFormModal from '../clients/ContactFormModal';
 import ShareModal from '../../components/ShareModal';
 
@@ -526,7 +526,7 @@ const DealCreate: React.FC = () => {
       </div>
 
       {/* Modals para creación inline */}
-      <CompanyFormModal
+      <CompanyForm
         isOpen={isCompanyModalOpen}
         onClose={() => setIsCompanyModalOpen(false)}
         mode="create"

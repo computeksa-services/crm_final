@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Deal, DealStatus, DealInterest, Quote } from '../../types';
 import { apiFetch } from '../../services/apiClient';
@@ -142,7 +142,7 @@ const InlineBadgeSelector: React.FC<{
         style={{ backgroundColor: current?.color || '#94a3b8', color: '#fff' }}
       >
         {current?.icon && <i className={`${current.icon} text-[8px]`} />}
-        <span>{current?.name || '–'}</span>
+        <span>{current?.name || '-'}</span>
         {current?.notify_client && <i className="fa-solid fa-envelope text-[8px] opacity-70" />}
         {!disabled && <i className="fa-solid fa-chevron-down text-[7px] opacity-60 ml-0.5" />}
       </button>
@@ -170,7 +170,7 @@ const InlineBadgeSelector: React.FC<{
                 <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0" style={{ backgroundColor: current?.color || '#94a3b8' }}>
                   <i className={`${current?.icon || 'fa-solid fa-tag'} text-[8px] text-white`} />
                 </div>
-                <span className="text-[11px] font-medium text-slate-700">{current?.name || '–'}</span>
+                <span className="text-[11px] font-medium text-slate-700">{current?.name || '-'}</span>
                 {current?.notify_client && renderNotifyBadge()}
                 <i className="fa-solid fa-check text-[8px] ml-auto text-slate-400" />
               </div>
@@ -318,7 +318,7 @@ const DealCard: React.FC<{
           )}
         </div>
 
-        {/* INTERÉS seleccionable */}
+        {/* INTERES seleccionable */}
         {(deal.id_interest || deal.interes_nombre) && (
           <div onClick={e => e.stopPropagation()}>
             <InlineBadgeSelector
@@ -407,7 +407,7 @@ const DealsListView: React.FC<DealsListViewProps> = ({
       } else if (activeGroup === 'estado_nombre') {
         key = (deal as any).estado_nombre || deal.estado_actual?.name || 'Sin estado';
       } else if (activeGroup === 'interes_nombre') {
-        key = deal.interes_nombre || deal.interes_actual?.name || 'Sin interés';
+        key = deal.interes_nombre || deal.interes_actual?.name || 'Sin interes';
       }
 
       const current = groups.get(key) || [];
