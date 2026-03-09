@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    
+    /* Select nativo estilo Notion/SaaS */
+    select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+      background-position: right 0.75rem center;
+      background-repeat: no-repeat;
+      background-size: 1.25em 1.25em;
+    }
+  </style>
+</head>
+<body class="bg-[#F5F5F7] min-h-screen font-sans text-zinc-900">
+
+  <!-- Fondo simulado de la App -->
+  <div class="p-8">
+    <h1 class="text-2xl font-bold text-zinc-800">Directorio de Contactos</h1>
+    <p class="text-zinc-500 text-sm mt-2">El modal aparecerá aquí encima...</p>
+  </div>
+
+  <!-- ======================================================= -->
+  <!-- MODAL DE CONTACTO (SaaS / Notion Style)                 -->
+  <!-- ======================================================= -->
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 backdrop-blur-sm p-4 sm:p-6 animate-fade-in">
+    
+    <!-- Contenedor del Modal -->
+    <div class="w-full max-w-[480px] bg-white rounded-xl shadow-2xl border border-zinc-200/60 flex flex-col overflow-hidden">
+      
+      <!-- Header Minimalista -->
+      <div class="px-5 py-3.5 border-b border-zinc-100 flex items-center justify-between">
+        <h2 class="text-[14px] font-semibold text-zinc-900 tracking-tight">
+          Nuevo Contacto
+        </h2>
+        <button class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors">
+          <i class="fa-solid fa-xmark text-[13px]"></i>
+        </button>
+      </div>
+
+      <!-- Formulario -->
+      <form class="flex flex-col">
+        <div class="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+          
+          <!-- Empresa + Botón de Crear -->
+          <div>
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block text-[12px] font-medium text-zinc-700">
+                Empresa <span class="text-red-500">*</span>
+              </label>
+              <!-- Botón Píldora para Crear Nueva Empresa -->
+              <button type="button" class="text-[10px] font-semibold text-zinc-600 bg-zinc-100 hover:bg-zinc-200 px-2 py-0.5 rounded-full transition-colors flex items-center gap-1 border border-zinc-200/50">
+                <i class="fa-solid fa-plus text-[8px]"></i> Nueva
+              </button>
+            </div>
+            <select required class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm cursor-pointer">
+              <option value="" disabled selected>Selecciona una empresa...</option>
+              <option value="1">SIEMENS HEALTHCARE CIA. LTDA.</option>
+              <option value="2">Computeksa S.A.</option>
+              <option value="3">Acme Corporation</option>
+            </select>
+          </div>
+
+          <!-- Nombres y Apellidos (Grid) -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Nombre <span class="text-red-500">*</span>
+              </label>
+              <input type="text" required class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="Ej. Juan">
+            </div>
+            <div>
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Apellido
+              </label>
+              <input type="text" class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="Ej. Pérez">
+            </div>
+          </div>
+
+          <!-- Cargo / Posición -->
+          <div>
+            <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+              Cargo o Posición
+            </label>
+            <input type="text" class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="Ej. Gerente de TI, CTO...">
+          </div>
+
+          <!-- Contacto: Email y Teléfono (Grid) -->
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Email
+              </label>
+              <input type="email" class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="correo@empresa.com">
+            </div>
+            <div>
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Teléfono
+              </label>
+              <input type="tel" class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="+593 99 999 9999">
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer / Acciones -->
+        <div class="px-5 py-4 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-2">
+          <button type="button" class="h-8 px-4 bg-white border border-zinc-200 text-zinc-600 rounded-md text-[12px] font-medium hover:bg-zinc-50 hover:text-zinc-900 transition-colors shadow-sm">
+            Cancelar
+          </button>
+          <button type="submit" class="h-8 px-4 bg-zinc-900 text-white rounded-md text-[12px] font-medium hover:bg-zinc-800 transition-colors shadow-sm flex items-center gap-1.5">
+            <i class="fa-solid fa-check text-[10px]"></i> Crear Contacto
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+</body>
+</html>

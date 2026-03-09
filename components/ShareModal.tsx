@@ -14,6 +14,8 @@ interface ShareModalProps {
   isOpen: boolean;
   onClose: () => void;
   onShared?: () => void;
+  localOnly?: boolean;
+  onLocalApply?: (permissions: Record<string, PermissionLevel>) => void;
   currentCollaborators?: Array<{ id_user: string; name: string; permission_level: string; avatar?: string; rol_user?: string; is_owner?: boolean }>; // colaboradores actuales
 }
 
@@ -25,6 +27,8 @@ const ShareModal: React.FC<ShareModalProps> = ({
   isOpen, 
   onClose, 
   onShared, 
+  localOnly = false,
+  onLocalApply,
   currentCollaborators = []
 }) => {
   const { user } = useAuth();
@@ -127,6 +131,13 @@ const ShareModal: React.FC<ShareModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user?.id_tenant) return;
+
+    if (localOnly) {
+      onLocalApply && onLocalApply(collaboratorPermissions);
+      onClose();
+      return;
+    }
+
     setSubmitting(true);
 
     try {
@@ -232,6 +243,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
   });
 
   const hasChanges = hasPermissionChanges;
+  const canSubmit = localOnly ? !loading : hasChanges;
 
   if (!isOpen) return null;
 
@@ -240,7 +252,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
       <div className="bg-white dark:bg-slate-500 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-400 bg-white dark:bg-slate-500 flex justify-between items-start gap-3">
           <div className="flex items-start gap-3 min-w-0">
-            <span className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center flex-shrink-0">
+            <span className="w-8 h-8 rounded-full bg-zinc-50 text-zinc-600 flex items-center justify-center flex-shrink-0">
               <i className="fa-solid fa-share-nodes text-sm"></i>
             </span>
             <div className="min-w-0">
@@ -264,7 +276,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
             {Object.keys(collaboratorPermissions).length > 0 && (
               <div>
                 <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                  <i className="fa-solid fa-users text-indigo-600"></i>
+                  <i className="fa-solid fa-users text-zinc-600"></i>
                   Asignaciones
                 </h3>
                 {/* VISTA DESKTOP - TABLA */}
@@ -435,8 +447,8 @@ const ShareModal: React.FC<ShareModalProps> = ({
             </button>
             <button
               type="submit"
-              disabled={submitting || loading || !hasChanges}
-              className="px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              disabled={submitting || loading || !canSubmit}
+              className="px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg bg-zinc-900 text-white font-bold text-sm hover:bg-zinc-800 shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {submitting ? (
                 <BrandSpinner size="xs" />

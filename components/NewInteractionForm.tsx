@@ -581,7 +581,7 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
     <form ref={formRef} onSubmit={handleSubmit}>
 
       {/* ══ MAIN FORM — never changes layout ══════════════════════════════ */}
-      <div className="px-5 py-4 space-y-4">
+      <div className="px-3 py-3 sm:px-5 sm:py-4 space-y-3 sm:space-y-4">
 
           {/* Editor estilo Activity Wall */}
           <div className="relative border border-zinc-200 rounded-lg shadow-sm focus-within:border-zinc-400 focus-within:ring-1 focus-within:ring-zinc-400 transition-all overflow-hidden bg-white">
@@ -600,17 +600,17 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              className="w-full text-[13px] p-3 text-zinc-800 bg-transparent border-0 focus:ring-0 resize-none h-16 outline-none placeholder:text-zinc-400"
+              className="w-full text-[12px] sm:text-[13px] p-2.5 sm:p-3 text-zinc-800 bg-transparent border-0 focus:ring-0 resize-none h-14 sm:h-16 outline-none placeholder:text-zinc-400"
               placeholder="Escribe una nota interna o registra una actividad..."
             />
-            <div className={`flex items-center justify-between px-3 py-2 border-t border-zinc-100 transition-colors duration-200 ${isScheduling ? 'bg-white' : 'bg-zinc-50/50'}`}>
-              <div className="relative flex-1 min-w-0 pr-2 min-h-[32px]">
+            <div className={`flex items-center justify-between px-2 py-1.5 sm:px-3 sm:py-2 border-t border-zinc-100 transition-colors duration-200 ${isScheduling ? 'bg-white' : 'bg-zinc-50/50'}`}>
+              <div className="relative flex-1 min-w-0 pr-1.5 sm:pr-2 min-h-[30px] sm:min-h-[32px]">
                 <div className={`flex items-center gap-1 overflow-x-auto scrollbar-hide transition-all duration-200 ease-out ${isScheduling && isChannelLocked ? 'pointer-events-none opacity-0 -translate-x-3 absolute inset-0' : 'opacity-100 translate-x-0 relative'}`}>
                   <button
                     type="button"
                     title="Nota"
                     onClick={() => setSelectedType('NOTE')}
-                    className={`w-7 h-7 flex items-center justify-center rounded transition-colors text-[12px] ${selectedType === 'NOTE' ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700'}`}
+                    className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded transition-colors text-[11px] sm:text-[12px] ${selectedType === 'NOTE' ? 'bg-zinc-900 text-white shadow-sm' : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700'}`}
                   >
                     <i className="fa-solid fa-file-lines" />
                   </button>
@@ -622,7 +622,7 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
                         type="button"
                         title={c.name}
                         onClick={() => setSelectedType(prev => prev === c.id_channel ? 'NOTE' : c.id_channel)}
-                        className={`w-7 h-7 flex items-center justify-center rounded transition-colors text-[12px] ${isActive ? 'shadow-sm' : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700'}`}
+                        className={`w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center rounded transition-colors text-[11px] sm:text-[12px] ${isActive ? 'shadow-sm' : 'text-zinc-400 hover:bg-zinc-200 hover:text-zinc-700'}`}
                         style={isActive
                           ? { backgroundColor: `${c.color || '#64748b'}1A`, color: c.color || '#64748b' }
                           : undefined}
@@ -635,11 +635,12 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
                     type="button"
                     onClick={activateNextAction}
                     disabled={!canStartNextAction}
-                    className="ml-1 inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold rounded border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-800 hover:bg-zinc-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="ml-0.5 sm:ml-1 inline-flex items-center gap-1 px-1.5 sm:px-2 py-1 text-[10px] sm:text-[11px] font-semibold rounded border border-zinc-200 bg-white text-zinc-600 hover:text-zinc-800 hover:bg-zinc-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     title={!canStartNextAction ? 'Escribe la actividad y selecciona un canal para continuar' : 'Configurar siguiente acción'}
                   >
-                    Next action
-                    <i className="fa-solid fa-arrow-right text-[10px]" />
+                    <i className="fa-regular fa-calendar-plus text-[11px] sm:hidden" />
+                    <span className="hidden sm:inline">Next action</span>
+                    <i className="fa-solid fa-arrow-right text-[10px] hidden sm:inline" />
                   </button>
                 </div>
 
@@ -647,11 +648,11 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
                   <button
                     type="button"
                     onClick={() => nextDateInputRef.current?.showPicker?.()}
-                    className="shrink-0 px-2.5 py-1.5 text-[12px] text-zinc-700 bg-zinc-50 hover:bg-zinc-100 border-r border-zinc-200 inline-flex items-center gap-1.5"
+                    className="shrink-0 px-2 sm:px-2.5 py-1.5 text-[11px] sm:text-[12px] text-zinc-700 bg-zinc-50 hover:bg-zinc-100 border-r border-zinc-200 inline-flex items-center gap-1 sm:gap-1.5"
                     title="Seleccionar fecha"
                   >
                     <i className="fa-regular fa-calendar text-zinc-400 text-[12px]"></i>
-                    <span className="font-medium">{formatNextActionDateLabel(nextContactDate)}</span>
+                    <span className="font-medium max-w-[84px] sm:max-w-none truncate">{formatNextActionDateLabel(nextContactDate)}</span>
                   </button>
                   <input
                     ref={nextDateInputRef}
@@ -666,13 +667,13 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
                     value={nextActionDesc}
                     onChange={(e) => setNextActionDesc(e.target.value)}
                     placeholder="Siguiente acción..."
-                    className="flex-1 min-w-0 px-2.5 py-1.5 text-[12px] text-zinc-700 bg-white focus:outline-none placeholder:text-zinc-400"
+                    className="flex-1 min-w-0 px-2 sm:px-2.5 py-1.5 text-[11px] sm:text-[12px] text-zinc-700 bg-white focus:outline-none placeholder:text-zinc-400"
                   />
 
                   <button
                     type="button"
                     onClick={() => setIsScheduling(false)}
-                    className="w-8 h-8 flex items-center justify-center border-l border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
+                    className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center border-l border-zinc-200 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700"
                     title="Cancelar next action"
                   >
                     <i className="fa-solid fa-arrow-left text-[11px]"></i>
@@ -689,7 +690,7 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
                       }
                       setAddToCalendar(v => !v);
                     }}
-                    className={`relative w-8 h-8 flex items-center justify-center border-l border-zinc-200 transition-all duration-200 ${hasCalendarEventConfigured ? 'bg-emerald-50 text-emerald-600 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.28)] ring-1 ring-emerald-200/70' : addToCalendar ? 'bg-zinc-100 text-zinc-700' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700'} ${!canSyncCalendar ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    className={`hidden sm:flex relative w-7 h-7 sm:w-8 sm:h-8 items-center justify-center border-l border-zinc-200 transition-all duration-200 ${hasCalendarEventConfigured ? 'bg-emerald-50 text-emerald-600 shadow-[inset_0_0_0_1px_rgba(16,185,129,0.28)] ring-1 ring-emerald-200/70' : addToCalendar ? 'bg-zinc-100 text-zinc-700' : 'text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700'} ${!canSyncCalendar ? 'opacity-40 cursor-not-allowed' : ''}`}
                     title={canSyncCalendar ? 'Agregar calendario' : 'Integración de calendario no activa'}
                   >
                     <CalendarPlus size={14} />
@@ -700,13 +701,13 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
                 </div>
               </div>
               {!isScheduling && (
-                <div className="flex items-center gap-2 ml-3 shrink-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 ml-2 sm:ml-3 shrink-0">
                   {hasActivityDraft && (
                     <button
                       type="button"
                       onClick={clearDraft}
                       disabled={isSubmitting}
-                      className="w-7 h-7 inline-flex items-center justify-center rounded border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-6 h-6 sm:w-7 sm:h-7 inline-flex items-center justify-center rounded border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Borrar borrador"
                     >
                       <i className="fa-regular fa-trash-can text-[12px]"></i>
@@ -715,9 +716,16 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
                   <button
                     type="submit"
                     disabled={isRegisterDisabled}
-                    className="px-3 py-1.5 bg-zinc-900 text-white text-[12px] font-medium rounded hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-60 flex items-center gap-1.5"
+                    className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 py-1.5 bg-zinc-900 text-white text-[11px] sm:text-[12px] font-medium rounded hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-60 flex items-center justify-center gap-1.5"
                   >
-                    {isSubmitting ? <BrandSpinner size="xs" /> : 'Registrar'}
+                    {isSubmitting ? (
+                      <BrandSpinner size="xs" />
+                    ) : (
+                      <>
+                        <i className="fa-regular fa-floppy-disk text-[12px] sm:hidden"></i>
+                        <span className="hidden sm:inline">Registrar</span>
+                      </>
+                    )}
                   </button>
                 </div>
               )}
@@ -725,12 +733,33 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
 
             {/* Acciones de programación dentro del mismo contenedor */}
             {isScheduling && (
-              <div className="border-t border-zinc-100 bg-zinc-50/50 px-3 py-2 flex items-center justify-end gap-2">
+              <div className="border-t border-zinc-100 bg-zinc-50/50 px-2 py-1.5 sm:px-3 sm:py-2 flex items-center justify-end gap-1.5 sm:gap-2">
+                {canSyncCalendar && (
+                  <button
+                    type="button"
+                    disabled={!canSyncCalendar}
+                    onClick={() => {
+                      if (!canSyncCalendar) return;
+                      if (useEventModalCapture) {
+                        setIsEventCaptureOpen(true);
+                        return;
+                      }
+                      setAddToCalendar(v => !v);
+                    }}
+                    className={`sm:hidden relative w-7 h-7 inline-flex items-center justify-center rounded border border-zinc-200 transition-all duration-200 ${hasCalendarEventConfigured ? 'bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200/70' : addToCalendar ? 'bg-zinc-100 text-zinc-700' : 'bg-white text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700'} ${!canSyncCalendar ? 'opacity-40 cursor-not-allowed' : ''}`}
+                    title={canSyncCalendar ? 'Agregar calendario' : 'Integración de calendario no activa'}
+                  >
+                    <CalendarPlus size={13} />
+                    {hasCalendarEventConfigured && (
+                      <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    )}
+                  </button>
+                )}
                 {onCancel && (
                   <button
                     type="button"
                     onClick={onCancel}
-                    className="text-[12px] font-medium text-zinc-500 hover:text-zinc-800 transition-colors"
+                    className="text-[11px] sm:text-[12px] font-medium text-zinc-500 hover:text-zinc-800 transition-colors"
                   >
                     Cancelar
                   </button>
@@ -740,7 +769,7 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
                     type="button"
                     onClick={clearDraft}
                     disabled={isSubmitting}
-                    className="w-8 h-8 inline-flex items-center justify-center rounded border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-7 h-7 sm:w-8 sm:h-8 inline-flex items-center justify-center rounded border border-zinc-200 bg-white text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Borrar borrador"
                   >
                     <i className="fa-regular fa-trash-can text-[12px]"></i>
@@ -749,9 +778,16 @@ const NewInteractionForm: React.FC<NewInteractionFormProps> = ({
                 <button
                   type="submit"
                   disabled={isRegisterDisabled}
-                  className="px-3 py-1.5 bg-zinc-900 text-white text-[12px] font-medium rounded hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-60 flex items-center gap-1.5"
+                  className="w-8 h-8 sm:w-auto sm:h-auto sm:px-3 py-1.5 bg-zinc-900 text-white text-[11px] sm:text-[12px] font-medium rounded hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-60 flex items-center justify-center gap-1.5"
                 >
-                  {isSubmitting ? <BrandSpinner size="xs" /> : 'Registrar'}
+                  {isSubmitting ? (
+                    <BrandSpinner size="xs" />
+                  ) : (
+                    <>
+                      <i className="fa-regular fa-floppy-disk text-[12px] sm:hidden"></i>
+                      <span className="hidden sm:inline">Registrar</span>
+                    </>
+                  )}
                 </button>
               </div>
             )}

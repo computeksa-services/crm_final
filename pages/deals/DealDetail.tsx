@@ -1045,19 +1045,10 @@ const DealDetail: React.FC = () => {
           </div>
 
           <div>
-            <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-4 flex items-center justify-between">
-              <span>Equipo</span>
-              {canEdit && (
-                <button
-                  onClick={() => { setIsShareOpen(true); refreshShareCollaborators(); }}
-                  className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-zinc-700 bg-white border border-zinc-300 rounded-md px-2.5 py-1 shadow-sm hover:bg-zinc-50 hover:border-zinc-400 hover:text-zinc-900 transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-300"
-                >
-                  <i className="fa-solid fa-user-gear text-[10px]" />
-                  Gestionar
-                </button>
-              )}
+            <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+              Equipo asignado
             </h3>
-            <div className="space-y-2">
+            <div className="space-y-2.5 text-left">
               {(deal.collaborators || [])
                 .slice()
                 .sort((a: any, b: any) => {
@@ -1073,28 +1064,48 @@ const DealDetail: React.FC = () => {
                 .map((collab: any) => {
                   const level = String(collab.permission_level || '').toUpperCase();
                   const isOwner = level === 'OWNER' || collab.is_owner;
-                  const badgeType: 'OWNER' | 'EDIT' | 'VIEW' = isOwner ? 'OWNER' : level === 'EDIT' ? 'EDIT' : 'VIEW';
+                  const roleText = isOwner ? 'Propietario' : level === 'EDIT' ? 'Principal' : 'Secundario';
+                  const isCurrentUser = String(collab.id_user || '') === String(user?.id_user || '');
 
                   return (
-                    <div key={collab.id_user} className="flex items-center group py-1.5 px-2 -mx-2 hover:bg-zinc-50 rounded-md transition-colors">
-                      <div className="flex items-center gap-2 min-w-0">
+                    <div
+                      key={collab.id_user}
+                      className="flex items-center justify-start gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 shadow-sm"
+                    >
+                      <div className="shrink-0 w-9 h-9 flex items-center justify-center self-center">
                         <Avatar
                           src={collab.avatar || null}
                           name={collab.name || collab.id_user || 'Usuario'}
                           size="sm"
-                          badge={{ type: badgeType }}
-                          badgeInset
                           enableHoverZoom
-                          hoverScale={1.1}
-                          showTooltip
-                          tooltipRole={isOwner ? 'Creador' : level === 'EDIT' ? 'Principal' : 'Secundario'}
-                          tooltipPosition="bottom"
+                          hoverScale={1.05}
                         />
-                        <span className="text-[13px] font-medium text-zinc-900 truncate">{collab.name || collab.id_user}</span>
+                      </div>
+                      <div className="min-w-0 flex-1 text-left">
+                        <p className="text-[13px] font-semibold text-zinc-900 truncate">
+                          {collab.name || collab.id_user}
+                          {isCurrentUser && <span className="text-zinc-400 font-medium"> (Tú)</span>}
+                        </p>
+                        <p className="text-[12px] text-zinc-500 leading-tight">{roleText}</p>
                       </div>
                     </div>
                   );
                 })}
+
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => { setIsShareOpen(true); refreshShareCollaborators(); }}
+                  className="w-full mt-1 rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-3 py-3 text-left hover:bg-zinc-100 transition-colors"
+                >
+                  <span className="inline-flex items-center justify-start gap-2 text-zinc-500">
+                    <span className="w-6 h-6 rounded-full bg-zinc-200/70 text-zinc-600 inline-flex items-center justify-center">
+                      <i className="fa-solid fa-plus text-[11px]"></i>
+                    </span>
+                    <span className="text-[13px] font-medium">Asignar colaborador...</span>
+                  </span>
+                </button>
+              )}
             </div>
           </div>
         </aside>
@@ -1201,11 +1212,11 @@ const DealDetail: React.FC = () => {
                               <p className="text-[13px] text-zinc-600">{item.description}</p>
                             </div>
                           ) : (
-                            <div className={`bg-white border rounded-xl p-4 shadow-sm transition-shadow relative ${isWhatsapp ? 'border-emerald-200' : 'border-zinc-200'}`}>
+                            <div className={`bg-white border rounded-xl p-3 sm:p-4 shadow-sm transition-shadow relative ${isWhatsapp ? 'border-emerald-200' : 'border-zinc-200'}`}>
                               {isWhatsapp && (
                                 <div className="absolute -top-2.5 -right-2.5 w-6 h-6 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-sm border-2 border-white" title="WhatsApp"><i className="fa-brands fa-whatsapp text-[12px]"></i></div>
                               )}
-                              <div className="flex justify-between items-start gap-3 mb-2">
+                              <div className="flex justify-between items-start gap-2 sm:gap-3 mb-1.5 sm:mb-2">
                                 <p className="text-[13px] font-semibold text-zinc-900 truncate">{item.user_name || 'Usuario'}</p>
                                 <div className="text-right text-[11px] text-zinc-400 font-normal tracking-[0.01em] whitespace-nowrap shrink-0">
                                   <span className="md:hidden">{item.date_fmt || '-'}</span>
@@ -1221,7 +1232,7 @@ const DealDetail: React.FC = () => {
                               {/* TAREA PLANIFICADA O VENCIDA */}
                               {(item.planned_action || item.planned_date) && (
                                 <div
-                                  className={`rounded-lg px-3 py-2.5 mt-3 border ${
+                                  className={`rounded-lg px-2.5 sm:px-3 py-2 sm:py-2.5 mt-2.5 sm:mt-3 border ${
                                     item.is_planned_overdue
                                       ? 'bg-red-50 border-red-100'
                                       : item.is_calendar_scheduled
@@ -1238,49 +1249,49 @@ const DealDetail: React.FC = () => {
                                       || item?.id_event;
 
                                     return (
-                                  <div className="flex items-center justify-between gap-2 mb-1">
-                                    <p
-                                      className={`text-[12px] leading-[1.4] ${
-                                        item.is_planned_overdue
-                                          ? 'text-red-900'
-                                          : item.is_calendar_scheduled
-                                            ? 'text-emerald-900'
-                                            : 'text-blue-900'
-                                      }`}
-                                    >
-                                      {item.planned_action || ''}
-                                    </p>
-                                    {eventId ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => openEventDetail(String(eventId))}
-                                        className={`text-[11px] font-semibold bg-white border px-2 py-0.5 rounded inline-flex items-center justify-center gap-1 whitespace-nowrap hover:brightness-95 transition-colors ${
-                                          item.is_planned_overdue
-                                            ? 'text-red-600 border-red-200'
-                                            : item.is_calendar_scheduled
-                                              ? 'text-emerald-600 border-emerald-200'
-                                              : 'text-blue-600 border-blue-200'
-                                        }`}
-                                        title="Ver detalle del evento"
-                                      >
-                                        <i className={`fa-regular ${item.is_calendar_scheduled ? 'fa-calendar-check' : 'fa-calendar'} text-[10px]`}></i>
-                                        {item.planned_date}
-                                      </button>
-                                    ) : (
-                                      <span
-                                        className={`text-[11px] font-semibold bg-white border px-2 py-0.5 rounded inline-flex items-center justify-center gap-1 whitespace-nowrap ${
-                                          item.is_planned_overdue
-                                            ? 'text-red-600 border-red-200'
-                                            : item.is_calendar_scheduled
-                                              ? 'text-emerald-600 border-emerald-200'
-                                              : 'text-blue-600 border-blue-200'
-                                        }`}
-                                      >
-                                        <i className={`fa-regular ${item.is_calendar_scheduled ? 'fa-calendar-check' : 'fa-calendar'} text-[10px]`}></i>
-                                        {item.planned_date}
-                                      </span>
-                                    )}
-                                  </div>
+                                      <div className="flex items-center justify-between gap-2 mb-0.5 sm:mb-1">
+                                        <p
+                                          className={`text-[12px] leading-[1.35] ${
+                                            item.is_planned_overdue
+                                              ? 'text-red-900'
+                                              : item.is_calendar_scheduled
+                                                ? 'text-emerald-900'
+                                                : 'text-blue-900'
+                                          }`}
+                                        >
+                                          {item.planned_action || ''}
+                                        </p>
+                                        {eventId ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => openEventDetail(String(eventId))}
+                                            className={`text-[11px] font-semibold bg-white border px-2 py-0.5 rounded inline-flex items-center justify-center gap-1 whitespace-nowrap hover:brightness-95 transition-colors ${
+                                              item.is_planned_overdue
+                                                ? 'text-red-600 border-red-200'
+                                                : item.is_calendar_scheduled
+                                                  ? 'text-emerald-600 border-emerald-200'
+                                                  : 'text-blue-600 border-blue-200'
+                                            }`}
+                                            title="Ver detalle del evento"
+                                          >
+                                            <i className={`fa-regular ${item.is_calendar_scheduled ? 'fa-calendar-check' : 'fa-calendar'} text-[10px]`}></i>
+                                            {item.planned_date}
+                                          </button>
+                                        ) : (
+                                          <span
+                                            className={`text-[11px] font-semibold bg-white border px-2 py-0.5 rounded inline-flex items-center justify-center gap-1 whitespace-nowrap ${
+                                              item.is_planned_overdue
+                                                ? 'text-red-600 border-red-200'
+                                                : item.is_calendar_scheduled
+                                                  ? 'text-emerald-600 border-emerald-200'
+                                                  : 'text-blue-600 border-blue-200'
+                                            }`}
+                                          >
+                                            <i className={`fa-regular ${item.is_calendar_scheduled ? 'fa-calendar-check' : 'fa-calendar'} text-[10px]`}></i>
+                                            {item.planned_date}
+                                          </span>
+                                        )}
+                                      </div>
                                     );
                                   })()}
                                 </div>

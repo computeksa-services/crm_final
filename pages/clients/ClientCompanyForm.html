@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    
+    /* Personalización del scrollbar para que sea sutil */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #e4e4e7; border-radius: 10px; }
+    
+    /* Select nativo estilo SaaS */
+    select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+      background-position: right 0.75rem center;
+      background-repeat: no-repeat;
+      background-size: 1.25em 1.25em;
+    }
+  </style>
+</head>
+<body class="bg-[#F5F5F7] min-h-screen font-sans text-zinc-900">
+
+  <!-- Fondo simulado de la App -->
+  <div class="p-8">
+    <h1 class="text-2xl font-bold text-zinc-800">Directorio de Empresas</h1>
+    <p class="text-zinc-500 text-sm mt-2">El modal aparecerá aquí encima...</p>
+  </div>
+
+  <!-- ======================================================= -->
+  <!-- MODAL DE EMPRESA (SaaS / Notion Style)                  -->
+  <!-- ======================================================= -->
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 backdrop-blur-sm p-4 sm:p-6 animate-fade-in">
+    
+    <!-- Contenedor del Modal (Más ancho: 720px por la cantidad de campos) -->
+    <div class="w-full max-w-[720px] bg-white rounded-xl shadow-2xl border border-zinc-200/60 flex flex-col overflow-hidden">
+      
+      <!-- Header Minimalista -->
+      <div class="px-6 py-4 border-b border-zinc-100 flex items-center justify-between bg-white">
+        <h2 class="text-[14px] font-semibold text-zinc-900 tracking-tight flex items-center gap-2">
+          Nueva Empresa
+        </h2>
+        <button class="w-7 h-7 flex items-center justify-center rounded-md hover:bg-zinc-100 text-zinc-400 hover:text-zinc-700 transition-colors">
+          <i class="fa-solid fa-xmark text-[13px]"></i>
+        </button>
+      </div>
+
+      <!-- Formulario -->
+      <form class="flex flex-col">
+        <!-- Contenedor scrolleable -->
+        <div class="p-6 space-y-5 max-h-[75vh] overflow-y-auto custom-scrollbar">
+          
+          <!-- Fila 1: Nombres -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Nombre de la Empresa <span class="text-red-500">*</span>
+              </label>
+              <input type="text" required class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="Ej. Computeksa S.A.">
+            </div>
+            <div>
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Razón Social
+              </label>
+              <input type="text" class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="Nombre legal completo">
+            </div>
+          </div>
+
+          <!-- Fila 2: Clasificación e Identificación -->
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="md:col-span-1">
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Tipo <span class="text-red-500">*</span>
+              </label>
+              <select required class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm cursor-pointer">
+                <option value="" disabled selected>Elegir...</option>
+                <option value="1">Cliente Final</option>
+                <option value="2">Distribuidor</option>
+              </select>
+            </div>
+            <div class="md:col-span-1">
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Tamaño
+              </label>
+              <select class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm cursor-pointer">
+                <option value="" disabled selected>Elegir...</option>
+                <option value="1">1 - 10 emp.</option>
+                <option value="2">11 - 50 emp.</option>
+              </select>
+            </div>
+            <div class="md:col-span-1">
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Tipo ID
+              </label>
+              <select class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm cursor-pointer">
+                <option value="" disabled selected>Elegir...</option>
+                <option value="RUC">RUC</option>
+                <option value="CI">Cédula</option>
+              </select>
+            </div>
+            <div class="md:col-span-1">
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Número ID
+              </label>
+              <input type="text" class="w-full text-[13px] font-mono text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="17900...001">
+            </div>
+          </div>
+
+          <!-- Fila 3: Ubicación y Teléfono -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                País <span class="text-red-500">*</span>
+              </label>
+              <select required class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm cursor-pointer">
+                <option value="EC" selected>Ecuador</option>
+                <option value="CO">Colombia</option>
+                <option value="PE">Perú</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Ciudad
+              </label>
+              <input type="text" class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="Ej. Quito">
+            </div>
+            <div>
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Teléfono
+              </label>
+              <input type="tel" class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="02 2...">
+            </div>
+          </div>
+
+          <!-- Fila 4: Dirección y Email -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="md:col-span-2">
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Dirección Física
+              </label>
+              <input type="text" class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="Av. Principal y Calle Secundaria...">
+            </div>
+            <div class="md:col-span-1">
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Email Corporativo
+              </label>
+              <input type="email" class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="info@empresa.com">
+            </div>
+          </div>
+
+          <!-- Fila 5: Website y Etiquetas (Componente Complejo) -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="md:col-span-1">
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Sitio Web
+              </label>
+              <input type="text" class="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400" placeholder="www.empresa.com">
+            </div>
+            
+            <div class="md:col-span-2 relative">
+              <label class="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                Etiquetas / Segmentación
+              </label>
+              <!-- Input Falso para Multi-Select -->
+              <div class="w-full min-h-[38px] bg-white border border-zinc-300 rounded-md px-2 py-1.5 flex flex-wrap gap-1.5 items-center shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 cursor-text">
+                
+                <!-- Etiquetas Seleccionadas -->
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200/60">
+                  Cliente VIP
+                  <button type="button" class="hover:text-blue-900"><i class="fa-solid fa-xmark"></i></button>
+                </span>
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                  Sector Salud
+                  <button type="button" class="hover:text-emerald-900"><i class="fa-solid fa-xmark"></i></button>
+                </span>
+
+                <!-- Input Real de Búsqueda -->
+                <input type="text" class="flex-1 bg-transparent border-none outline-none text-[13px] min-w-[120px] text-zinc-900 placeholder:text-zinc-400" placeholder="Buscar o crear...">
+              </div>
+
+              <!-- Dropdown de Etiquetas (Simulado hacia arriba) -->
+              <!-- En React, controla la visibilidad de este div con el estado 'labelMenuOpen' -->
+              <div class="absolute bottom-full left-0 right-0 mb-1 bg-white border border-zinc-200 rounded-lg shadow-xl z-50 py-1 max-h-48 overflow-y-auto">
+                <button type="button" class="w-full text-left px-3 py-1.5 hover:bg-zinc-50 flex items-center gap-2 text-[12px] font-medium text-zinc-700 transition-colors">
+                  <span class="w-2 h-2 rounded-full bg-purple-500"></span> Sector Público
+                </button>
+                <button type="button" class="w-full text-left px-3 py-1.5 hover:bg-zinc-50 flex items-center gap-2 text-[12px] font-medium text-zinc-700 transition-colors">
+                  <span class="w-2 h-2 rounded-full bg-amber-500"></span> Proveedor
+                </button>
+                
+                <div class="border-t border-zinc-100 mt-1 pt-1">
+                  <!-- Botón dinámico para crear etiqueta -->
+                  <button type="button" class="w-full text-left px-3 py-1.5 bg-blue-50/50 hover:bg-blue-50 text-blue-600 text-[12px] font-medium flex items-center gap-1.5 transition-colors">
+                    <i class="fa-solid fa-plus text-[10px]"></i> Crear etiqueta "Tecnología"
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer / Acciones -->
+        <div class="px-6 py-4 border-t border-zinc-100 bg-zinc-50/50 flex justify-end gap-2">
+          <button type="button" class="h-8 px-4 bg-white border border-zinc-200 text-zinc-600 rounded-md text-[12px] font-medium hover:bg-zinc-50 hover:text-zinc-900 transition-colors shadow-sm">
+            Cancelar
+          </button>
+          <button type="submit" class="h-8 px-4 bg-zinc-900 text-white rounded-md text-[12px] font-medium hover:bg-zinc-800 transition-colors shadow-sm flex items-center gap-1.5">
+            <i class="fa-solid fa-check text-[10px]"></i> Crear Empresa
+          </button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+</body>
+</html>
