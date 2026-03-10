@@ -104,7 +104,8 @@ const CampaignWizard: React.FC = () => {
           '{{email}}': 'Email',
           '{{company_name}}': 'Empresa',
           '{{position}}': 'Cargo',
-          '{{city}}': 'Ciudad'
+                    '{{city}}': 'Ciudad',
+                    '{{unsubscribe}}': 'Unsubscribe'
         },
         exec: (editor: any, _this: any, { control }: any) => {
            const key = control.args?.[0];

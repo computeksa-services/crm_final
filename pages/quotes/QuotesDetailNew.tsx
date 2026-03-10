@@ -16,11 +16,14 @@ interface Attachment {
   url: string;
   tipo: string;
   fecha: string;
+  drive_id?: string;
 }
 
 interface SentLog {
   id_sent: string;
-  sent_at_fmt: string;
+  sent_at_fmt?: string;
+  sent_at_human?: string;
+  sent_time?: string;
   sent_by_name?: string;
   sent_to: string;
   sent_cc?: string;
@@ -44,17 +47,30 @@ type QuoteExtended = Omit<
 > & {
   url_cotizacion_manual?: string | null;
   archivos_adjuntos?: Attachment[];
+  raw_attachments?: Attachment[];
   sent_history?: SentLog[];
   versions?: Array<{
-    id_version: string;
+    id_version?: string;
     file_url: string;
-    created_at: string;
-    created_at_fmt: string;
-    version_number: number;
-    creator_name: string;
-    sent_at: string | null;
-    is_approved: boolean;
+    created_at?: string;
+    created_at_raw?: string;
+    created_at_fmt?: string;
+    created_at_human?: string;
+    created_time?: string;
+    version_number?: number;
+    creator_name?: string;
+    sent_at?: string | null;
+    is_approved?: boolean;
   }>;
+  timeline_info?: {
+    days_inactive?: number;
+    inactive_time_text?: string;
+    created_at_human?: string;
+    updated_at_human?: string;
+    fecha_emision_human?: string;
+    created_time?: string;
+    updated_time?: string;
+  };
   collaborators?: Array<{
     id_user: string;
     name: string;
@@ -103,6 +119,7 @@ type QuoteExtended = Omit<
     value?: string;
     status_name?: string;
     status_color?: string;
+    status_icon?: string;
   };
 };
 
@@ -385,12 +402,15 @@ const QuotesDetailNew: React.FC = () => {
   const [itemQtyDrafts, setItemQtyDrafts] = useState<Record<string, string>>({});
   const [syncingItemIds, setSyncingItemIds] = useState<Record<string, boolean>>({});
   const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
+  const [deletingAttachmentUrl, setDeletingAttachmentUrl] = useState<string | null>(null);
 
   // --- MODALS ---
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [shareCollaborators, setShareCollaborators] = useState<any[]>([]);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const manualFileInputRef = useRef<HTMLInputElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
   const actionsMenuRef = useRef<HTMLDivElement>(null);
   const [confirmState, setConfirmState] = useState({
     isOpen: false,
@@ -415,10 +435,14 @@ const QuotesDetailNew: React.FC = () => {
   }, []);
 
   // --- FETCH DATA ---
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (options?: { silent?: boolean }) => {
     if (!id || !user?.id_tenant || !user?.id_user) return;
 
-    setLoading(true);
+    const isSilent = Boolean(options?.silent);
+
+    if (!isSilent) {
+      setLoading(true);
+    }
     try {
       const response = await apiFetch(
         `${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/detail?id_cotizacion=${id}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`
@@ -434,7 +458,16 @@ const QuotesDetailNew: React.FC = () => {
       const q: any = Array.isArray(parsed) ? parsed[0] : parsed;
 
       if (q) {
-        setQuote(q as QuoteExtended);
+        const normalizedAttachments = Array.isArray(q.archivos_adjuntos)
+          ? q.archivos_adjuntos
+          : Array.isArray(q.raw_attachments)
+            ? q.raw_attachments
+            : [];
+
+        setQuote({
+          ...q,
+          archivos_adjuntos: normalizedAttachments,
+        } as QuoteExtended);
         setItems(Array.isArray(q.items) ? q.items.map(normalizeQuoteItem) : []);
         if (Array.isArray(q.available_statuses)) {
           setQuoteStatuses(q.available_statuses);
@@ -444,7 +477,9 @@ const QuotesDetailNew: React.FC = () => {
       console.error('Error fetching quote:', e);
       setToast({ message: 'Error al cargar los datos.', type: 'error' });
     } finally {
-      setLoading(false);
+      if (!isSilent) {
+        setLoading(false);
+      }
     }
   }, [id, user]);
 
@@ -601,6 +636,71 @@ const QuotesDetailNew: React.FC = () => {
           setToast({ message: 'Error al enviar.', type: 'error' });
         } finally {
           setSendingQuoteId(null);
+        }
+      },
+    });
+  };
+
+  const handleUploadAttachments = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !quote || !user) return;
+
+    setUploadingAttachments(true);
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+      formData.append('files', files[i]);
+    }
+    formData.append('id_cotizacion', quote.id_cotizacion);
+    formData.append('id_tenant', user.id_tenant);
+    formData.append('id_user', user.id_user);
+
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/attachments/add`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error();
+      setToast({ message: 'Adjuntos subidos correctamente.', type: 'success' });
+      await fetchData({ silent: true });
+    } catch {
+      setToast({ message: 'Error al subir archivos.', type: 'error' });
+    } finally {
+      setUploadingAttachments(false);
+      if (attachmentInputRef.current) attachmentInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteAttachment = (fileUrl: string) => {
+    if (!quote || !user) return;
+
+    setConfirmState({
+      isOpen: true,
+      title: 'Eliminar Adjunto',
+      message: '¿Seguro que deseas eliminar este archivo?',
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        setDeletingAttachmentUrl(fileUrl);
+
+        try {
+          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/attachments/remove`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id_cotizacion: quote.id_cotizacion,
+              id_tenant: user.id_tenant,
+              id_user: user.id_user,
+              url_a_eliminar: fileUrl,
+            }),
+          });
+
+          if (!res.ok) throw new Error();
+          setToast({ message: 'Adjunto eliminado.', type: 'success' });
+          await fetchData({ silent: true });
+        } catch {
+          setToast({ message: 'Error al eliminar adjunto.', type: 'error' });
+        } finally {
+          setDeletingAttachmentUrl(null);
         }
       },
     });
@@ -978,13 +1078,37 @@ const QuotesDetailNew: React.FC = () => {
   const [totalInteger, totalDecimals = '00'] = totalFormatted.split('.');
   const isManualQuoteActive = quote ? Boolean(quote.url_cotizacion_manual) : false;
   const versionsList = quote && quote.versions ? (quote.versions as Array<{
-    id_version: string;
+    id_version?: string;
     file_url: string;
-    created_at: string;
+    created_at?: string;
+    created_at_raw?: string;
     created_at_fmt?: string;
-    version_number: number;
-    creator_name: string;
+    created_at_human?: string;
+    created_time?: string;
+    version_number?: number;
+    creator_name?: string;
   }>) : [];
+  const documentsCount = versionsList.length + (isManualQuoteActive ? 1 : 0) + (quote?.archivos_adjuntos?.length || 0);
+  const historyCount = quote?.sent_history?.length || 0;
+  const quoteCreatedDate =
+    quote?.timeline_info?.fecha_emision_human ||
+    quote?.timeline_info?.created_at_human ||
+    (quote as any)?.created_at_fmt ||
+    (quote as any)?.created_at ||
+    '-';
+  const quoteCreatedLabel = [quoteCreatedDate, quote?.timeline_info?.created_time].filter(Boolean).join(' • ');
+  const quoteUpdatedLabel = [
+    quote?.timeline_info?.updated_at_human,
+    quote?.timeline_info?.updated_time,
+  ].filter(Boolean).join(' • ') || (quote as any)?.updated_at_fmt || (quote as any)?.updated_at || '-';
+  const dealStatusIconRaw = String(quote?.deal_detail?.status_icon || '').trim();
+  const dealStatusIconClass = !dealStatusIconRaw
+    ? 'fa-solid fa-circle'
+    : dealStatusIconRaw.includes('fa-') && dealStatusIconRaw.includes(' ')
+      ? dealStatusIconRaw
+      : dealStatusIconRaw.startsWith('fa-')
+        ? `fa-solid ${dealStatusIconRaw}`
+        : `fa-solid fa-${dealStatusIconRaw}`;
   const productCategories = useMemo(() => {
     const set = new Set<string>();
     availableProducts.forEach((p: any) => {
@@ -1129,7 +1253,7 @@ Valor                </div>
           </div>
 
           {/* PIPELINE DE ESTADOS */}
-          <div className="mt-8 overflow-x-auto scrollbar-hide">
+          <div className="mt-5 hidden md:block overflow-x-auto overflow-y-visible scrollbar-hide">
             <div className="flex min-w-[700px] gap-2.5">
               {quotePipelineCats.map((cat, idx) => {
                 const isActive = idx === quoteCatIndex;
@@ -1145,15 +1269,10 @@ Valor                </div>
                         backgroundColor: isCompleted ? completedColor : isActive ? activeColor : '#e4e4e7',
                       }}
                     >
-                      {isActive && (
-                        <div
-                          className="absolute inset-0 rounded-full"
-                          style={{ backgroundColor: activeColor }}
-                        ></div>
-                      )}
+                      {isActive && <div className="absolute inset-0 rounded-full" style={{ backgroundColor: activeColor }}></div>}
                     </div>
                     <div className={`flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide ${isActive ? 'font-bold text-zinc-900' : 'text-zinc-400'}`}>
-                      {isCompleted && <i className="fa-solid fa-circle-check text-zinc-500"></i>}
+                      {isCompleted && <i className="fa-solid fa-circle-check text-zinc-400"></i>}
                       {!isCompleted && !isActive && <i className="fa-regular fa-circle text-[10px]"></i>}
                       {isActive && (
                         <span
@@ -1173,21 +1292,90 @@ Valor                </div>
               })}
             </div>
           </div>
+
+          <div className="mt-4 md:hidden">
+            <div className="space-y-3">
+              {quotePipelineCats.map((cat, idx) => {
+                const isActive = idx === quoteCatIndex;
+                const isCompleted = idx < quoteCatIndex && currentQuoteCat !== 'REJECTED';
+                const activeColor = QUOTE_CATEGORY_COLORS[currentQuoteCat] || '#0ea5e9';
+
+                return (
+                  <div key={`mobile-${cat}`} className="relative pl-6">
+                    <span className={`absolute left-[6px] top-0 h-full w-[1px] ${idx === quotePipelineCats.length - 1 ? 'hidden' : 'block'}`} style={{ backgroundColor: '#e4e4e7' }}></span>
+                    <div className="relative flex items-center gap-2">
+                      <span
+                        className="absolute -left-6 mt-0.5 flex h-3 w-3 items-center justify-center rounded-full border"
+                        style={{
+                          backgroundColor: isActive ? activeColor : isCompleted ? '#d4d4d8' : '#ffffff',
+                          borderColor: isActive ? activeColor : isCompleted ? '#d4d4d8' : '#d4d4d8',
+                        }}
+                      ></span>
+                      <span className={`text-[12px] font-semibold uppercase tracking-wide ${isActive ? 'font-bold' : isCompleted ? 'text-zinc-700' : 'text-zinc-400'}`} style={isActive ? { color: activeColor } : undefined}>
+                        {quotePipelineLabel(cat)}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </header>
 
       {/* MAIN CONTENT GRID */}
-      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 mt-5 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
         {/* LEFT PANEL - DETALLES */}
         <aside className="lg:col-span-4 space-y-8">
+          {(quote.id_trato || quote.deal_detail?.id || quote.deal_detail?.name) && (
+            <button
+              type="button"
+              onClick={() => {
+                const relatedDealId = quote.id_trato || quote.deal_detail?.id;
+                if (relatedDealId) navigate(`/app/deals/${relatedDealId}`);
+              }}
+              className="w-full text-left block bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 rounded-xl p-3.5 shadow-sm relative overflow-hidden group hover:border-emerald-400 hover:shadow-md transition-all"
+            >
+              <i className="fa-solid fa-handshake absolute -right-3 -bottom-3 text-emerald-100/50 text-5xl transform -rotate-12 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6"></i>
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-1.5 gap-1.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-6 h-6 rounded bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm border border-emerald-200 shrink-0">
+                      <i className="fa-solid fa-handshake text-[10px]"></i>
+                    </div>
+                    <p className="text-[14px] font-bold text-zinc-900 leading-tight group-hover:text-emerald-700 transition-colors overflow-hidden text-ellipsis [display:-webkit-box] [-webkit-line-clamp:2] [-webkit-box-orient:vertical] break-words">
+                      {quote.deal_detail?.name || 'Trato relacionado'}
+                    </p>
+                  </div>
+                  <span
+                    className="px-1.5 py-0.5 rounded-md text-[8px] font-bold uppercase tracking-wide border flex items-center gap-1 shrink-0"
+                    style={{
+                      color: quote.deal_detail?.status_color || '#047857',
+                      borderColor: `${quote.deal_detail?.status_color || '#10b981'}40`,
+                      backgroundColor: `${quote.deal_detail?.status_color || '#10b981'}15`,
+                    }}
+                  >
+                    <i className={`${dealStatusIconClass} text-[8px]`}></i>
+                    {quote.deal_detail?.status_name || 'Sin estado'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between pt-1 mt-1">
+                  <div>
+                    <span className="text-[9px] font-semibold text-emerald-700 uppercase tracking-wider block mb-0.5">Valor del Trato</span>
+                    <span className="text-[15px] font-bold text-emerald-900">{formatCurrency(quote.deal_detail?.value || 0)}</span>
+                  </div>
+                  <div className="w-5 h-5 rounded-full bg-white border border-emerald-200 flex items-center justify-center text-emerald-500 shadow-sm transform translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all pointer-events-none">
+                    <i className="fa-solid fa-arrow-right text-[9px]"></i>
+                  </div>
+                </div>
+              </div>
+            </button>
+          )}
+
           <div>
-            <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-4 flex items-center justify-between">
-              <span>Detalles de Cotización</span>
-              {canEdit && (
-                <button className="hover:text-zinc-600">
-                  <i className="fa-solid fa-pen text-[10px]"></i>
-                </button>
-              )}
+            <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-4">
+              Detalles de Cotización
             </h3>
 
             <div className="space-y-1">
@@ -1195,7 +1383,7 @@ Valor                </div>
               <div className="relative group/popover">
                 <div className="flex items-center py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 cursor-pointer transition-colors">
                   <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2">
-                    <i className="fa-solid fa-building w-4 text-center"></i> Empresa
+                    <i className="fa-regular fa-building w-4 text-center"></i> Empresa
                   </div>
                   <div className="w-2/3 text-zinc-900 text-[13px] font-medium truncate">
                     {quote.company_detail?.name || '—'}
@@ -1245,7 +1433,7 @@ Valor                </div>
               <div className="relative group/popover">
                 <div className="flex items-center py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 cursor-pointer transition-colors">
                   <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2">
-                    <i className="fa-solid fa-user w-4 text-center"></i> Contacto
+                    <i className="fa-regular fa-user w-4 text-center"></i> Contacto
                   </div>
                   <div className="w-2/3 text-zinc-900 text-[13px] font-medium truncate">
                     {quote.contact_detail?.full_name || '—'}
@@ -1280,12 +1468,30 @@ Valor                </div>
               </div>
 
               {/* CREADOR */}
-              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 cursor-pointer transition-colors pt-2 border-t border-zinc-100 mt-2">
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 cursor-pointer transition-colors">
                 <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2">
                   <i className="fa-solid fa-user-check w-4 text-center"></i> Creador
                 </div>
                 <div className="w-2/3 flex items-center gap-2 text-zinc-900 text-[13px] font-medium">
                   {quote.owner_detail?.name || '—'}
+                </div>
+              </div>
+
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors mt-2">
+                <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2">
+                  <i className="fa-regular fa-calendar-plus w-4 text-center"></i> Creación
+                </div>
+                <div className="w-2/3 text-zinc-700 text-[13px]">
+                  <span className="text-zinc-500">{quoteCreatedLabel}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 transition-colors">
+                <div className="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2">
+                  <i className="fa-regular fa-calendar-check w-4 text-center"></i> Updated
+                </div>
+                <div className="w-2/3 text-zinc-700 text-[13px]">
+                  <span className="text-zinc-500">{quoteUpdatedLabel}</span>
                 </div>
               </div>
             </div>
@@ -1326,13 +1532,8 @@ Valor                </div>
 
           {/* MENSAJE AL CLIENTE */}
           <div>
-            <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center justify-between">
-              <span>Mensaje en Correo</span>
-              {canEdit && (
-                <button className="hover:text-zinc-600">
-                  <i className="fa-solid fa-pen text-[10px]"></i>
-                </button>
-              )}
+            <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+              Mensaje en Correo
             </h3>
               <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3 relative overflow-hidden group">
               <div className="absolute left-0 top-0 w-1 h-full bg-blue-400"></div>
@@ -1357,19 +1558,19 @@ Valor                </div>
             </button>
             <button
               onClick={() => setActiveTab('documentos')}
-              className={`pb-3 text-[13px] font-medium text-zinc-500 border-b-2 border-transparent hover:text-zinc-800 transition-colors whitespace-nowrap ${
+              className={`pb-3 text-[13px] font-medium text-zinc-500 border-b-2 border-transparent hover:text-zinc-800 transition-colors whitespace-nowrap flex items-center gap-2 ${
                 activeTab === 'documentos' ? 'text-zinc-900 border-zinc-900 font-semibold' : ''
               }`}
             >
-              Documentos & Archivos
+              Documentos <span className="bg-zinc-100 text-zinc-600 px-1.5 rounded-full text-[10px] font-semibold">{documentsCount}</span>
             </button>
             <button
               onClick={() => setActiveTab('historial')}
-              className={`pb-3 text-[13px] font-medium text-zinc-500 border-b-2 border-transparent hover:text-zinc-800 transition-colors whitespace-nowrap ${
+              className={`pb-3 text-[13px] font-medium text-zinc-500 border-b-2 border-transparent hover:text-zinc-800 transition-colors whitespace-nowrap flex items-center gap-2 ${
                 activeTab === 'historial' ? 'text-zinc-900 border-zinc-900 font-semibold' : ''
               }`}
             >
-              Historial de Envíos
+              Historial de Envíos <span className="bg-zinc-100 text-zinc-600 px-1.5 rounded-full text-[10px] font-semibold">{historyCount}</span>
             </button>
           </div>
 
@@ -1546,15 +1747,17 @@ Valor                </div>
                 {versionsList.length > 0 ? (
                   <div className="space-y-2">
                     {versionsList.map((version, idx) => (
-                      <div key={version.id_version} className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
+                      <div key={version.id_version || `${version.file_url || 'version'}-${idx}`} className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
                         <div className="flex items-center justify-between p-4 hover:bg-zinc-50 transition-colors group">
                           <div className="flex items-center gap-4">
                             <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center shadow-sm border border-red-200">
                               <i className="fa-solid fa-file-pdf text-red-500 text-2xl"></i>
                             </div>
                             <div>
-                              <p className="text-[13px] font-semibold text-zinc-900">v{version.version_number} - {version.created_at_fmt || new Date(version.created_at).toLocaleString()}</p>
-                              <p className="text-[11px] text-zinc-500">Por {version.creator_name}</p>
+                              <p className="text-[13px] font-semibold text-zinc-900">
+                                v{version.version_number || idx + 1} - {[version.created_at_human, version.created_time].filter(Boolean).join(' • ') || version.created_at_fmt || version.created_at_raw || (version.created_at ? new Date(version.created_at).toLocaleString() : '-')}
+                              </p>
+                              <p className="text-[11px] text-zinc-500">Por {version.creator_name || 'Usuario'}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
@@ -1569,10 +1772,10 @@ Valor                </div>
                             {canEdit && (
                               <button
                                 onClick={() => handleSendQuote(version.id_version)}
-                                disabled={sendingQuoteId === version.id_version || processing}
+                                disabled={sendingQuoteId === (version.id_version || 'manual') || processing}
                                 className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
                               >
-                                {sendingQuoteId === version.id_version ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
+                                {sendingQuoteId === (version.id_version || 'manual') ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
                               </button>
                             )}
                           </div>
@@ -1592,16 +1795,93 @@ Valor                </div>
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <h3 className="text-[14px] font-semibold text-zinc-900">Archivos Adjuntos Extra</h3>
-                    <p className="text-[11px] text-zinc-500 mt-0.5">Sube especificaciones, manuales u órdenes de compra (Máx 3).</p>
+                    <p className="text-[11px] text-zinc-500 mt-0.5">Sube especificaciones, manuales u órdenes de compra.</p>
                   </div>
+                  {canEdit && (quote.archivos_adjuntos?.length || 0) > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (uploadingAttachments || processing) return;
+                        attachmentInputRef.current?.click();
+                      }}
+                      disabled={uploadingAttachments || processing}
+                      className="text-[11px] bg-white border border-zinc-200 hover:border-zinc-400 text-zinc-600 px-3 py-1.5 rounded-lg transition-colors font-semibold flex items-center disabled:opacity-50"
+                    >
+                      {uploadingAttachments ? <BrandSpinner size="xs" className="mr-1.5" /> : <i className="fa-solid fa-plus mr-1.5"></i>}
+                      Agregar más
+                    </button>
+                  )}
                 </div>
 
-                <div className="border-2 border-dashed border-zinc-300 bg-zinc-50/50 rounded-xl p-8 text-center hover:bg-zinc-50 transition-colors hover:border-zinc-400 cursor-pointer">
-                  <div className="w-10 h-10 bg-white rounded-full border border-zinc-200 shadow-sm flex items-center justify-center mx-auto mb-3 text-zinc-400 group-hover:text-blue-500 transition-colors">
-                    <i className="fa-solid fa-paperclip"></i>
+                <input
+                  type="file"
+                  multiple
+                  ref={attachmentInputRef}
+                  className="hidden"
+                  onChange={handleUploadAttachments}
+                />
+
+                {(!quote.archivos_adjuntos || quote.archivos_adjuntos.length === 0) ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!canEdit || uploadingAttachments || processing) return;
+                      attachmentInputRef.current?.click();
+                    }}
+                    disabled={!canEdit || uploadingAttachments || processing}
+                    className="w-full border-2 border-dashed border-zinc-300 bg-zinc-50/50 rounded-xl p-8 text-center hover:bg-zinc-50 transition-colors hover:border-zinc-400 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <div className="w-10 h-10 bg-white rounded-full border border-zinc-200 shadow-sm flex items-center justify-center mx-auto mb-3 text-zinc-400">
+                      {uploadingAttachments ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-paperclip"></i>}
+                    </div>
+                    <p className="text-[13px] font-semibold text-zinc-700">
+                      {uploadingAttachments ? 'Subiendo adjuntos...' : canEdit ? 'Haz clic para subir archivos adjuntos' : 'Sin permisos para subir adjuntos'}
+                    </p>
+                  </button>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {quote.archivos_adjuntos.map((file, idx) => (
+                      <div key={`${file.url}-${idx}`} className="group rounded-xl border border-zinc-200 bg-white p-3 hover:border-zinc-300 transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex items-start gap-2.5">
+                            <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 shrink-0">
+                              <i className="fa-solid fa-file"></i>
+                            </span>
+                            <div className="min-w-0">
+                              <p className="text-[12px] font-semibold text-zinc-800 truncate">{file.nombre || 'Archivo adjunto'}</p>
+                              <p className="text-[10px] text-zinc-500 truncate">
+                                {file.fecha ? new Date(file.fecha).toLocaleDateString() : 'Reciente'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <a
+                              href={file.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="h-7 w-7 rounded-md text-zinc-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center"
+                              title="Abrir archivo"
+                            >
+                              <i className="fa-solid fa-eye text-[11px]"></i>
+                            </a>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAttachment(file.url)}
+                                disabled={deletingAttachmentUrl === file.url}
+                                className="h-7 w-7 rounded-md text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center disabled:opacity-60"
+                                title="Eliminar archivo"
+                              >
+                                {deletingAttachmentUrl === file.url ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-trash text-[11px]"></i>}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-[13px] font-semibold text-zinc-700">Haz clic para subir archivos adjuntos</p>
-                </div>
+                )}
               </div>
             </div>
           )}
@@ -1629,7 +1909,7 @@ Valor                </div>
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 gap-2 border-b border-zinc-100 pb-3">
                           <div>
                             <p className="text-[13px] font-semibold text-zinc-900">{log.subject || 'Comunicación'}</p>
-                            <p className="text-[11px] text-zinc-500 mt-0.5">{log.sent_at_fmt}</p>
+                            <p className="text-[11px] text-zinc-500 mt-0.5">{[log.sent_at_human, log.sent_time].filter(Boolean).join(' • ') || log.sent_at_fmt || '-'}</p>
                           </div>
                           <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap ${
                             log.method === 'EMAIL'

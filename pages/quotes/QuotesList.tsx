@@ -167,11 +167,11 @@ const renderGroupCell = (row: any, label: string, statuses: QuoteStatus[] = []) 
   }
 
   return (
-    <div className="flex items-center gap-2.5">
+    <div className="flex items-center gap-3 py-0.5">
       <i className={`fa-solid fa-chevron-right text-slate-400 text-[10px] transition-transform duration-150 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
 
       {color ? (
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold text-white" style={{ backgroundColor: color }}>
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold text-white" style={{ backgroundColor: color }}>
           {icon && <i className={`${icon} text-[9px]`} />}
           {label || 'Sin asignar'}
         </span>
@@ -179,9 +179,9 @@ const renderGroupCell = (row: any, label: string, statuses: QuoteStatus[] = []) 
         <span className="font-semibold text-slate-700 text-xs">{label || 'Sin asignar'}</span>
       )}
 
-      <span className="text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-full">{row.subRows.length}</span>
+      <span className="text-[10px] text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">{row.subRows.length}</span>
 
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-800">
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-800">
         {subtotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
       </span>
     </div>
@@ -239,7 +239,7 @@ const InlineBadgeSelector: React.FC<{
                 ref={buttonRef}
                 type="button"
                 onClick={(e) => { e.stopPropagation(); if (!disabled) setIsOpen(!isOpen); }}
-              className={`inline-flex items-center justify-between gap-1.5 px-2 py-0.5 min-h-[20px] rounded text-[10px] font-semibold transition-all whitespace-nowrap ${disabled ? 'cursor-default' : 'hover:opacity-90 cursor-pointer'}`}
+              className={`inline-flex items-center justify-between gap-2 px-2.5 py-1 min-h-[24px] rounded-md text-[11px] font-semibold transition-all whitespace-nowrap ${disabled ? 'cursor-default' : 'hover:opacity-90 cursor-pointer'}`}
               style={{ backgroundColor: current?.color || '#94a3b8', color: '#ffffff' }}
             >
               <span className="inline-flex items-center gap-1.5 min-w-0">
@@ -269,7 +269,7 @@ const InlineBadgeSelector: React.FC<{
                                 <button
                                     key={item.id}
                                     onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
-                        className="w-full px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors"
+                          className="w-full px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors"
                                 >
                         <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: item.color || '#94a3b8' }}>
                           <i className={`${item.icon || 'fa-solid fa-tag'} text-[8px] text-white`}></i>
@@ -281,7 +281,7 @@ const InlineBadgeSelector: React.FC<{
                     )}
                     
                     {/* Estado actual (deshabilitado) */}
-                <div className="bg-slate-50 border-y border-slate-100 px-3 py-1.5">
+                <div className="bg-slate-50 border-y border-slate-100 px-3 py-2">
                   <div className="w-full flex items-center gap-2 opacity-50 cursor-not-allowed">
                     <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: current?.color || '#94a3b8' }}>
                       <i className={`${current?.icon || 'fa-solid fa-tag'} text-[8px] text-white`}></i>
@@ -298,7 +298,7 @@ const InlineBadgeSelector: React.FC<{
                                 <button
                                     key={item.id}
                                     onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
-                        className="w-full px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors"
+                          className="w-full px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors"
                                 >
                         <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: item.color || '#94a3b8' }}>
                           <i className={`${item.icon || 'fa-solid fa-tag'} text-[8px] text-white`}></i>
@@ -534,14 +534,14 @@ const ToolbarGroupDropdown: React.FC<{
   };
 
   return (
-    <div className="border-b border-slate-200 px-3 py-2 flex items-center gap-2 bg-white">
+    <div className="border-b border-slate-200 px-4 py-3 flex items-center gap-3 bg-white">
       <div className="relative flex-1 min-w-0">
         <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none" />
         <input
           value={globalFilter}
           onChange={(e) => onGlobalFilterChange(e.target.value)}
           placeholder="Buscar cotizacion…"
-          className="w-full pl-8 pr-8 py-2 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm outline-none focus:ring-1 focus:ring-slate-300 focus:bg-white placeholder:text-slate-300 text-slate-700 transition-all"
+          className="w-full pl-8 pr-8 py-2.5 sm:py-2 bg-slate-50 border border-slate-200 rounded-md text-sm outline-none focus:ring-1 focus:ring-slate-300 focus:bg-white placeholder:text-slate-300 text-slate-700 transition-all"
         />
         {globalFilter && (
           <button
@@ -564,7 +564,7 @@ const ToolbarGroupDropdown: React.FC<{
         <button
           onClick={() => setOpen((o) => !o)}
           className={`
-            relative flex items-center gap-1.5 px-2.5 py-2 sm:py-1.5 rounded-md border text-sm sm:text-xs font-medium transition-all whitespace-nowrap
+            relative flex items-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-md border text-sm sm:text-xs font-medium transition-all whitespace-nowrap
             ${open ? 'bg-slate-50 border-slate-300 text-slate-700' : 'text-slate-500 border-slate-200 hover:bg-slate-50'}
           `}
         >
@@ -672,7 +672,7 @@ const ToolbarGroupDropdown: React.FC<{
 
       <button
         onClick={onNew}
-        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 sm:py-1.5 bg-slate-800 text-white rounded-md text-sm sm:text-xs font-medium hover:bg-slate-700 transition-colors whitespace-nowrap"
+        className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 sm:py-2 bg-slate-800 text-white rounded-md text-sm sm:text-xs font-medium hover:bg-slate-700 transition-colors whitespace-nowrap"
       >
         <i className="fa-solid fa-plus text-[11px] sm:text-[10px]" />
         <span className="inline">Nueva cotizacion</span>
@@ -1054,7 +1054,7 @@ const QuotesList: React.FC = () => {
                 return null;
             }
             return (
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-2.5" onClick={(e) => e.stopPropagation()}>
             <QuoteActionsMenu
             quote={row.original}
             user={user}
@@ -1134,7 +1134,7 @@ const QuotesList: React.FC = () => {
         const companyName = getValue() as string;
         const contactName = row.original.contact_full_name || 'Sin contacto';
         return (
-            <div className="flex flex-col gap-0" style={{ maxWidth: 180 }}>
+          <div className="flex flex-col gap-0.5 py-0.5" style={{ maxWidth: 180 }}>
                 <span className="text-[13px] leading-tight text-slate-800 font-semibold truncate" title={companyName}>{companyName}</span>
                 {contactName && <span className="text-[10px] leading-tight text-slate-600 truncate" title={contactName}>{contactName}</span>}
             </div>
@@ -1148,7 +1148,7 @@ const QuotesList: React.FC = () => {
         enableColumnFilter: false,
         // CORRECCIÓN: Retornar null si es grupo
         cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50">
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50">
             <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800 whitespace-nowrap">
               {formatCurrency(getValue() as string)}
             </span>
@@ -1276,7 +1276,7 @@ const QuotesList: React.FC = () => {
       cell: ({ row }) => {
         if (row.getIsGrouped()) return null;
         const days = row.original.days_inactive;
-        const inactiveText = row.original.inactive_time_text;
+        const inactiveText = (row.original as any).inactive_time_text;
         if (days === undefined || days === null) {
           return <span className="text-xs text-slate-300">{inactiveText || '-'}</span>;
         }
@@ -1368,7 +1368,7 @@ const QuotesList: React.FC = () => {
                   const isDate = header.column.id === 'fecha_emision' || header.column.id === 'created_at';
                   
                   return (
-                    <th key={header.id} style={{ width: header.getSize() }} className="border-b border-slate-200 bg-white px-4 py-2 text-left relative">
+                    <th key={header.id} style={{ width: header.getSize() }} className="border-b border-slate-200 bg-white px-4 py-3 text-left relative">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 cursor-pointer select-none" onClick={header.column.getToggleSortingHandler()}>
                           <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">{flexRender(header.column.columnDef.header, header.getContext())}</span>
@@ -1377,7 +1377,7 @@ const QuotesList: React.FC = () => {
                         {header.column.id !== 'actions' && header.column.columnDef.enableColumnFilter !== false && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setActiveFilterMenu(activeFilterMenu === header.column.id ? null : header.column.id); }}
-                            className={`w-5 h-5 rounded flex items-center justify-center transition-all ${isFiltered ? 'text-slate-500 bg-slate-200' : 'text-slate-300 hover:text-slate-500'}`}
+                            className={`w-6 h-6 rounded-md flex items-center justify-center transition-all ${isFiltered ? 'text-slate-500 bg-slate-200' : 'text-slate-300 hover:text-slate-500'}`}
                           >
                             <i className={`fa-solid ${isDate ? 'fa-calendar-days' : 'fa-filter'} text-[9px]`}></i>
                           </button>
@@ -1388,7 +1388,7 @@ const QuotesList: React.FC = () => {
                         <div 
                           ref={filterMenuRef} 
                           onMouseLeave={() => setActiveFilterMenu(null)}
-                          className="absolute top-full left-0 mt-1 w-60 bg-white shadow-lg rounded-lg border border-slate-200 z-50 py-2"
+                          className="absolute top-full left-0 mt-1.5 w-60 bg-white shadow-lg rounded-lg border border-slate-200 z-50 py-2.5"
                         >
                           {isDate ? (
                             <div className="px-3 space-y-2">
@@ -1453,7 +1453,7 @@ const QuotesList: React.FC = () => {
           <tbody className="bg-white">
             {grouping.length > 0 && (
               <tr className="bg-slate-50 border-b border-slate-100">
-                <td colSpan={columns.length} className="px-4 py-0.5">
+                <td colSpan={columns.length} className="px-4 py-1.5">
                   <div className="flex items-center gap-1.5 text-[10px]">
                     <button onClick={() => setExpanded(true)} className="text-slate-400 hover:text-slate-700 transition-colors leading-none">expandir</button>
                     <span className="text-slate-300">/</span>
@@ -1494,7 +1494,7 @@ const QuotesList: React.FC = () => {
                         `}
                     >
                         {isGrouped ? (
-                            <td colSpan={row.getVisibleCells().length} className="px-4 py-1">
+                            <td colSpan={row.getVisibleCells().length} className="px-4 py-2">
                                 {(() => {
                                   const groupedCell = row.getVisibleCells().find(
                                     (cell) => cell.column.id === row.groupingColumnId
@@ -1508,7 +1508,7 @@ const QuotesList: React.FC = () => {
                             </td>
                         ) : (
                             row.getVisibleCells().map(cell => (
-                                <td key={cell.id} className="px-4 py-1 align-middle">
+                            <td key={cell.id} className="px-4 py-2.5 align-middle">
                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                 </td>
                             ))
@@ -1520,21 +1520,21 @@ const QuotesList: React.FC = () => {
         </table>
       </div>
 
-      <div className="border-t border-slate-100 px-3 py-2.5 bg-white">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 text-xs text-slate-600 min-w-0">
+      <div className="border-t border-slate-100 px-4 py-3 bg-white">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center justify-between sm:justify-start gap-3 sm:gap-4 text-xs text-slate-600 min-w-0">
               <span className="font-semibold shrink-0">{totalRows} registros</span>
-              <div className="inline-flex items-center justify-between sm:justify-start gap-1.5 px-2 py-1 rounded-md bg-slate-50 border border-slate-200 min-w-0 w-[190px] sm:w-auto">
+              <div className="inline-flex items-center justify-between sm:justify-start gap-2 px-2.5 py-1.5 rounded-md bg-slate-50 border border-slate-200 min-w-0 w-[190px] sm:w-auto">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</span>
                 <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800">
                   {totalFiltered.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                 </span>
               </div>
             </div>
-            <div className="flex items-center justify-end sm:justify-start gap-1 text-xs text-slate-600 shrink-0">
-              <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 transition-colors"><i className="fa-solid fa-chevron-left text-[10px]"></i></button>
-              <span className="px-2 py-0.5 text-[11px] font-semibold text-slate-700">{table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1}</span>
-              <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 transition-colors"><i className="fa-solid fa-chevron-right text-[10px]"></i></button>
+            <div className="flex items-center justify-end sm:justify-start gap-1.5 text-xs text-slate-600 shrink-0">
+              <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-slate-100 disabled:opacity-30 transition-colors"><i className="fa-solid fa-chevron-left text-[10px]"></i></button>
+              <span className="px-2.5 py-1 text-[11px] font-semibold text-slate-700">{table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1}</span>
+              <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-slate-100 disabled:opacity-30 transition-colors"><i className="fa-solid fa-chevron-right text-[10px]"></i></button>
             </div>
           </div>
       </div>

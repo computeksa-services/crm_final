@@ -201,7 +201,7 @@ const InlineBadgeSelector: React.FC<{
         type="button"
         onClick={(e) => { e.stopPropagation(); if (!disabled) setIsOpen(!isOpen); }}
         className={`
-          inline-flex items-center gap-1.5 px-2 py-0.5 min-h-[20px] rounded text-[10px] font-semibold
+          inline-flex items-center gap-2 px-2.5 py-1 min-h-[24px] rounded-md text-[11px] font-semibold
           transition-all whitespace-nowrap
           ${disabled ? 'cursor-default' : 'hover:opacity-90 cursor-pointer'}
         `}
@@ -235,7 +235,7 @@ const InlineBadgeSelector: React.FC<{
             {itemsAbove.map(item => (
               <button key={item.id}
                 onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
-                className="w-full px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors">
+                className="w-full px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors">
                 <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: item.color || '#94a3b8' }}>
                   <i className={`${item.icon || 'fa-solid fa-tag'} text-[8px] text-white`} />
                 </div>
@@ -243,7 +243,7 @@ const InlineBadgeSelector: React.FC<{
                 {item.notify_client && renderNotifyBadge()}
               </button>
             ))}
-            <div className="bg-slate-50 border-y border-slate-100 px-3 py-1.5">
+            <div className="bg-slate-50 border-y border-slate-100 px-3 py-2">
               <div className="flex items-center gap-2 opacity-50 cursor-not-allowed">
                 <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: current?.color || '#94a3b8' }}>
                   <i className={`${current?.icon || 'fa-solid fa-tag'} text-[8px] text-white`} />
@@ -256,7 +256,7 @@ const InlineBadgeSelector: React.FC<{
             {itemsBelow.map(item => (
               <button key={item.id}
                 onClick={(e) => { e.stopPropagation(); onSelect(item.id); setIsOpen(false); }}
-                className="w-full px-3 py-1.5 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors">
+                className="w-full px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors">
                 <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: item.color || '#94a3b8' }}>
                   <i className={`${item.icon || 'fa-solid fa-tag'} text-[8px] text-white`} />
                 </div>
@@ -380,10 +380,10 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
       color = match?.color; icon = match?.icon;
     }
     return (
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-3 py-0.5">
         <i className={`fa-solid fa-chevron-right text-slate-400 text-[10px] transition-transform duration-150 ${row.getIsExpanded() ? 'rotate-90' : ''}`} />
         {color ? (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-semibold text-white"
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold text-white"
             style={{ backgroundColor: color }}>
             {icon && <i className={`${icon} text-[9px]`} />}
             {label || 'Sin asignar'}
@@ -391,8 +391,8 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
         ) : (
           <span className="font-semibold text-slate-700 text-xs">{label || 'Sin asignar'}</span>
         )}
-        <span className="text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-full">{row.subRows.length}</span>
-        <span className="inline-flex items-center px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50">
+        <span className="text-[10px] text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">{row.subRows.length}</span>
+        <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50">
           <MoneyValue amount={subtotal} size="text-xs" />
         </span>
       </div>
@@ -416,7 +416,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
           return null;
         }
         return (
-          <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center gap-2.5" onClick={e => e.stopPropagation()}>
             <DealActionsMenu deal={row.original} user={user} onEdit={onEdit} onShare={onShare} onArchive={onArchive} onDelete={onDelete} anchor="auto-left" />
             <InlineBadgeSelector
               valueId={row.original.id_deal_status || ''}
@@ -466,7 +466,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
         const companyName = getValue() as string;
         const contactName = row.original.contact_full_name || '';
         return (
-          <div className="flex flex-col gap-0">
+          <div className="flex flex-col gap-0.5 py-0.5">
             <span className="text-[13px] leading-tight text-slate-800 font-semibold truncate" style={{ maxWidth: 180 }}>{companyName}</span>
             {contactName && <span className="text-[10px] leading-tight text-slate-600 truncate" style={{ maxWidth: 180 }}>{contactName}</span>}
           </div>
@@ -481,7 +481,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
       cell: ({ getValue, row }) => {
         if (row.getIsGrouped()) return null;
         return (
-          <span className="inline-flex items-center px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50">
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50">
             <MoneyValue amount={parseDealValue(getValue() as Deal['valor_trato'])} size="text-[11px]" />
           </span>
         );
@@ -709,7 +709,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
                   const isDate = ['created_at', 'updated_at'].includes(header.column.id);
                   return (
                     <th key={header.id} style={{ width: header.getSize() }}
-                      className="border-b border-slate-200 bg-white px-4 py-2 text-left relative">
+                      className="border-b border-slate-200 bg-white px-4 py-3 text-left relative">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 cursor-pointer select-none"
                           onClick={header.column.getToggleSortingHandler()}>
@@ -721,7 +721,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
                         {header.column.id !== 'actions' && header.column.columnDef.enableColumnFilter !== false && (
                           <button
                             onClick={(e) => { e.stopPropagation(); setActiveFilterMenu(activeFilterMenu === header.column.id ? null : header.column.id); }}
-                            className={`w-5 h-5 rounded flex items-center justify-center transition-all ${isFiltered ? 'text-slate-500 bg-slate-200' : 'text-slate-300 hover:text-slate-500'}`}>
+                            className={`w-6 h-6 rounded-md flex items-center justify-center transition-all ${isFiltered ? 'text-slate-500 bg-slate-200' : 'text-slate-300 hover:text-slate-500'}`}>
                             <i className={`fa-solid ${isDate ? 'fa-calendar-days' : 'fa-filter'} text-[9px]`} />
                           </button>
                         )}
@@ -729,7 +729,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
 
                       {activeFilterMenu === header.column.id && (
                         <div ref={filterMenuRef} onMouseLeave={() => setActiveFilterMenu(null)}
-                          className="absolute top-full left-0 mt-1 w-60 bg-white shadow-lg rounded-lg border border-slate-200 z-50 py-2">
+                          className="absolute top-full left-0 mt-1.5 w-60 bg-white shadow-lg rounded-lg border border-slate-200 z-50 py-2.5">
                           {isDate ? (
                             <div className="px-3 space-y-2">
                               <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Rango de fechas</p>
@@ -789,7 +789,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
           <tbody>
             {grouping.length > 0 && onExpandAll && onCollapseAll && (
               <tr className="bg-slate-50 border-b border-slate-100">
-                <td colSpan={columns.length} className="px-4 py-0.5">
+                <td colSpan={columns.length} className="px-4 py-1.5">
                   <div className="flex items-center gap-1.5 text-[10px]">
                     <button onClick={onExpandAll}
                       className="text-slate-400 hover:text-slate-700 transition-colors leading-none">
@@ -826,7 +826,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
                     ${isGrouped ? 'bg-slate-50 hover:bg-slate-100' : 'bg-white hover:bg-blue-50/70'}`}
                 >
                   {isGrouped ? (
-                    <td colSpan={row.getVisibleCells().length} className="px-4 py-1">
+                    <td colSpan={row.getVisibleCells().length} className="px-4 py-2">
                       {(() => {
                         const groupedCell = row.getVisibleCells().find(cell => cell.column.id === row.groupingColumnId);
                         const label = groupedCell ? String(groupedCell.getValue() ?? '') : '';
@@ -835,7 +835,7 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
                     </td>
                   ) : (
                     row.getVisibleCells().map(cell => (
-                      <td key={cell.id} className="px-4 py-1 align-middle">
+                      <td key={cell.id} className="px-4 py-2.5 align-middle">
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
                     ))
@@ -848,27 +848,27 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
       </div>
 
       {/* FOOTER */}
-      <div className="border-t border-slate-100 px-3 py-2.5 bg-white">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-3 text-xs text-slate-600 min-w-0">
+      <div className="border-t border-slate-100 px-4 py-3 bg-white">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between sm:justify-start gap-3 sm:gap-4 text-xs text-slate-600 min-w-0">
             <span className="font-semibold shrink-0">{deals.length} registros</span>
-            <span className="inline-flex items-center justify-between sm:justify-start gap-1.5 px-2 py-1 rounded-md bg-slate-50 border border-slate-200 min-w-0 w-[190px] sm:w-auto">
+            <span className="inline-flex items-center justify-between sm:justify-start gap-2 px-2.5 py-1.5 rounded-md bg-slate-50 border border-slate-200 min-w-0 w-[190px] sm:w-auto">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</span>
               <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800">
                 {totalFiltered.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
               </span>
             </span>
           </div>
-          <div className="flex items-center justify-end sm:justify-start gap-1 text-xs text-slate-600 shrink-0">
+          <div className="flex items-center justify-end sm:justify-start gap-1.5 text-xs text-slate-600 shrink-0">
           <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 transition-colors">
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-slate-100 disabled:opacity-30 transition-colors">
             <i className="fa-solid fa-chevron-left text-[10px]" />
           </button>
-          <span className="px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+          <span className="px-2.5 py-1 text-[11px] font-semibold text-slate-700">
             {table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1}
           </span>
           <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-slate-100 disabled:opacity-30 transition-colors">
+            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-slate-100 disabled:opacity-30 transition-colors">
             <i className="fa-solid fa-chevron-right text-[10px]" />
           </button>
           </div>

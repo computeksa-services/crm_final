@@ -831,7 +831,7 @@ const DealDetail: React.FC = () => {
         <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-2xl md:text-3xl font-bold text-zinc-900 tracking-tight truncate">{deal.nombre_trato}</h1>
                 <span
                   className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border shadow-sm"
@@ -883,7 +883,7 @@ const DealDetail: React.FC = () => {
                 const isCompleted = idx < catIndex && currentCat !== 'LOST'; // Si está perdido, no marca verde los siguientes
 
                 const activeColor = SYSTEM_CATEGORY_COLORS[currentCat] || '#10b981';
-                const completedColor = SYSTEM_CATEGORY_COLORS[cat] || '#6b7280';
+                const completedColor = '#d4d4d8';
 
                 return (
                   <div key={cat} className={`flex-${isActive ? '[1.5]' : '1'} group cursor-pointer`}>
@@ -918,7 +918,7 @@ const DealDetail: React.FC = () => {
                 const isActive = idx === catIndex;
                 const isCompleted = idx < catIndex && currentCat !== 'LOST';
                 const activeColor = SYSTEM_CATEGORY_COLORS[currentCat] || '#10b981';
-                const completedColor = SYSTEM_CATEGORY_COLORS[cat] || '#6b7280';
+                const completedColor = '#d4d4d8';
 
                 return (
                   <div key={`mobile-${cat}`} className="relative pl-6">
@@ -1136,7 +1136,7 @@ const DealDetail: React.FC = () => {
           <div className="flex gap-6 border-b border-zinc-200 mb-6 overflow-x-auto scrollbar-hide">
             <button onClick={() => setActiveTab('activity')} className={`pb-3 text-[13px] whitespace-nowrap transition-colors border-b-2 ${activeTab === 'activity' ? 'font-semibold text-zinc-900 border-zinc-900' : 'font-medium text-zinc-500 border-transparent hover:text-zinc-800'}`}>Muro de Actividad</button>
             <button onClick={() => setActiveTab('quotes')} className={`pb-3 text-[13px] whitespace-nowrap transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'quotes' ? 'font-semibold text-zinc-900 border-zinc-900' : 'font-medium text-zinc-500 border-transparent hover:text-zinc-800'}`}>Cotizaciones <span className="bg-zinc-100 text-zinc-600 px-1.5 rounded-full text-[10px] font-semibold">{quotes.length}</span></button>
-            <button onClick={() => setActiveTab('files')} className={`pb-3 text-[13px] whitespace-nowrap transition-colors border-b-2 ${activeTab === 'files' ? 'font-semibold text-zinc-900 border-zinc-900' : 'font-medium text-zinc-500 border-transparent hover:text-zinc-800'}`}>Archivos</button>
+            <button onClick={() => setActiveTab('files')} className={`pb-3 text-[13px] whitespace-nowrap transition-colors border-b-2 opacity-40 cursor-not-allowed ${activeTab === 'files' ? 'font-semibold text-zinc-900 border-zinc-900' : 'font-medium text-zinc-500 border-transparent'}`}>Archivos</button>
           </div>
 
           {/* TAB: MURO DE ACTIVIDAD (DISEÑO EXACTO) */}
@@ -1219,6 +1219,9 @@ const DealDetail: React.FC = () => {
                     {g.interactions?.map((item: any) => {
                       const isSystem = item.type === 'SYSTEM';
                       const isWhatsapp = item.channel_name?.toUpperCase() === 'WHATSAPP';
+                      const hasChannel = Boolean(item.channel_name || item.channel_icon);
+                      const channelBadgeColor = isWhatsapp ? '#25D366' : (item.channel_color || '#64748b');
+                      const channelBadgeIcon = item.channel_icon || (isWhatsapp ? 'fa-brands fa-whatsapp' : 'fa-solid fa-comment');
                       return (
                         <div key={item.id} className="relative pl-10 group mb-4">
                           {/* AVATAR FLOTANTE IZQUIERDA */}
@@ -1233,9 +1236,9 @@ const DealDetail: React.FC = () => {
                               <p className="text-[13px] text-zinc-600">{item.description}</p>
                             </div>
                           ) : (
-                            <div className={`bg-white border rounded-xl p-3 sm:p-4 shadow-sm transition-shadow relative ${isWhatsapp ? 'border-emerald-200' : 'border-zinc-200'}`}>
-                              {isWhatsapp && (
-                                <div className="absolute -top-2.5 -right-2.5 w-6 h-6 bg-[#25D366] text-white rounded-full flex items-center justify-center shadow-sm border-2 border-white" title="WhatsApp"><i className="fa-brands fa-whatsapp text-[12px]"></i></div>
+                            <div className={`bg-white border rounded-xl p-3 sm:p-4 shadow-sm transition-shadow relative`} style={hasChannel ? { borderColor: `${channelBadgeColor}55` } : undefined}>
+                              {hasChannel && (
+                                <div className="absolute -top-2.5 -right-2.5 w-6 h-6 text-white rounded-full flex items-center justify-center shadow-sm border-2 border-white" style={{ backgroundColor: channelBadgeColor }} title={item.channel_name || 'Canal'}><i className={`${channelBadgeIcon} text-[12px]`}></i></div>
                               )}
                               <div className="flex justify-between items-start gap-2 sm:gap-3 mb-1.5 sm:mb-2">
                                 <p className="text-[13px] font-semibold text-zinc-900 truncate">{item.user_name || 'Usuario'}</p>
