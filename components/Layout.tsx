@@ -8,6 +8,10 @@ import { ButtonLoader } from './AppLoaders';
 import Avatar from './Avatar';
 import AddMenu from './AddMenu';
 import CompanyForm from '../pages/clients/CompanyForm';
+import ContactForm from '../pages/clients/ContactForm';
+import InteractionEventCaptureModal from './InteractionEventCaptureModal';
+import { EventFormData, EventAttendee } from '../pages/calendar/EventModal';
+import { apiFetch } from '../services/apiClient';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -37,10 +41,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [menuPosition, setMenuPosition] = useState<{ top: number; right: number } | null>(null);
   const [collapsedNavHover, setCollapsedNavHover] = useState<{ label: string; top: number; left: number } | null>(null);
   const [isCompanyFormOpen, setIsCompanyFormOpen] = useState(false);
+  const [isContactFormOpen, setIsContactFormOpen] = useState(false);
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const userMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { user, logout } = useAuth();
-  const { loading: cacheLoading, currentUser } = useDataCache();
+  const { loading: cacheLoading, currentUser, contacts, users } = useDataCache();
   const location = useLocation();
   const navigate = useNavigate();
   const userRole = user?.rol_user || 'usuario';
@@ -133,6 +139,45 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const confirmLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const handleEventCapture = async (payload: { formData: EventFormData; attendees: EventAttendee[] }) => {
+    if (!user?.id_user || !user?.id_tenant) return;
+
+    try {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/events`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          id_user: user.id_user,
+          id_tenant: user.id_tenant,
+          event: {
+            title: payload.formData.title,
+            description: payload.formData.description,
+            start: new Date(payload.formData.start).toISOString(),
+            end: new Date(payload.formData.end).toISOString(),
+            is_all_day: payload.formData.is_all_day,
+            location: payload.formData.location || undefined,
+            generate_meeting: payload.formData.generate_meeting,
+            id_trato: payload.formData.id_trato || undefined,
+            id_tenant: user.id_tenant,
+            id_user: user.id_user,
+          },
+          attendees: payload.attendees,
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || 'Error al crear evento');
+      }
+
+      setIsEventModalOpen(false);
+    } catch (error) {
+      console.error('Error creating event:', error);
+      alert(error instanceof Error ? error.message : 'Error al crear el evento');
+    }
   };
 
   useEffect(() => {
@@ -361,8 +406,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <li className={`${isSidebarCollapsed ? 'flex justify-center' : 'px-2'} mb-2`}>
                 <AddMenu
                   isCollapsed={isSidebarCollapsed}
+                  onAddEvent={() => setIsEventModalOpen(true)}
                   onAddDeal={() => navigate('/app/deals/new')}
-                  onAddContact={() => { /* TODO: Implementar */ }}
+                  onAddContact={() => setIsContactFormOpen(true)}
                   onAddCompany={() => setIsCompanyFormOpen(true)}
                   onAddQuote={() => { /* TODO: Implementar */ }}
                   onAddProduct={() => { /* TODO: Implementar */ }}
@@ -471,8 +517,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         onClose={() => setIsCompanyFormOpen(false)}
         mode="create"
         onSuccess={() => setIsCompanyFormOpen(false)}
+        redirectOnCreate={false}
       />
 
+      <ContactForm
+        isOpen={isContactFormOpen}
+        onClose={() => setIsContactFormOpen(false)}
+        mode="create"
+        onSuccess={() => setIsContactFormOpen(false)}
+      />
+
+      <InteractionEventCaptureModal
+        isOpen={isEventModalOpen}
+        onClose={() => setIsEventModalOpen(false)}
+        onCapture={handleEventCapture}
+        contacts={contacts}
+        users={users}
+        currentUserId={user?.id_user}
+      />
 
       {/* ── Logout Confirm Modal ─────────────────────────────────────────────── */}
       {showLogoutConfirm && (

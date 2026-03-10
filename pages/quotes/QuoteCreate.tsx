@@ -7,7 +7,7 @@ import { apiFetch } from '../../services/apiClient';
 import Toast from '../../components/Toast';
 import { BrandSpinner } from '../../components/AppLoaders';
 import CompanyForm from '../clients/CompanyForm';
-import ContactFormModal from '../clients/ContactFormModal';
+import ContactForm from '../clients/ContactForm';
 
 const QuoteCreate: React.FC = () => {
   const navigate = useNavigate();
@@ -985,7 +985,7 @@ const QuoteCreate: React.FC = () => {
         onSuccess={handleCompanyCreated}
       />
       
-      <ContactFormModal
+      <ContactForm
         isOpen={isContactModalOpen}
         onClose={() => setIsContactModalOpen(false)}
         mode="create"

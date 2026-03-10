@@ -8,7 +8,7 @@ import { GATEWAY_CONFIG } from '../../services/gatewayConfig';
 import Toast from '../../components/Toast';
 import { BrandSpinner } from '../../components/AppLoaders';
 import CompanyForm from '../clients/CompanyForm';
-import ContactFormModal from '../clients/ContactFormModal';
+import ContactForm from '../clients/ContactForm';
 import ShareModal from '../../components/ShareModal';
 
 const DealCreate: React.FC = () => {
@@ -533,7 +533,7 @@ const DealCreate: React.FC = () => {
         onSuccess={handleCompanyCreated}
       />
       
-      <ContactFormModal
+      <ContactForm
         isOpen={isContactModalOpen}
         onClose={() => setIsContactModalOpen(false)}
         mode="create"
@@ -571,3 +571,4 @@ const DealCreate: React.FC = () => {
 };
 
 export default DealCreate;
+

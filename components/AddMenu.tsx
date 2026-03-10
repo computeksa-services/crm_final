@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 interface AddMenuProps {
+  onAddEvent: () => void;
   onAddDeal: () => void;
   onAddContact: () => void;
   onAddCompany: () => void;
@@ -13,6 +14,7 @@ interface AddMenuProps {
 }
 
 const AddMenu: React.FC<AddMenuProps> = ({
+  onAddEvent,
   onAddDeal,
   onAddContact,
   onAddCompany,
@@ -29,6 +31,7 @@ const AddMenu: React.FC<AddMenuProps> = ({
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const menuItems = [
+    { label: 'Evento',     icon: 'fa-calendar-days', color: 'text-indigo-500', bg: 'bg-indigo-50 dark:bg-indigo-500/10', onClick: onAddEvent },
     { label: 'Trato',      icon: 'fa-handshake', color: 'text-blue-500',   bg: 'bg-blue-50 dark:bg-blue-500/10',   onClick: onAddDeal },
     { label: 'Contacto',   icon: 'fa-user',       color: 'text-emerald-500',bg: 'bg-emerald-50 dark:bg-emerald-500/10', onClick: onAddContact },
     { label: 'Empresa',    icon: 'fa-building',   color: 'text-violet-500', bg: 'bg-violet-50 dark:bg-violet-500/10',  onClick: onAddCompany },

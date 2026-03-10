@@ -5,7 +5,7 @@ import { ClientContact } from '../../types';
 import Toast from '../../components/Toast';
 import { apiFetch } from '../../services/apiClient';
 import ConfirmModal from '../../components/ConfirmModal';
-import ContactFormModal from './ContactFormModal';
+import ContactForm from './ContactForm';
 import ShareModal from '../../components/ShareModal';
 import NewInteractionModal from '../../components/NewInteractionModal';
 import ContactHistoryTimeline from '../../components/ContactHistoryTimeline';
@@ -509,7 +509,7 @@ const ClientContactDetail: React.FC = () => {
 
       {/* EDIT CONTACT MODAL */}
       {showEditContact && contact && (
-        <ContactFormModal
+        <ContactForm
           isOpen={showEditContact}
           onClose={() => setShowEditContact(false)}
           mode="edit"

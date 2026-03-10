@@ -7,7 +7,7 @@ import { useDataCache } from '../contexts/DataCacheContext';
 import { apiFetch } from '../services/apiClient';
 import { GATEWAY_CONFIG } from '../services/gatewayConfig';
 import CompanyForm from '../pages/clients/CompanyForm';
-import ContactFormModal from '../pages/clients/ContactFormModal';
+import ContactForm from '../pages/clients/ContactForm';
 import { BrandSpinner } from './AppLoaders';
 
 interface DealFormModalProps {
@@ -419,9 +419,10 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
         }}
       />
 
-      <ContactFormModal
+      <ContactForm
         isOpen={isContactFormOpen}
         onClose={() => setIsContactFormOpen(false)}
+        mode="create"
         onSuccess={(newContact) => {
           setContactsList(prev => [...prev, newContact]);
           setFormData(prev => ({ ...prev, id_contact: newContact.id_contact }));
@@ -435,3 +436,4 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
 };
 
 export default DealFormModal;
+

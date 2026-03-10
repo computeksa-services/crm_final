@@ -8,7 +8,7 @@ import { GATEWAY_CONFIG } from '../../services/gatewayConfig';
 import Toast from '../../components/Toast';
 import { BrandSpinner } from '../../components/AppLoaders';
 import CompanyForm from '../clients/CompanyForm';
-import ContactFormModal from '../clients/ContactFormModal';
+import ContactForm from '../clients/ContactForm';
 import ShareModal from '../../components/ShareModal';
 
 type PermissionLevel = 'VIEW' | 'EDIT' | 'BLOCKED';
@@ -155,7 +155,7 @@ const SearchableClientSelector: React.FC<{
 
       {isOpen && !disabled ? (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-zinc-200 rounded-xl shadow-[0_12px_32px_rgba(24,24,27,0.14)] z-[140] overflow-hidden">
-          <div className="max-h-64 overflow-y-auto py-1.5">
+          <div className="max-h-36 overflow-y-auto py-1.5">
             {filteredOptions.map(option => (
               <button
                 key={option.id}
@@ -165,7 +165,7 @@ const SearchableClientSelector: React.FC<{
                   setInternalQuery(option.label);
                   setIsOpen(false);
                 }}
-                className={`w-full px-3 py-2.5 text-left transition-colors ${
+                className={`w-full px-3 py-1.5 text-left transition-colors ${
                   option.id === currentId ? 'bg-zinc-50' : 'hover:bg-zinc-50'
                 }`}
               >
@@ -734,7 +734,7 @@ const DealForm: React.FC = () => {
   const isEditing = !!queryParams.get('id');
 
   return (
-    <div className="bg-white text-zinc-900 min-h-screen pb-8 animate-fade-in">
+    <div className="bg-[#F9F9F8] text-zinc-900 min-h-screen pb-5 animate-fade-in">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       <header className="bg-white/80 backdrop-blur-md border-b border-zinc-200 sticky top-0 z-40">
@@ -772,9 +772,9 @@ const DealForm: React.FC = () => {
         </div>
       </header>
 
-      <main className="max-w-[1200px] mx-auto px-4 sm:px-6 mt-6 sm:mt-8 pb-8">
-        <div className="bg-white border border-zinc-200 rounded-xl shadow-sm flex flex-col lg:flex-row items-stretch overflow-visible min-h-[calc(100vh-10rem)]">
-          <div className="w-full lg:w-[65%] p-5 sm:p-8 border-b lg:border-b-0 lg:border-r border-zinc-200">
+      <main className="max-w-[1200px] mx-auto px-3 sm:px-4 mt-5 pb-6">
+        <div className="flex flex-col lg:flex-row items-stretch overflow-visible">
+          <div className="w-full lg:w-[65%] px-4 sm:px-6 pt-3 pb-6 border-b lg:border-b-0 lg:border-r border-zinc-200">
             <h3 className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider mb-4 flex items-center gap-2">
               <i className="fa-solid fa-layer-group" /> Informacion
             </h3>
@@ -903,7 +903,7 @@ const DealForm: React.FC = () => {
             </div>
           </div>
 
-          <div className="w-full lg:w-[35%] p-5 sm:p-8 bg-white flex flex-col">
+          <div className="w-full lg:w-[35%] px-4 sm:px-6 pt-3 pb-6 flex flex-col">
             <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-4">Acerca del trato</h3>
 
             <div className="space-y-1">
@@ -953,14 +953,34 @@ const DealForm: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-8 border-t border-zinc-200 pt-6">
-              <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">Equipo asignado</h3>
+            <div className="mt-4 border-t border-zinc-200 pt-4">
+              <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                Equipo asignado
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-zinc-200 text-zinc-600 text-[10px] font-bold">{displayedCollaborators.length}</span>
+              </h3>
               <div className="space-y-2.5 text-left">
                 {displayedCollaborators.map(collab => {
                   const level = String(collab.permission_level || '').toUpperCase();
                   const isOwner = level === 'OWNER' || collab.is_owner;
                   const roleText = isOwner ? 'Propietario' : level === 'EDIT' ? 'Principal' : 'Secundario';
                   const isCurrentUser = String(collab.id_user || '') === String(user?.id_user || '');
+
+                  const handleRemove = async () => {
+                    if (isEditing) {
+                      try {
+                        await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/deals/share`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ id_trato: currentDealId, permissions: [{ id_user: collab.id_user, permission_level: 'BLOCKED' }] }),
+                        });
+                        setShareCollaborators(prev => prev.filter(c => c.id_user !== collab.id_user));
+                      } catch {
+                        setToast({ message: 'Error al eliminar colaborador.', type: 'error' });
+                      }
+                    } else {
+                      setCollaboratorPermissions(prev => ({ ...prev, [collab.id_user]: 'BLOCKED' }));
+                    }
+                  };
 
                   return (
                     <div key={collab.id_user} className="flex items-center justify-start gap-3 rounded-xl border border-zinc-200 bg-white px-3 py-2.5 shadow-sm">
@@ -980,6 +1000,16 @@ const DealForm: React.FC = () => {
                         </p>
                         <p className="text-[12px] text-zinc-500 leading-tight">{roleText}</p>
                       </div>
+                      {!isOwner && (
+                        <button
+                          type="button"
+                          onClick={handleRemove}
+                          className="shrink-0 w-6 h-6 flex items-center justify-center rounded-full text-zinc-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                          title="Quitar colaborador"
+                        >
+                          <i className="fa-solid fa-xmark text-[10px]" />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -1001,9 +1031,7 @@ const DealForm: React.FC = () => {
                       <i className="fa-solid fa-plus text-[11px]" />
                     </span>
                     <span className="text-[12px] font-medium">
-                      {selectedCollaboratorsCount > 0 && !isEditing
-                        ? `Asignar colaborador... (${selectedCollaboratorsCount})`
-                        : 'Asignar colaborador...'}
+                      Añadir colaborador
                     </span>
                   </span>
                 </button>
@@ -1021,7 +1049,7 @@ const DealForm: React.FC = () => {
         onSuccess={handleCompanyCreated}
       />
 
-      <ContactFormModal
+      <ContactForm
         isOpen={isContactModalOpen}
         onClose={() => setIsContactModalOpen(false)}
         mode="create"
@@ -1100,3 +1128,4 @@ const DealForm: React.FC = () => {
 };
 
 export default DealForm;
+

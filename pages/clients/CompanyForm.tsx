@@ -14,6 +14,7 @@ interface CompanyFormProps {
   mode: 'create' | 'edit';
   initialData?: Partial<ClientCompany>;
   onSuccess?: (company: ClientCompany) => void;
+  redirectOnCreate?: boolean;
 }
 
 interface CompanyLabel {
@@ -27,7 +28,7 @@ interface CompanyFormData extends Omit<Partial<ClientCompany>, 'id_type'> {
   id_type?: 'RUC' | 'CI' | 'PASAPORTE' | 'IDENTIFICACION DEL EXTERIOR' | 'OTRO' | '' | undefined;
 }
 
-const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initialData, onSuccess }) => {
+const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initialData, onSuccess, redirectOnCreate = true }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { countries = [], companyTypes = [], companySizes = [], companyLabelsMap } = useDataCache();
@@ -239,13 +240,15 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initia
       const savedCompany = Array.isArray(result) ? result[0] : result;
       
       setToast({
-        message: mode === 'create' ? 'Empresa creada, redirigiendo...' : 'Empresa actualizada.',
+        message: mode === 'create'
+          ? (redirectOnCreate ? 'Empresa creada, redirigiendo...' : 'Empresa creada.')
+          : 'Empresa actualizada.',
         type: 'success'
       });
       
       onSuccess?.(savedCompany);
       
-      if (mode === 'create' && savedCompany?.id_client_company) {
+      if (mode === 'create' && savedCompany?.id_client_company && redirectOnCreate) {
         setTimeout(() => {
           navigate(`/app/client-companies/${savedCompany.id_client_company}`);
           onClose();

@@ -6,7 +6,7 @@ import { GATEWAY_CONFIG } from '../services/gatewayConfig';
 import { Deal, ClientCompany, ClientContact, CustomStatus, DealChannel } from '../types';
 import Toast from './Toast';
 import CompanyForm from '../pages/clients/CompanyForm';
-import ContactFormModal from '../pages/clients/ContactFormModal';
+import ContactForm from '../pages/clients/ContactForm';
 import { createPortal } from 'react-dom';
 import { BrandSpinner } from './AppLoaders';
 
@@ -599,7 +599,7 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
         onSuccess={handleCompanyCreated}
       />
       
-      <ContactFormModal
+      <ContactForm
         isOpen={isContactModalOpen}
         onClose={() => setIsContactModalOpen(false)}
         mode="create"
@@ -613,3 +613,4 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
 };
 
 export default DealEditModal;
+

@@ -1508,7 +1508,7 @@ const QuotesList: React.FC = () => {
                             </td>
                         ) : (
                             row.getVisibleCells().map(cell => (
-                                <td key={cell.id} className="px-4 py-1 align-middle border-r border-slate-50 last:border-r-0">
+                                <td key={cell.id} className="px-4 py-1 align-middle">
                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                 </td>
                             ))

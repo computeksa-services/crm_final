@@ -5,7 +5,7 @@ import Toast from './Toast';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
 import CompanyForm from '../pages/clients/CompanyForm';
-import ContactFormModal from '../pages/clients/ContactFormModal';
+import ContactForm from '../pages/clients/ContactForm';
 import { BrandSpinner } from './AppLoaders';
 
 interface QuoteFormModalProps {
@@ -484,7 +484,7 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
       )}
 
       {isContactFormOpen && (
-        <ContactFormModal
+        <ContactForm
           isOpen={isContactFormOpen}
           onClose={() => setIsContactFormOpen(false)}
           onSuccess={contact => {
@@ -499,3 +499,4 @@ const QuoteFormModal: React.FC<QuoteFormModalProps> = ({
 };
 
 export default QuoteFormModal;
+

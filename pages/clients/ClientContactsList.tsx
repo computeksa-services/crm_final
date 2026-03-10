@@ -7,7 +7,7 @@ import { ClientContact } from '../../types';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
-import ContactFormModal from './ContactFormModal';
+import ContactForm from './ContactForm';
 import StartFollowUpModal from '../../components/StartFollowUpModal';
 import { AvatarBadge } from '../../components/AvatarBadge';
 import { apiFetch } from '../../services/apiClient';
@@ -748,7 +748,7 @@ const ClientContactsList: React.FC = () => {
       </div>
 
       {/* Modal de Creación / Edición */}
-      <ContactFormModal
+      <ContactForm
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         mode={isEditMode ? 'edit' : 'create'}
@@ -789,3 +789,4 @@ const ClientContactsList: React.FC = () => {
 };
 
 export default ClientContactsList;
+
