@@ -8,7 +8,6 @@ import { useEmailSendPolicy } from '../../src/hooks/useEmailSendPolicy';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
-import QuoteFormModal from '../../components/QuoteFormModal';
 import { getImageUrl, getLocalAvatarDataUrl } from '../../utils/imageUtils';
 
 // --- TIPOS EXTENDIDOS ---
@@ -294,7 +293,6 @@ const QuoteDetail: React.FC = () => {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [shareCollaborators, setShareCollaborators] = useState<any[]>([]);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   // Historial: vista rápida/detallada
   const [historyCondensed, setHistoryCondensed] = useState(false);
@@ -2022,15 +2020,6 @@ const QuoteDetail: React.FC = () => {
           onClose={() => { setIsShareOpen(false); }} 
           onShared={() => { setToast({ message: 'Compartido.', type: 'success' }); fetchData(); }}
           currentCollaborators={shareCollaborators}
-        />
-      )}
-
-      {quote && (
-        <QuoteFormModal
-            isOpen={isEditModalOpen}
-            onClose={() => setIsEditModalOpen(false)}
-            initialData={quote as any}
-            onSuccess={(updated) => { setQuote(updated as QuoteExtended); setIsEditModalOpen(false); setToast({ message: 'Actualizado.', type: 'success' }); fetchData(); }}
         />
       )}
 

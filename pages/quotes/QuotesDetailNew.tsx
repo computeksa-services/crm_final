@@ -216,6 +216,16 @@ const getAvatarColor = (name: string = '') => {
   return colors[Math.abs(hash) % colors.length];
 };
 
+const convertGoogleDriveUrl = (url: string): string => {
+  if (!url) return '';
+  if (url.includes('images.weserv.nl')) return url;
+  const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
+  if (match && match[1]) {
+    return `https://images.weserv.nl/?url=${encodeURIComponent(`https://drive.google.com/uc?id=${match[1]}&export=view`)}&n=-1`;
+  }
+  return url;
+};
+
 const QUOTE_CATEGORY_COLORS: Record<string, string> = {
   DRAFT: '#6b7280',
   SENT: '#0ea5e9',
@@ -1167,6 +1177,12 @@ const QuotesDetailNew: React.FC = () => {
                   <i className={`fa-solid ${effectiveQuoteStatus.icon || 'fa-circle'} text-[9px]`} />
                   <span>{effectiveQuoteStatus.name || 'Desconocido'}</span>
                 </span>
+                {quote.is_private && (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-100 text-rose-700 uppercase tracking-wide border border-rose-200 shadow-sm">
+                    <i className="fa-solid fa-lock text-[9px]" />
+                    <span>Privada</span>
+                  </span>
+                )}
                 <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 text-zinc-500 uppercase tracking-wide border border-zinc-200 shadow-sm">
                   {quote.formatted_no_cotizacion || `COT-${quote.id_cotizacion?.substring(0, 4)}`}
                 </span>
@@ -1507,25 +1523,50 @@ Valor                </div>
                 <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5">
                   <i className="fa-regular fa-clock"></i> Validez
                 </p>
-                <p className="text-[12px] font-semibold text-zinc-900">30 días</p>
+                <p className={`text-[12px] font-semibold ${quote.validez_oferta ? 'text-zinc-900' : 'text-zinc-400'}`}>
+                  {quote.validez_oferta || 'Sin definir'}
+                </p>
               </div>
               <div className="bg-white border border-zinc-200 rounded-lg p-2.5 shadow-sm">
                 <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5">
                   <i className="fa-solid fa-shield-halved"></i> Garantía
                 </p>
-                <p className="text-[12px] font-semibold text-zinc-900">12 meses</p>
+                <p className={`text-[12px] font-semibold ${quote.garantia ? 'text-zinc-900' : 'text-zinc-400'}`}>
+                  {quote.garantia || 'Sin definir'}
+                </p>
               </div>
               <div className="bg-white border border-zinc-200 rounded-lg p-2.5 shadow-sm">
                 <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5">
                   <i className="fa-solid fa-truck-fast"></i> Entrega
                 </p>
-                <p className="text-[12px] font-semibold text-zinc-900">2-5 días</p>
+                <p className={`text-[12px] font-semibold ${quote.tiempo_entrega ? 'text-zinc-900' : 'text-zinc-400'}`}>
+                  {quote.tiempo_entrega || 'Sin definir'}
+                </p>
               </div>
               <div className="bg-white border border-zinc-200 rounded-lg p-2.5 shadow-sm">
                 <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5">
                   <i className="fa-regular fa-credit-card"></i> Pago
                 </p>
-                <p className="text-[12px] font-semibold text-zinc-900">30 días</p>
+                <p className={`text-[12px] font-semibold ${quote.condicion_pago ? 'text-zinc-900' : 'text-zinc-400'}`}>
+                  {quote.condicion_pago || 'Sin definir'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* CORREOS EN COPIA */}
+          <div>
+            <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+              Correos en Copia
+            </h3>
+            <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-2 relative overflow-hidden">
+              <div className="absolute left-0 top-0 w-1 h-full bg-amber-400"></div>
+              <div className="flex flex-wrap gap-1">
+                {quote.correos_adicionales ? quote.correos_adicionales.split(',').map((email, i) => (
+                  <span key={i} className="inline-flex items-center bg-white border border-amber-200 rounded px-1.5 py-0.5 text-[10px] text-amber-900 font-medium truncate">
+                    {email.trim()}
+                  </span>
+                )) : <span className="text-[10px] text-amber-600 italic px-1">Sin correos</span>}
               </div>
             </div>
           </div>
@@ -1613,7 +1654,24 @@ Valor                </div>
                     >
                       <div className="col-span-5 flex items-start gap-3">
                         <div className="w-10 h-10 rounded-md bg-white border border-zinc-200 shadow-sm flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
-                          <i className="fa-solid fa-box text-zinc-300 text-sm"></i>
+                          {(item as any)?.imagen_url ? (
+                            <img
+                              src={convertGoogleDriveUrl((item as any).imagen_url)}
+                              alt={item.descripcion || 'Producto'}
+                              className="h-full w-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                                const fallback = e.currentTarget.nextElementSibling as HTMLElement | null;
+                                if (fallback) fallback.style.display = 'flex';
+                              }}
+                            />
+                          ) : null}
+                          <span
+                            className="h-full w-full items-center justify-center"
+                            style={{ display: (item as any)?.imagen_url ? 'none' : 'flex' }}
+                          >
+                            <i className="fa-solid fa-box text-zinc-300 text-sm"></i>
+                          </span>
                         </div>
                         <div className="min-w-0 pr-2">
                           <p className="text-[13px] font-semibold text-zinc-900 truncate">{item.descripcion || 'Producto'}</p>
@@ -1623,25 +1681,60 @@ Valor                </div>
 
                       <div className="col-span-2 flex justify-center">
                         {canEdit ? (
-                          <input
-                            type="number"
-                            min={1}
-                            value={quantityValue}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (/^\d*$/.test(value)) {
-                                setItemQtyDrafts(prev => ({ ...prev, [rowKey]: value }));
-                              }
-                            }}
-                            onBlur={() => commitItemQuantity(item, idx)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.currentTarget.blur();
-                              }
-                            }}
-                            disabled={!itemId || Boolean(syncingItemIds[rowKey])}
-                            className="w-16 text-center text-[13px] font-medium text-zinc-900 border border-zinc-200 rounded-md py-1 bg-white disabled:bg-zinc-50 disabled:text-zinc-400"
-                          />
+                          <div className="group/stepper flex items-center border border-transparent hover:border-zinc-200 hover:bg-white hover:shadow-sm focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 rounded-md transition-all h-8">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!itemId || syncingItemIds[rowKey]) return;
+                                const currentValue = Number(itemQtyDrafts[rowKey] ?? item.cantidad ?? 1) || 1;
+                                const nextQty = Math.max(1, currentValue - 1);
+                                setItemQtyDrafts(prev => ({ ...prev, [rowKey]: String(nextQty) }));
+                                if (nextQty !== Number(item.cantidad || 0)) {
+                                  void handleUpdateItem(itemId, nextQty, unitPrice, Number(item.cantidad || 0));
+                                }
+                              }}
+                              disabled={!itemId || Boolean(syncingItemIds[rowKey]) || Number(itemQtyDrafts[rowKey] ?? item.cantidad ?? 1) <= 1}
+                              className="w-7 h-full flex items-center justify-center text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-l-md transition-all opacity-0 group-hover/stepper:opacity-100 focus-within:opacity-100 disabled:text-zinc-300 disabled:hover:bg-transparent"
+                            >
+                              <i className="fa-solid fa-minus text-[10px]"></i>
+                            </button>
+                            <input
+                              type="text"
+                              inputMode="numeric"
+                              pattern="[0-9]*"
+                              value={quantityValue}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (/^\d*$/.test(value)) {
+                                  setItemQtyDrafts(prev => ({ ...prev, [rowKey]: value }));
+                                }
+                              }}
+                              onBlur={() => commitItemQuantity(item, idx)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                              disabled={!itemId || Boolean(syncingItemIds[rowKey])}
+                              className="w-8 text-center text-[13px] font-medium text-zinc-700 bg-transparent outline-none cursor-pointer group-hover/stepper:cursor-text disabled:text-zinc-400"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!itemId || syncingItemIds[rowKey]) return;
+                                const currentValue = Number(itemQtyDrafts[rowKey] ?? item.cantidad ?? 1) || 1;
+                                const nextQty = currentValue + 1;
+                                setItemQtyDrafts(prev => ({ ...prev, [rowKey]: String(nextQty) }));
+                                if (nextQty !== Number(item.cantidad || 0)) {
+                                  void handleUpdateItem(itemId, nextQty, unitPrice, Number(item.cantidad || 0));
+                                }
+                              }}
+                              disabled={!itemId || Boolean(syncingItemIds[rowKey])}
+                              className="w-7 h-full flex items-center justify-center text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-r-md transition-all opacity-0 group-hover/stepper:opacity-100 focus-within:opacity-100 disabled:text-zinc-300 disabled:hover:bg-transparent"
+                            >
+                              <i className="fa-solid fa-plus text-[10px]"></i>
+                            </button>
+                          </div>
                         ) : (
                           <span className="text-[13px] font-medium text-zinc-900">{item.cantidad || 0}</span>
                         )}

@@ -28,7 +28,7 @@ import DealDetail from './pages/deals/DealDetail';
 import DealForm from './pages/deals/DealForm';
 import ProductsList from './pages/ProductsList';
 import SettingsPage from './pages/SettingsPage';
-import QuoteCreate from './pages/quotes/QuoteCreate'; // RUTA CORREGIDA
+import QuoteForm from './pages/quotes/QuoteForm';
 import FinancialsList from './pages/financials/FinancialsList';
 import FinancialForm from './pages/financials/FinancialForm';
 import FinancialDetail from './pages/financials/FinancialDetail';
@@ -128,8 +128,8 @@ const App: React.FC = () => {
                 </Suspense>
               } />
               <Route path="quotes" element={<QuotesList />} />
-              <Route path="quotes/new" element={<QuoteCreate />} />
-              <Route path="quotes/edit" element={<QuoteCreate />} />
+              <Route path="quotes/new" element={<QuoteForm />} />
+              <Route path="quotes/edit" element={<QuoteForm />} />
               <Route path="quotes/:id" element={<QuotesDetailNew />} />
               <Route path="deals" element={<DealFiltersProvider><Deals /></DealFiltersProvider>} />
               <Route path="deals/new" element={<DealForm />} />

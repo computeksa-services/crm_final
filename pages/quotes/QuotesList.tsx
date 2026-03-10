@@ -1095,10 +1095,14 @@ const QuotesList: React.FC = () => {
         cell: ({ getValue, row }) => {
             if (row.getIsGrouped()) return null;
             const nombre = getValue() as string;
+            const isPrivate = row.original.is_private;
             return (
-                <div className="overflow-hidden" style={{ maxWidth: '250px' }}>
+                <div className="overflow-hidden flex items-center gap-1.5" style={{ maxWidth: '250px' }}>
+                    {isPrivate && (
+                        <i className="fa-solid fa-lock text-rose-600 text-[11px] shrink-0" title="Cotización privada"></i>
+                    )}
                     <span 
-                className="text-slate-800 text-sm font-medium block truncate" 
+                        className="text-slate-800 text-sm font-medium block truncate" 
                         title={nombre}
                     >
                         {nombre}

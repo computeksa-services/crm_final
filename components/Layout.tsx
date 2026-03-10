@@ -46,7 +46,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const userMenuButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const { user, logout } = useAuth();
-  const { loading: cacheLoading, currentUser, contacts, users } = useDataCache();
+  const { loading: cacheLoading, currentUser, contacts, users, companies } = useDataCache();
   const location = useLocation();
   const navigate = useNavigate();
   const userRole = user?.rol_user || 'usuario';
@@ -410,7 +410,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   onAddDeal={() => navigate('/app/deals/new')}
                   onAddContact={() => setIsContactFormOpen(true)}
                   onAddCompany={() => setIsCompanyFormOpen(true)}
-                  onAddQuote={() => { /* TODO: Implementar */ }}
+                  onAddQuote={() => navigate('/app/quotes/new')}
                   onAddProduct={() => { /* TODO: Implementar */ }}
                   onAddPortfolio={() => { /* TODO: Implementar */ }}
                   onAddCampaign={() => { /* TODO: Implementar */ }}
