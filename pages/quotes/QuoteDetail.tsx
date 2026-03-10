@@ -43,10 +43,12 @@ interface QuoteExtended extends Quote {
   url_cotizacion_manual?: string | null;
   archivos_adjuntos?: Attachment[];
   sent_history?: SentLog[];
+  creator_name?: string;
   deal_detail?: {
     id?: string;
     name?: string;
     value?: string;
+    owner_id?: string;
     status_name?: string;
     status_color?: string;
   };
@@ -171,6 +173,93 @@ const StatusSelector: React.FC<{
         </div>
       )}
     </div>
+  );
+};
+
+// --- HELPER: Fila de artículo con estado local para edición reactiva ---
+const ItemRow: React.FC<{
+  item: QuoteItem;
+  canEdit: boolean;
+  isItemsLocked: boolean;
+  isManualQuoteActive: boolean;
+  onUpdate: (id: string, cant: number, precio: number) => void;
+  onDelete: (id: string) => void;
+  convertDriveUrl: (url: string) => string;
+}> = ({ item, canEdit, isItemsLocked, isManualQuoteActive, onUpdate, onDelete, convertDriveUrl }) => {
+  const parsePrecio = (val: number | string) =>
+    parseFloat(String(val).replace(/[^0-9.-]+/g, '')) || 0;
+
+  const [localCant, setLocalCant] = useState<number>(parseFloat(item.cantidad as any) || 0);
+  const [localPrecio, setLocalPrecio] = useState<number>(parsePrecio(item.precio_unitario));
+
+  // Sincronizar si los datos del servidor cambian
+  useEffect(() => {
+    setLocalCant(parseFloat(item.cantidad as any) || 0);
+    setLocalPrecio(parsePrecio(item.precio_unitario));
+  }, [item.cantidad, item.precio_unitario]);
+
+  const itemId = item.id_articulo_cot || item.id_quote_item || '';
+
+  return (
+    <tr className="group hover:bg-slate-50/60 transition-colors">
+      <td className="px-6 py-4">
+        <div className="flex gap-4">
+          <div className="w-12 h-12 rounded-lg border border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0">
+            {item.imagen_url
+              ? <img src={convertDriveUrl(item.imagen_url)} className="w-full h-full object-cover" alt={item.descripcion} />
+              : <i className="fa-solid fa-box text-slate-300"></i>}
+          </div>
+          <div className="flex flex-col justify-center">
+            <span className="font-bold text-slate-700 text-[13px] line-clamp-2">{item.descripcion}</span>
+            {(item.formatted_product_code || item.codigo) && <span className="text-[10px] text-slate-400 font-mono mt-0.5">{item.formatted_product_code || item.codigo}</span>}
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-4 text-right align-middle">
+        <input
+          type="number"
+          min="1"
+          disabled={!canEdit || isItemsLocked}
+          value={localCant}
+          onChange={(e) => setLocalCant(parseFloat(e.target.value) || 0)}
+          onBlur={(e) => {
+            const val = Math.max(1, parseFloat(e.target.value) || 1);
+            setLocalCant(val);
+            onUpdate(itemId, val, localPrecio);
+          }}
+          className="w-14 text-right bg-transparent hover:bg-white border border-transparent hover:border-slate-200 rounded px-1 py-1 focus:ring-1 focus:ring-brand-500 outline-none text-slate-700 font-medium transition-all"
+        />
+      </td>
+      <td className="px-4 py-4 text-right align-middle">
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          disabled={!canEdit || isItemsLocked}
+          value={localPrecio}
+          onChange={(e) => setLocalPrecio(parseFloat(e.target.value) || 0)}
+          onBlur={(e) => {
+            const val = parseFloat(e.target.value) || 0;
+            setLocalPrecio(val);
+            onUpdate(itemId, localCant, val);
+          }}
+          className="w-20 text-right bg-transparent hover:bg-white border border-transparent hover:border-slate-200 rounded px-1 py-1 focus:ring-1 focus:ring-brand-500 outline-none text-slate-700 font-medium transition-all"
+        />
+      </td>
+      <td className="px-6 py-4 text-right font-bold text-slate-700 align-middle">
+        {(localCant * localPrecio).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+      </td>
+      <td className="px-2 text-center align-middle">
+        {canEdit && !isItemsLocked && !isManualQuoteActive && (
+          <button
+            onClick={() => onDelete(itemId)}
+            className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2 rounded-lg hover:bg-red-50"
+          >
+            <i className="fa-solid fa-trash-can"></i>
+          </button>
+        )}
+      </td>
+    </tr>
   );
 };
 
@@ -345,10 +434,10 @@ const QuoteDetail: React.FC = () => {
           if (prevItems.length === 0) return q.items;
           
           // Crear un mapa de los nuevos items por ID para lookup rápido
-          const newItemsMap = new Map(
+          const newItemsMap = new Map<string | undefined, QuoteItem>(
             q.items.map((item: any) => [
               item.id_articulo_cot || item.id_quote_item,
-              item
+              item as QuoteItem
             ])
           );
           
@@ -690,7 +779,7 @@ const QuoteDetail: React.FC = () => {
         const prod = availableProducts.find(p => p.id_product === productId);
         if (!prod) return null;
 
-        const precio = parseFloat((prod.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
+        const precio = parseFloat(String(prod.precio_unitario).replace(/[^0-9.-]+/g,"")) || 0;
         
         return apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products-selected`, {
           method: 'POST',
@@ -746,8 +835,13 @@ const QuoteDetail: React.FC = () => {
       
       if (created) {
         setAvailableProducts(products);
-        setSelectedProductId(created.id_product);
+        // Add the newly created product to selectedProducts with its temporary quantity
+        const newSelectedProducts = new Map(selectedProducts);
+        newSelectedProducts.set(created.id_product, newProduct.tempQuantity || 1);
+        setSelectedProducts(newSelectedProducts);
+        
         const precio = parseFloat(newProduct.precio_unitario) || 0;
+        
         await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/products-selected`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -756,9 +850,9 @@ const QuoteDetail: React.FC = () => {
             id_tenant: user.id_tenant,
             id_user: user.id_user,
             descripcion: created.descripcion,
-            cantidad: itemQuantity,
+            cantidad: newProduct.tempQuantity || 1, // Use tempQuantity for new product
             precio_unitario: precio,
-            subtotal: itemQuantity * precio,
+            subtotal: (newProduct.tempQuantity || 1) * precio, // Use tempQuantity for new product
             id_producto: created.id_product
           })
         });
@@ -1405,33 +1499,18 @@ const QuoteDetail: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {items.map((item, idx) => {
-                                    const cant = parseFloat(item.cantidad as any) || 0;
-                                    const precio = parseFloat((item.precio_unitario as any).replace(/[^0-9.-]+/g,"")) || 0;
-                                    return (
-                                        <tr key={idx} className="group hover:bg-slate-50/60 transition-colors">
-                                            <td className="px-6 py-4">
-                                                <div className="flex gap-4">
-                                                    <div className="w-12 h-12 rounded-lg border border-slate-200 bg-white flex items-center justify-center overflow-hidden shrink-0">
-                                                        {item.imagen_url ? <img src={convertGoogleDriveUrl(item.imagen_url)} className="w-full h-full object-cover"/> : <i className="fa-solid fa-box text-slate-300"></i>}
-                                                    </div>
-                                                    <div className="flex flex-col justify-center">
-                                                        <span className="font-bold text-slate-700 text-[13px] line-clamp-2">{item.descripcion}</span>
-                                                        {item.formatted_product_code && <span className="text-[10px] text-slate-400 font-mono mt-0.5">{item.formatted_product_code}</span>}
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-4 text-right align-middle">
-                                                <input type="number" min="1" disabled={!canEdit || isItemsLocked} defaultValue={cant} onBlur={(e) => handleUpdateItem(item.id_articulo_cot || '', parseFloat(e.target.value)||1, precio)} className="w-14 text-right bg-transparent hover:bg-white border border-transparent hover:border-slate-200 rounded px-1 py-1 focus:ring-1 focus:ring-brand-500 outline-none text-slate-700 font-medium transition-all" />
-                                            </td>
-                                            <td className="px-4 py-4 text-right align-middle">
-                                                <input type="number" step="0.01" disabled={!canEdit || isItemsLocked} defaultValue={precio.toFixed(2)} onBlur={(e) => handleUpdateItem(item.id_articulo_cot || '', cant, parseFloat(e.target.value)||0)} className="w-20 text-right bg-transparent hover:bg-white border border-transparent hover:border-slate-200 rounded px-1 py-1 focus:ring-1 focus:ring-brand-500 outline-none text-slate-700 font-medium transition-all" />
-                                            </td>
-                                            <td className="px-6 py-4 text-right font-bold text-slate-700 align-middle">{(cant * precio).toLocaleString('en-US', {style:'currency', currency:'USD'})}</td>
-                                            <td className="px-2 text-center align-middle">{canEdit && !isItemsLocked && !isManualQuoteActive && <button onClick={() => handleDeleteItem(item.id_articulo_cot || '')} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-2 rounded-lg hover:bg-red-50"><i className="fa-solid fa-trash-can"></i></button>}</td>
-                                        </tr>
-                                    );
-                                })}
+                                {items.map((item, idx) => (
+                                    <ItemRow
+                                        key={item.id_articulo_cot || item.id_quote_item || idx}
+                                        item={item}
+                                        canEdit={canEdit}
+                                        isItemsLocked={isItemsLocked}
+                                        isManualQuoteActive={isManualQuoteActive}
+                                        onUpdate={handleUpdateItem}
+                                        onDelete={handleDeleteItem}
+                                        convertDriveUrl={convertGoogleDriveUrl}
+                                    />
+                                ))}
                                 <tr className="bg-slate-50 border-t border-slate-200">
                                     <td colSpan={3} className="px-6 py-4 text-right font-bold text-slate-600 uppercase text-xs tracking-wider">Total General</td>
                                     <td className="px-6 py-4 text-right font-black text-slate-800 text-xl font-mono tracking-tight">{quote.total}</td>
@@ -1586,8 +1665,8 @@ const QuoteDetail: React.FC = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {quote.sent_history?.length > 0 && (
-                      <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full text-xs font-bold">{quote.sent_history.length}</span>
+                    {(quote.sent_history?.length ?? 0) > 0 && (
+                      <span className="bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full text-xs font-bold">{quote.sent_history!.length}</span>
                     )}
                     {quote.sent_history && quote.sent_history.length > 5 && (
                       <div className="flex items-center bg-slate-100 rounded-md p-0.5">
@@ -1950,8 +2029,8 @@ const QuoteDetail: React.FC = () => {
         <QuoteFormModal
             isOpen={isEditModalOpen}
             onClose={() => setIsEditModalOpen(false)}
-            initialData={quote}
-            onSuccess={(updated) => { setQuote(updated); setIsEditModalOpen(false); setToast({ message: 'Actualizado.', type: 'success' }); fetchData(); }}
+            initialData={quote as any}
+            onSuccess={(updated) => { setQuote(updated as QuoteExtended); setIsEditModalOpen(false); setToast({ message: 'Actualizado.', type: 'success' }); fetchData(); }}
         />
       )}
 
@@ -2099,7 +2178,7 @@ const QuoteDetail: React.FC = () => {
                             {filteredProducts.map((product) => {
                                 const isSelected = selectedProducts.has(product.id_product);
                                 const quantity = selectedProducts.get(product.id_product) || 1;
-                                const precio = parseFloat((product.precio_unitario as any).toString().replace(/[^0-9.-]+/g,"")) || 0;
+                                const precio = parseFloat(String(product.precio_unitario).replace(/[^0-9.-]+/g,"")) || 0;
 
                                 return (
                                   <div
@@ -2358,7 +2437,7 @@ const QuoteDetail: React.FC = () => {
                         selectedProducts.forEach((qty, prodId) => {
                           const prod = availableProducts.find(p => p.id_product === prodId);
                           if (prod) {
-                            const precio = parseFloat((prod.precio_unitario as any).toString().replace(/[^0-9.-]+/g,"")) || 0;
+                            const precio = parseFloat(String(prod.precio_unitario).replace(/[^0-9.-]+/g,"")) || 0;
                             total += precio * qty;
                           }
                         });

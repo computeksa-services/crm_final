@@ -12,7 +12,7 @@ import LoginPage from './pages/LoginPage';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import QuotesList from './pages/quotes/QuotesList';
-import QuoteDetail from './pages/quotes/QuoteDetail';
+import QuotesDetailNew from './pages/quotes/QuotesDetailNew';
 import Profile from './pages/users/Profile';
 import AccountSettings from './pages/accountSettings/AccountSettings';
 import Integrations from './pages/users/Integrations';
@@ -130,7 +130,7 @@ const App: React.FC = () => {
               <Route path="quotes" element={<QuotesList />} />
               <Route path="quotes/new" element={<QuoteCreate />} />
               <Route path="quotes/edit" element={<QuoteCreate />} />
-              <Route path="quotes/:id" element={<QuoteDetail />} />
+              <Route path="quotes/:id" element={<QuotesDetailNew />} />
               <Route path="deals" element={<DealFiltersProvider><Deals /></DealFiltersProvider>} />
               <Route path="deals/new" element={<DealForm />} />
               <Route path="deals/edit" element={<DealForm />} />

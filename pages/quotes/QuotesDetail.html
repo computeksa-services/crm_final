@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    body { font-family: 'Inter', sans-serif; }
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+    .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none; margin: 0;
+    }
+  </style>
+</head>
+<body>
+
+<div class="min-h-screen bg-[#F9F9F8] text-zinc-800 pb-20 selection:bg-sky-100 selection:text-sky-900">
+  
+  <!-- ========================================== -->
+  <!-- HEADER STICKY -->
+  <!-- ========================================== -->
+  <header class="bg-white/90 border-b border-zinc-200 sticky top-0 z-40 backdrop-blur-md">
+    <div class="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div class="flex flex-col md:flex-row md:items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-3 mb-1.5">
+            <h1 class="text-2xl md:text-3xl font-bold text-zinc-900 tracking-tight truncate">
+              Tablet Samsung S10
+            </h1>
+            <span class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-zinc-100 text-zinc-500 uppercase tracking-wide border border-zinc-200 shadow-sm">
+              COT-0029
+            </span>
+          </div>
+        </div>
+
+        <div class="flex flex-col sm:flex-row sm:items-center gap-4 shrink-0">
+          <div class="text-left sm:text-right mr-2">
+            <div class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-0.5">Total de la Cotización</div>
+            <div class="text-2xl font-semibold tracking-tight text-zinc-900">$575<span class="text-zinc-400 text-lg">.00</span></div>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <button class="h-9 w-9 flex items-center justify-center rounded-md bg-white border border-zinc-200 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 transition-colors shadow-sm" title="Compartir">
+              <i class="fa-solid fa-share-nodes text-[13px]"></i>
+            </button>
+            <button class="h-9 px-4 bg-zinc-900 text-white rounded-md font-medium text-[13px] hover:bg-zinc-800 transition-colors shadow-sm flex items-center gap-2">
+              <i class="fa-solid fa-paper-plane text-[11px]"></i> Enviar al Cliente
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pipeline de Estados -->
+      <div class="mt-8 overflow-x-auto scrollbar-hide">
+        <div class="flex min-w-[700px] gap-2.5">
+          <div class="flex-1 group cursor-pointer hover:opacity-80 transition-opacity">
+            <div class="h-1.5 w-full rounded-full mb-2 bg-[#6b7280]"></div>
+            <div class="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-900 uppercase tracking-wide">
+              <i class="fa-solid fa-circle-check" style="color: #6b7280"></i> Borrador
+            </div>
+          </div>
+          <div class="flex-[1.5] group cursor-pointer">
+            <div class="h-1.5 w-full rounded-full mb-2 relative" style="background-color: #0ea5e9;">
+               <div class="absolute inset-0 rounded-full animate-pulse opacity-40" style="background-color: #0ea5e9;"></div>
+            </div>
+            <div class="flex items-center gap-1.5 text-[11px] font-bold text-zinc-900 uppercase tracking-wide">
+              <span class="w-2.5 h-2.5 rounded-full shadow-[0_0_8px_rgba(14,165,233,0.6)]" style="background-color: #0ea5e9;"></span> 
+              Actual: <span style="color: #0ea5e9;">Enviado</span>
+            </div>
+          </div>
+          <div class="flex-1 group cursor-pointer hover:opacity-80 transition-opacity">
+            <div class="h-1.5 w-full bg-zinc-200 rounded-full mb-2"></div>
+            <div class="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-400 uppercase tracking-wide">
+              <i class="fa-regular fa-circle text-[10px]"></i> Aprobado
+            </div>
+          </div>
+          <div class="flex-1 group cursor-pointer hover:opacity-80 transition-opacity">
+            <div class="h-1.5 w-full bg-zinc-200 rounded-full mb-2"></div>
+            <div class="flex items-center gap-1.5 text-[11px] font-semibold text-zinc-400 uppercase tracking-wide">
+              <i class="fa-regular fa-circle text-[10px]"></i> Rechazado
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 mt-8 grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
+    
+    <!-- === COLUMNA IZQUIERDA === -->
+    <aside class="lg:col-span-4 space-y-8">
+      
+      <!-- TRATO VINCULADO (TARJETA ENLACE CLICKABLE) -->
+      <a href="#" class="block bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 rounded-xl p-5 shadow-sm relative overflow-hidden group hover:border-emerald-400 hover:shadow-md transition-all cursor-pointer">
+        <i class="fa-solid fa-handshake absolute -right-4 -bottom-4 text-emerald-100/50 text-6xl transform -rotate-12 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6"></i>
+        
+        <div class="relative z-10">
+          <div class="flex justify-between items-start mb-2">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm border border-emerald-200">
+                <i class="fa-solid fa-handshake text-[12px]"></i>
+              </div>
+              <p class="text-[15px] font-bold text-zinc-900 leading-tight group-hover:text-emerald-700 transition-colors">Tablet Samsung S10</p>
+            </div>
+            <span class="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+              <i class="fa-solid fa-circle text-[6px]"></i> Enviada
+            </span>
+          </div>
+          
+          <div class="flex items-center justify-between border-t border-emerald-100/60 pt-3 mt-3">
+            <div>
+              <span class="text-[10px] font-semibold text-emerald-700 uppercase tracking-wider block mb-0.5">Valor del Negocio</span>
+              <span class="text-[16px] font-bold text-emerald-900">$575.00</span>
+            </div>
+            <div class="w-6 h-6 rounded-full bg-white border border-emerald-200 flex items-center justify-center text-emerald-500 shadow-sm transform translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all">
+              <i class="fa-solid fa-arrow-right text-[10px]"></i>
+            </div>
+          </div>
+        </div>
+      </a>
+
+      <!-- Info General -->
+      <div>
+        <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-4 flex items-center justify-between">
+          <span>Detalles de Cotización</span>
+          <button class="hover:text-zinc-600"><i class="fa-solid fa-pen text-[10px]"></i></button>
+        </h3>
+        
+        <div class="space-y-1">
+          <!-- EMPRESA HOVER CARD -->
+          <div class="relative group/popover">
+            <div class="flex items-start py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 cursor-pointer transition-colors">
+              <div class="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2 pt-0.5">
+                <i class="fa-regular fa-building w-4 text-center"></i> Empresa
+              </div>
+              <div class="w-2/3">
+                <a href="#" class="text-zinc-900 text-[13px] font-medium block leading-tight hover:text-blue-600 hover:underline decoration-zinc-300 underline-offset-2">
+                  SIEMENS HEALTHCARE CIA. LTDA.
+                </a>
+              </div>
+            </div>
+            <div class="hidden sm:block absolute left-1/3 top-full mt-2 w-72 bg-white border border-zinc-200 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] opacity-0 invisible group-hover/popover:opacity-100 group-hover/popover:visible transition-all duration-200 z-50 transform translate-y-1 group-hover/popover:translate-y-0">
+              <div class="absolute -top-2 left-6 w-4 h-4 bg-white border-t border-l border-zinc-200 transform rotate-45"></div>
+              <div class="p-4 relative z-10 bg-white rounded-xl">
+                <div class="flex items-start gap-3 mb-3">
+                  <div class="w-10 h-10 rounded-md bg-zinc-100 border border-zinc-200 flex items-center justify-center text-zinc-500 shrink-0"><i class="fa-solid fa-building"></i></div>
+                  <div>
+                    <h4 class="text-[13px] font-bold text-zinc-900 leading-tight">SIEMENS HEALTHCARE</h4>
+                    <span class="text-zinc-500 font-mono text-[10px] block mt-0.5">RUC: 1792390834001</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CONTACTO HOVER CARD -->
+          <div class="relative group/popover">
+            <div class="flex items-center py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 cursor-pointer transition-colors">
+              <div class="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2">
+                <i class="fa-regular fa-user w-4 text-center"></i> Contacto
+              </div>
+              <div class="w-2/3 text-zinc-900 text-[13px] truncate font-medium hover:text-blue-600 hover:underline decoration-zinc-300 underline-offset-2">
+                Silvia Buenaventura
+              </div>
+            </div>
+            <div class="hidden sm:block absolute left-1/3 top-full mt-2 w-72 bg-white border border-zinc-200 rounded-xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] opacity-0 invisible group-hover/popover:opacity-100 group-hover/popover:visible transition-all duration-200 z-50">
+              <div class="absolute -top-2 left-6 w-4 h-4 bg-white border-t border-l border-zinc-200 transform rotate-45"></div>
+              <div class="p-4 relative z-10 bg-white rounded-xl">
+                <div class="flex items-start gap-3 mb-3">
+                  <div class="w-10 h-10 rounded-full bg-sky-100 text-sky-700 font-bold flex items-center justify-center">SB</div>
+                  <div>
+                    <h4 class="text-[13px] font-bold text-zinc-900">Silvia Buenaventura</h4>
+                    <p class="text-[11px] text-zinc-500">Asistente de Gerencia</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Creador -->
+          <div class="flex items-center group py-1.5 hover:bg-zinc-50 rounded-md px-2 -mx-2 cursor-pointer transition-colors pt-2 border-t border-zinc-100 mt-2">
+            <div class="w-1/3 text-zinc-500 text-[13px] flex items-center gap-2">
+              <i class="fa-regular fa-user-circle w-4 text-center"></i> Creador
+            </div>
+            <div class="w-2/3 flex items-center gap-2 text-zinc-900 text-[13px] font-medium">
+              <img src="https://lh3.googleusercontent.com/a/ACg8ocIwov-7RUzzjv7ytzz1-e8-0x7EYRKOYG2eql-q4o7qabjVkg=s96-c" class="w-5 h-5 rounded-full border border-zinc-200">
+              Leonel Sabando
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Condiciones Comerciales -->
+      <div>
+        <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3">
+          Condiciones Comerciales
+        </h3>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="bg-white border border-zinc-200 rounded-lg p-2.5 shadow-sm">
+            <p class="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5"><i class="fa-regular fa-clock"></i> Validez</p>
+            <p class="text-[12px] font-semibold text-zinc-900">30 días</p>
+          </div>
+          <div class="bg-white border border-zinc-200 rounded-lg p-2.5 shadow-sm">
+            <p class="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5"><i class="fa-solid fa-shield-halved"></i> Garantía</p>
+            <p class="text-[12px] font-semibold text-zinc-900">12 meses</p>
+          </div>
+          <div class="bg-white border border-zinc-200 rounded-lg p-2.5 shadow-sm">
+            <p class="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5"><i class="fa-solid fa-truck-fast"></i> Entrega</p>
+            <p class="text-[12px] font-semibold text-zinc-900">2-5 días</p>
+          </div>
+          <div class="bg-white border border-zinc-200 rounded-lg p-2.5 shadow-sm">
+            <p class="text-[9px] font-bold text-zinc-400 uppercase tracking-wider mb-0.5"><i class="fa-regular fa-credit-card"></i> Pago</p>
+            <p class="text-[12px] font-semibold text-zinc-900">30 días</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- MENSAJE AL CLIENTE -->
+      <div>
+        <h3 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-3 flex items-center justify-between">
+          <span>Mensaje en Correo</span>
+          <button class="hover:text-zinc-600"><i class="fa-solid fa-pen text-[10px]"></i></button>
+        </h3>
+        <div class="bg-blue-50/50 border border-blue-100 rounded-lg p-3 relative overflow-hidden group">
+          <div class="absolute left-0 top-0 w-1 h-full bg-blue-400"></div>
+          <p class="text-[12px] text-blue-900 font-medium whitespace-pre-wrap leading-relaxed">✅ Entrega: Oficinas del cliente en quito
+✅ Incluye Pen</p>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- === COLUMNA DERECHA (TABS) === -->
+    <section class="lg:col-span-8 relative">
+      
+      <input type="radio" name="tabs" id="tab-articulos" class="peer/articulos hidden" checked />
+      <input type="radio" name="tabs" id="tab-documentos" class="peer/documentos hidden" />
+      <input type="radio" name="tabs" id="tab-historial" class="peer/historial hidden" />
+
+      <!-- Navegación Tabs -->
+      <div class="flex gap-6 border-b border-zinc-200 mb-6 overflow-x-auto scrollbar-hide">
+        <label for="tab-articulos" class="cursor-pointer pb-3 text-[13px] font-medium text-zinc-500 border-b-2 border-transparent hover:text-zinc-800 transition-colors flex items-center gap-2 peer-checked/articulos:text-zinc-900 peer-checked/articulos:border-zinc-900 peer-checked/articulos:font-semibold whitespace-nowrap">
+          Artículos <span class="bg-zinc-100 text-zinc-600 px-1.5 rounded-full text-[10px] font-semibold">1</span>
+        </label>
+        
+        <label for="tab-documentos" class="cursor-pointer pb-3 text-[13px] font-medium text-zinc-500 border-b-2 border-transparent hover:text-zinc-800 transition-colors flex items-center gap-2 peer-checked/documentos:text-zinc-900 peer-checked/documentos:border-zinc-900 peer-checked/documentos:font-semibold whitespace-nowrap">
+          Documentos & Archivos
+        </label>
+        
+        <label for="tab-historial" class="cursor-pointer pb-3 text-[13px] font-medium text-zinc-500 border-b-2 border-transparent hover:text-zinc-800 transition-colors peer-checked/historial:text-zinc-900 peer-checked/historial:border-zinc-900 peer-checked/historial:font-semibold whitespace-nowrap">
+          Historial de Envíos <span class="bg-sky-50 text-sky-600 px-1.5 rounded-full text-[10px] font-semibold border border-sky-100">1</span>
+        </label>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- TAB 1: ARTÍCULOS                               -->
+      <!-- ============================================== -->
+      <div class="hidden peer-checked/articulos:block animate-fade-in">
+        
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-[14px] font-semibold text-zinc-900">Listado de Productos</h3>
+          <button class="text-[12px] font-medium bg-zinc-900 text-white px-3 py-1.5 rounded-md hover:bg-zinc-800 transition-colors shadow-sm flex items-center gap-2">
+            <i class="fa-solid fa-plus text-[10px]"></i> Agregar Artículo
+          </button>
+        </div>
+
+        <div class="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
+          
+          <!-- Header Tabla: 12 columnas. pr-10 para la cruz -->
+          <div class="grid grid-cols-12 gap-4 px-4 py-3 border-b border-zinc-200 bg-zinc-50/80 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+            <div class="col-span-5">Descripción</div>
+            <div class="col-span-2 text-center">Cant.</div>
+            <div class="col-span-2 text-right">Precio Un.</div>
+            <div class="col-span-3 text-right pr-10">Total</div>
+          </div>
+
+          <!-- Fila de Producto -->
+          <div class="relative grid grid-cols-12 gap-4 px-4 py-4 items-center border-b border-zinc-100 hover:bg-zinc-50 transition-colors group">
+            
+            <div class="col-span-5 flex items-start gap-3">
+              <div class="w-10 h-10 rounded-md bg-white border border-zinc-200 shadow-sm flex items-center justify-center overflow-hidden shrink-0 mt-0.5">
+                <img src="https://images.weserv.nl/?url=https://drive.google.com/uc?id=1mcwmaIvThnowphXOaIWW5HV_TxXRx9Fm&export=view&n=-1" class="w-full h-full object-cover">
+              </div>
+              <div class="min-w-0 pr-2">
+                <div class="text-[13px] font-semibold text-zinc-900 leading-snug">
+                  TABLET SAMSUNG GALAXY S10 FE 8GB 128GB 10.9Inch 5G-LTE BT And-14 Gray
+                </div>
+                <div class="text-[11px] font-mono text-zinc-400 mt-1">COD-032</div>
+              </div>
+            </div>
+
+            <!-- Cantidad (Hover Stepper) -->
+            <div class="col-span-2 flex justify-center">
+              <div class="group/stepper flex items-center border border-transparent hover:border-zinc-200 hover:bg-white hover:shadow-sm focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 rounded-md transition-all h-8">
+                <button class="w-7 h-full flex items-center justify-center text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-l-md transition-all opacity-0 group-hover/stepper:opacity-100">
+                  <i class="fa-solid fa-minus text-[10px]"></i>
+                </button>
+                <input type="number" value="1" min="1" class="w-8 text-center text-[13px] font-medium text-zinc-700 bg-transparent outline-none cursor-pointer group-hover/stepper:cursor-text">
+                <button class="w-7 h-full flex items-center justify-center text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 rounded-r-md transition-all opacity-0 group-hover/stepper:opacity-100">
+                  <i class="fa-solid fa-plus text-[10px]"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Precio Unitario (Siempre visible el $) -->
+            <div class="col-span-2 flex justify-end">
+              <div class="relative flex items-center w-24">
+                <span class="absolute left-2 text-[12px] text-zinc-500 z-10">$</span>
+                <!-- pl-5 para que el número no pise el $ -->
+                <input type="text" value="575.00" class="w-full text-right text-[13px] font-medium text-zinc-700 bg-transparent border border-transparent hover:border-zinc-200 hover:bg-white focus:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded pl-5 pr-2 py-1 outline-none transition-all hover:shadow-sm focus:shadow h-8" title="Editar Precio">
+              </div>
+            </div>
+
+            <!-- Subtotal -->
+            <div class="col-span-3 text-right pr-10 text-[13px] font-bold text-zinc-900">
+              $575.00
+            </div>
+
+            <!-- BOTÓN ELIMINAR (X) -> Solo visible en hover del padre '.group' -->
+            <div class="absolute right-4 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button class="w-7 h-7 rounded-md text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center" title="Quitar Artículo">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+
+          </div>
+
+          <!-- Footer Totales -->
+          <div class="bg-zinc-50 border-t border-zinc-200 p-4">
+            <div class="flex justify-end items-center gap-6 text-[13px] pr-10">
+              <span class="font-semibold text-zinc-500 uppercase tracking-wider text-[11px]">Total General</span>
+              <span class="font-bold text-xl tracking-tight text-zinc-900">$575.00</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ============================================== -->
+      <!-- TAB 2: DOCUMENTOS Y ARCHIVOS ADJUNTOS          -->
+      <!-- ============================================== -->
+      <div class="hidden peer-checked/documentos:block animate-fade-in space-y-8">
+        
+        <!-- SECCIÓN A: Documentos Generados / Manuales -->
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-[14px] font-semibold text-zinc-900">Documento de Cotización Principal</h3>
+            <div class="flex gap-2">
+              <button class="text-[11px] font-bold uppercase tracking-wide bg-white border border-zinc-200 text-zinc-600 px-3 py-1.5 rounded-md hover:border-emerald-300 hover:text-emerald-600 transition-colors shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Subir Manual
+              </button>
+              <button class="text-[11px] font-bold uppercase tracking-wide bg-indigo-50 border border-indigo-100 text-indigo-700 px-3 py-1.5 rounded-md hover:bg-indigo-100 transition-colors shadow-sm flex items-center gap-1.5">
+                <i class="fa-solid fa-file-pdf"></i> Regenerar (v2)
+              </button>
+            </div>
+          </div>
+
+          <div class="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
+            <div class="flex items-center justify-between p-4 hover:bg-zinc-50 transition-colors group">
+              <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-md bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-500 shrink-0">
+                  <i class="fa-solid fa-file-pdf text-lg"></i>
+                </div>
+                <div>
+                  <p class="text-[13px] font-bold text-zinc-900">Versión 1 <span class="ml-2 px-1.5 py-0.5 rounded text-[9px] bg-zinc-100 text-zinc-500 uppercase border border-zinc-200">Generado por sistema</span></p>
+                  <p class="text-[11px] text-zinc-500 mt-0.5">Leonel Sabando • 02 Mar 2026, 11:08 AM</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <a href="#" class="h-8 px-3 bg-white border border-zinc-200 text-zinc-600 rounded-md text-[12px] font-medium flex items-center gap-2 hover:bg-zinc-50 hover:text-zinc-900 shadow-sm transition-colors">
+                  <i class="fa-solid fa-eye"></i> Abrir
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SECCIÓN B: Archivos Adjuntos Extra -->
+        <div>
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="text-[14px] font-semibold text-zinc-900">Archivos Adjuntos Extra</h3>
+              <p class="text-[11px] text-zinc-500 mt-0.5">Sube especificaciones, manuales u órdenes de compra (Máx 3).</p>
+            </div>
+          </div>
+
+          <div class="border-2 border-dashed border-zinc-300 bg-zinc-50/50 rounded-xl p-8 text-center hover:bg-zinc-50 transition-colors hover:border-zinc-400 cursor-pointer">
+             <div class="w-10 h-10 bg-white rounded-full border border-zinc-200 shadow-sm flex items-center justify-center mx-auto mb-3 text-zinc-400 group-hover:text-blue-500 transition-colors">
+               <i class="fa-solid fa-paperclip"></i>
+             </div>
+             <p class="text-[13px] font-semibold text-zinc-700">Haz clic para subir archivos adjuntos</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ============================================== -->
+      <!-- TAB 3: HISTORIAL DE CORREOS                    -->
+      <!-- ============================================== -->
+      <div class="hidden peer-checked/historial:block animate-fade-in">
+        
+        <div class="flex items-center justify-between mb-6">
+          <h3 class="text-[14px] font-semibold text-zinc-900">Registro de Comunicaciones</h3>
+        </div>
+
+        <div class="relative before:absolute before:inset-0 before:ml-[15px] before:w-[1px] before:bg-zinc-200 space-y-6">
+          
+          <div class="relative pl-10 group">
+            <div class="absolute left-0 top-0 w-8 h-8 rounded-full border border-sky-200 bg-sky-50 text-sky-500 flex items-center justify-center z-10 shadow-sm">
+              <i class="fa-solid fa-paper-plane text-[11px]"></i>
+            </div>
+            
+            <div class="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm hover:border-zinc-300 transition-colors">
+              
+              <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 gap-2 border-b border-zinc-100 pb-3">
+                <div class="flex items-start gap-3">
+                  <img src="https://lh3.googleusercontent.com/a/ACg8ocIwov-7RUzzjv7ytzz1-e8-0x7EYRKOYG2eql-q4o7qabjVkg=s96-c" class="w-8 h-8 rounded-full border border-zinc-200 mt-0.5">
+                  <div>
+                    <p class="text-[13px] font-bold text-zinc-900">Leonel Sabando <span class="font-normal text-zinc-500">envió la cotización</span></p>
+                    <p class="text-[11px] text-zinc-500 mt-0.5 flex items-center gap-1.5">
+                      Para: <span class="text-zinc-800 font-medium truncate">silvia.buenaventura@siemens-healthineers.com</span>
+                    </p>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span class="text-[11px] text-zinc-400 font-medium whitespace-nowrap block">02 Mar 2026</span>
+                  <span class="text-[10px] text-zinc-400 whitespace-nowrap block">11:09 AM</span>
+                </div>
+              </div>
+
+              <div class="bg-zinc-50 rounded-lg p-3">
+                <p class="text-[12px] font-bold text-zinc-800 mb-2">Asunto: Cotización #0029 (v1) -</p>
+                <div class="text-[12px] text-zinc-700 leading-relaxed font-medium whitespace-pre-wrap">✅ Entrega: Oficinas del cliente en quito
+✅ Incluye Pen</div>
+                
+                <div class="mt-3 pt-3 border-t border-zinc-200/60 flex flex-wrap gap-2">
+                  <a href="#" class="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-zinc-200 shadow-sm rounded text-[10px] font-bold uppercase tracking-wide text-zinc-600 hover:bg-zinc-50 hover:text-red-600 transition-colors">
+                    <i class="fa-solid fa-file-pdf text-red-500 text-[12px]"></i> Cotización v1.pdf
+                  </a>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+      
+    </section>
+  </main>
+
+</div>
+
+</body>
+</html>

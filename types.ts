@@ -446,18 +446,32 @@ export interface Quote {
     email: string;
     avatar: string;
   };
-  company_detail?: ClientCompany;
+  company_detail?: {
+    id_client_company?: string;
+    name?: string;         // Campo simplificado del backend
+    name_company?: string;  // Campo completo ClientCompany
+    ruc?: string;           // Campo simplificado del backend
+    id_number?: string;     // Campo completo ClientCompany
+    id_type?: string;
+    address?: string;
+    city?: string;
+    phone_company?: string;
+    email_company?: string;
+  };
   contact_detail?: {
     id: string;
     email: string;
     phone: string;
     full_name: string;
+    position?: string;
   };
   deal_detail?: {
-    id: string;
-    name: string;
-    value: string;
-    owner_id: string;
+    id?: string;
+    name?: string;
+    value?: string;
+    owner_id?: string;
+    status_name?: string;
+    status_color?: string;
   };
   
   // Historial de envíos de cotización
@@ -470,7 +484,7 @@ export interface Quote {
     subject?: string | null; // Asunto (puede ser null)
     method?: string; // 'EMAIL', etc
     email_policy?: string | null; // 'CORPORATE' | 'INDIVIDUAL' (puede ser null)
-    version_enviada?: number; // Versión que se envió
+    version_enviada?: number | null; // Versión que se envió
   }>;
 }
 
@@ -548,11 +562,14 @@ export interface QuoteItem {
   id_articulo_cot?: string; // Campo alternativo usado por el API
   id_cotizacion: string;
   id_product?: string;
+  id_producto?: string; // Campo alternativo enviado por el backend
   descripcion: string; // Snapshot
-  codigo?: string; // Código del producto
+  codigo?: string; // Código del producto (legacy)
+  formatted_product_code?: string; // Código formateado enviado por el backend (ej: "COD-055")
   cantidad: number;
-  precio_unitario: number; // Snapshot
-  subtotal: number;
+  precio_unitario: number | string; // Snapshot (puede venir como string "$0.00" del backend)
+  subtotal: number | string; // Puede venir como string "$0.00" del backend
+  imagen_url?: string; // URL de imagen del producto (join desde catálogo)
 }
 
 // PDF VERSION (Versión PDF de una cotización)
