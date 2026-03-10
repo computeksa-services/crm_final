@@ -437,6 +437,11 @@ const DealForm: React.FC = () => {
     const defaultInterest = cachedDealInterests.find(i => i.is_default) || cachedDealInterests[0];
     const defaultChannel = cachedDealChannels.find(c => c.is_default) || cachedDealChannels[0];
 
+    // Calcular fecha de cierre estimado: hoy + 3 días
+    const today = new Date();
+    today.setDate(today.getDate() + 3);
+    const estimatedCloseDate = today.toISOString().split('T')[0]; // YYYY-MM-DD
+
     const stateData = location.state as any;
     const clientCompanyId = stateData?.companyId || queryParams.get('clientCompanyId');
     const contactId = stateData?.contactId || queryParams.get('contactId');
@@ -463,6 +468,7 @@ const DealForm: React.FC = () => {
     }
 
     setDeal(initialState);
+    setExpectedCloseDate(estimatedCloseDate);
   }, [
     cacheLoading,
     user,
@@ -807,12 +813,24 @@ const DealForm: React.FC = () => {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-zinc-700 mb-1.5">Cierre Estimado</label>
-                  <input
-                    type="date"
-                    value={expectedCloseDate}
-                    onChange={(e) => setExpectedCloseDate(e.target.value)}
-                    className="w-full px-3 py-2 text-sm font-medium text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg outline-none transition-all shadow-sm cursor-pointer"
-                  />
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={expectedCloseDate}
+                      onChange={(e) => setExpectedCloseDate(e.target.value)}
+                      className="flex-1 px-3 py-2 text-sm font-medium text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg outline-none transition-all shadow-sm cursor-pointer"
+                    />
+                    {expectedCloseDate && (
+                      <button
+                        type="button"
+                        onClick={() => setExpectedCloseDate('')}
+                        className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full text-zinc-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                        title="Limpiar fecha"
+                      >
+                        <i className="fa-solid fa-xmark text-[11px]" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
