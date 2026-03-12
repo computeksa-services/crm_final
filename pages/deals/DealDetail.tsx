@@ -15,8 +15,6 @@ import Avatar from '../../components/Avatar';
 import DealActionsMenu from '../../components/DealActionsMenu';
 import { EventDetailModal } from '../calendar/EventDetail';
 
-const getInitials = (n?: string) => n ? n.split(' ').map(p => p[0]).join('').substring(0, 2).toUpperCase() : '?';
-
 const formatCurrency = (val: string | number | undefined) => {
   const num = typeof val === 'string' ? parseFloat(val) : val;
   if (num === undefined || isNaN(num)) return '$0.00';
@@ -667,9 +665,14 @@ const DealDetail: React.FC = () => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
         setProcessing(true);
         try {
-          await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/interest/deals`, {
+          await apiFetch(GATEWAY_CONFIG.API.DEALS.UPDATE, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id_trato: deal.id_trato, id_interest: newInterestId, id_tenant: user?.id_tenant, id_user: user?.id_user })
+            body: JSON.stringify({
+              ...deal,
+              id_interest: newInterestId,
+              id_tenant: user?.id_tenant,
+              id_user: user?.id_user,
+            })
           });
           setDeal((prev: any) => prev ? {
             ...prev,
@@ -1226,7 +1229,7 @@ const DealDetail: React.FC = () => {
                         <div key={item.id} className="relative pl-10 group mb-4">
                           {/* AVATAR FLOTANTE IZQUIERDA */}
                           <div className="absolute left-0 top-2 w-8 h-8 rounded-full border border-zinc-200 bg-white overflow-hidden z-10 shadow-sm flex items-center justify-center text-zinc-400">
-                            {isSystem ? <i className="fa-solid fa-code-branch text-[11px]"></i> : (item.user_avatar ? <img src={item.user_avatar} alt="av" className="w-full h-full object-cover" /> : <span className="text-[10px] font-medium">{getInitials(item.user_name)}</span>)}
+                            {isSystem ? <i className="fa-solid fa-code-branch text-[11px]"></i> : <Avatar src={item.user_avatar || ''} name={item.user_name || 'Usuario'} size="sm" />}
                           </div>
                           
                           {/* CONTENEDOR MENSAJE DERECHA */}

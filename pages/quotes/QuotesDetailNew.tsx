@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
 import { useEmailSendPolicy } from '../../src/hooks/useEmailSendPolicy';
 import { apiFetch } from '../../services/apiClient';
+import { GATEWAY_CONFIG } from '../../services/gatewayConfig';
 import ShareModal from '../../components/ShareModal';
 import ConfirmModal from '../../components/ConfirmModal';
 import Toast from '../../components/Toast';
@@ -21,6 +22,7 @@ interface Attachment {
 
 interface SentLog {
   id_sent: string;
+  sent_at_raw?: string;
   sent_at_fmt?: string;
   sent_at_human?: string;
   sent_time?: string;
@@ -28,10 +30,11 @@ interface SentLog {
   sent_to: string;
   sent_cc?: string;
   sent_from?: string;
-  subject: string;
-  method: string;
+  subject?: string;
+  method?: string;
   email_policy?: string;
   version_enviada?: number | null;
+  version_no?: number | null;
   sent_file_url?: string;
   attachments?: Attachment[];
   message_snapshot?: string;
@@ -39,6 +42,13 @@ interface SentLog {
   operator_name?: string;
   operator_avatar?: string;
   creator_name?: string;
+}
+
+interface AttachmentUploadItem {
+  id: string;
+  name: string;
+  status: 'pending' | 'uploading' | 'success' | 'error';
+  message?: string;
 }
 
 type QuoteExtended = Omit<
@@ -224,6 +234,25 @@ const convertGoogleDriveUrl = (url: string): string => {
     return `https://images.weserv.nl/?url=${encodeURIComponent(`https://drive.google.com/uc?id=${match[1]}&export=view`)}&n=-1`;
   }
   return url;
+};
+
+const getFileNameFromUrl = (url: string | undefined | null, fallback: string) => {
+  if (!url) return fallback;
+
+  try {
+    const pathname = new URL(url).pathname;
+    const rawName = pathname.split('/').filter(Boolean).pop();
+    return rawName ? decodeURIComponent(rawName) : fallback;
+  } catch {
+    const rawName = url.split('?')[0].split('/').filter(Boolean).pop();
+    return rawName ? decodeURIComponent(rawName) : fallback;
+  }
+};
+
+const sanitizeFilePart = (value: string | undefined | null, fallback: string) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return fallback;
+  return normalized.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim();
 };
 
 const QUOTE_CATEGORY_COLORS: Record<string, string> = {
@@ -414,6 +443,8 @@ const QuotesDetailNew: React.FC = () => {
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [deletingAttachmentUrl, setDeletingAttachmentUrl] = useState<string | null>(null);
+  const [openingFileKey, setOpeningFileKey] = useState<string | null>(null);
+  const [attachmentUploadQueue, setAttachmentUploadQueue] = useState<AttachmentUploadItem[]>([]);
 
   // --- MODALS ---
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -442,6 +473,45 @@ const QuotesDetailNew: React.FC = () => {
         total: nextTotal as any,
       };
     });
+  }, []);
+
+  const openFileSecure = useCallback(async (fileUrl?: string | null, key?: string) => {
+    if (!fileUrl) {
+      setToast({ message: 'No se encontró el archivo.', type: 'error' });
+      return;
+    }
+
+    const currentKey = key || fileUrl;
+    setOpeningFileKey(currentKey);
+
+    try {
+      const response = await apiFetch(
+        `${GATEWAY_CONFIG.API.QUOTES.VIEW_FILE}?url_archivo=${encodeURIComponent(fileUrl)}`,
+        {
+          method: 'GET',
+        }
+      );
+
+      if (!response.ok) throw new Error();
+
+      const blob = await response.blob();
+      if (!blob || blob.size === 0) throw new Error();
+
+      const blobUrl = URL.createObjectURL(blob);
+      const popup = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+
+      if (!popup) {
+        setToast({ message: 'Si no se abrió la vista, habilita ventanas emergentes para este sitio.', type: 'success' });
+      }
+
+      window.setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+      }, 60000);
+    } catch {
+      setToast({ message: 'No se pudo cargar el archivo.', type: 'error' });
+    } finally {
+      setOpeningFileKey(prev => (prev === currentKey ? null : prev));
+    }
   }, []);
 
   // --- FETCH DATA ---
@@ -571,7 +641,9 @@ const QuotesDetailNew: React.FC = () => {
       if (!res.ok) throw new Error();
       const data = await res.json();
       const url = data.redirect_url || data.url_pdf || data.url;
-      if (url) window.open(url, '_blank');
+      if (url) {
+        await openFileSecure(url, 'generated-pdf');
+      }
       setToast({ message: 'PDF Generado.', type: 'success' });
       fetchData();
     } catch {
@@ -615,18 +687,26 @@ const QuotesDetailNew: React.FC = () => {
 
   const handleSendQuote = async (idVersion?: string) => {
     if (!quote || !user) return;
+    if (sendingQuoteId) return;
     if (emailPolicyLoading) {
       setToast({ message: 'Validando configuración de correo...', type: 'error' });
       return;
     }
+    const isManualSend = !idVersion && Boolean(quote.url_cotizacion_manual);
+
+    if (isManualSend && !quote.url_cotizacion_manual) {
+      setToast({ message: 'No se encontró la cotización manual para enviar.', type: 'error' });
+      return;
+    }
+
     const destEmail = quote.contact_detail?.email || 'el cliente';
     setConfirmState({
       isOpen: true,
       title: 'Enviar Cotización',
-      message: `¿Enviar ${idVersion ? 'esta versión' : 'la cotización'} a ${destEmail}?`,
+      message: `¿Enviar ${isManualSend ? 'la cotización manual' : idVersion ? 'esta versión' : 'la cotización'} a ${destEmail}?`,
       onConfirm: async () => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
-        setSendingQuoteId(idVersion || 'manual');
+        setSendingQuoteId(isManualSend ? 'manual' : idVersion || 'manual');
         try {
           const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/send`, {
             method: 'POST',
@@ -635,7 +715,9 @@ const QuotesDetailNew: React.FC = () => {
               id_cotizacion: quote.id_cotizacion,
               id_user: user.id_user,
               id_tenant: user.id_tenant,
-              id_version: idVersion || null,
+              id_version: isManualSend ? null : idVersion || null,
+              is_manual: isManualSend,
+              url_archivo: isManualSend ? quote.url_cotizacion_manual : undefined,
               id_trato: quote.id_trato,
             }),
           });
@@ -652,29 +734,78 @@ const QuotesDetailNew: React.FC = () => {
   };
 
   const handleUploadAttachments = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0 || !quote || !user) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0 || !quote || !user) return;
+
+    const uploadQueue = files.map((file, index) => ({
+      id: `${file.name}-${file.size}-${file.lastModified}-${index}`,
+      name: file.name,
+      status: 'pending' as const,
+      message: 'En espera',
+    }));
+
+    setAttachmentUploadQueue(uploadQueue);
 
     setUploadingAttachments(true);
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-      formData.append('files', files[i]);
-    }
-    formData.append('id_cotizacion', quote.id_cotizacion);
-    formData.append('id_tenant', user.id_tenant);
-    formData.append('id_user', user.id_user);
+    let uploadedCount = 0;
+    let failedCount = 0;
 
     try {
-      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/attachments/add`, {
-        method: 'POST',
-        body: formData,
-      });
+      for (const [index, file] of files.entries()) {
+        const uploadId = uploadQueue[index].id;
+        setAttachmentUploadQueue(prev => prev.map(item =>
+          item.id === uploadId
+            ? { ...item, status: 'uploading', message: 'Subiendo...' }
+            : item
+        ));
 
-      if (!res.ok) throw new Error();
-      setToast({ message: 'Adjuntos subidos correctamente.', type: 'success' });
-      await fetchData({ silent: true });
-    } catch {
-      setToast({ message: 'Error al subir archivos.', type: 'error' });
+        const formData = new FormData();
+        formData.append('files', file);
+        formData.append('id_cotizacion', quote.id_cotizacion);
+        formData.append('id_tenant', user.id_tenant);
+        formData.append('id_user', user.id_user);
+
+        try {
+          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/attachments/add`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!res.ok) throw new Error();
+
+          uploadedCount += 1;
+          setAttachmentUploadQueue(prev => prev.map(item =>
+            item.id === uploadId
+              ? { ...item, status: 'success', message: 'Subido correctamente' }
+              : item
+          ));
+        } catch {
+          failedCount += 1;
+          setAttachmentUploadQueue(prev => prev.map(item =>
+            item.id === uploadId
+              ? { ...item, status: 'error', message: 'No se pudo subir' }
+              : item
+          ));
+        }
+      }
+
+      if (uploadedCount > 0) {
+        await fetchData({ silent: true });
+      }
+
+      if (uploadedCount > 0 && failedCount === 0) {
+        setToast({
+          message: uploadedCount === 1 ? 'Adjunto subido correctamente.' : `${uploadedCount} adjuntos subidos correctamente.`,
+          type: 'success',
+        });
+      } else if (uploadedCount > 0 && failedCount > 0) {
+        setToast({
+          message: `${uploadedCount} archivo${uploadedCount === 1 ? '' : 's'} subido${uploadedCount === 1 ? '' : 's'} y ${failedCount} falló${failedCount === 1 ? '' : 's'}.`,
+          type: 'error',
+        });
+      } else {
+        setToast({ message: 'No se pudo subir ningún archivo.', type: 'error' });
+      }
     } finally {
       setUploadingAttachments(false);
       if (attachmentInputRef.current) attachmentInputRef.current.value = '';
@@ -700,7 +831,7 @@ const QuotesDetailNew: React.FC = () => {
               id_cotizacion: quote.id_cotizacion,
               id_tenant: user.id_tenant,
               id_user: user.id_user,
-              url_a_eliminar: fileUrl,
+              url_archivo: fileUrl,
             }),
           });
 
@@ -1087,6 +1218,15 @@ const QuotesDetailNew: React.FC = () => {
   const totalFormatted = formatCurrency(totalValue);
   const [totalInteger, totalDecimals = '00'] = totalFormatted.split('.');
   const isManualQuoteActive = quote ? Boolean(quote.url_cotizacion_manual) : false;
+  const quoteCodeForDocName = sanitizeFilePart(
+    quote?.formatted_no_cotizacion || (quote?.id_cotizacion ? `COT-${quote.id_cotizacion.substring(0, 4)}` : ''),
+    'SIN-CODIGO'
+  );
+  const quoteClientForDocName = sanitizeFilePart(
+    quote?.company_detail?.name || quote?.contact_detail?.full_name,
+    'Cliente'
+  );
+  const manualDisplayName = `Cotización #${quoteCodeForDocName} - ${quoteClientForDocName}.pdf`;
   const versionsList = quote && quote.versions ? (quote.versions as Array<{
     id_version?: string;
     file_url: string;
@@ -1100,6 +1240,7 @@ const QuotesDetailNew: React.FC = () => {
   }>) : [];
   const documentsCount = versionsList.length + (isManualQuoteActive ? 1 : 0) + (quote?.archivos_adjuntos?.length || 0);
   const historyCount = quote?.sent_history?.length || 0;
+  const isSendingAnyQuote = sendingQuoteId !== null;
   const quoteCreatedDate =
     quote?.timeline_info?.fecha_emision_human ||
     quote?.timeline_info?.created_at_human ||
@@ -1812,27 +1953,43 @@ Valor                </div>
                 </div>
 
                 {isManualQuoteActive && (
-                  <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-4 mb-3 flex items-center justify-between">
-                    <div>
-                      <p className="text-[13px] font-semibold text-emerald-900">Cotización manual activa</p>
-                      <p className="text-[11px] text-emerald-700">Este archivo se usa como principal para enviar.</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={quote.url_cotizacion_manual || '#'}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-bold text-zinc-600 hover:text-emerald-700 px-3 py-1.5 rounded-lg bg-white border border-zinc-200 hover:border-emerald-300 transition-all"
-                      >
-                        <i className="fa-solid fa-external-link-alt mr-1"></i> Abrir
-                      </a>
-                      <button
-                        onClick={() => handleSendQuote()}
-                        disabled={sendingQuoteId === 'manual' || processing}
-                        className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
-                      >
-                        {sendingQuoteId === 'manual' ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
-                      </button>
+                  <div className="group rounded-xl border border-emerald-200 bg-white p-3 shadow-sm mb-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex items-start gap-2.5">
+                        <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 shrink-0 border border-emerald-100">
+                          <i className="fa-solid fa-file-pdf text-[13px]"></i>
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                            <p className="text-[12px] font-semibold text-zinc-800 truncate">
+                              {manualDisplayName}
+                            </p>
+                            <span className="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-700">
+                              Principal
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-zinc-500">Archivo manual cargado por el usuario para envio.</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => void openFileSecure(quote.url_cotizacion_manual, 'manual-quote')}
+                          disabled={openingFileKey === 'manual-quote'}
+                          className="h-7 w-7 rounded-md text-zinc-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center disabled:opacity-50"
+                          title="Abrir archivo"
+                        >
+                          {openingFileKey === 'manual-quote' ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-eye text-[11px]"></i>}
+                        </button>
+                        <button
+                          onClick={() => handleSendQuote()}
+                          disabled={isSendingAnyQuote || processing}
+                          className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-md hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
+                        >
+                          {sendingQuoteId === 'manual' ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1840,33 +1997,43 @@ Valor                </div>
                 {versionsList.length > 0 ? (
                   <div className="space-y-2">
                     {versionsList.map((version, idx) => (
-                      <div key={version.id_version || `${version.file_url || 'version'}-${idx}`} className="bg-white border border-zinc-200 rounded-lg shadow-sm overflow-hidden">
-                        <div className="flex items-center justify-between p-4 hover:bg-zinc-50 transition-colors group">
-                          <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-red-50 to-red-100 flex items-center justify-center shadow-sm border border-red-200">
-                              <i className="fa-solid fa-file-pdf text-red-500 text-2xl"></i>
-                            </div>
-                            <div>
-                              <p className="text-[13px] font-semibold text-zinc-900">
-                                v{version.version_number || idx + 1} - {[version.created_at_human, version.created_time].filter(Boolean).join(' • ') || version.created_at_fmt || version.created_at_raw || (version.created_at ? new Date(version.created_at).toLocaleString() : '-')}
+                      <div key={version.id_version || `${version.file_url || 'version'}-${idx}`} className="group rounded-xl border border-zinc-200 bg-white p-3 shadow-sm hover:border-zinc-300 transition-colors">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex items-start gap-2.5">
+                            <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 shrink-0">
+                              <i className="fa-solid fa-file-pdf text-[13px]"></i>
+                            </span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                                <p className="text-[12px] font-semibold text-zinc-800 truncate">
+                                  {`Cotización #${quoteCodeForDocName} v${version.version_number || idx + 1} - ${quoteClientForDocName}.pdf`}
+                                </p>
+                                <span className="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-zinc-600">
+                                  v{version.version_number || idx + 1}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-zinc-500 truncate">
+                                {[version.created_at_human, version.created_time].filter(Boolean).join(' • ') || version.created_at_fmt || version.created_at_raw || (version.created_at ? new Date(version.created_at).toLocaleString() : '-')}
                               </p>
-                              <p className="text-[11px] text-zinc-500">Por {version.creator_name || 'Usuario'}</p>
+                              <p className="text-[10px] text-zinc-500 truncate">Por {version.creator_name || 'Usuario'}</p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                            <a
-                              href={version.file_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="w-8 h-8 rounded-md text-zinc-400 hover:text-blue-500 hover:bg-blue-50 transition-colors flex items-center justify-center"
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => void openFileSecure(version.file_url, `version-${version.id_version || idx}`)}
+                              disabled={openingFileKey === `version-${version.id_version || idx}`}
+                              className="h-7 w-7 rounded-md text-zinc-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center disabled:opacity-50"
+                              title="Abrir archivo"
                             >
-                              <i className="fa-solid fa-download text-sm"></i>
-                            </a>
+                              {openingFileKey === `version-${version.id_version || idx}` ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-eye text-[11px]"></i>}
+                            </button>
                             {canEdit && (
                               <button
                                 onClick={() => handleSendQuote(version.id_version)}
-                                disabled={sendingQuoteId === (version.id_version || 'manual') || processing}
-                                className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
+                                disabled={isSendingAnyQuote || processing}
+                                className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-md hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
                               >
                                 {sendingQuoteId === (version.id_version || 'manual') ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
                               </button>
@@ -1914,6 +2081,36 @@ Valor                </div>
                   onChange={handleUploadAttachments}
                 />
 
+                {attachmentUploadQueue.length > 0 && (
+                  <div className="mb-4 rounded-xl border border-zinc-200 bg-white p-3 shadow-sm">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[12px] font-semibold text-zinc-900">Estado de subida</p>
+                        <p className="text-[10px] text-zinc-500">Cada archivo se procesa de forma individual.</p>
+                      </div>
+                      {uploadingAttachments && <BrandSpinner size="xs" />}
+                    </div>
+
+                    <div className="space-y-2">
+                      {attachmentUploadQueue.map((item) => (
+                        <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-[12px] font-medium text-zinc-800">{item.name}</p>
+                            <p className="text-[10px] text-zinc-500">{item.message}</p>
+                          </div>
+
+                          <div className="shrink-0">
+                            {item.status === 'uploading' && <BrandSpinner size="xs" />}
+                            {item.status === 'success' && <i className="fa-solid fa-circle-check text-[14px] text-emerald-500"></i>}
+                            {item.status === 'error' && <i className="fa-solid fa-circle-xmark text-[14px] text-rose-500"></i>}
+                            {item.status === 'pending' && <i className="fa-regular fa-clock text-[14px] text-zinc-400"></i>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {(!quote.archivos_adjuntos || quote.archivos_adjuntos.length === 0) ? (
                   <button
                     type="button"
@@ -1949,15 +2146,15 @@ Valor                </div>
                           </div>
 
                           <div className="flex items-center gap-1 shrink-0">
-                            <a
-                              href={file.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => void openFileSecure(file.url, `attachment-${idx}`)}
+                              disabled={openingFileKey === `attachment-${idx}`}
                               className="h-7 w-7 rounded-md text-zinc-400 hover:text-blue-600 hover:bg-blue-50 transition-colors flex items-center justify-center"
                               title="Abrir archivo"
                             >
-                              <i className="fa-solid fa-eye text-[11px]"></i>
-                            </a>
+                              {openingFileKey === `attachment-${idx}` ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-eye text-[11px]"></i>}
+                            </button>
                             {canEdit && (
                               <button
                                 type="button"
@@ -1990,51 +2187,104 @@ Valor                </div>
                 <div className="relative before:absolute before:inset-0 before:ml-[15px] before:w-[1px] before:bg-zinc-200 space-y-6">
                   {(quote.sent_history as SentLog[]).map((log, idx) => (
                     <div key={log.id_sent} className="relative pl-10 group">
+                      {(() => {
+                        const normalizedMethod = String(log.method || 'EMAIL').toUpperCase();
+                        const isEmail = normalizedMethod !== 'REPLY';
+                        const versionNumber = log.version_enviada ?? log.version_no ?? null;
+                        const communicationTitle =
+                          log.subject ||
+                          (versionNumber
+                            ? `Envío de cotización v${versionNumber}`
+                            : 'Envío de cotización');
+                        const timestampLabel =
+                          [log.sent_at_human, log.sent_time].filter(Boolean).join(' • ') ||
+                          log.sent_at_fmt ||
+                          log.sent_at_raw ||
+                          '-';
+                        const senderName =
+                          log.operator_name ||
+                          log.sent_by_name ||
+                          log.creator_name ||
+                          '-';
+                        const receiverEmail = log.sent_to || '-';
+                        const summaryMessage =
+                          log.message_content ||
+                          log.message_snapshot ||
+                          (versionNumber
+                            ? `Se registró el envío de la versión v${versionNumber} al destinatario.`
+                            : 'Se registró el envío de la cotización al destinatario.');
+
+                        return (
+                          <>
                       <div className={`absolute left-0 top-0 w-8 h-8 rounded-full flex items-center justify-center z-10 shadow-sm ${
-                        log.method === 'EMAIL' 
+                        isEmail
                           ? 'border border-sky-200 bg-sky-50 text-sky-500'
                           : 'border border-amber-200 bg-amber-50 text-amber-500'
                       }`}>
-                        <i className={`fa-solid ${log.method === 'EMAIL' ? 'fa-paper-plane' : 'fa-reply'} text-[11px]`}></i>
+                        <i className={`fa-solid ${isEmail ? 'fa-paper-plane' : 'fa-reply'} text-[11px]`}></i>
                       </div>
 
                       <div className="bg-white border border-zinc-200 rounded-xl p-4 shadow-sm hover:border-zinc-300 transition-colors">
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 gap-2 border-b border-zinc-100 pb-3">
                           <div>
-                            <p className="text-[13px] font-semibold text-zinc-900">{log.subject || 'Comunicación'}</p>
-                            <p className="text-[11px] text-zinc-500 mt-0.5">{[log.sent_at_human, log.sent_time].filter(Boolean).join(' • ') || log.sent_at_fmt || '-'}</p>
+                            <p className="text-[13px] font-semibold text-zinc-900">{communicationTitle}</p>
+                            <p className="text-[11px] text-zinc-500 mt-0.5">{timestampLabel}</p>
                           </div>
-                          <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap ${
-                            log.method === 'EMAIL'
-                              ? 'text-sky-700 bg-sky-50 border border-sky-100'
-                              : 'text-amber-700 bg-amber-50 border border-amber-100'
-                          }`}>
-                            {log.method === 'EMAIL' ? 'Email Enviado' : 'Respuesta'}
-                          </span>
+                          <div className="flex items-center gap-2 flex-wrap justify-start sm:justify-end">
+                            {versionNumber !== null && versionNumber !== undefined && (
+                              <span className="px-2 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap text-violet-700 bg-violet-50 border border-violet-100">
+                                v{versionNumber}
+                              </span>
+                            )}
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold whitespace-nowrap ${
+                              isEmail
+                                ? 'text-sky-700 bg-sky-50 border border-sky-100'
+                                : 'text-amber-700 bg-amber-50 border border-amber-100'
+                            }`}>
+                              {isEmail ? 'Email Enviado' : 'Respuesta'}
+                            </span>
+                          </div>
                         </div>
 
                         <div className="bg-zinc-50 rounded-lg p-3">
-                          <p className="text-[11px] font-semibold text-zinc-600 mb-1">
-                            {log.method === 'EMAIL' ? `Para: ${log.sent_to}` : `De: ${log.sent_from || log.operator_name}`}
-                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mb-2.5 text-[11px]">
+                            <p className="text-zinc-600">
+                              <span className="font-semibold">Para:</span>{' '}
+                              <span className="text-zinc-700 font-medium">{receiverEmail}</span>
+                            </p>
+                            <p className="text-zinc-600">
+                              <span className="font-semibold">Enviado por:</span>{' '}
+                              <span className="text-zinc-700 font-medium">{senderName}</span>
+                            </p>
+                            {log.sent_cc && (
+                              <p className="text-zinc-600 sm:col-span-2">
+                                <span className="font-semibold">CC:</span>{' '}
+                                <span className="text-zinc-700 font-medium break-all">{log.sent_cc}</span>
+                              </p>
+                            )}
+                          </div>
                           <div className="text-[12px] text-zinc-700 leading-relaxed font-medium whitespace-pre-wrap">
-                            {log.message_content || 'Sin contenido'}
+                            {summaryMessage}
                           </div>
 
                           {log.sent_file_url && (
                             <div className="mt-3 pt-3 border-t border-zinc-200/60 flex flex-wrap gap-2">
-                              <a
-                                href={log.sent_file_url}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                              <button
+                                type="button"
+                                onClick={() => void openFileSecure(log.sent_file_url, `sent-file-${log.id_sent}`)}
+                                disabled={openingFileKey === `sent-file-${log.id_sent}`}
                                 className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-zinc-200 shadow-sm rounded text-[10px] font-bold uppercase tracking-wide text-zinc-600 hover:bg-zinc-50 hover:text-red-600 transition-colors"
                               >
-                                <i className="fa-solid fa-file-pdf text-red-500 text-[12px]"></i> PDF Enviado
-                              </a>
+                                {openingFileKey === `sent-file-${log.id_sent}` ? <BrandSpinner size="xs" className="mr-1" /> : <i className="fa-solid fa-file-pdf text-red-500 text-[12px]"></i>}
+                                PDF Enviado
+                              </button>
                             </div>
                           )}
                         </div>
                       </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>

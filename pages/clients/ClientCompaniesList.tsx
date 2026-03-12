@@ -6,6 +6,7 @@ import { ClientCompany } from '../../types';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
+import Avatar from '../../components/Avatar';
 import CompanyForm from './CompanyForm';
 import { apiFetch } from '../../services/apiClient';
 import {
@@ -431,8 +432,7 @@ const ClientCompaniesList: React.FC = () => {
         const name = getValue() as string || 'Desconocido';
         return (
           <div className="flex items-center gap-2 py-1">
-            {avatar ? <img src={avatar} alt={name} className="w-8 h-8 rounded-full border border-slate-200 object-cover" /> : 
-            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 border border-slate-200 font-bold">{getInitials(name)}</div>}
+            <Avatar src={avatar || ''} name={name} size="sm" className="border border-slate-200" />
             <span className="text-sm text-slate-600 font-medium">{name}</span>
           </div>
         );

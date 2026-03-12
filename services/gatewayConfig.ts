@@ -71,6 +71,7 @@ export const GATEWAY_CONFIG = {
       UPDATE: buildFullUrl('/api/quotes/update'),
       DELETE: buildFullUrl('/api/quotes/delete'),
       ARCHIVED: buildFullUrl('/api/v1/quotes/archived'),
+      VIEW_FILE: buildFullUrl('/api/crm/view'),
       GENERATE_PDF: buildFullUrl('/api/quotes/generate-pdf'),
       SEND: buildFullUrl('/api/quotes/send'),
       DECISION: buildFullUrl('/api/quotes/decision'),

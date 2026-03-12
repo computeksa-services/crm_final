@@ -1,8 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import {
-  getImageUrl,
-  getLocalAvatarDataUrl,
-} from '../utils/imageUtils';
+import { getImageUrl } from '../utils/imageUtils';
 import { BrandSpinner } from './AppLoaders';
 
 const loadedAvatarUrls = new Set<string>();
@@ -60,10 +57,10 @@ const badgeConfig = {
   }
 } as const;
 
-const Avatar: React.FC<AvatarProps> = ({ 
-  src, 
-  name, 
-  size = 'md', 
+const Avatar: React.FC<AvatarProps> = ({
+  src,
+  name,
+  size = 'md',
   className = '',
   showOnlineIndicator = false,
   loading = 'lazy',
@@ -81,16 +78,12 @@ const Avatar: React.FC<AvatarProps> = ({
   const [tooltipStyle, setTooltipStyle] = useState<React.CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // Memoizar URL para evitar recálculos innecesarios
   const imageUrl = useMemo(() => getImageUrl(src), [src]);
-  const fallbackUrl = useMemo(() => getLocalAvatarDataUrl(name), [name]);
   const effectiveImageUrl = imageUrl;
   const wasLoadedBefore = useMemo(
     () => (effectiveImageUrl ? loadedAvatarUrls.has(effectiveImageUrl) : false),
     [effectiveImageUrl]
   );
-
-  const shouldShowFallback = !effectiveImageUrl || imageError;
 
   useEffect(() => {
     setImageError(false);
@@ -100,7 +93,6 @@ const Avatar: React.FC<AvatarProps> = ({
   useEffect(() => {
     if (!effectiveImageUrl || imageLoaded || imageError) return;
     const timeoutId = window.setTimeout(() => {
-      // Safety net: avoid infinite spinner on transient network hangs.
       setImageError(true);
     }, 6000);
     return () => window.clearTimeout(timeoutId);
@@ -176,19 +168,12 @@ const Avatar: React.FC<AvatarProps> = ({
         className={`${enableHoverZoom ? 'relative w-full h-full transition-transform duration-200 will-change-transform origin-center' : 'relative w-full h-full'}`}
         style={enableHoverZoom && isHovered ? { transform: `scale(${hoverScale})`, zIndex: 10 } : undefined}
       >
-        {shouldShowFallback ? (
-          <img
-            src={fallbackUrl}
-            alt={name}
-            className="w-full h-full rounded-full object-cover"
-            loading={loading}
-            decoding="async"
-            crossOrigin="anonymous"
-          />
+        {!effectiveImageUrl || imageError ? (
+          <div className="w-full h-full rounded-full bg-slate-200 dark:bg-slate-400"></div>
         ) : (
           <>
             <img
-              src={effectiveImageUrl || fallbackUrl}
+              src={effectiveImageUrl}
               alt={name}
               className={`w-full h-full rounded-full object-cover transition-opacity duration-200 ${
                 imageLoaded ? 'opacity-100' : 'opacity-0'
@@ -207,12 +192,10 @@ const Avatar: React.FC<AvatarProps> = ({
           </>
         )}
 
-        {/* Indicador online - esquina inferior derecha */}
         {showOnlineIndicator && (
           <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white dark:border-slate-500 rounded-full pointer-events-none"></span>
         )}
 
-        {/* Badge de colaborador - esquina inferior derecha con z-index */}
         {badgeInfo && (
           <div
             className={`absolute ${badgeInset ? badgeSize.inset : badgeSize.floating} ${badgeInfo.bg} rounded-full border border-white flex items-center justify-center shadow-sm pointer-events-none z-10`}

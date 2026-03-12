@@ -27,7 +27,15 @@ interface Attachment {
   size: string;
   type: string;
   file?: File;
+    url?: string;
+    file_url?: string;
+    url_archivo?: string;
 }
+
+const getAttachmentUrl = (att: Attachment | undefined | null): string | null => {
+    if (!att) return null;
+    return att.url_archivo || att.url || att.file_url || null;
+};
 
 const CampaignWizard: React.FC = () => {
   const navigate = useNavigate();
@@ -51,6 +59,9 @@ const CampaignWizard: React.FC = () => {
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [isCreator, setIsCreator] = useState(true);
     const { policy: emailPolicy } = useEmailSendPolicy(user);
+    const [attachmentChangeFlag, setAttachmentChangeFlag] = useState<'addfile' | 'deletefile' | null>(null);
+    const [changedAttachmentUrl, setChangedAttachmentUrl] = useState<string | null>(null);
+    const [viewingAttachmentKey, setViewingAttachmentKey] = useState<string | null>(null);
   
   // Estado para controlar si hay cambios pendientes
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -176,22 +187,29 @@ const CampaignWizard: React.FC = () => {
       setIsCreator(user?.id_user === campaign.created_by);
       
       setFormData(prev => ({
-        ...prev,
-        name: campaign.name,
-        subject: campaign.subject,
-        previewText: campaign.preview_text || '',
-        htmlContent: campaign.html_content || prev.htmlContent,
-        senderType: campaign.sender_type,
-        senderName: campaign.sender_name || prev.senderName,
-        senderEmail: campaign.sender_email || prev.senderEmail,
-        selectedLists: normalizedLists,
-        scheduledAt: campaign.scheduled_at || null,
-        scheduledTimezone: campaign.schedule_timezone || null,
-        attachments: Array.isArray(campaign.attachments) ? campaign.attachments : []
-      }));
+                ...prev,
+                name: campaign.name,
+                subject: campaign.subject,
+                previewText: campaign.preview_text || '',
+                htmlContent: campaign.html_content || prev.htmlContent,
+                senderType: campaign.sender_type,
+                senderName: campaign.sender_name || prev.senderName,
+                senderEmail: campaign.sender_email || prev.senderEmail,
+                selectedLists: normalizedLists,
+                scheduledAt: campaign.scheduled_at || null,
+                scheduledTimezone: campaign.schedule_timezone || null,
+                attachments: Array.isArray(campaign.attachments)
+                    ? campaign.attachments.map((att: any) => ({
+                            ...att,
+                            url_archivo: att?.url_archivo || att?.url || att?.file_url || att?.attachment_url || null,
+                        }))
+                    : []
+            }));
       
       // Al cargar datos iniciales, no hay cambios sin guardar
       setHasUnsavedChanges(false);
+            setAttachmentChangeFlag(null);
+            setChangedAttachmentUrl(null);
     } catch (error) { console.error(error); }
   };
 
@@ -222,7 +240,35 @@ const CampaignWizard: React.FC = () => {
   const handleBack = () => setCurrentStep(prev => Math.max(prev - 1, 1));
 
   // --- FILES & ATTACHMENTS (MEJORADO) ---
+    const canAttachFiles = Boolean(currentCampaignId) && !hasUnsavedChanges;
+
+    const handleOpenFilePicker = () => {
+        if (!currentCampaignId) {
+            setToast({ message: 'Primero guarda la campaña para generar el ID antes de adjuntar archivos.', type: 'info' });
+            return;
+        }
+
+        if (hasUnsavedChanges) {
+            setToast({ message: 'Guarda los cambios pendientes antes de adjuntar archivos.', type: 'info' });
+            return;
+        }
+
+        fileInputRef.current?.click();
+    };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!currentCampaignId) {
+            setToast({ message: 'Debes guardar la campaña antes de subir adjuntos.', type: 'info' });
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
+        if (hasUnsavedChanges) {
+            setToast({ message: 'Guarda los cambios pendientes antes de subir adjuntos.', type: 'info' });
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
     if (e.target.files && e.target.files.length > 0) {
       const filesArray = Array.from(e.target.files);
       const validFiles: Attachment[] = [];
@@ -260,6 +306,8 @@ const CampaignWizard: React.FC = () => {
             ...prev,
             attachments: [...prev.attachments, ...validFiles]
           }));
+                    setAttachmentChangeFlag('addfile');
+                    setChangedAttachmentUrl(null);
           setHasUnsavedChanges(true);
       }
     }
@@ -268,12 +316,63 @@ const CampaignWizard: React.FC = () => {
   };
 
   const removeAttachment = (index: number) => {
+        const target = formData.attachments[index] as Attachment | undefined;
+        const targetUrl = target?.url_archivo || target?.url || target?.file_url || null;
+
     setFormData(prev => ({
       ...prev,
       attachments: prev.attachments.filter((_, i) => i !== index)
     }));
+        setAttachmentChangeFlag('deletefile');
+        setChangedAttachmentUrl(targetUrl);
     setHasUnsavedChanges(true);
   };
+
+    const handleViewAttachment = async (attachment: Attachment, index: number) => {
+        const viewKey = `${attachment.name || 'attachment'}-${index}`;
+        if (viewingAttachmentKey) return;
+
+        const remoteUrl = getAttachmentUrl(attachment);
+        if (!remoteUrl && !attachment.file) {
+            setToast({ message: 'No se encontró URL del archivo para visualizar.', type: 'error' });
+            return;
+        }
+
+        setViewingAttachmentKey(viewKey);
+        try {
+            if (remoteUrl) {
+                const response = await apiFetch(
+                    `${GATEWAY_CONFIG.API.QUOTES.VIEW_FILE}?url_archivo=${encodeURIComponent(remoteUrl)}`,
+                    { method: 'GET' }
+                );
+                if (!response.ok) throw new Error('Error al obtener archivo');
+
+                const blob = await response.blob();
+                if (!blob || blob.size === 0) throw new Error('Archivo vacío');
+
+                const blobUrl = URL.createObjectURL(blob);
+                const popup = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+                if (!popup) {
+                    setToast({ message: 'Si no se abrió la vista, habilita ventanas emergentes para este sitio.', type: 'info' });
+                }
+                window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+                return;
+            }
+
+            if (attachment.file) {
+                const blobUrl = URL.createObjectURL(attachment.file);
+                const popup = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+                if (!popup) {
+                    setToast({ message: 'Si no se abrió la vista, habilita ventanas emergentes para este sitio.', type: 'info' });
+                }
+                window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+            }
+        } catch {
+            setToast({ message: 'No se pudo abrir el archivo.', type: 'error' });
+        } finally {
+            setViewingAttachmentKey(prev => (prev === viewKey ? null : prev));
+        }
+    };
 
     const handleSenderTypeChange = (type: 'USER' | 'TENANT') => {
         const hasCorporate = Boolean(tenantData?.corporate_email_address && tenantData?.corporate_send_emails);
@@ -376,6 +475,16 @@ const CampaignWizard: React.FC = () => {
         }
 
         // Adjuntos
+        if (attachmentChangeFlag) {
+            dataToSend.append('attachment_flag', attachmentChangeFlag);
+            dataToSend.append('flag', attachmentChangeFlag);
+            if (changedAttachmentUrl) {
+                dataToSend.append('url_archivo', changedAttachmentUrl);
+                dataToSend.append('file_url', changedAttachmentUrl);
+                dataToSend.append('url', changedAttachmentUrl);
+            }
+        }
+
         if (formData.attachments.length === 0) {
             dataToSend.append('attachments', '[]'); 
         } else {
@@ -434,6 +543,8 @@ const CampaignWizard: React.FC = () => {
         }
 
         setHasUnsavedChanges(false);
+        setAttachmentChangeFlag(null);
+        setChangedAttachmentUrl(null);
         
         // Salir si no es borrador
         if (!isDraft) {
@@ -747,7 +858,12 @@ const CampaignWizard: React.FC = () => {
                     {/* Toolbar */}
                     <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 shadow-sm sticky top-0 z-10">
                         <div className="flex gap-2">
-                            <button onClick={() => fileInputRef.current?.click()} className="px-4 py-2 bg-slate-50 border text-slate-700 rounded-lg text-sm font-bold hover:bg-slate-100 flex gap-2 items-center transition-colors">
+                            <button
+                                onClick={handleOpenFilePicker}
+                                disabled={!canAttachFiles}
+                                className="px-4 py-2 bg-slate-50 border text-slate-700 rounded-lg text-sm font-bold hover:bg-slate-100 flex gap-2 items-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={!currentCampaignId ? 'Primero guarda la campaña para generar el ID.' : hasUnsavedChanges ? 'Guarda cambios pendientes antes de adjuntar.' : 'Adjuntar archivo'}
+                            >
                                 <i className="fa-solid fa-paperclip"></i> Adjuntar
                             </button>
                             <input type="file" ref={fileInputRef} className="hidden" multiple onChange={handleFileChange} />
@@ -789,6 +905,14 @@ const CampaignWizard: React.FC = () => {
                                                 <p className="text-[10px] opacity-70">{file.size}</p>
                                             </div>
                                         </div>
+                                        <button
+                                            onClick={() => void handleViewAttachment(file, idx)}
+                                            disabled={viewingAttachmentKey !== null}
+                                            className="ml-1 w-6 h-6 flex items-center justify-center rounded-full hover:bg-white hover:text-blue-700 transition-colors disabled:opacity-50"
+                                            title="Ver archivo"
+                                        >
+                                            {viewingAttachmentKey === `${file.name || 'attachment'}-${idx}` ? <SimpleSpinner size="sm" /> : <i className="fa-solid fa-eye"></i>}
+                                        </button>
                                         <button 
                                             onClick={() => removeAttachment(idx)} 
                                             className="ml-2 w-6 h-6 flex items-center justify-center rounded-full hover:bg-white hover:text-red-500 transition-colors"
@@ -907,7 +1031,13 @@ const CampaignWizard: React.FC = () => {
                                     {formData.attachments.length > 0 ? (
                                         <div className="flex items-center gap-2 text-slate-700">
                                             <i className="fa-solid fa-paperclip text-slate-400"></i>
-                                            <span className="font-bold">{formData.attachments[0].name}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleViewAttachment(formData.attachments[0], 0)}
+                                                className="font-bold text-left hover:text-brand-700 underline-offset-2 hover:underline"
+                                            >
+                                                {formData.attachments[0].name}
+                                            </button>
                                             <span className="text-xs text-slate-400">({formData.attachments[0].size})</span>
                                         </div>
                                     ) : (

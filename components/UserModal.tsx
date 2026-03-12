@@ -1,7 +1,6 @@
 import React from 'react';
 import { BrandSpinner } from './AppLoaders';
 import { User, Tenant } from '../types';
-import { getLocalAvatarDataUrl } from '../utils/imageUtils';
 
 interface UserModalProps {
   isOpen: boolean;
@@ -88,15 +87,7 @@ const UserModal: React.FC<UserModalProps> = ({
               <div className="flex flex-col items-center py-4 px-4 bg-gradient-to-b from-slate-50 to-white rounded-xl border border-slate-200">
                 <div className="relative mb-3">
                   <div className="w-24 h-24 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 border-2 border-white shadow-lg flex items-center justify-center overflow-hidden">
-                    {editingUser.avatar_url ? (
-                      <img src={editingUser.avatar_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <img 
-                        src={getLocalAvatarDataUrl(editingUser.name_user || 'Usuario')} 
-                        alt="Avatar" 
-                        className="w-full h-full object-cover"
-                      />
-                    )}
+                    <img src={editingUser.avatar_url || ''} alt="" className="w-full h-full object-cover" />
                   </div>
                   {editingUser.is_owner && (
                     <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-br from-amber-400 to-amber-500 rounded-full flex items-center justify-center shadow-lg border-2 border-white">

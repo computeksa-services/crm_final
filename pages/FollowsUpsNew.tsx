@@ -5,7 +5,7 @@ import { FollowUpItem } from '../types';
 import { apiFetch } from '../services/apiClient';
 import { parseISO, isBefore, startOfDay } from 'date-fns';
 import { Handshake } from 'lucide-react';
-import LogActionModal from '../components/LogActionModal';
+import NewInteractionModal from '../components/NewInteractionModal';
 import ReassignModal from '../components/ReassignModal';
 import Toast from '../components/Toast';
 import { BrandSpinner } from '../components/AppLoaders';
@@ -755,10 +755,24 @@ const FollowUpsPage: React.FC = () => {
 
       {/* MODALES */}
       {managingItem && (
-        <LogActionModal
+        <NewInteractionModal
           isOpen={!!managingItem}
-          item={managingItem}
           onClose={() => setManagingItem(null)}
+          entityId={managingItem.entity_type === 'DEAL'
+            ? (managingItem.id_entity || (managingItem as any).id_trato || '')
+            : (managingItem.id_entity || (managingItem as any).id_contact || '')}
+          entityType={managingItem.entity_type}
+          contactEmail={managingItem.email}
+          contactName={(managingItem as any).contact_name || (managingItem as any).contact_full_name || managingItem.title || 'Contacto'}
+          collaborators={(managingItem as any).collaborators || []}
+          useEventModalCapture={true}
+          eventCaptureDeal={managingItem.entity_type === 'DEAL' ? {
+            id_trato: managingItem.id_entity || (managingItem as any).id_trato || '',
+            nombre_trato: (managingItem as any).nombre_trato || managingItem.title,
+            id_client_company: (managingItem as any).id_client_company || '',
+            client_company_name: (managingItem as any).client_company_name || managingItem.subtitle || '',
+            contact_name: (managingItem as any).contact_name || (managingItem as any).contact_full_name || '',
+          } : undefined}
           onSuccess={() => {
             setManagingItem(null);
             fetchItems();

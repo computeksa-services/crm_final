@@ -216,8 +216,11 @@ const ClassificationSelector: React.FC<{
   };
 
   const currentIndex = options.findIndex(o => o.id === currentId);
-  const optionsAbove = currentIndex > 0 ? options.slice(0, currentIndex) : [];
-  const optionsBelow = currentIndex >= 0 && currentIndex < options.length - 1 ? options.slice(currentIndex + 1) : [];
+  const hasCurrentOption = currentIndex >= 0;
+  const optionsAbove = hasCurrentOption && currentIndex > 0 ? options.slice(0, currentIndex) : [];
+  const optionsBelow = hasCurrentOption
+    ? (currentIndex < options.length - 1 ? options.slice(currentIndex + 1) : [])
+    : options;
 
   useEffect(() => {
     if (isOpen && buttonRef.current) {
@@ -304,11 +307,13 @@ const ClassificationSelector: React.FC<{
               </button>
             ))}
 
-            <div className="bg-slate-50 border-y border-slate-100 px-3 py-1.5">
-              <div className="flex items-center gap-2 text-slate-500 cursor-not-allowed">
-                {renderOption(current, true)}
+            {hasCurrentOption ? (
+              <div className="bg-slate-50 border-y border-slate-100 px-3 py-1.5">
+                <div className="flex items-center gap-2 text-slate-500 cursor-not-allowed">
+                  {renderOption(current, true)}
+                </div>
               </div>
-            </div>
+            ) : null}
 
             {optionsBelow.map(option => (
               <button
