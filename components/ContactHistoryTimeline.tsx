@@ -3,7 +3,6 @@ import { BrandSpinner } from './AppLoaders';
 import { apiFetch } from '../services/apiClient';
 import { useAuth } from '../contexts/AuthContext';
 import { GATEWAY_CONFIG, buildUrl } from '../services/gatewayConfig';
-import { getImageUrl, getLocalAvatarDataUrl } from '../utils/imageUtils';
 
 interface ContactInteraction {
   id: string;
@@ -129,7 +128,7 @@ const ContactHistoryTimeline: React.FC<ContactHistoryTimelineProps> = ({ contact
                   <div key={interaction.id || idx} className={`relative flex items-start gap-4 p-4 rounded-xl ${isLatest ? 'border-2 border-brand-200 bg-brand-50/40 shadow-sm' : 'border border-slate-100 bg-white'} ${isLatest ? 'after:content-[\'Última Gestión\'] after:absolute after:-top-3 after:right-4 after:bg-brand-600 after:text-white after:text-[10px] after:font-bold after:px-2 after:py-0.5 after:rounded-full' : ''}`}>
                     {/* Avatar primero */}
                     <img
-                      src={getImageUrl(interaction.user_avatar) || getLocalAvatarDataUrl(interaction.user_name || 'Sistema')}
+                      src={interaction.user_avatar || ''}
                       alt="avatar"
                       className="w-8 h-8 rounded-full border border-slate-200 object-cover mt-1"
                     />

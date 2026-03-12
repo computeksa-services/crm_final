@@ -1,6 +1,5 @@
 import React from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
-import { getImageUrl } from '../../../utils/imageUtils';
 
 const ProfileSection: React.FC = () => {
   const { user } = useAuth();
@@ -18,7 +17,7 @@ const ProfileSection: React.FC = () => {
       <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-8 mb-6">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6">
           <img
-            src={getImageUrl(user.avatar_url) || ''}
+            src={user.avatar_url || ''}
             alt={user.name_user}
             className="w-16 sm:w-20 h-16 sm:h-20 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
           />

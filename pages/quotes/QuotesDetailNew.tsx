@@ -1379,7 +1379,7 @@ Valor                </div>
                 <div className="flex items-center justify-between pt-1 mt-1">
                   <div>
                     <span className="text-[9px] font-semibold text-emerald-700 uppercase tracking-wider block mb-0.5">Valor del Trato</span>
-                    <span className="text-[15px] font-bold text-emerald-900">{formatCurrency(quote.deal_detail?.value || 0)}</span>
+                    <span className="text-[15px] font-bold text-emerald-900 tabular-nums">{formatCurrency(quote.deal_detail?.value || 0)}</span>
                   </div>
                   <div className="w-5 h-5 rounded-full bg-white border border-emerald-200 flex items-center justify-center text-emerald-500 shadow-sm transform translate-x-2 opacity-0 group-hover:translate-x-0 group-hover:opacity-100 transition-all pointer-events-none">
                     <i className="fa-solid fa-arrow-right text-[9px]"></i>
@@ -1741,12 +1741,12 @@ Valor                </div>
                       </div>
 
                       <div className="col-span-2 flex justify-end">
-                        <span className="text-[13px] font-semibold text-zinc-900">
+                        <span className="text-[13px] font-semibold text-zinc-900 tabular-nums">
                           {formatCurrency(unitPrice)}
                         </span>
                       </div>
 
-                      <div className="col-span-3 text-right pr-10 text-[13px] font-bold text-zinc-900">
+                      <div className="col-span-3 text-right pr-10 text-[13px] font-bold text-zinc-900 tabular-nums">
                         {formatCurrency(rowTotal)}
                       </div>
 
@@ -1768,7 +1768,7 @@ Valor                </div>
                       <span className="font-semibold text-zinc-500 uppercase tracking-wider text-[11px]">
                         Total General
                       </span>
-                      <span className="font-bold text-xl tracking-tight text-zinc-900">
+                      <span className="font-bold text-xl tracking-tight text-zinc-900 tabular-nums">
                         {formatCurrency(totalValue)}
                       </span>
                     </div>
@@ -2181,7 +2181,7 @@ Valor                </div>
                       />
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-zinc-900 truncate">{prod.descripcion || 'Producto'}</p>
-                        <p className="text-xs text-zinc-500">{formatCurrency(prod.precio_unitario)}</p>
+                        <p className="text-xs text-zinc-500 tabular-nums">{formatCurrency(prod.precio_unitario)}</p>
                       </div>
                     </label>
 

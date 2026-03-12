@@ -1,7 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { BrandSpinner } from '../../components/AppLoaders';
 import Toast from '../../components/Toast';
-import { getImageUrl } from '../../utils/imageUtils';
 
 // ── TYPES ────────────────────────────────────────────────────────────────────
 type RSVPAction = 'accepted' | 'declined' | 'tentative';
@@ -116,7 +115,7 @@ const AttendeeRow: React.FC<{ attendee: EventAttendee; color?: string }> = ({ at
     <div className="flex items-center gap-2.5 py-1.5">
       <div className="relative shrink-0">
         {attendee.avatar ? (
-          <img src={getImageUrl(attendee.avatar) || attendee.avatar} className="w-7 h-7 rounded-full object-cover" alt="" />
+          <img src={attendee.avatar} className="w-7 h-7 rounded-full object-cover" alt="" />
         ) : (
           <div
             className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white"

@@ -850,7 +850,7 @@ const DealDetail: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 shrink-0">
               <div className="text-left sm:text-right mr-2">
                 <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-0.5">Valor</div>
-                <div className="text-2xl font-semibold tracking-tight text-zinc-900">
+                <div className="text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums">
                   {formatCurrency(deal.valor_numeric).split('.')[0]}<span className="text-zinc-400 text-lg">.{formatCurrency(deal.valor_numeric).split('.')[1] || '00'}</span>
                 </div>
               </div>
@@ -1388,10 +1388,10 @@ const DealDetail: React.FC = () => {
                             <div className="text-[11px] text-zinc-500 truncate flex items-center gap-1.5 mt-0.5"><span className="font-mono bg-zinc-100 border border-zinc-200 px-1 rounded text-[9px] font-bold text-zinc-600">v{q.version || 1}</span>{q.nombre || q.nombre_cotizacion || 'Sin título'}</div>
                           </div>
                         </div>
-                        <div className="col-span-3 hidden md:block"><div className="text-[12px] text-zinc-500 font-medium">{q.fecha_human || q.fecha || q.fecha_emision}</div><div className={`text-[13px] font-bold mt-0.5 ${isRej ? 'text-zinc-400' : 'text-zinc-900'}`}>{formatCurrency(q.total)}</div></div>
+                        <div className="col-span-3 hidden md:block"><div className="text-[12px] text-zinc-500 font-medium">{q.fecha_human || q.fecha || q.fecha_emision}</div><div className={`text-[13px] font-bold mt-0.5 tabular-nums ${isRej ? 'text-zinc-400' : 'text-zinc-900'}`}>{formatCurrency(q.total)}</div></div>
                         <div className="col-span-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${isApp ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : isRej ? 'bg-red-50 text-red-600 border-red-100' : 'bg-sky-50 text-sky-700 border-sky-100'}`}>{q.estado_name || q.estado}</span>
-                          <div className="text-[12px] font-bold text-zinc-900 mt-1 md:hidden">{formatCurrency(q.total)}</div>
+                          <div className="text-[12px] font-bold text-zinc-900 mt-1 md:hidden tabular-nums">{formatCurrency(q.total)}</div>
                         </div>
                         <div className="col-span-3 md:col-span-1 text-right"><button className="text-zinc-400 hover:text-zinc-900 w-7 h-7 inline-flex items-center justify-center rounded-md hover:bg-zinc-200 transition-colors"><i className="fa-solid fa-chevron-right text-[11px]"></i></button></div>
                       </div>

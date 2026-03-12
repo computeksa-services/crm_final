@@ -14,7 +14,6 @@ import ConfirmModal from '../../components/ConfirmModal';
 import UserModal from '../../components/UserModal';
 import { apiFetch } from '../../services/apiClient';
 import { handleApiResponse } from '../../utils/apiResponseHandler';
-import { getImageUrl, getLocalAvatarDataUrl } from '../../utils/imageUtils';
 
 const UsersList: React.FC = () => {
   const { user } = useAuth();
@@ -370,7 +369,7 @@ const UsersList: React.FC = () => {
                                 <div className="relative flex-shrink-0">
                                   <img 
                                     className="h-10 w-10 rounded-full object-cover border-2 border-white shadow-sm" 
-                                    src={getImageUrl(u.avatar_url) || getLocalAvatarDataUrl(u.name_user)} 
+                                    src={u.avatar_url || ''} 
                                     alt="" 
                                   />
                                   {u.is_owner && (
@@ -519,7 +518,7 @@ const UsersList: React.FC = () => {
                           <div className="relative">
                             <img 
                               className="h-10 w-10 rounded-full object-cover border-2 border-white shadow-sm" 
-                              src={getImageUrl(u.avatar_url) || getLocalAvatarDataUrl(u.name_user)} 
+                              src={u.avatar_url || ''} 
                               alt="" 
                             />
                             {u.is_owner && (

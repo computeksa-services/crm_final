@@ -8,7 +8,6 @@ import { useEmailSendPolicy } from '../../src/hooks/useEmailSendPolicy';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
-import { getImageUrl, getLocalAvatarDataUrl } from '../../utils/imageUtils';
 
 // --- TIPOS EXTENDIDOS ---
 interface Attachment {
@@ -245,7 +244,7 @@ const ItemRow: React.FC<{
           className="w-20 text-right bg-transparent hover:bg-white border border-transparent hover:border-slate-200 rounded px-1 py-1 focus:ring-1 focus:ring-brand-500 outline-none text-slate-700 font-medium transition-all"
         />
       </td>
-      <td className="px-6 py-4 text-right font-bold text-slate-700 align-middle">
+      <td className="px-6 py-4 text-right font-bold text-slate-700 align-middle tabular-nums">
         {(localCant * localPrecio).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
       </td>
       <td className="px-2 text-center align-middle">
@@ -1393,7 +1392,7 @@ const QuoteDetail: React.FC = () => {
                       <div key={collaborator.id_user} className="flex items-center justify-between text-xs p-2 rounded-lg hover:bg-slate-50 transition-colors">
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           {collaborator.avatar ? (
-                            <img src={getImageUrl(collaborator.avatar) || getLocalAvatarDataUrl(collaborator.name)} alt={collaborator.name} className="w-6 h-6 rounded-full border border-slate-200" />
+                            <img src={collaborator.avatar} alt={collaborator.name} className="w-6 h-6 rounded-full border border-slate-200" />
                           ) : (
                             <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
                               {(collaborator.name || 'U').charAt(0)}

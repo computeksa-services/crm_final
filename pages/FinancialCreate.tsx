@@ -313,7 +313,7 @@ const FinancialCreate: React.FC = () => {
                   </div>
                   <div className="bg-slate-50 p-6 rounded-xl border border-slate-200">
                     <label className="text-xs font-bold text-slate-500 uppercase block mb-1">Total a Pagar / Cobrar</label>
-                    <p className="text-4xl font-black text-slate-800 font-mono tracking-tighter">{formatCurrency(transaction.total_value || 0)}</p>
+                    <p className="text-4xl font-black text-slate-800 font-mono tracking-tighter tabular-nums">{formatCurrency(transaction.total_value || 0)}</p>
                   </div>
               </div>
             </div>

@@ -346,7 +346,6 @@ const KanbanCard: React.FC<{
           {valor && (
             <span
               className="inline-flex items-center px-1.5 py-0.5 rounded-md border border-slate-200 bg-slate-50 text-[10px] font-semibold text-slate-700 tabular-nums whitespace-nowrap"
-              style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}
             >
               {valor}
             </span>
@@ -469,7 +468,6 @@ const KanbanColumn: React.FC<{
               <span
                 className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold tabular-nums"
                 style={{
-                  fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
                   color: headerTextColor,
                   backgroundColor: 'rgba(255,255,255,0.18)',
                   borderColor: 'rgba(255,255,255,0.35)'

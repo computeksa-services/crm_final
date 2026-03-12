@@ -10,7 +10,6 @@ import ShareModal from '../../components/ShareModal';
 import CompanyMap from './CompanyMap';
 import CompanyFormModal from './CompanyFormModal';
 import { apiFetch } from '../../services/apiClient';
-import { getImageUrl, getLocalAvatarDataUrl } from '../../utils/imageUtils';
 
 const ClientCompanyDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -573,7 +572,7 @@ const ClientCompanyDetail: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-dashed border-slate-100">
                   <div className="flex items-center gap-2">
                     {company.created_by_avatar ? (
-                      <img src={getImageUrl(company.created_by_avatar) || getLocalAvatarDataUrl(company.created_by_name || 'Usuario')} alt={company.created_by_name || 'Usuario'} className="w-6 h-6 rounded-full border" />
+                      <img src={company.created_by_avatar} alt={company.created_by_name || 'Usuario'} className="w-6 h-6 rounded-full border" />
                     ) : (
                       <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-400 border">{(company.created_by_name || 'U').charAt(0)}</div>
                     )}
@@ -625,7 +624,7 @@ const ClientCompanyDetail: React.FC = () => {
                     <div key={collaborator.id_user} className="flex items-center justify-between text-xs p-2 rounded-lg hover:bg-slate-50 transition-colors">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         {collaborator.avatar ? (
-                          <img src={getImageUrl(collaborator.avatar) || getLocalAvatarDataUrl(collaborator.name)} alt={collaborator.name} className="w-6 h-6 rounded-full border border-slate-200" />
+                          <img src={collaborator.avatar} alt={collaborator.name} className="w-6 h-6 rounded-full border border-slate-200" />
                         ) : (
                           <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600">
                             {(collaborator.name || 'U').charAt(0)}

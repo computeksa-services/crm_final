@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -23,6 +25,12 @@ html h6 {
   font-weight: inherit;
 }
 
+/* Ensure table elements inherit font-family from parent */
+table,
+th,
+td {
+  font-family: inherit;
+}
 
 .dark {
   color: #e2e8f0;

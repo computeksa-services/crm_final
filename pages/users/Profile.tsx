@@ -9,7 +9,6 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { User } from '../../types';
-import { getImageUrl } from '../../utils/imageUtils';
 import { BrandSpinner } from '../../components/AppLoaders';
 
 const Profile: React.FC = () => {
@@ -44,7 +43,7 @@ const Profile: React.FC = () => {
         <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 mb-6 p-8">
           <div className="flex items-start gap-6">
             <img
-              src={getImageUrl(profileData.avatar_url) || ''}
+              src={profileData.avatar_url || ''}
               alt={profileData.name_user}
               className="w-20 h-20 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
             />

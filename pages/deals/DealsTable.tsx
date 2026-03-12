@@ -706,14 +706,14 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
               <tr key={hg.id}>
                 {hg.headers.map(header => {
                   const isFiltered = columnFilters.some(f => f.id === header.column.id);
-                  const isDate = ['created_at', 'updated_at'].includes(header.column.id);
+                  const isDate = ['fecha_emision', 'created_at', 'updated_at'].includes(header.column.id);
                   return (
                     <th key={header.id} style={{ width: header.getSize() }}
-                      className="border-b border-slate-200 bg-white px-4 py-3 text-left relative">
+                      className="h-9 border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-left relative font-sans">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 cursor-pointer select-none"
                           onClick={header.column.getToggleSortingHandler()}>
-                          <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
+                          <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">
                             {flexRender(header.column.columnDef.header, header.getContext())}
                           </span>
                           {{ asc: <i className="fa-solid fa-sort-up text-slate-400 text-[9px]" />, desc: <i className="fa-solid fa-sort-down text-slate-400 text-[9px]" /> }[header.column.getIsSorted() as string] ?? null}
@@ -848,28 +848,28 @@ const DealsTable = forwardRef<DealsTableHandle, DealsTableProps>(({
       </div>
 
       {/* FOOTER */}
-      <div className="border-t border-slate-100 px-4 py-3 bg-white">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="border-t border-zinc-200 px-4 py-1.5 bg-zinc-50 font-sans">
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center justify-between sm:justify-start gap-3 sm:gap-4 text-xs text-slate-600 min-w-0">
             <span className="font-semibold shrink-0">{deals.length} registros</span>
-            <span className="inline-flex items-center justify-between sm:justify-start gap-2 px-2.5 py-1.5 rounded-md bg-slate-50 border border-slate-200 min-w-0 w-[190px] sm:w-auto">
+            <span className="inline-flex items-center justify-between sm:justify-start gap-2 px-2.5 py-0.5 rounded-md bg-white border border-zinc-200 min-w-0 w-[190px] sm:w-auto">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</span>
-              <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800">
+              <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800 tabular-nums">
                 {totalFiltered.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
               </span>
             </span>
           </div>
           <div className="flex items-center justify-end sm:justify-start gap-1.5 text-xs text-slate-600 shrink-0">
           <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()}
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-slate-100 disabled:opacity-30 transition-colors">
-            <i className="fa-solid fa-chevron-left text-[10px]" />
+            className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-zinc-100 disabled:opacity-30 transition-colors">
+            <i className="fa-solid fa-chevron-left text-[9px]" />
           </button>
-          <span className="px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+          <span className="px-2 py-0.5 text-[10px] font-semibold text-slate-700">
             {table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1}
           </span>
           <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()}
-            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-slate-100 disabled:opacity-30 transition-colors">
-            <i className="fa-solid fa-chevron-right text-[10px]" />
+            className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-zinc-100 disabled:opacity-30 transition-colors">
+            <i className="fa-solid fa-chevron-right text-[9px]" />
           </button>
           </div>
         </div>

@@ -819,7 +819,7 @@ const FinancialsList: React.FC = () => {
       <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
           <div className="flex items-center gap-6">
             <span>{transactions.length} REGISTROS</span>
-            <span className="text-brand-600">TOTAL: {formatCurrency(transactions.reduce((acc, t) => acc + Number(t.total_value || 0), 0))}</span>
+                        <span className="text-brand-600">TOTAL: <span className="tabular-nums">{formatCurrency(transactions.reduce((acc, t) => acc + Number(t.total_value || 0), 0))}</span></span>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-left"></i></button>

@@ -7,7 +7,6 @@ import { apiFetch } from '../../services/apiClient';
 import AudienceMembersModal from '../marketing_center/audiences/AudienceMembersModal';
 import ConfirmModal from '../ConfirmModal';
 import { BrandSpinner } from '../AppLoaders';
-import { getImageUrl, getLocalAvatarDataUrl } from '../../utils/imageUtils';
 
 interface SharedUser {
   id_user: string;
@@ -584,22 +583,22 @@ const ListDetail: React.FC = () => {
                 <div className={`space-y-4 max-h-[300px] overflow-y-auto pr-2 ${editForm.visibility !== 'PUBLIC_TENANT' ? 'opacity-50 pointer-events-none' : ''}`}>
                   {sharedUsers.map(user => (
                     <div key={user.id_user} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <img src={getImageUrl(user.avatar) || getLocalAvatarDataUrl(user.name)} alt={user.name} className="w-8 h-8 rounded-full bg-slate-200" />
-                          <div className="leading-tight">
-                            <p className="text-sm font-semibold text-slate-700">{user.name}</p>
-                            <p className="text-[10px] text-slate-400">{user.email}</p>
-                          </div>
+                      <div className="flex items-center gap-3">
+                        <img src={user.avatar || ''} alt={user.name} className="w-8 h-8 rounded-full bg-slate-200" />
+                        <div className="leading-tight">
+                          <p className="text-sm font-semibold text-slate-700">{user.name}</p>
+                          <p className="text-[10px] text-slate-400">{user.email}</p>
                         </div>
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            className="sr-only peer"
-                            checked={user.has_access}
-                            onChange={() => handleToggleShare(user.id_user)}
-                          />
-                          <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          className="sr-only peer"
+                          checked={user.has_access}
+                          onChange={() => handleToggleShare(user.id_user)}
+                        />
+                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                      </label>
                     </div>
                   ))}
                 </div>

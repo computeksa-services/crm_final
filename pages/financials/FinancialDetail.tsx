@@ -287,7 +287,7 @@ const FinancialDetail: React.FC = () => {
             <div className="flex flex-col items-start lg:items-end gap-2 w-full lg:w-auto">
                 <div className="text-left lg:text-right w-full lg:w-auto">
                     <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-0.5">Saldo por Cobrar</div>
-                    <div className="text-2xl font-mono font-bold text-rose-600 tracking-tight">
+                    <div className="text-2xl font-mono font-bold text-rose-600 tracking-tight tabular-nums">
                         {formatCurrency(transaction.balance_due)}
                     </div>
                 </div>
@@ -442,19 +442,19 @@ const FinancialDetail: React.FC = () => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                         <div className="space-y-1">
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Subtotal</p>
-                          <p className="text-lg font-mono font-bold text-slate-700">{formatCurrency(transaction.subtotal)}</p>
+                          <p className="text-lg font-mono font-bold text-slate-700 tabular-nums">{formatCurrency(transaction.subtotal)}</p>
                         </div>
                         <div className="space-y-1">
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">IVA ({transaction.tax_amount}%)</p>
-                          <p className="text-lg font-mono font-bold text-slate-700">{formatCurrency((transaction.subtotal||0) * (transaction.tax_amount||0)/100)}</p>
+                          <p className="text-lg font-mono font-bold text-slate-700 tabular-nums">{formatCurrency((transaction.subtotal||0) * (transaction.tax_amount||0)/100)}</p>
                         </div>
                         <div className="space-y-1">
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Factura</p>
-                          <p className="text-lg font-mono font-black text-slate-900">{formatCurrency(transaction.total_value)}</p>
+                          <p className="text-lg font-mono font-black text-slate-900 tabular-nums">{formatCurrency(transaction.total_value)}</p>
                         </div>
                         <div className="space-y-1 bg-emerald-50 p-3 rounded-xl border border-emerald-100">
                           <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Monto Abonado</p>
-                          <p className="text-lg font-mono font-black text-emerald-700">{formatCurrency(transaction.paid_amount)}</p>
+                          <p className="text-lg font-mono font-black text-emerald-700 tabular-nums">{formatCurrency(transaction.paid_amount)}</p>
                         </div>
                     </div>
 
@@ -473,7 +473,7 @@ const FinancialDetail: React.FC = () => {
                         {transaction.retention_value > 0 ? (
                           <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
                             <div><p className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Retención</p><p className="text-xs font-bold text-slate-700">{transaction.v_input_fecha_retencion || 'S/F'}</p></div>
-                            <p className="text-lg font-mono font-black text-indigo-600">{formatCurrency(transaction.retention_value)}</p>
+                            <p className="text-lg font-mono font-black text-indigo-600 tabular-nums">{formatCurrency(transaction.retention_value)}</p>
                           </div>
                         ) : <div />}
                         <div className="text-right">
@@ -542,7 +542,7 @@ const FinancialDetail: React.FC = () => {
                </div>
                <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl flex justify-between items-center">
                   <span className="text-xs font-bold text-rose-600 uppercase">Saldo Pendiente:</span>
-                  <span className="text-xl font-mono font-black text-rose-700">{formatCurrency(transaction.balance_due)}</span>
+                <span className="text-xl font-mono font-black text-rose-700 tabular-nums">{formatCurrency(transaction.balance_due)}</span>
                </div>
                <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-2xl">$</span>

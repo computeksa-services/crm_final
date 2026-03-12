@@ -131,7 +131,7 @@ const SelectWinningQuoteModal: React.FC<SelectWinningQuoteModalProps> = ({
                       <h4 className="font-semibold text-slate-900">
                         Cotización #{quote.formatted_no_cotizacion || quote.no_cotizacion}
                       </h4>
-                      <span className="text-lg font-bold text-slate-900">
+                      <span className="text-lg font-bold text-slate-900 tabular-nums">
                         {formatCurrency(quote.total)}
                       </span>
                     </div>

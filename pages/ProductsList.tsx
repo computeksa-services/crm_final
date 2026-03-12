@@ -110,23 +110,7 @@ const ProductsList: React.FC = () => {
     return `COD-${String(nextNum).padStart(3, '0')}`;
   };
 
-  const convertGoogleDriveUrl = (url: string): string => {
-    if (!url) return '';
-    
-    // Si ya es una URL de proxy, devolverla
-    if (url.includes('images.weserv.nl')) return url;
-    
-    // Extraer el ID del archivo de URL de Google Drive
-    const match = url.match(/\/d\/([a-zA-Z0-9-_]+)/);
-    if (match && match[1]) {
-      const directUrl = `https://drive.google.com/uc?id=${match[1]}&export=view`;
-      // Usar un proxy para evitar problemas de CORS
-      return `https://images.weserv.nl/?url=${encodeURIComponent(directUrl)}&n=-1`;
-    }
-    
-    // Si no se puede extraer, devolver la URL original
-    return url;
-  };
+
 
   const handleAddNew = () => {
     const nextCode = getNextProductCode();
@@ -321,7 +305,7 @@ const ProductsList: React.FC = () => {
                             <td className="px-6 py-3">
                                 <div className="w-12 h-12 bg-white border border-slate-200 rounded-lg flex items-center justify-center overflow-hidden">
                                     {p.imagen_url ? (
-                                        <img src={convertGoogleDriveUrl(p.imagen_url)} alt="" className="w-full h-full object-cover" />
+                                        <img src={p.imagen_url} alt="" className="w-full h-full object-cover" />
                                     ) : (
                                         <i className="fa-solid fa-image text-slate-300"></i>
                                     )}
@@ -369,7 +353,7 @@ const ProductsList: React.FC = () => {
                 >
                     <div className="aspect-square bg-slate-50 flex items-center justify-center overflow-hidden relative">
                         {p.imagen_url ? (
-                            <img src={convertGoogleDriveUrl(p.imagen_url)} alt="" className="w-full h-full object-cover" />
+                            <img src={p.imagen_url} alt="" className="w-full h-full object-cover" />
                         ) : (
                             <i className="fa-solid fa-box-open text-4xl text-slate-300"></i>
                         )}
@@ -508,7 +492,7 @@ const ProductsList: React.FC = () => {
                     onClick={() => fileInputRef.current?.click()}
                   >
                     {editingProduct.imagen_url ? (
-                        <img src={convertGoogleDriveUrl(editingProduct.imagen_url)} alt="" className="w-full h-full object-cover" />
+                        <img src={editingProduct.imagen_url} alt="" className="w-full h-full object-cover" />
                     ) : (
                         <div className="text-center p-2">
                             <i className="fa-solid fa-cloud-arrow-up text-3xl text-slate-300 mb-1"></i>

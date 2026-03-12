@@ -332,9 +332,10 @@ const DealCard: React.FC<{
 
         {/* FOOTER: valor + fechas + inactividad */}
         <div className="flex items-end justify-between gap-2 pt-2 border-t border-slate-100 mt-auto">
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
-            <span className="text-[11px] font-semibold text-slate-800">$</span>
-            <span className="text-[11px] font-semibold text-slate-800 tabular-nums">{formatAmount(valor)}</span>
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50">
+            <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800 whitespace-nowrap tabular-nums">
+              {valor.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+            </span>
           </span>
 
           <div className="flex items-center gap-2">
@@ -503,7 +504,7 @@ const DealsListView: React.FC<DealsListViewProps> = ({
                     return <span className="text-xs font-semibold text-slate-600">{group.key}</span>;
                   })()}
                   <span className="text-[10px] text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-full">{group.deals.length}</span>
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-slate-200 bg-slate-50" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border border-slate-200 bg-slate-50">
                     <span className="text-[10px] font-semibold text-slate-700">$</span>
                     <span className="text-[10px] font-semibold text-slate-700 tabular-nums">{formatAmount(group.subtotal)}</span>
                   </span>
@@ -558,10 +559,11 @@ const DealsListView: React.FC<DealsListViewProps> = ({
       {/* Footer */}
       <div className="border-t border-slate-100 px-4 py-2 flex items-center justify-between bg-white flex-shrink-0">
         <span className="text-xs text-slate-500">{filteredDeals.length} tratos</span>
-        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+        <span className="inline-flex items-center justify-between sm:justify-start gap-2 px-2.5 py-0.5 rounded-md bg-white border border-zinc-200 min-w-0 w-[190px] sm:w-auto">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</span>
-          <span className="text-xs font-semibold text-slate-700">$</span>
-          <span className="text-xs font-semibold text-slate-700 tabular-nums">{formatAmount(totalValor)}</span>
+          <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800 whitespace-nowrap tabular-nums">
+            {totalValor.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+          </span>
         </span>
       </div>
     </div>

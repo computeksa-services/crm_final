@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { User } from '../../types';
 import Toast from '../../components/Toast';
-import { getImageUrl } from '../../utils/imageUtils';
 import { PersonalIntegrations } from '../../src/components/users/PersonalIntegrations';
 import { BrandSpinner } from '../../components/AppLoaders';
 
@@ -127,7 +126,7 @@ const UserProfile: React.FC = () => {
             <div className="px-6 pb-6 -mt-12">
               <div className="relative w-24 h-24 mx-auto mb-4">
                 <img
-                  src={getImageUrl(profileData.avatar_url)}
+                  src={profileData.avatar_url || ''}
                   alt={profileData.name_user}
                   className="w-full h-full rounded-full border-4 border-white shadow-lg object-cover"
                 />

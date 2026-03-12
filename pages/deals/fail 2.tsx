@@ -1,3 +1,9 @@
+/**
+ * @deprecated Archivo legacy/experimental conservado solo como referencia.
+ * No debe utilizarse como base para cambios nuevos.
+ * Candidato a eliminación en un cleanup futuro fuera de este proyecto/refactor.
+ */
+
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -503,7 +509,7 @@ const DealDetail: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 shrink-0">
               <div className="text-left sm:text-right mr-2">
                 <div className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-0.5">Valor del Trato</div>
-                <div className="text-2xl font-semibold tracking-tight text-zinc-900">
+                <div className="text-2xl font-semibold tracking-tight text-zinc-900 tabular-nums">
                   {formatCurrency(deal.valor_numeric).split('.')[0]}<span className="text-zinc-400 text-lg">.{formatCurrency(deal.valor_numeric).split('.')[1]}</span>
                 </div>
               </div>
@@ -845,14 +851,14 @@ const DealDetail: React.FC = () => {
 
                         <div className="col-span-3 hidden md:block">
                           <div className="text-[12px] text-zinc-500 font-medium">{q.fecha_emision}</div>
-                          <div className="text-[13px] font-bold text-zinc-900 mt-0.5">{formatCurrency(q.total)}</div>
+                          <div className="text-[13px] font-bold text-zinc-900 mt-0.5 tabular-nums">{formatCurrency(q.total)}</div>
                         </div>
 
                         <div className="col-span-3">
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide border ${badgeColors}`} style={!isApproved && !isRejected && q.estado_color ? { color: q.estado_color, backgroundColor: `${q.estado_color}15`, borderColor: `${q.estado_color}30` } : {}}>
                             {q.estado}
                           </span>
-                          <div className="text-[12px] font-bold text-zinc-900 mt-1 md:hidden">{formatCurrency(q.total)}</div>
+                          <div className="text-[12px] font-bold text-zinc-900 mt-1 md:hidden tabular-nums">{formatCurrency(q.total)}</div>
                         </div>
 
                         <div className="col-span-3 md:col-span-1 text-right">

@@ -647,7 +647,7 @@ const FinancialForm: React.FC = () => {
                     <label className="text-xs font-bold text-slate-500 uppercase block mb-1">
                         {getActionLabel()} (Menos Retención)
                     </label>
-                    <p className="text-4xl font-black text-slate-800 font-mono tracking-tighter">
+                    <p className="text-4xl font-black text-slate-800 font-mono tracking-tighter tabular-nums">
                         {formatCurrency(calculatedTotal)}
                     </p>
                   </div>

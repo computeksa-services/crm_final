@@ -2,9 +2,6 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   getImageUrl,
   getLocalAvatarDataUrl,
-  isAvatarUrlKnownFailed,
-  markAvatarUrlAsFailed,
-  clearFailedAvatarUrl,
 } from '../utils/imageUtils';
 import { BrandSpinner } from './AppLoaders';
 
@@ -87,11 +84,7 @@ const Avatar: React.FC<AvatarProps> = ({
   // Memoizar URL para evitar recálculos innecesarios
   const imageUrl = useMemo(() => getImageUrl(src), [src]);
   const fallbackUrl = useMemo(() => getLocalAvatarDataUrl(name), [name]);
-  const effectiveImageUrl = useMemo(() => {
-    if (!imageUrl) return null;
-    if (isAvatarUrlKnownFailed(imageUrl)) return null;
-    return imageUrl;
-  }, [imageUrl]);
+  const effectiveImageUrl = imageUrl;
   const wasLoadedBefore = useMemo(
     () => (effectiveImageUrl ? loadedAvatarUrls.has(effectiveImageUrl) : false),
     [effectiveImageUrl]
@@ -107,19 +100,17 @@ const Avatar: React.FC<AvatarProps> = ({
   useEffect(() => {
     if (!effectiveImageUrl || imageLoaded || imageError) return;
     const timeoutId = window.setTimeout(() => {
-      // Safety net: avoid infinite spinner when remote providers hang/rate-limit.
+      // Safety net: avoid infinite spinner on transient network hangs.
       setImageError(true);
     }, 6000);
     return () => window.clearTimeout(timeoutId);
   }, [effectiveImageUrl, imageLoaded, imageError]);
 
   const handleImageError = () => {
-    markAvatarUrlAsFailed(effectiveImageUrl);
     setImageError(true);
   };
 
   const handleImageLoad = () => {
-    clearFailedAvatarUrl(effectiveImageUrl);
     if (effectiveImageUrl) {
       loadedAvatarUrls.add(effectiveImageUrl);
     }

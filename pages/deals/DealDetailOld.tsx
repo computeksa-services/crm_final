@@ -1,3 +1,9 @@
+/**
+ * @deprecated Archivo legacy conservado solo como referencia histórica.
+ * No debe recibir nuevas mejoras ni ajustes funcionales.
+ * Candidato a eliminación en un cleanup futuro fuera de este proyecto/refactor.
+ */
+
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -777,7 +783,7 @@ const DealDetail: React.FC = () => {
             {/* Lado Derecho: Acciones y Valor */}
             <div className="flex flex-col items-start lg:items-end gap-3 w-full lg:w-auto">
                 <div className="text-left lg:text-right w-full lg:w-auto">
-                    <div className="text-3xl font-mono font-bold text-slate-800 tracking-tight">
+                    <div className="text-3xl font-mono font-bold text-slate-800 tracking-tight tabular-nums">
                         {formatCurrency(deal.valor_trato)}
                     </div>
                 </div>
@@ -1059,7 +1065,7 @@ const DealDetail: React.FC = () => {
                                             </div>
                                         </div>
                                         <div className="text-right">
-                                            <p className="font-bold text-slate-700 text-[17px]">{formatCurrency(quote.total)}</p>
+                                            <p className="font-bold text-slate-700 text-[17px] tabular-nums">{formatCurrency(quote.total)}</p>
                                             <span 
                                                 className="text-[11px] font-bold uppercase inline-block mt-1 px-2 py-0.5 rounded border"
                                                 style={{ 

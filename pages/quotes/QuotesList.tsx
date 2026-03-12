@@ -181,7 +181,7 @@ const renderGroupCell = (row: any, label: string, statuses: QuoteStatus[] = []) 
 
       <span className="text-[10px] text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">{row.subRows.length}</span>
 
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-800">
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-800 tabular-nums">
         {subtotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
       </span>
     </div>
@@ -534,14 +534,14 @@ const ToolbarGroupDropdown: React.FC<{
   };
 
   return (
-    <div className="border-b border-slate-200 px-4 py-3 flex items-center gap-3 bg-white">
+    <div className="border-b border-slate-200 px-3 py-2 flex items-center gap-2 bg-white">
       <div className="relative flex-1 min-w-0">
         <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none" />
         <input
           value={globalFilter}
           onChange={(e) => onGlobalFilterChange(e.target.value)}
           placeholder="Buscar cotizacion…"
-          className="w-full pl-8 pr-8 py-2.5 sm:py-2 bg-slate-50 border border-slate-200 rounded-md text-sm outline-none focus:ring-1 focus:ring-slate-300 focus:bg-white placeholder:text-slate-300 text-slate-700 transition-all"
+          className="w-full pl-8 pr-8 py-2 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm outline-none focus:ring-1 focus:ring-slate-300 focus:bg-white placeholder:text-slate-300 text-slate-700 transition-all"
         />
         {globalFilter && (
           <button
@@ -564,7 +564,7 @@ const ToolbarGroupDropdown: React.FC<{
         <button
           onClick={() => setOpen((o) => !o)}
           className={`
-            relative flex items-center gap-1.5 px-3 py-2.5 sm:py-2 rounded-md border text-sm sm:text-xs font-medium transition-all whitespace-nowrap
+            relative flex items-center gap-1.5 px-2.5 py-2 sm:py-1.5 rounded-md border text-sm sm:text-xs font-medium transition-all whitespace-nowrap
             ${open ? 'bg-slate-50 border-slate-300 text-slate-700' : 'text-slate-500 border-slate-200 hover:bg-slate-50'}
           `}
         >
@@ -672,7 +672,7 @@ const ToolbarGroupDropdown: React.FC<{
 
       <button
         onClick={onNew}
-        className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-2.5 sm:py-2 bg-slate-800 text-white rounded-md text-sm sm:text-xs font-medium hover:bg-slate-700 transition-colors whitespace-nowrap"
+        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 sm:py-1.5 bg-slate-800 text-white rounded-md text-sm sm:text-xs font-medium hover:bg-slate-700 transition-colors whitespace-nowrap"
       >
         <i className="fa-solid fa-plus text-[11px] sm:text-[10px]" />
         <span className="inline">Nueva cotizacion</span>
@@ -1153,7 +1153,7 @@ const QuotesList: React.FC = () => {
         // CORRECCIÓN: Retornar null si es grupo
         cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
           <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50">
-            <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800 whitespace-nowrap">
+            <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800 whitespace-nowrap tabular-nums">
               {formatCurrency(getValue() as string)}
             </span>
           </span>
@@ -1349,7 +1349,7 @@ const QuotesList: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden font-sans text-slate-700">
+    <div className="flex flex-col h-full bg-white overflow-hidden text-slate-700 font-sans">
       <ToolbarGroupDropdown
         grouping={grouping as string[]}
         onGroupingChange={(g) => setGrouping(g as GroupingState)}
@@ -1362,20 +1362,20 @@ const QuotesList: React.FC = () => {
         onClearFilters={handleClearFilters}
       />
 
-      <div className="flex-1 overflow-auto relative bg-white">
+      <div className="flex-1 overflow-auto">
         <table className="w-full border-separate border-spacing-0 text-sm">
           <thead className="sticky top-0 z-30">
             {table.getHeaderGroups().map(hg => (
               <tr key={hg.id}>
                 {hg.headers.map(header => {
                   const isFiltered = columnFilters.some(f => f.id === header.column.id);
-                  const isDate = header.column.id === 'fecha_emision' || header.column.id === 'created_at';
+                  const isDate = ['fecha_emision', 'created_at', 'updated_at'].includes(header.column.id);
                   
                   return (
-                    <th key={header.id} style={{ width: header.getSize() }} className="border-b border-slate-200 bg-white px-4 py-3 text-left relative">
+                    <th key={header.id} style={{ width: header.getSize() }} className="h-9 border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-left relative">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 cursor-pointer select-none" onClick={header.column.getToggleSortingHandler()}>
-                          <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                          <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide whitespace-nowrap">{flexRender(header.column.columnDef.header, header.getContext())}</span>
                           {{ asc: <i className="fa-solid fa-sort-up text-slate-400 text-[9px]" />, desc: <i className="fa-solid fa-sort-down text-slate-400 text-[9px]" /> }[header.column.getIsSorted() as string] ?? null}
                         </div>
                         {header.column.id !== 'actions' && header.column.columnDef.enableColumnFilter !== false && (
@@ -1524,21 +1524,21 @@ const QuotesList: React.FC = () => {
         </table>
       </div>
 
-      <div className="border-t border-slate-100 px-4 py-3 bg-white">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="border-t border-zinc-200 px-4 py-1.5 bg-zinc-50">
+          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center justify-between sm:justify-start gap-3 sm:gap-4 text-xs text-slate-600 min-w-0">
               <span className="font-semibold shrink-0">{totalRows} registros</span>
-              <div className="inline-flex items-center justify-between sm:justify-start gap-2 px-2.5 py-1.5 rounded-md bg-slate-50 border border-slate-200 min-w-0 w-[190px] sm:w-auto">
+              <div className="inline-flex items-center justify-between sm:justify-start gap-2 px-2.5 py-0.5 rounded-md bg-white border border-zinc-200 min-w-0 w-[190px] sm:w-auto">
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</span>
-                <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800">
+                <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800 tabular-nums">
                   {totalFiltered.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                 </span>
               </div>
             </div>
             <div className="flex items-center justify-end sm:justify-start gap-1.5 text-xs text-slate-600 shrink-0">
-              <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-slate-100 disabled:opacity-30 transition-colors"><i className="fa-solid fa-chevron-left text-[10px]"></i></button>
-              <span className="px-2.5 py-1 text-[11px] font-semibold text-slate-700">{table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1}</span>
-              <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-slate-100 disabled:opacity-30 transition-colors"><i className="fa-solid fa-chevron-right text-[10px]"></i></button>
+              <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-zinc-100 disabled:opacity-30 transition-colors"><i className="fa-solid fa-chevron-left text-[9px]"></i></button>
+              <span className="px-2 py-0.5 text-[10px] font-semibold text-slate-700">{table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1}</span>
+              <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-zinc-100 disabled:opacity-30 transition-colors"><i className="fa-solid fa-chevron-right text-[9px]"></i></button>
             </div>
           </div>
       </div>

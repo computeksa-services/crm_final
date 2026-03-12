@@ -2,10 +2,6 @@
  * Utilidades para manejo de imágenes en el CRM
  */
 
-const failedAvatarUrls = new Map<string, number>();
-const avatarPreloadCache = new Map<string, Promise<boolean>>();
-const FAILED_AVATAR_TTL_MS = 10 * 60 * 1000;
-
 /**
  * Convierte URLs de Google Drive al formato directo para mostrar imágenes
  * @param url - URL de la imagen (Google Drive, Google Avatar, o cualquier URL)
@@ -72,63 +68,6 @@ export const getLocalAvatarDataUrl = (name: string | undefined | null): string =
   const color = '#ffffff';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" fill="${bg}"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="${color}" font-family="Arial, sans-serif" font-size="52" font-weight="700">${initials}</text></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-};
-
-/**
- * Marca un avatar remoto como fallido para no reintentarlo en bucle.
- */
-export const markAvatarUrlAsFailed = (url: string | undefined | null): void => {
-  if (!url) return;
-  failedAvatarUrls.set(url, Date.now() + FAILED_AVATAR_TTL_MS);
-};
-
-/**
- * Indica si una URL ya falló en esta sesión.
- */
-export const isAvatarUrlKnownFailed = (url: string | undefined | null): boolean => {
-  if (!url) return false;
-  const expiresAt = failedAvatarUrls.get(url);
-  if (!expiresAt) return false;
-  if (Date.now() > expiresAt) {
-    failedAvatarUrls.delete(url);
-    return false;
-  }
-  return true;
-};
-
-/**
- * Limpia la marca de fallo de un avatar para permitir reintentos inmediatos.
- */
-export const clearFailedAvatarUrl = (url: string | undefined | null): void => {
-  if (!url) return;
-  failedAvatarUrls.delete(url);
-};
-
-/**
- * Precarga un avatar remoto una vez por sesión para suavizar la primera renderización.
- */
-export const preloadAvatarUrl = async (url: string | undefined | null): Promise<boolean> => {
-  const normalized = getImageUrl(url);
-  if (!normalized) return false;
-  if (isAvatarUrlKnownFailed(normalized)) return false;
-  if (avatarPreloadCache.has(normalized)) {
-    return avatarPreloadCache.get(normalized)!;
-  }
-
-  const promise = new Promise<boolean>((resolve) => {
-    const img = new Image();
-    img.decoding = 'async';
-    img.referrerPolicy = 'no-referrer';
-    img.onload = () => resolve(true);
-    img.onerror = () => {
-      markAvatarUrlAsFailed(normalized);
-      resolve(false);
-    };
-    img.src = normalized;
-  });
-
-  avatarPreloadCache.set(normalized, promise);
-  return promise;
 };
 
 /**
