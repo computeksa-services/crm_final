@@ -443,6 +443,7 @@ const QuotesDetailNew: React.FC = () => {
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
   const [deletingAttachmentUrl, setDeletingAttachmentUrl] = useState<string | null>(null);
+  const [deletingManualQuote, setDeletingManualQuote] = useState(false);
   const [openingFileKey, setOpeningFileKey] = useState<string | null>(null);
   const [attachmentUploadQueue, setAttachmentUploadQueue] = useState<AttachmentUploadItem[]>([]);
 
@@ -614,7 +615,7 @@ const QuotesDetailNew: React.FC = () => {
               status_detail: newStatus as any,
             });
             setToast({ message: 'Estado actualizado.', type: 'success' });
-            fetchData();
+            fetchData({ silent: true });
           } else throw new Error();
         } catch {
           setToast({ message: 'Error al actualizar estado.', type: 'error' });
@@ -645,7 +646,7 @@ const QuotesDetailNew: React.FC = () => {
         await openFileSecure(url, 'generated-pdf');
       }
       setToast({ message: 'PDF Generado.', type: 'success' });
-      fetchData();
+      fetchData({ silent: true });
     } catch {
       setToast({ message: 'Error al generar PDF.', type: 'error' });
     } finally {
@@ -671,13 +672,44 @@ const QuotesDetailNew: React.FC = () => {
       });
       if (!res.ok) throw new Error();
       setToast({ message: 'Cotización manual subida exitosamente.', type: 'success' });
-      await fetchData();
+      await fetchData({ silent: true });
     } catch {
       setToast({ message: 'No se pudo subir la cotización.', type: 'error' });
     } finally {
       setProcessing(false);
       if (manualFileInputRef.current) manualFileInputRef.current.value = '';
     }
+  };
+
+  const handleDeleteManualQuote = () => {
+    if (!quote || !user) return;
+    setConfirmState({
+      isOpen: true,
+      title: 'Eliminar Cotización Manual',
+      message: '¿Seguro que deseas eliminar la cotización manual? Esta acción no se puede deshacer.',
+      onConfirm: async () => {
+        setConfirmState(prev => ({ ...prev, isOpen: false }));
+        setDeletingManualQuote(true);
+        try {
+          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/manual/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id_cotizacion: quote.id_cotizacion,
+              id_tenant: user.id_tenant,
+              id_user: user.id_user,
+            }),
+          });
+          if (!res.ok) throw new Error();
+          setToast({ message: 'Cotización manual eliminada.', type: 'success' });
+          await fetchData({ silent: true });
+        } catch {
+          setToast({ message: 'Error al eliminar la cotización manual.', type: 'error' });
+        } finally {
+          setDeletingManualQuote(false);
+        }
+      },
+    });
   };
 
   const handleSendQuote = async (idVersion?: string) => {
@@ -718,7 +750,7 @@ const QuotesDetailNew: React.FC = () => {
           });
           if (!res.ok) throw new Error();
           setToast({ message: 'Enviada correctamente.', type: 'success' });
-          fetchData();
+          fetchData({ silent: true });
         } catch {
           setToast({ message: 'Error al enviar.', type: 'error' });
         } finally {
@@ -1979,11 +2011,22 @@ Valor                </div>
                         </button>
                         <button
                           onClick={() => handleSendQuote()}
-                          disabled={isSendingAnyQuote || processing}
+                          disabled={isSendingAnyQuote || processing || deletingManualQuote}
                           className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-md hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
                         >
                           {sendingQuoteId === 'manual' ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
                         </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={handleDeleteManualQuote}
+                            disabled={deletingManualQuote || processing || isSendingAnyQuote}
+                            className="h-7 w-7 rounded-md text-zinc-400 hover:text-red-600 hover:bg-red-50 transition-colors flex items-center justify-center disabled:opacity-50"
+                            title="Eliminar cotización manual"
+                          >
+                            {deletingManualQuote ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-trash text-[11px]"></i>}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2317,7 +2360,7 @@ Valor                </div>
           onClose={() => setIsShareOpen(false)}
           onShared={() => {
             setToast({ message: 'Compartido.', type: 'success' });
-            fetchData();
+            fetchData({ silent: true });
           }}
           currentCollaborators={shareCollaborators}
         />

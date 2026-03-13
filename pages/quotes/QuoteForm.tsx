@@ -334,6 +334,18 @@ const QuoteForm: React.FC = () => {
 
 	const [deals, setDeals] = useState<Deal[]>([]);
 
+	// Refs to keep latest cache values accessible inside fetchData without
+	// making them useCallback deps (which would re-run fetchData and reset the form
+	// whenever a contact/company is created and the cache invalidates).
+	const contactsRef = useRef(contacts);
+	const dealInterestsRef = useRef(dealInterests);
+	const dealChannelsRef = useRef(dealChannels);
+	const dealsRef = useRef(deals);
+	useEffect(() => { contactsRef.current = contacts; }, [contacts]);
+	useEffect(() => { dealInterestsRef.current = dealInterests; }, [dealInterests]);
+	useEffect(() => { dealChannelsRef.current = dealChannels; }, [dealChannels]);
+	useEffect(() => { dealsRef.current = deals; }, [deals]);
+
 	const [quote, setQuote] = useState<Partial<Quote>>({});
 	const [newDeal, setNewDeal] = useState<any>({});
 	const [filteredContacts, setFilteredContacts] = useState<ClientContact[]>([]);
@@ -401,20 +413,20 @@ const QuoteForm: React.FC = () => {
 						setIsLinkingDeal(true);
 					}
 					if (q.id_client_company) {
-						setFilteredContacts(contacts.filter((c: ClientContact) => String(c.id_client_company) === String(q.id_client_company)));
+						setFilteredContacts(contactsRef.current.filter((c: ClientContact) => String(c.id_client_company) === String(q.id_client_company)));
 					}
 				}
 			} else {
-				const defaultInterest = dealInterests.find((s) => s.is_default) || dealInterests[0];
-				const defaultChannel = dealChannels.find((c) => c.is_default) || dealChannels[0];
+				const defaultInterest = dealInterestsRef.current.find((s) => s.is_default) || dealInterestsRef.current[0];
+				const defaultChannel = dealChannelsRef.current.find((c) => c.is_default) || dealChannelsRef.current[0];
 				const initialQuote: Partial<Quote> = {
 					nombre_cotizacion: dealName ? `Cotizacion para ${dealName}` : '',
 					id_trato: dealId || '',
 					id_client_company: clientCompanyId || '',
 					id_contact: contactId || '',
-					tiempo_entrega: '5-7 dias laborables',
-					garantia: '12 meses',
-					validez_oferta: '30 dias',
+					tiempo_entrega: '',
+					garantia: '',
+					validez_oferta: '',
 					condicion_pago: '',
 					nota: '',
 					mensaje: '',
@@ -433,8 +445,8 @@ const QuoteForm: React.FC = () => {
 						: (initialQuote.condicion_pago ? 'OTRO' : '')
 				);
 				if (initialQuote.id_client_company) {
-					setFilteredContacts(contacts.filter((c: ClientContact) => String(c.id_client_company) === String(initialQuote.id_client_company)));
-					setFilteredDeals(deals.filter((d: Deal) => String(d.id_client_company) === String(initialQuote.id_client_company)));
+					setFilteredContacts(contactsRef.current.filter((c: ClientContact) => String(c.id_client_company) === String(initialQuote.id_client_company)));
+					setFilteredDeals(dealsRef.current.filter((d: Deal) => String(d.id_client_company) === String(initialQuote.id_client_company)));
 				}
 				setNewDeal({
 					nombre_trato: dealName ? `Trato - ${dealName}` : '',
@@ -454,7 +466,7 @@ const QuoteForm: React.FC = () => {
 		} finally {
 			setIsLoading(false);
 		}
-	}, [user, location.search, contacts, dealInterests, dealChannels, deals]);
+	}, [user, location.search]);
 
 	useEffect(() => {
 		fetchData();
@@ -680,7 +692,23 @@ const QuoteForm: React.FC = () => {
 		setToast({ message: 'Contacto creado exitosamente.', type: 'success' });
 	};
 
+	// Commits any email typed in the CC input that hasn't been confirmed with Enter
+	const commitCcInput = (inputValue: string) => {
+		const email = inputValue.trim();
+		if (!email) return;
+		if (!/^([a-zA-Z0-9_.+-]+)@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$/.test(email)) return;
+		const current = (quote.correos_adicionales || '').split(',').map(v => v.trim()).filter(Boolean);
+		if (current.includes(email)) return;
+		setQuote(prev => ({ ...prev, correos_adicionales: [...current, email].join(',') }));
+		setCcInput('');
+		setCcError(null);
+	};
+
 	const handleSave = async () => {
+		// Flush any pending CC email before saving
+		if (ccInput.trim()) {
+			commitCcInput(ccInput);
+		}
 		if (!quote.nombre_cotizacion) {
 			setToast({ message: 'El nombre de la cotizacion es obligatorio.', type: 'error' });
 			return;
@@ -1415,6 +1443,7 @@ const QuoteForm: React.FC = () => {
 									value={ccInput}
 									onChange={handleInputChange}
 									onKeyDown={handleCcInputKeyDown}
+								onBlur={() => commitCcInput(ccInput)}
 									className={`w-full text-sm text-zinc-900 bg-white border ${ccError ? 'border-red-400' : 'border-zinc-300'} focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-lg px-3 py-2 outline-none transition-all shadow-sm placeholder:text-zinc-400`}
 									placeholder="Agrega un correo y presiona Enter"
 								/>
