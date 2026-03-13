@@ -236,6 +236,38 @@ const convertGoogleDriveUrl = (url: string): string => {
   return url;
 };
 
+const getFileExtFromUrl = (url: string | undefined | null): string => {
+  if (!url) return '';
+  try {
+    const pathname = new URL(url).pathname;
+    const last = pathname.split('/').filter(Boolean).pop() || '';
+    const dot = last.lastIndexOf('.');
+    return dot !== -1 ? last.substring(dot).toLowerCase() : '';
+  } catch {
+    const raw = url.split('?')[0];
+    const last = raw.split('/').filter(Boolean).pop() || '';
+    const dot = last.lastIndexOf('.');
+    return dot !== -1 ? last.substring(dot).toLowerCase() : '';
+  }
+};
+
+const getFileIconClass = (url: string | undefined | null): string => {
+  const ext = getFileExtFromUrl(url);
+  if (ext === '.pdf') return 'fa-file-pdf';
+  if (['.doc', '.docx'].includes(ext)) return 'fa-file-word';
+  if (['.xls', '.xlsx'].includes(ext)) return 'fa-file-excel';
+  if (['.ppt', '.pptx'].includes(ext)) return 'fa-file-powerpoint';
+  if (['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'].includes(ext)) return 'fa-file-image';
+  if (['.zip', '.rar', '.7z'].includes(ext)) return 'fa-file-zipper';
+  if (['.txt', '.csv'].includes(ext)) return 'fa-file-lines';
+  return 'fa-file';
+};
+
+const getFileLabel = (url: string | undefined | null): string => {
+  const ext = getFileExtFromUrl(url);
+  return ext ? ext.replace('.', '').toUpperCase() : 'Archivo';
+};
+
 const getFileNameFromUrl = (url: string | undefined | null, fallback: string) => {
   if (!url) return fallback;
 
@@ -1253,7 +1285,8 @@ const QuotesDetailNew: React.FC = () => {
     quote?.company_detail?.name || quote?.contact_detail?.full_name,
     'Cliente'
   );
-  const manualDisplayName = `Cotización #${quoteCodeForDocName} - ${quoteClientForDocName}.pdf`;
+  const manualFileExt = getFileExtFromUrl(quote?.url_cotizacion_manual);
+  const manualDisplayName = `Cotización #${quoteCodeForDocName} - ${quoteClientForDocName}${manualFileExt || '.pdf'}`;
   const versionsList = quote && quote.versions ? (quote.versions as Array<{
     id_version?: string;
     file_url: string;
@@ -1984,7 +2017,7 @@ Valor                </div>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex items-start gap-2.5">
                         <span className="mt-0.5 inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 shrink-0 border border-emerald-100">
-                          <i className="fa-solid fa-file-pdf text-[13px]"></i>
+                          <i className={`fa-solid ${getFileIconClass(quote.url_cotizacion_manual)} text-[13px]`}></i>
                         </span>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-0.5">
@@ -2313,8 +2346,8 @@ Valor                </div>
                                 disabled={openingFileKey === `sent-file-${log.id_sent}`}
                                 className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-zinc-200 shadow-sm rounded text-[10px] font-bold uppercase tracking-wide text-zinc-600 hover:bg-zinc-50 hover:text-red-600 transition-colors"
                               >
-                                {openingFileKey === `sent-file-${log.id_sent}` ? <BrandSpinner size="xs" className="mr-1" /> : <i className="fa-solid fa-file-pdf text-red-500 text-[12px]"></i>}
-                                PDF Enviado
+                                {openingFileKey === `sent-file-${log.id_sent}` ? <BrandSpinner size="xs" className="mr-1" /> : <i className={`fa-solid ${getFileIconClass(log.sent_file_url)} text-red-500 text-[12px]`}></i>}
+                                {getFileLabel(log.sent_file_url)} Enviado
                               </button>
                             </div>
                           )}
