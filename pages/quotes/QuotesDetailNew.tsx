@@ -657,11 +657,6 @@ const QuotesDetailNew: React.FC = () => {
     const file = e.target.files?.[0];
     if (!file || !quote || !user) return;
 
-    if (file.type !== 'application/pdf') {
-      setToast({ message: 'Solo se permiten archivos PDF.', type: 'error' });
-      return;
-    }
-
     setProcessing(true);
     const formData = new FormData();
     formData.append('file', file);
@@ -1932,7 +1927,7 @@ Valor                </div>
                   <h3 className="text-[14px] font-semibold text-zinc-900">Versiones de Cotización</h3>
                   {canEdit && (
                     <div className="flex items-center gap-2">
-                      <input type="file" ref={manualFileInputRef} className="hidden" accept=".pdf" onChange={handleUploadManualQuote} />
+                      <input type="file" ref={manualFileInputRef} className="hidden" onChange={handleUploadManualQuote} />
                       <button
                         onClick={() => manualFileInputRef.current?.click()}
                         disabled={processing}
