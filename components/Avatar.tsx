@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { getImageUrl } from '../utils/imageUtils';
-import { BrandSpinner } from './AppLoaders';
 
 const loadedAvatarUrls = new Set<string>();
 
@@ -63,7 +62,7 @@ const Avatar: React.FC<AvatarProps> = ({
   size = 'md',
   className = '',
   showOnlineIndicator = false,
-  loading = 'lazy',
+  loading = 'eager',
   badgeInset = false,
   enableHoverZoom = false,
   hoverScale = 1.12,
@@ -90,12 +89,19 @@ const Avatar: React.FC<AvatarProps> = ({
     setImageLoaded(wasLoadedBefore);
   }, [effectiveImageUrl, wasLoadedBefore]);
 
+  // Verificar si la imagen existe usando Image API
+  // Esto funciona incluso para imágenes en caché que no disparan onLoad en <img>
   useEffect(() => {
     if (!effectiveImageUrl || imageLoaded || imageError) return;
-    const timeoutId = window.setTimeout(() => {
+    const img = new Image();
+    img.onload = () => {
+      loadedAvatarUrls.add(effectiveImageUrl);
+      setImageLoaded(true);
+    };
+    img.onerror = () => {
       setImageError(true);
-    }, 6000);
-    return () => window.clearTimeout(timeoutId);
+    };
+    img.src = effectiveImageUrl;
   }, [effectiveImageUrl, imageLoaded, imageError]);
 
   const handleImageError = () => {
@@ -185,9 +191,7 @@ const Avatar: React.FC<AvatarProps> = ({
               onLoad={handleImageLoad}
             />
             {!imageLoaded && (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-200 dark:bg-slate-400 rounded-full">
-                <BrandSpinner size="xs" />
-              </div>
+              <div className="absolute inset-0 rounded-full bg-slate-200 dark:bg-slate-400"></div>
             )}
           </>
         )}

@@ -4,6 +4,7 @@ import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import CollectionModal from '../../components/CollectionModal';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
 import { apiFetch } from '../../services/apiClient';
 import { financialService } from '../../services/financials.service';
 import { BrandSpinner } from '../../components/AppLoaders';
@@ -15,6 +16,30 @@ const formatCurrency = (val: string | number | undefined) => {
   const num = typeof val === 'string' ? parseFloat(val) : val;
   if (num === undefined || isNaN(num)) return '$0.00';
   return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+};
+
+const getCurrentMonthRange = () => {
+  const now = new Date();
+  return {
+    start: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0],
+    end: new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0],
+    include_open: true,
+  };
+};
+
+const normalizeTransactionType = (value: any): FinancialTransaction['transaction_type'] => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (raw === 'VENTA') return 'VENTA';
+  if (raw === 'COMPRA' || raw === 'GASTO') return 'GASTO';
+  return 'OTRO';
+};
+
+const deriveBalanceDue = (rawBalance: any, totalValue: any, paidAmount: any) => {
+  const explicitBalance = Number(rawBalance);
+  if (!Number.isNaN(explicitBalance) && rawBalance !== null && rawBalance !== undefined && rawBalance !== '') {
+    return Math.max(explicitBalance, 0);
+  }
+  return Math.max(Number(totalValue || 0) - Number(paidAmount || 0), 0);
 };
 
 const getInitials = (fullName?: string) => {
@@ -98,6 +123,7 @@ const FinancialDetail: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { invalidateFinancials } = useDataCache();
 
   const [transaction, setTransaction] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,7 +155,7 @@ const FinancialDetail: React.FC = () => {
       const normalizedTx = {
         ...tx,
         id_transaction: tx.id_transaccion,
-        transaction_type: tx.tipo_transaccion,
+        transaction_type: normalizeTransactionType(tx.tipo_transaccion || tx.transaction_type),
         invoice_number: tx.numero_factura,
         description: tx.descripcion_concepto,
         status: tx.estado_registro,
@@ -146,7 +172,7 @@ const FinancialDetail: React.FC = () => {
         retention_value: parseFloat(tx.valor_retencion || 0),
         total_value: parseFloat(tx.total_factura || 0),
         paid_amount: parseFloat(tx.monto_pagado_caja || tx.v_total_abonado || 0),
-        balance_due: Math.max(parseFloat(tx.v_saldo_pendiente || 0) - parseFloat(tx.valor_retencion || 0), 0),
+        balance_due: deriveBalanceDue(tx.v_saldo_pendiente || tx.balance_due, tx.total_factura, tx.monto_pagado_caja || tx.v_total_abonado),
         enable_automation: tx.enable_automation === true,
         automation_frequency: tx.automation_frequency,
         automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : [],
@@ -183,6 +209,7 @@ const FinancialDetail: React.FC = () => {
       });
       if (!res.ok) throw new Error();
       setToast({ message: 'Estado actualizado', type: 'success' });
+      await invalidateFinancials(getCurrentMonthRange());
       fetchData(); 
     } catch {
       setToast({ message: 'Error al actualizar', type: 'error' });
@@ -193,16 +220,24 @@ const FinancialDetail: React.FC = () => {
     if (!transaction || paymentAmount <= 0) return;
     setProcessing(true);
     try {
-      const newPaid = (parseFloat(transaction.paid_amount as any) || 0) + paymentAmount;
-      const newBalance = Math.max((parseFloat(transaction.balance_due as any) || 0) - paymentAmount, 0);
+      const currentBalance = parseFloat(transaction.balance_due as any) || 0;
+      const appliedAmount = Math.min(paymentAmount, currentBalance);
+      if (appliedAmount <= 0) {
+        setToast({ message: 'El monto del abono no es válido.', type: 'error' });
+        return;
+      }
+
+      const newPaid = (parseFloat(transaction.paid_amount as any) || 0) + appliedAmount;
+      const newBalance = Math.max(currentBalance - appliedAmount, 0);
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...transaction, paid_amount: newPaid, balance_due: newBalance, id_tenant: user?.id_tenant })
+        body: JSON.stringify({ ...transaction, paid_amount: newPaid, balance_due: newBalance, status: newBalance === 0 ? 'PAGADO' : transaction.status, id_tenant: user?.id_tenant })
       });
       if (!res.ok) throw new Error();
       setIsPaymentModalOpen(false); setPaymentAmount(0);
       setToast({ message: 'Abono registrado', type: 'success' });
+      await invalidateFinancials(getCurrentMonthRange());
       fetchData();
     } catch { setToast({ message: 'Error en abono', type: 'error' }); } finally { setProcessing(false); }
   };
@@ -212,6 +247,7 @@ const FinancialDetail: React.FC = () => {
     try {
       setProcessing(true);
       await financialService.delete(transaction.id_transaction, user.id_tenant, user.id_user);
+      await invalidateFinancials(getCurrentMonthRange());
       setConfirmState(p => ({ ...p, isOpen: false }));
       setToast({ message: 'Eliminado', type: 'success' });
       navigate('/app/financials');
@@ -241,6 +277,7 @@ const FinancialDetail: React.FC = () => {
       if (!res.ok) throw new Error();
       setToast({ message: 'Notificación enviada', type: 'success' });
       setIsCollectionModalOpen(false);
+      await invalidateFinancials(getCurrentMonthRange());
       fetchData();
     } catch { setToast({ message: 'Error en envío', type: 'error' }); } finally { setProcessing(false); }
   };
@@ -546,7 +583,7 @@ const FinancialDetail: React.FC = () => {
                </div>
                <div className="relative">
                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-2xl">$</span>
-                  <input autoFocus type="number" value={paymentAmount} onChange={e => setPaymentAmount(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 border-2 border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl py-5 pl-10 pr-4 outline-none text-3xl font-mono font-black text-slate-800 transition-all" placeholder="0.00" />
+                  <input autoFocus type="number" max={transaction.balance_due || undefined} value={paymentAmount} onChange={e => setPaymentAmount(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 border-2 border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl py-5 pl-10 pr-4 outline-none text-3xl font-mono font-black text-slate-800 transition-all" placeholder="0.00" />
                </div>
                <div className="flex gap-3">
                   <button onClick={() => setIsPaymentModalOpen(false)} className="flex-1 py-4 rounded-2xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors">Cancelar</button>

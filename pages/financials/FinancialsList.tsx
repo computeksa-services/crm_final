@@ -40,6 +40,21 @@ const formatDateDDMMYYYY = (dateStr?: string) => {
     return dateStr;
 };
 
+const normalizeTransactionType = (value: any): FinancialTransaction['transaction_type'] => {
+    const raw = String(value || '').trim().toUpperCase();
+    if (raw === 'VENTA') return 'VENTA';
+    if (raw === 'COMPRA' || raw === 'GASTO') return 'GASTO';
+    return 'OTRO';
+};
+
+const deriveBalanceDue = (rawBalance: any, totalValue: any, paidAmount: any) => {
+    const explicitBalance = Number(rawBalance);
+    if (!Number.isNaN(explicitBalance) && rawBalance !== null && rawBalance !== undefined && rawBalance !== '') {
+        return Math.max(explicitBalance, 0);
+    }
+    return Math.max(Number(totalValue || 0) - Number(paidAmount || 0), 0);
+};
+
 // Función de filtro de rango de fechas para TanStack Table
 const dateRangeFilter: FilterFn<any> = (row, columnId, value) => {
     const { start, end } = value as { start: string; end: string };
@@ -67,13 +82,13 @@ const KpiCard: React.FC<{ title: string; value: number; icon: string; color: 'bl
         orange: 'bg-amber-50 text-amber-700 border-amber-100',
     };
     return (
-        <div className={`p-3 rounded-lg border ${styles[color]} flex items-center gap-3 shadow-sm`}>
-            <div className={`w-10 h-10 rounded-md flex items-center justify-center bg-white bg-opacity-60`}>
-                <i className={`fa-solid ${icon} text-xl`}></i>
+        <div className={`p-2 rounded-lg border ${styles[color]} flex items-center gap-2`}>
+            <div className={`w-8 h-8 rounded-md flex items-center justify-center bg-white bg-opacity-60 flex-shrink-0`}>
+                <i className={`fa-solid ${icon} text-base`}></i>
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
                 <span className="text-[10px] font-bold uppercase opacity-70 tracking-widest">{title}</span>
-                <div className="text-lg font-black font-mono tracking-tight mt-0.5">
+                <div className="text-sm font-bold font-mono tracking-tight mt-0.5 truncate">
                     ${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
                 {subtext && <div className="text-[10px] opacity-80 font-medium -mt-1">{subtext}</div>}
@@ -125,7 +140,7 @@ const DateRangeSelector: React.FC<{ availableList: YearWithMonths[], selectedYea
     const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
     
     return (
-        <div className="flex items-center gap-2 bg-white px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
+        <div className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-md border border-slate-200">
             {/* Selector de Año */}
             <select
                 value={selectedYear}
@@ -212,13 +227,19 @@ const InlineStatusSelector: React.FC<{ status: string; onChange: (val: string) =
 };
 
 // 3. Helper Group Cell
-const renderGroupCell = (row: any, label: string) => (
-  <div className="flex items-center gap-3">
-    <i className={`fa-solid fa-chevron-right text-slate-400 text-xs transition-transform duration-200 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
-    <span className="font-bold text-slate-700 uppercase tracking-tight">{label || 'No asignado'}</span>
-    <span className="bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full text-[10px] font-bold">{row.subRows.length}</span>
-  </div>
-);
+const renderGroupCell = (row: any, label: string) => {
+  const subtotal = row.subRows.reduce((sum: number, subRow: any) => sum + Number(subRow.original?.total_value || 0), 0);
+  return (
+    <div className="flex items-center gap-3 py-0.5">
+      <i className={`fa-solid fa-chevron-right text-slate-400 text-[10px] transition-transform duration-150 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
+      <span className="font-semibold text-slate-700 text-xs">{label || 'Sin asignar'}</span>
+      <span className="text-[10px] text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">{row.subRows.length}</span>
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-800 tabular-nums">
+        ${subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+      </span>
+    </div>
+  );
+};
 
 // 4. Badges Extras
 const getTypeBadge = (type: string) => {
@@ -232,6 +253,102 @@ const getPaymentStatusColor = (code?: string) => {
     if (code === 'OVERDUE') return 'bg-rose-50 text-rose-700 border-rose-200';
     if (code === 'WARNING') return 'bg-amber-50 text-amber-700 border-amber-200';
     return 'bg-slate-50 text-slate-600 border-slate-200';
+};
+
+// 5. Grouping Dropdown (Phase C - Toolbar parity with QuotesList)
+const FINANCIALS_GROUP_OPTIONS = [
+  { id: 'client_company_name', icon: 'fa-building', label: 'Cliente' },
+  { id: 'status', icon: 'fa-list-check', label: 'Estado' },
+  { id: 'transaction_type', icon: 'fa-tag', label: 'Tipo' },
+];
+
+const GroupingDropdown: React.FC<{
+  grouping: string[];
+  onGroupingChange: (g: string[]) => void;
+  columnFilters: ColumnFiltersState;
+  onClearFilters: () => void;
+}> = ({ grouping, onGroupingChange, columnFilters, onClearFilters }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const hasActiveGroup = grouping.length > 0;
+  const hasActiveFilters = columnFilters.length > 0;
+  const activeConfigCount = (hasActiveGroup ? 1 : 0) + columnFilters.length;
+
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current) { clearTimeout(closeTimerRef.current); closeTimerRef.current = null; }
+  };
+  const scheduleClose = () => {
+    clearCloseTimer();
+    closeTimerRef.current = setTimeout(() => { setOpen(false); closeTimerRef.current = null; }, 650);
+  };
+  const canUseHoverClose = () => {
+    if (typeof window === 'undefined' || !window.matchMedia) return false;
+    return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  };
+
+  return (
+    <div
+      className="relative flex-shrink-0"
+      ref={ref}
+      onMouseEnter={clearCloseTimer}
+      onMouseLeave={() => { if (open && canUseHoverClose()) scheduleClose(); }}
+    >
+      <button
+        onClick={() => setOpen(o => !o)}
+        className={`relative flex items-center gap-1.5 px-2.5 py-2 sm:py-1.5 rounded-md border text-sm sm:text-xs font-medium transition-all whitespace-nowrap ${open ? 'bg-slate-50 border-slate-300 text-slate-700' : 'text-slate-500 border-slate-200 hover:bg-slate-50'}`}
+      >
+        <i className="fa-solid fa-layer-group text-[10px]" />
+        <span>Agrupar</span>
+        <i className={`fa-solid fa-chevron-down text-[8px] opacity-50 transition-transform duration-150 ${open ? 'rotate-180' : ''}`} />
+        {activeConfigCount > 0 && (
+          <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 px-1 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center leading-none border-2 border-white">
+            {activeConfigCount}
+          </span>
+        )}
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1.5 right-0 bg-white/95 backdrop-blur-sm border border-slate-200/90 rounded-xl shadow-[0_10px_24px_rgba(15,23,42,0.12)] py-1 z-50 w-56 max-w-[calc(100vw-1rem)]">
+          <p className="px-2.5 pt-1 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-[0.14em]">Agrupado por</p>
+          {FINANCIALS_GROUP_OPTIONS.map(opt => {
+            const isActive = grouping.includes(opt.id);
+            return (
+              <button
+                key={opt.id}
+                onClick={() => { onGroupingChange(isActive ? [] : [opt.id]); setOpen(false); }}
+                className={`w-full h-8 flex items-center gap-2 px-2.5 text-xs rounded-md transition-colors text-left ${isActive ? 'bg-blue-50 text-blue-700 font-semibold' : 'text-slate-600 hover:bg-slate-50'}`}
+              >
+                <i className={`fa-solid ${opt.icon} text-[10px] w-3.5 text-center ${isActive ? 'text-blue-500' : 'text-slate-400'}`} />
+                {opt.label}
+                {isActive && <i className="fa-solid fa-check text-[9px] ml-auto text-blue-400" />}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => { onGroupingChange([]); setOpen(false); }}
+            className={`w-full h-8 flex items-center gap-2 px-2.5 text-xs rounded-md transition-colors text-left ${hasActiveGroup ? 'text-red-600 bg-red-50 hover:bg-red-100/70' : 'text-slate-500 hover:bg-slate-50'}`}
+          >
+            <i className={`fa-solid fa-xmark text-[10px] w-3.5 text-center ${hasActiveGroup ? 'text-red-500' : 'text-slate-400'}`} />
+            Sin agrupar
+            {!hasActiveGroup && <i className="fa-solid fa-check text-[9px] ml-auto text-slate-400" />}
+          </button>
+          {hasActiveFilters && (
+            <>
+              <div className="border-t border-slate-100 mt-1.5 pt-1.5" />
+              <button
+                onClick={() => { onClearFilters(); setOpen(false); }}
+                className="w-full h-8 flex items-center gap-2 px-2.5 text-xs text-slate-600 hover:bg-slate-50 rounded-md transition-colors text-left"
+              >
+                <i className="fa-solid fa-filter text-[10px] w-3.5 text-center text-slate-400" />
+                <span>Limpiar {columnFilters.length} filtro{columnFilters.length > 1 ? 's' : ''}</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
 
 // --- MAIN COMPONENT ---
@@ -306,6 +423,7 @@ const FinancialsList: React.FC = () => {
 
   // --- DATA LOADING ---
     const didInitRef = useRef(false);
+        const didFirstFilterEffectRef = useRef(false);
 
     const computeKey = useCallback(() => {
         return `${dateRange.start || ''}|${dateRange.end || ''}|${includeOpen ? 1 : 0}`;
@@ -338,11 +456,11 @@ const FinancialsList: React.FC = () => {
                 description: t.description || t.descripcion_concepto,
                 client_company_name: t.client_company_name || t.nombre_cliente_proveedor,
                 status: t.status || t.estado_registro,
-                transaction_type: t.tipo_transaccion,
+                transaction_type: normalizeTransactionType(t.tipo_transaccion || t.transaction_type),
                 total_value: Number(t.total_value || t.total_factura || 0),
-                paid_amount: Number(t.paid_amount || t.monto_pagado_caja || 0),
+                paid_amount: Number(t.paid_amount || t.monto_pagado_caja || t.v_total_abonado || 0),
                 retention_value: Number(t.retention_value || t.valor_retencion || 0),
-                balance_due: Math.max(Number(t.v_saldo_pendiente || t.saldo_pendiente || 0) - Number(t.valor_retencion || 0), 0),
+                balance_due: deriveBalanceDue(t.v_saldo_pendiente || t.saldo_pendiente || t.balance_due, t.total_value || t.total_factura, t.paid_amount || t.monto_pagado_caja || t.v_total_abonado),
                 issue_date: t.issue_date || t.fecha_emision,
                 due_date: t.due_date || t.fecha_vencimiento,
                 subtotal: Number(t.subtotal || 0),
@@ -369,6 +487,10 @@ const FinancialsList: React.FC = () => {
   // Recargar solo cuando el usuario cambia los filtros MANUALMENTE (después de la carga inicial)
     useEffect(() => {
         if (!didInitRef.current) return;
+        if (!didFirstFilterEffectRef.current) {
+            didFirstFilterEffectRef.current = true;
+            return;
+        }
         const key = computeKey();
         const hasCache = Boolean(financialsCache[key]);
         if (!hasCache) setLoading(true);
@@ -400,7 +522,7 @@ const FinancialsList: React.FC = () => {
           setPaymentModal({ isOpen: true, tx, date: new Date().toISOString().split('T')[0], amount, method: 'TRANSFERENCIA', ref: '' });
       } else {
           try {
-              await financialService.update({ id_transaction: tx.id_transaction, id_tenant: user?.id_tenant, status: newStatus, paid_amount: 0, balance_due: tx.total_value });
+              await financialService.update({ id_transaction: tx.id_transaction, id_tenant: user?.id_tenant, status: newStatus });
               setToast({ message: 'Estado actualizado', type: 'success' });
               invalidateFinancials({ start: dateRange.start, end: dateRange.end, include_open: includeOpen });
           } catch (e) { setToast({ message: 'Error al actualizar', type: 'error' }); }
@@ -410,10 +532,27 @@ const FinancialsList: React.FC = () => {
   const confirmPayment = async () => {
       if (!paymentModal.tx) return;
       try {
+          const currentPaid = Number(paymentModal.tx.paid_amount || 0);
+          const currentBalance = Number(paymentModal.tx.balance_due || paymentModal.tx.total_value || 0);
+          const amount = Math.min(Number(paymentModal.amount || 0), currentBalance);
+          if (amount <= 0) {
+              setToast({ message: 'Ingrese un monto válido.', type: 'error' });
+              return;
+          }
+
+          const newPaidAmount = currentPaid + amount;
+          const newBalance = Math.max(currentBalance - amount, 0);
           await financialService.update({
               id_transaction: paymentModal.tx.id_transaction, id_tenant: user?.id_tenant,
-              status: 'PAGADO', payment_date: paymentModal.date, payment_method: paymentModal.method, payment_reference: paymentModal.ref, paid_amount: paymentModal.amount,
-              total_value: paymentModal.tx.total_value, subtotal: paymentModal.tx.subtotal, tax_amount: paymentModal.tx.tax_amount
+              status: newBalance === 0 ? 'PAGADO' : 'PENDIENTE',
+              payment_date: paymentModal.date,
+              payment_method: paymentModal.method,
+              payment_reference: paymentModal.ref,
+              paid_amount: newPaidAmount,
+              balance_due: newBalance,
+              total_value: paymentModal.tx.total_value,
+              subtotal: paymentModal.tx.subtotal,
+              tax_amount: paymentModal.tx.tax_amount
           });
           setPaymentModal(prev => ({ ...prev, isOpen: false }));
           setToast({ message: 'Pago registrado', type: 'success' });
@@ -841,7 +980,7 @@ const FinancialsList: React.FC = () => {
                   <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 className="font-bold text-slate-800">Registrar Pago</h3><button onClick={() => setPaymentModal(p => ({...p, isOpen:false}))} className="text-slate-400 hover:text-slate-600"><i className="fa-solid fa-times"></i></button></div>
                   <div className="p-6 space-y-4">
                       <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Fecha</label><input type="date" value={paymentModal.date} onChange={e => setPaymentModal(p => ({...p, date: e.target.value}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" /></div>
-                      <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Monto</label><div className="relative"><span className="absolute left-3 top-2 text-slate-400">$</span><input type="number" value={paymentModal.amount} onChange={e => setPaymentModal(p => ({...p, amount: parseFloat(e.target.value)}))} className="w-full pl-6 pr-3 py-2 border border-slate-300 rounded-lg text-sm font-bold" /></div></div>
+                      <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Monto</label><div className="relative"><span className="absolute left-3 top-2 text-slate-400">$</span><input type="number" max={paymentModal.tx?.balance_due || undefined} value={paymentModal.amount} onChange={e => setPaymentModal(p => ({...p, amount: parseFloat(e.target.value) || 0}))} className="w-full pl-6 pr-3 py-2 border border-slate-300 rounded-lg text-sm font-bold" /></div></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Método</label><select value={paymentModal.method} onChange={e => setPaymentModal(p => ({...p, method: e.target.value}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"><option value="TRANSFERENCIA">Transferencia</option><option value="EFECTIVO">Efectivo</option><option value="CHEQUE">Cheque</option></select></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Referencia</label><input type="text" placeholder="Ej: #12345" value={paymentModal.ref} onChange={e => setPaymentModal(p => ({...p, ref: e.target.value}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" /></div>
                   </div>

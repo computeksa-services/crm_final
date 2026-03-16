@@ -6,6 +6,7 @@ import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import CompanyForm from './CompanyForm';
 import { useAuth } from '../../contexts/AuthContext';
+import { useDataCache } from '../../contexts/DataCacheContext';
 import { apiFetch } from '../../services/apiClient';
 
 interface ContactFormProps {
@@ -219,6 +220,7 @@ const ContactForm: React.FC<ContactFormProps> = ({
 	companies = [],
 }) => {
 	const { user } = useAuth();
+	const { invalidateContacts } = useDataCache();
 
 	const [formData, setFormData] = useState<ContactFormData>({
 		first_name: '',
@@ -430,6 +432,7 @@ const ContactForm: React.FC<ContactFormProps> = ({
 				type: 'success',
 			});
 
+			await invalidateContacts(savedContact);
 			onSuccess?.(savedContact);
 			setInitialFormData(null);
 			onClose();

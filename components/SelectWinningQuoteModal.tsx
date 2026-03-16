@@ -32,6 +32,8 @@ const SelectWinningQuoteModal: React.FC<SelectWinningQuoteModalProps> = ({
 }) => {
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [createInCartera, setCreateInCartera] = useState(false);
+  const hasQuotes = quotes.length > 0;
+  const getQuoteId = (quote: Quote): string => String(quote.id_cotizacion || (quote as any).id || '').trim();
 
   React.useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
@@ -45,10 +47,15 @@ const SelectWinningQuoteModal: React.FC<SelectWinningQuoteModalProps> = ({
 
   React.useEffect(() => {
     if (isOpen) {
-      setSelectedQuoteId(null);
+      if (quotes.length === 1) {
+        const onlyQuoteId = getQuoteId(quotes[0]);
+        setSelectedQuoteId(onlyQuoteId || null);
+      } else {
+        setSelectedQuoteId(null);
+      }
       setCreateInCartera(false);
     }
-  }, [isOpen]);
+  }, [isOpen, quotes]);
 
   if (!isOpen) return null;
 
@@ -100,13 +107,17 @@ const SelectWinningQuoteModal: React.FC<SelectWinningQuoteModalProps> = ({
 
           {/* Lista de cotizaciones */}
           <div className="mt-4 space-y-2 max-h-96 overflow-y-auto">
-            {quotes.map((quote) => (
+            {hasQuotes ? quotes.map((quote) => (
               <div
-                key={quote.id_cotizacion}
-                onClick={() => setSelectedQuoteId(quote.id_cotizacion)}
+                key={getQuoteId(quote) || `${quote.formatted_no_cotizacion || quote.no_cotizacion || (quote as any).numero || 'quote'}-${quote.total || '0'}`}
+                onClick={() => {
+                  const quoteId = getQuoteId(quote);
+                  if (!quoteId) return;
+                  setSelectedQuoteId(quoteId);
+                }}
                 className={`
                   relative p-4 border-2 rounded-lg cursor-pointer transition-all
-                  ${selectedQuoteId === quote.id_cotizacion 
+                  ${selectedQuoteId === getQuoteId(quote)
                     ? 'border-brand-500 bg-brand-50' 
                     : 'border-slate-200 hover:border-slate-300 bg-white'
                   }
@@ -116,12 +127,12 @@ const SelectWinningQuoteModal: React.FC<SelectWinningQuoteModalProps> = ({
                   <div className="flex-shrink-0 mt-0.5">
                     <div className={`
                       w-5 h-5 rounded-full border-2 flex items-center justify-center
-                      ${selectedQuoteId === quote.id_cotizacion
+                      ${selectedQuoteId === getQuoteId(quote)
                         ? 'border-brand-500 bg-brand-500'
                         : 'border-slate-300'
                       }
                     `}>
-                      {selectedQuoteId === quote.id_cotizacion && (
+                      {selectedQuoteId === getQuoteId(quote) && (
                         <i className="fa-solid fa-check text-white text-xs"></i>
                       )}
                     </div>
@@ -129,18 +140,18 @@ const SelectWinningQuoteModal: React.FC<SelectWinningQuoteModalProps> = ({
                   <div className="ml-3 flex-1">
                     <div className="flex items-center justify-between">
                       <h4 className="font-semibold text-slate-900">
-                        Cotización #{quote.formatted_no_cotizacion || quote.no_cotizacion}
+                        Cotización #{quote.formatted_no_cotizacion || quote.no_cotizacion || (quote as any).numero || 'Sin número'}
                       </h4>
                       <span className="text-lg font-bold text-slate-900 tabular-nums">
                         {formatCurrency(quote.total)}
                       </span>
                     </div>
                     <p className="text-sm text-slate-600 mt-1">
-                      {quote.nombre_cotizacion}
+                      {quote.nombre_cotizacion || (quote as any).nombre || 'Sin título'}
                     </p>
-                    {quote.fecha_emision_fmt && (
+                    {(quote.fecha_emision_fmt || (quote as any).fecha) && (
                       <p className="text-xs text-slate-500 mt-1">
-                        Emitida: {quote.fecha_emision_fmt}
+                        Emitida: {quote.fecha_emision_fmt || (quote as any).fecha}
                       </p>
                     )}
                     {quote.estado && (
@@ -157,7 +168,11 @@ const SelectWinningQuoteModal: React.FC<SelectWinningQuoteModalProps> = ({
                   </div>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+                No hay cotizaciones disponibles para seleccionar en este trato.
+              </div>
+            )}
           </div>
 
           {/* Checkbox para crear en cartera (solo si tiene acceso) */}
@@ -187,7 +202,9 @@ const SelectWinningQuoteModal: React.FC<SelectWinningQuoteModalProps> = ({
             <div className="flex items-start">
               <i className="fa-solid fa-info-circle text-amber-600 mt-0.5"></i>
               <p className="ml-2 text-xs text-amber-800">
-                Las demás cotizaciones de este trato se marcarán automáticamente como rechazadas.
+                {hasQuotes
+                  ? 'Las demás cotizaciones de este trato se marcarán automáticamente como rechazadas.'
+                  : 'Debes crear o asociar al menos una cotización para marcar una ganadora.'}
               </p>
             </div>
           </div>

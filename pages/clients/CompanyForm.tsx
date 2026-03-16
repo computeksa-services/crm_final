@@ -23,15 +23,47 @@ interface CompanyLabel {
   color?: string;
 }
 
-interface CompanyFormData extends Omit<Partial<ClientCompany>, 'id_type'> {
+interface CompanyFormData extends Omit<Partial<ClientCompany>, 'id_type' | 'labels'> {
   labels?: CompanyLabel[] | any[];
   id_type?: 'RUC' | 'CI' | 'PASAPORTE' | 'IDENTIFICACION DEL EXTERIOR' | 'OTRO' | '' | undefined;
 }
 
+const normalizeIntegerField = (value: unknown): number | undefined => {
+  if (value === '' || value === null || value === undefined) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const normalizeDecimalField = (value: unknown): number | undefined => {
+  if (value === '' || value === null || value === undefined) return undefined;
+  const normalized = String(value).replace(',', '.');
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : undefined;
+};
+
+const normalizeBooleanField = (value: unknown): boolean => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'si' || normalized === 'sí';
+  }
+  return false;
+};
+
+const normalizeCompanyFormData = (data?: Partial<ClientCompany>): CompanyFormData => ({
+  ...data,
+  payment_terms_days: normalizeIntegerField(data?.payment_terms_days ?? data?.billing_details?.payment_terms_days),
+  applies_iva: normalizeBooleanField(data?.applies_iva ?? data?.billing_details?.applies_iva),
+  iva_percentage: normalizeDecimalField(data?.iva_percentage ?? data?.billing_details?.iva_percentage),
+  preferred_payment_method: data?.preferred_payment_method || data?.billing_details?.preferred_payment_method || '',
+  bank_details: data?.bank_details || data?.billing_details?.bank_details || ''
+});
+
 const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initialData, onSuccess, redirectOnCreate = true }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { countries = [], companyTypes = [], companySizes = [], companyLabelsMap } = useDataCache();
+  const { countries = [], companyTypes = [], companySizes = [], companyLabelsMap, invalidateCompanies } = useDataCache();
   
   const [customLabels, setCustomLabels] = useState<CompanyLabel[]>([]);
   const [formData, setFormData] = useState<CompanyFormData>({});
@@ -39,6 +71,7 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initia
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [labelQuery, setLabelQuery] = useState('');
   const [labelMenuOpen, setLabelMenuOpen] = useState(false);
+  const [showFinancialFields, setShowFinancialFields] = useState(false);
   const labelDropdownRef = useRef<HTMLDivElement>(null);
 
   // Unsaved changes detection
@@ -80,7 +113,7 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initia
     if (mode === 'edit' && initialData) {
       const dataWithLabels = initialData as any;
       const formDataNew = {
-        ...initialData,
+        ...normalizeCompanyFormData(initialData),
         id_company_size: initialData.id_company_size || (initialData as any).company_size || '',
         labels: Array.isArray(dataWithLabels.labels)
           ? dataWithLabels.labels.map(resolveLabel)
@@ -99,7 +132,12 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initia
         name_company: '', 
         razon_social: '', 
         city: '', 
-        address: ''
+        address: '',
+        payment_terms_days: undefined,
+        applies_iva: false,
+        iva_percentage: undefined,
+        preferred_payment_method: '',
+        bank_details: ''
       };
       setFormData(formDataNew);
       // Guardar estado inicial para detectar cambios
@@ -107,6 +145,7 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initia
     }
     setLabelMenuOpen(false);
     setLabelQuery('');
+    setShowFinancialFields(false);
   }, [isOpen, mode, initialData]);
 
   // Detectar cambios no guardados
@@ -163,14 +202,50 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initia
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, labelMenuOpen, showDiscardConfirm, handleAttemptClose]);
 
-  const resolveLabel = (label: any): CompanyLabel => {
+  function resolveLabel(label: any): CompanyLabel {
     const id = typeof label === 'string' ? label : (label.id_label || label.id || '');
     const found = companyLabelsMap[id] || customLabels.find(l => l.id_label === id);
     return { id_label: id, name: found?.name || label.name || id, color: found?.color || '#3B82F6' };
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const target = e.target;
+    const { name } = target;
+
+    if (target instanceof HTMLInputElement && target.type === 'checkbox') {
+      const checked = target.checked;
+      setFormData(prev => ({
+        ...prev,
+        [name]: checked,
+        ...(name === 'applies_iva' && !checked ? { iva_percentage: undefined } : {})
+      }));
+      return;
+    }
+
+    setFormData(prev => ({ ...prev, [name]: target.value }));
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const buildPayload = () => {
+    const payload: Record<string, any> = {
+      ...formData,
+      payment_terms_days: normalizeIntegerField(formData.payment_terms_days),
+      applies_iva: normalizeBooleanField(formData.applies_iva),
+      iva_percentage: normalizeBooleanField(formData.applies_iva)
+        ? normalizeDecimalField(formData.iva_percentage)
+        : undefined,
+      preferred_payment_method: formData.preferred_payment_method?.trim() || undefined,
+      bank_details: formData.bank_details?.trim() || undefined,
+      id_tenant: user?.id_tenant,
+      id_user: user?.id_user
+    };
+
+    if (!payload.id_type) delete payload.id_type;
+    if (payload.payment_terms_days === undefined) delete payload.payment_terms_days;
+    if (payload.iva_percentage === undefined) delete payload.iva_percentage;
+    if (!payload.preferred_payment_method) delete payload.preferred_payment_method;
+    if (!payload.bank_details) delete payload.bank_details;
+
+    return payload;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -217,14 +292,10 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initia
       const filteredLabelIds = finalLabelIds.filter(id => id && String(id).trim() !== '');
 
       const endpoint = mode === 'edit' ? 'update' : '';
-      const payload = { 
-        ...formData, 
-        labels: filteredLabelIds, 
-        id_tenant: user?.id_tenant, 
-        id_user: user?.id_user 
+      const payload = {
+        ...buildPayload(),
+        labels: filteredLabelIds
       };
-      
-      if (!payload.id_type) delete payload.id_type;
       
       const response = await apiFetch(
         `${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies/${endpoint}`, 
@@ -246,6 +317,7 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initia
         type: 'success'
       });
       
+      await invalidateCompanies(savedCompany);
       onSuccess?.(savedCompany);
       
       if (mode === 'create' && savedCompany?.id_client_company && redirectOnCreate) {
@@ -624,6 +696,103 @@ const CompanyForm: React.FC<CompanyFormProps> = ({ isOpen, onClose, mode, initia
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="border border-zinc-200 rounded-lg bg-zinc-50/60 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowFinancialFields(prev => !prev)}
+                className="w-full px-4 py-3 flex items-center justify-between text-left hover:bg-zinc-100/70 transition-colors"
+              >
+                <div>
+                  <p className="text-[12px] font-semibold text-zinc-800">Datos financieros</p>
+                  <p className="text-[11px] text-zinc-500">Despliega esta sección para completar información de pago del cliente.</p>
+                </div>
+                <i className={`fa-solid fa-chevron-down text-[12px] text-zinc-400 transition-transform ${showFinancialFields ? 'rotate-180' : ''}`}></i>
+              </button>
+
+              {showFinancialFields && (
+                <div className="px-4 pb-4 border-t border-zinc-200 bg-white space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+                    <div>
+                      <label className="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                        Días de plazo para el pago
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        name="payment_terms_days"
+                        value={formData.payment_terms_days ?? ''}
+                        onChange={handleInputChange}
+                        className="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400"
+                        placeholder="Ej. 30"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                        Método de pago preferido
+                      </label>
+                      <input
+                        type="text"
+                        name="preferred_payment_method"
+                        value={formData.preferred_payment_method || ''}
+                        onChange={handleInputChange}
+                        className="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400"
+                        placeholder="Ej. Transferencia"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                    <div className="rounded-md border border-zinc-200 bg-zinc-50 px-3 py-3">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          name="applies_iva"
+                          checked={!!formData.applies_iva}
+                          onChange={handleInputChange}
+                          className="mt-0.5 h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span>
+                          <span className="block text-[12px] font-medium text-zinc-800">Aplica IVA</span>
+                          <span className="block text-[11px] text-zinc-500">Marca esta opción si el cliente paga IVA.</span>
+                        </span>
+                      </label>
+                    </div>
+                    <div>
+                      <label className="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                        Porcentaje de IVA
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        name="iva_percentage"
+                        value={formData.iva_percentage ?? ''}
+                        onChange={handleInputChange}
+                        disabled={!formData.applies_iva}
+                        className="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400 disabled:bg-zinc-100 disabled:text-zinc-400 disabled:border-zinc-200"
+                        placeholder="Ej. 15.00"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[12px] font-medium text-zinc-700 mb-1.5">
+                      Datos bancarios
+                    </label>
+                    <textarea
+                      name="bank_details"
+                      value={formData.bank_details || ''}
+                      onChange={handleInputChange}
+                      rows={3}
+                      className="w-full text-[13px] text-zinc-900 bg-white border border-zinc-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-md px-3 py-2 outline-none transition-shadow shadow-sm placeholder:text-zinc-400 resize-y"
+                      placeholder="Banco, números de cuenta u observaciones"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
           </div>

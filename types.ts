@@ -123,6 +123,11 @@ export interface ClientCompany {
   website?: string;
   phone_company?: string;
   email_company?: string;
+  payment_terms_days?: number;
+  applies_iva?: boolean;
+  iva_percentage?: number;
+  preferred_payment_method?: string;
+  bank_details?: string;
   created_by?: string; // ID del usuario que creó el registro
   access_level?: 'VIEW' | 'EDIT'; // Nivel de acceso calculado por backend
   id_country?: string; // ID del país
@@ -137,6 +142,20 @@ export interface ClientCompany {
   company_size?: string;
   label_name?: string;
   label_color?: string;
+  labels?: string[];
+  created_at?: string;
+  updated_at?: string;
+  billing_details?: {
+    payment_terms_days?: number;
+    applies_iva?: boolean;
+    iva_percentage?: number;
+    preferred_payment_method?: string;
+    bank_details?: string;
+  };
+  timeline_info?: {
+    created_at_human?: string;
+    updated_at_human?: string;
+  };
 }
 
 // 4. CLIENT CONTACT (La persona de contacto)

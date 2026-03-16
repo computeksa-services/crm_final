@@ -247,6 +247,13 @@ const ClientCompaniesList: React.FC = () => {
     setColumnFilters(currentFilters);
   };
 
+  const getPaymentTermsDays = (company: any) => {
+    const value = company?.payment_terms_days ?? company?.billing_details?.payment_terms_days;
+    if (value === null || value === undefined || value === '') return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
   // --- PASO 1: PREPARACIÓN DE DATOS (FLATTENING) ---
   const tableData = useMemo(() => {
     if (grouping.length > 0 && grouping[0] === 'labels') {
@@ -415,6 +422,19 @@ const ClientCompaniesList: React.FC = () => {
           );
         }
         return row.getIsGrouped() ? null : <span className="text-slate-600 text-sm font-medium">{getValue() as string || '-'}</span>;
+      },
+    },
+    {
+      id: 'payment_terms_days',
+      accessorFn: (row) => getPaymentTermsDays(row),
+      header: 'Crédito',
+      size: 110,
+      enableColumnFilter: false,
+      cell: ({ row, getValue }) => {
+        if (row.getIsGrouped()) return null;
+        const days = getValue() as number | undefined;
+        if (days === undefined) return <span className="text-slate-400 text-sm">-</span>;
+        return <span className="text-sm font-medium text-slate-700">{days} días</span>;
       },
     },
     {

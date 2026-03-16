@@ -12,6 +12,8 @@ interface CompanyLabel {
   total_empresas: number | string;
 }
 
+const CACHE_VERSION = '2.0';
+
 type DataCacheState = {
   // Datos
   companies: ClientCompany[];
@@ -37,7 +39,7 @@ type DataCacheState = {
   loaded: boolean;
   
   // Métodos de invalidación
-  invalidateCompanies: () => Promise<void>;
+  invalidateCompanies: (optimisticCompany?: ClientCompany) => Promise<void>;
   invalidateContacts: (optimisticContact?: ClientContact) => Promise<void>;
   invalidateProducts: () => Promise<void>;
   invalidateUsers: () => Promise<void>;
@@ -114,7 +116,6 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       localStorage.removeItem(`cache_${user.id_tenant}`);
     } catch (e) {}
 
-    const CACHE_VERSION = '2.0'; // 🔄 Incrementar cuando cambien estructuras de datos
     const cachedKey = `cache_${user.id_tenant}_${user.id_user}_v${CACHE_VERSION}`;
     
     // Limpiar versiones antiguas del cache
@@ -427,8 +428,18 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [loadData]);
 
   // --- INVALIDACIÓN (RECARGA) ---
-  const invalidateCompanies = useCallback(async () => {
+  const invalidateCompanies = useCallback(async (optimisticCompany?: ClientCompany) => {
     if (!user?.id_tenant || !user?.id_user) return;
+
+    if (optimisticCompany) {
+      setCompanies(prev => {
+        const existing = prev.find(c => c.id_client_company === optimisticCompany.id_client_company);
+        if (existing) {
+          return prev.map(c => c.id_client_company === optimisticCompany.id_client_company ? optimisticCompany : c);
+        }
+        return [optimisticCompany, ...prev];
+      });
+    }
     
     try {
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies?id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
@@ -439,7 +450,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setCompanyLabelsMap(labelsMap);
         
         // Guardar en localStorage
-        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}_v${CACHE_VERSION}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : { contacts: [] };
@@ -478,7 +489,7 @@ export const DataCacheProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         setContacts(contactsArray);
         
         // Guardar en localStorage
-        const cachedKey = `cache_${user.id_tenant}_${user.id_user}`;
+        const cachedKey = `cache_${user.id_tenant}_${user.id_user}_v${CACHE_VERSION}`;
         try {
           const cached = localStorage.getItem(cachedKey);
           const parsed = cached ? JSON.parse(cached) : { companies: [] };
