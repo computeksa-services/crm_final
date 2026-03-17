@@ -16,6 +16,11 @@ interface CampaignAudienceProps {
     field: K,
     value: CampaignFormData[K]
   ) => void;
+  onValidationChange?: (data: {
+    selectedCount: number;
+    selectedWithContactsCount: number;
+    totalSubscribers: number;
+  }) => void;
 }
 
 /**
@@ -26,6 +31,7 @@ interface CampaignAudienceProps {
 const CampaignAudience: React.FC<CampaignAudienceProps> = ({
   formData,
   updateFormData,
+  onValidationChange,
 }) => {
   const { user } = useAuth();
   const [lists, setLists] = useState<AudienceList[]>([]);
@@ -96,6 +102,18 @@ const CampaignAudience: React.FC<CampaignAudienceProps> = ({
 
   const totalSubscribers = getTotalSubscribers();
   const selectedCount = formData.target_lists.length;
+  const selectedWithContactsCount = lists.filter(
+    (list) => formData.target_lists.includes(list.id) && list.member_count > 0
+  ).length;
+
+  useEffect(() => {
+    if (!onValidationChange) return;
+    onValidationChange({
+      selectedCount,
+      selectedWithContactsCount,
+      totalSubscribers,
+    });
+  }, [onValidationChange, selectedCount, selectedWithContactsCount, totalSubscribers]);
 
   return (
     <div className="campaign-audience">
@@ -237,6 +255,15 @@ const CampaignAudience: React.FC<CampaignAudienceProps> = ({
           <span className="info-icon">ℹ️</span>
           <span className="info-text">
             Selecciona al menos una lista para continuar
+          </span>
+        </div>
+      )}
+
+      {!isLoading && selectedCount > 0 && selectedWithContactsCount === 0 && (
+        <div className="info-box warning">
+          <span className="info-icon">⚠️</span>
+          <span className="info-text">
+            Las listas seleccionadas no tienen contactos. Elige al menos una lista con suscriptores.
           </span>
         </div>
       )}
@@ -547,6 +574,11 @@ const CampaignAudience: React.FC<CampaignAudienceProps> = ({
         .info-text {
           font-size: 13px;
           margin: 0;
+        }
+
+        .info-box.warning {
+          background: #fff8e6;
+          border-color: #ffd27a;
         }
 
         @media (max-width: 768px) {

@@ -73,6 +73,11 @@ const dateRangeFilter: FilterFn<any> = (row, columnId, value) => {
 
 // --- COMPONENTES UI ---
 
+const formatCurrency = (value: number | string) => {
+  const num = typeof value === 'string' ? parseFloat(value.replace(/[^0-9.-]+/g, '')) : value;
+  return isNaN(num) ? '$0.00' : num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+};
+
 // 1. KPI Card (Diseño compacto)
 const KpiCard: React.FC<{ title: string; value: number; icon: string; color: 'blue' | 'green' | 'red' | 'orange'; subtext?: string; }> = ({ title, value, icon, color, subtext }) => {
     const styles = {
@@ -89,7 +94,7 @@ const KpiCard: React.FC<{ title: string; value: number; icon: string; color: 'bl
             <div className="flex-1 min-w-0">
                 <span className="text-[10px] font-bold uppercase opacity-70 tracking-widest">{title}</span>
                 <div className="text-sm font-bold font-mono tracking-tight mt-0.5 truncate">
-                    ${value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    {formatCurrency(value)}
                 </div>
                 {subtext && <div className="text-[10px] opacity-80 font-medium -mt-1">{subtext}</div>}
             </div>
@@ -99,6 +104,10 @@ const KpiCard: React.FC<{ title: string; value: number; icon: string; color: 'bl
 
 // 2. Selector de Año y Mes (Mejorado)
 const DateRangeSelector: React.FC<{ availableList: YearWithMonths[], selectedYear: number; selectedMonth: number; onChange: (start: string, end: string) => void; onYearChange: (year: number) => void; onMonthChange: (month: number) => void; }> = ({ availableList, selectedYear, selectedMonth, onChange, onYearChange, onMonthChange }) => {
+  const [isYearMenuOpen, setIsYearMenuOpen] = useState(false);
+  const [isMonthMenuOpen, setIsMonthMenuOpen] = useState(false);
+  const yearMenuRef = useRef<HTMLDivElement>(null);
+  const monthMenuRef = useRef<HTMLDivElement>(null);
     const currentYearData = availableList.find(y => y.year === selectedYear);
     const monthsForYear = currentYearData?.months_available || [];
     
@@ -135,39 +144,98 @@ const DateRangeSelector: React.FC<{ availableList: YearWithMonths[], selectedYea
         const end = new Date(selectedYear, month, 0).toISOString().split('T')[0];
         onMonthChange(month);
         onChange(start, end);
+      setIsMonthMenuOpen(false);
     };
-    
-    const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+
+    useEffect(() => {
+      const handleClickOutside = (e: MouseEvent) => {
+        if (yearMenuRef.current && !yearMenuRef.current.contains(e.target as Node)) {
+          setIsYearMenuOpen(false);
+        }
+        if (monthMenuRef.current && !monthMenuRef.current.contains(e.target as Node)) {
+          setIsMonthMenuOpen(false);
+        }
+      };
+      if (isMonthMenuOpen || isYearMenuOpen) document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isMonthMenuOpen, isYearMenuOpen]);
+
+    const monthNames = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const selectedMonthData = sortedMonths.find(m => m.month === monthToUse);
     
     return (
-        <div className="flex items-center gap-2 bg-white px-2.5 py-1.5 rounded-md border border-slate-200">
+      <div className="flex items-center gap-1.5 bg-white h-8 px-2 rounded-md border border-slate-200">
             {/* Selector de Año */}
-            <select
-                value={selectedYear}
-                onChange={(e) => handleYearChange(parseInt(e.target.value))}
-                className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer border-r border-slate-200 pr-2"
-            >
-                {availableList.map(y => (
-                    <option key={y.year} value={y.year}>{y.year}</option>
-                ))}
-            </select>
+            <div className="relative" ref={yearMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsYearMenuOpen(v => !v)}
+                className="h-6 px-1.5 text-xs font-semibold text-slate-700 bg-transparent outline-none cursor-pointer inline-flex items-center gap-1.5 border-r border-slate-200 pr-2"
+              >
+                <span>{selectedYear}</span>
+                <i className={`fa-solid fa-chevron-down text-[9px] text-slate-400 transition-transform ${isYearMenuOpen ? 'rotate-180' : ''}`}></i>
+              </button>
+
+              {isYearMenuOpen && (
+                <div className="absolute top-full left-0 mt-1.5 w-24 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50">
+                  {availableList.map(y => {
+                    const isActive = y.year === selectedYear;
+                    return (
+                      <button
+                        key={y.year}
+                        type="button"
+                        onClick={() => {
+                          handleYearChange(y.year);
+                          setIsYearMenuOpen(false);
+                        }}
+                        className={`w-full px-2.5 py-1.5 text-left text-xs font-semibold transition-colors ${isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+                      >
+                        {y.year}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
             
-            {/* Selector de Mes con Count */}
-            <select
-                value={monthToUse || ""}
-                onChange={(e) => handleMonthSelect(parseInt(e.target.value))}
-                className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
-            >
-                {sortedMonths.length === 0 ? (
-                    <option value="">-- Sin meses disponibles --</option>
-                ) : (
-                    sortedMonths.map(m => (
-                        <option key={`${selectedYear}-${m.month}`} value={m.month}>
-                            {monthNames[m.month-1]} ({m.count} registros)
-                        </option>
-                    ))
+            {/* Selector de Mes con count circular */}
+            <div className="relative" ref={monthMenuRef}>
+              <button
+                type="button"
+                onClick={() => setIsMonthMenuOpen(v => !v)}
+                disabled={sortedMonths.length === 0}
+                className="h-6 px-1.5 text-xs font-semibold text-slate-700 bg-transparent outline-none cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <span className="lowercase">{selectedMonthData ? monthNames[selectedMonthData.month - 1] : 'sin meses'}</span>
+                {selectedMonthData && (
+                  <span className="inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-slate-100 text-slate-700 text-[10px] font-bold">
+                    {selectedMonthData.count}
+                  </span>
                 )}
-            </select>
+                <i className={`fa-solid fa-chevron-down text-[9px] text-slate-400 transition-transform ${isMonthMenuOpen ? 'rotate-180' : ''}`}></i>
+              </button>
+
+              {isMonthMenuOpen && sortedMonths.length > 0 && (
+                <div className="absolute top-full right-0 mt-1.5 w-40 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-50">
+                  {sortedMonths.map(m => {
+                    const isActive = m.month === monthToUse;
+                    return (
+                      <button
+                        key={`${selectedYear}-${m.month}`}
+                        type="button"
+                        onClick={() => handleMonthSelect(m.month)}
+                        className={`w-full px-2.5 py-1.5 flex items-center justify-between text-left transition-colors ${isActive ? 'bg-blue-50 text-blue-700' : 'text-slate-700 hover:bg-slate-50'}`}
+                      >
+                        <span className="text-xs font-semibold lowercase">{monthNames[m.month - 1]}</span>
+                        <span className={`inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full text-[10px] font-bold ${isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'}`}>
+                          {m.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
         </div>
     );
 }
@@ -235,7 +303,7 @@ const renderGroupCell = (row: any, label: string) => {
       <span className="font-semibold text-slate-700 text-xs">{label || 'Sin asignar'}</span>
       <span className="text-[10px] text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">{row.subRows.length}</span>
       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-800 tabular-nums">
-        ${subtotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+        {formatCurrency(subtotal)}
       </span>
     </div>
   );
@@ -650,14 +718,14 @@ const FinancialsList: React.FC = () => {
         header: 'Subtotal',
         size: 100,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono text-slate-600 text-right block">${(getValue() as number).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono text-slate-600 text-right block">{formatCurrency(getValue() as number)}</span>
     },
     {
         accessorKey: 'tax_amount',
         header: 'IVA',
         size: 80,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono text-slate-500 text-right block">${((row.original.subtotal||0) * (getValue() as number||0)/100).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono text-slate-500 text-right block">{formatCurrency((row.original.subtotal||0) * (getValue() as number||0)/100)}</span>
     },
     {
         accessorKey: 'retention_value',
@@ -666,7 +734,7 @@ const FinancialsList: React.FC = () => {
         enableColumnFilter: false,
         cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
             (getValue() as number) > 0 
-                ? <span className="text-xs font-mono text-indigo-600 text-right block">${(getValue() as number).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+                ? <span className="text-xs font-mono text-indigo-600 text-right block">{formatCurrency(getValue() as number)}</span>
                 : <span className="text-xs text-slate-400 text-right block">-</span>
         )
     },
@@ -675,21 +743,21 @@ const FinancialsList: React.FC = () => {
         header: 'Total',
         size: 110,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono font-bold text-slate-800 bg-slate-50 px-2 py-1 rounded border border-slate-100 text-right block">${(getValue() as number).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono font-bold text-slate-800 bg-slate-50 px-2 py-1 rounded border border-slate-100 text-right block">{formatCurrency(getValue() as number)}</span>
     },
     {
         accessorKey: 'paid_amount',
         header: 'Pagado',
         size: 100,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono text-emerald-600 font-medium text-right block">${(getValue() as number).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono text-emerald-600 font-medium text-right block">{formatCurrency(getValue() as number)}</span>
     },
     {
         accessorKey: 'balance_due',
         header: 'Saldo',
         size: 100,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono font-bold text-red-600 text-right block">${(getValue() as number).toLocaleString(undefined, {minimumFractionDigits:2})}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono font-bold text-red-600 text-right block">{formatCurrency(getValue() as number)}</span>
     },
     {
         id: 'payment_status',
@@ -754,16 +822,20 @@ const FinancialsList: React.FC = () => {
     getExpandedRowModel: getExpandedRowModel(),
   });
 
+  const filteredRows = table.getFilteredRowModel().rows;
+  const totalRows = useMemo(() => filteredRows.filter(r => !r.getIsGrouped()).length, [filteredRows]);
+  const totalValue = useMemo(() => filteredRows.reduce((s, r) => s + (r.getIsGrouped() ? 0 : Number(r.original.total_value || 0)), 0), [filteredRows]);
+
   if (!user || (user.rol_user !== 'admin' && user.rol_user !== 'superadmin')) return null;
 
   return (
-    <div className="flex flex-col h-full bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden font-sans text-slate-700">
+    <div className="flex flex-col h-full bg-white overflow-hidden font-sans text-slate-700">
       
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
       {/* 1. KPIs SECTION (Encima de la tabla) */}
       {kpiSummary && (
-        <div className="p-3 bg-slate-50 border-b border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-3 shrink-0">
+        <div className="px-3 py-2 bg-slate-50 border-b border-slate-200 grid grid-cols-2 md:grid-cols-4 gap-2 shrink-0">
           <KpiCard title="Ventas Mes" value={kpiSummary.ventasMes} icon="fa-chart-line" color="blue" subtext="Emitido en periodo" />
           <KpiCard title="Ingresos Reales" value={kpiSummary.cobradoMes} icon="fa-sack-dollar" color="green" subtext="Dinero ingresado a caja" />
           <KpiCard title="Por Cobrar" value={kpiSummary.porCobrarTotal} icon="fa-wallet" color="orange" subtext="Deuda total histórica" />
@@ -772,98 +844,91 @@ const FinancialsList: React.FC = () => {
       )}
 
       {/* 2. TOOLBAR */}
-      <div className="bg-white border-b border-slate-200 p-3 flex flex-wrap items-center justify-between gap-3 shrink-0">
-        
+      <div className="border-b border-slate-200 px-3 py-2 bg-white flex flex-wrap items-center gap-2 shrink-0">
+
         {/* BUSCADOR */}
-        <div className="relative order-3 lg:order-1 w-full lg:flex-1">
-            <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-            <input 
-                value={globalFilter} 
-                onChange={e => setGlobalFilter(e.target.value)}
-                placeholder="Buscar factura, cliente..." 
-                className="w-full pl-8 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-brand-500 shadow-sm"
-            />
-        </div>
-
-        {/* CONTROLES EXTRA (Fechas, Toggle, Agrupar) */}
-        <div className="order-2 lg:order-2 w-full lg:w-auto flex items-center justify-start lg:justify-center flex-wrap gap-3">
-            
-            {/* Selector Año/Mes */}
-            {(() => {
-                // Filtrar años válidos (que tengan months_available y al menos un mes)
-                const validYears = availableList.filter(y => Array.isArray(y.months_available) && y.months_available.length > 0);
-                if (validYears.length > 0) {
-                    return <>
-                        <DateRangeSelector 
-                            availableList={availableList}
-                            selectedYear={selectedYear}
-                            selectedMonth={selectedMonth}
-                            onChange={(start, end) => setDateRange({ start, end })}
-                            onYearChange={(year) => setSelectedYear(year)}
-                            onMonthChange={(month) => setSelectedMonth(month)}
-                        />
-                        {/* Botón Ir a Hoy */}
-                        <button
-                            onClick={() => {
-                                const today = new Date();
-                                const year = today.getFullYear();
-                                const month = today.getMonth() + 1;
-                                const start = new Date(year, month - 1, 1).toISOString().split('T')[0];
-                                const end = new Date(year, month, 0).toISOString().split('T')[0];
-                                setSelectedYear(year);
-                                setSelectedMonth(month);
-                                setDateRange({ start, end });
-                            }}
-                            className="px-3 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-bold uppercase text-slate-600 transition-all shadow-sm hover:shadow-md whitespace-nowrap flex items-center gap-2"
-                            title="Ir al mes actual"
-                        >
-                            <i className="fa-solid fa-calendar-check"></i>Hoy
-                        </button>
-                    </>;
-                } else {
-                    return <span className="text-xs text-slate-400">No hay registros disponibles aún.</span>;
-                }
-            })()}
-
-            {/* Toggle Pendientes */}
-            <button 
-                onClick={() => setIncludeOpen(!includeOpen)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all text-[11px] font-bold uppercase whitespace-nowrap ${includeOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-500'}`}
-                title="Marcar esto hará que siempre se vean los pendientes y vencidos primero sin importar el mes o año de selección"
-            >
-                <div className={`w-2 h-2 rounded-full ${includeOpen ? 'bg-indigo-500' : 'bg-slate-300'}`}></div>
-                Ver Pendientes
+        <div className="relative w-full sm:flex-1 sm:min-w-0">
+          <i className="fa-solid fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-300 text-xs pointer-events-none" />
+          <input
+            value={globalFilter}
+            onChange={e => setGlobalFilter(e.target.value)}
+            placeholder="Buscar factura, cliente..."
+            className="w-full pl-8 pr-8 py-2 sm:py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm outline-none focus:ring-1 focus:ring-slate-300 focus:bg-white placeholder:text-slate-300 text-slate-700 transition-all"
+          />
+          {globalFilter && (
+            <button onClick={() => setGlobalFilter('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
+              <i className="fa-solid fa-xmark text-[10px]" />
             </button>
-
-            {/* Agrupar */}
-            <div className="flex items-center justify-start lg:justify-center flex-wrap gap-1 bg-white border border-slate-200 rounded-lg p-1.5 shadow-sm">
-                <span className="text-[11px] font-black text-slate-400 px-2 uppercase">Agrupar:</span>
-                <div className="flex items-center gap-1 flex-wrap">
-                    {[
-                        { id: 'client_company_name', icon: 'fa-building', label: 'Cliente' },
-                        { id: 'status', icon: 'fa-list-check', label: 'Estado' },
-                        { id: 'transaction_type', icon: 'fa-tag', label: 'Tipo' }
-                    ].map(opt => (
-                        <button 
-                            key={opt.id} 
-                            onClick={() => setGrouping(prev => prev.includes(opt.id) ? [] : [opt.id])}
-                            className={`px-2.5 py-1 rounded text-[11px] font-bold transition-all flex items-center gap-1 whitespace-nowrap ${
-                                grouping.includes(opt.id) ? 'bg-brand-600 text-white shadow-inner' : 'text-slate-500 hover:bg-slate-50'
-                            }`}
-                        >
-                            <i className={`fa-solid ${opt.icon} text-[11px]`}></i> {opt.label}
-                        </button>
-                    ))}
-                </div>
-            </div>
+          )}
         </div>
 
-        {/* BOTÓN NUEVA */}
-        <button 
-          onClick={() => navigate('/app/financials/new')} 
-          className="order-1 lg:order-3 w-full sm:w-auto px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-bold hover:bg-emerald-700 shadow-sm border border-emerald-700 transition-all flex items-center justify-center gap-2"
+        {/* Selector Año/Mes + Hoy */}
+        {(() => {
+            const validYears = availableList.filter(y => Array.isArray(y.months_available) && y.months_available.length > 0);
+            if (validYears.length > 0) return (
+              <>
+                <DateRangeSelector
+                  availableList={availableList}
+                  selectedYear={selectedYear}
+                  selectedMonth={selectedMonth}
+                  onChange={(start, end) => setDateRange({ start, end })}
+                  onYearChange={(year) => setSelectedYear(year)}
+                  onMonthChange={(month) => setSelectedMonth(month)}
+                />
+                <button
+                  onClick={() => {
+                    const today = new Date();
+                    const year = today.getFullYear();
+                    const month = today.getMonth() + 1;
+                    const start = new Date(year, month - 1, 1).toISOString().split('T')[0];
+                    const end = new Date(year, month, 0).toISOString().split('T')[0];
+                    setSelectedYear(year);
+                    setSelectedMonth(month);
+                    setDateRange({ start, end });
+                  }}
+                  className="flex items-center gap-1.5 px-2.5 py-2 sm:py-1.5 rounded-md border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors whitespace-nowrap"
+                  title="Ir al mes actual"
+                >
+                  <i className="fa-solid fa-calendar-check text-[10px]" /> Hoy
+                </button>
+              </>
+            );
+            return null;
+        })()}
+
+        {/* Toggle Pendientes primero */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={includeOpen}
+          onClick={() => setIncludeOpen(!includeOpen)}
+          className="h-8 px-2.5 flex items-center gap-2 rounded-md border border-slate-200 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors whitespace-nowrap"
+          title="Mostrar pendientes y vencidos históricos independientemente del mes seleccionado"
         >
-            <i className="fa-solid fa-plus"></i> Nueva
+          <span
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${includeOpen ? 'bg-emerald-500' : 'bg-slate-300'}`}
+            aria-hidden="true"
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform ${includeOpen ? 'translate-x-5' : 'translate-x-0'}`}
+            />
+          </span>
+          <span className="text-xs font-medium text-slate-600">Pendientes primero</span>
+        </button>
+
+        {/* Agrupar + Nueva */}
+        <GroupingDropdown
+          grouping={grouping as string[]}
+          onGroupingChange={setGrouping}
+          columnFilters={columnFilters}
+          onClearFilters={() => { setColumnFilters([]); setGlobalFilter(''); }}
+        />
+
+        <button
+          onClick={() => navigate('/app/financials/new')}
+          className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 sm:py-1.5 bg-slate-800 text-white rounded-md text-sm sm:text-xs font-medium hover:bg-slate-700 transition-colors whitespace-nowrap"
+        >
+          <i className="fa-solid fa-plus text-[10px]" /> Nueva
         </button>
       </div>
 
@@ -879,48 +944,62 @@ const FinancialsList: React.FC = () => {
                   const canFilter = header.column.getCanFilter();
 
                   return (
-                    <th key={header.id} style={{ width: header.getSize() }} className="border-b border-r border-slate-200 bg-slate-50 px-4 py-2 text-left relative group">
+                    <th key={header.id} style={{ width: header.getSize() }} className="border-b border-r border-zinc-200 bg-zinc-50 px-4 py-2 text-left relative group">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2 cursor-pointer select-none" onClick={header.column.getToggleSortingHandler()}>
-                          <span className="text-[11px] font-black text-slate-500 uppercase tracking-wider">{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                          <span className="text-[11px] font-semibold text-slate-600 uppercase tracking-wide">{flexRender(header.column.columnDef.header, header.getContext())}</span>
                           {{ asc: <i className="fa-solid fa-sort-up text-brand-600"></i>, desc: <i className="fa-solid fa-sort-down text-brand-600"></i> }[header.column.getIsSorted() as string] ?? null}
                         </div>
                         {header.column.id !== 'actions' && canFilter && (
-                          <button onClick={(e) => { e.stopPropagation(); setActiveFilterMenu(activeFilterMenu === header.column.id ? null : header.column.id); }} className={`w-5 h-5 rounded flex items-center justify-center transition-all ${isFiltered ? 'bg-brand-100 text-brand-600' : 'text-slate-300 hover:text-slate-500'}`}><i className={`fa-solid ${isDate ? 'fa-calendar' : 'fa-filter'} text-[10px]`}></i></button>
+                          <button onClick={(e) => { e.stopPropagation(); setActiveFilterMenu(activeFilterMenu === header.column.id ? null : header.column.id); }} className={`w-6 h-6 rounded-md flex items-center justify-center transition-all ${isFiltered ? 'text-slate-500 bg-slate-200' : 'text-slate-300 hover:text-slate-500'}`}><i className={`fa-solid ${isDate ? 'fa-calendar-days' : 'fa-filter'} text-[9px]`}></i></button>
                         )}
                       </div>
 
                       {/* MENÚ DE FILTRO */}
                       {activeFilterMenu === header.column.id && (
-                        <div ref={filterMenuRef} className="absolute top-full left-0 mt-1 w-64 bg-white shadow-xl rounded-xl border border-slate-200 z-50 py-3 animate-in fade-in slide-in-from-top-1">
+                        <div
+                          ref={filterMenuRef}
+                          onMouseLeave={() => setActiveFilterMenu(null)}
+                          className="absolute top-full left-0 mt-1.5 w-60 bg-white shadow-lg rounded-lg border border-slate-200 z-50 py-2.5"
+                        >
                           {isDate ? (
-                            <div className="px-4 space-y-3">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-1">Rango de fechas</span>
-                                <input type="date" className="w-full text-xs border rounded p-1.5 outline-none focus:border-brand-500" onChange={e => header.column.setFilterValue((old:any) => ({ ...old, start: e.target.value }))} />
-                                <input type="date" className="w-full text-xs border rounded p-1.5 outline-none focus:border-brand-500" onChange={e => header.column.setFilterValue((old:any) => ({ ...old, end: e.target.value }))} />
+                            <div className="px-3 space-y-2">
+                              <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-widest">Rango de fechas</p>
+                              <div>
+                                <label className="text-[9px] text-slate-500 font-medium block mb-0.5">Desde</label>
+                                <input type="date" className="w-full text-xs border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-slate-300" onChange={e => header.column.setFilterValue((old:any) => ({ ...old, start: e.target.value }))} />
+                              </div>
+                              <div>
+                                <label className="text-[9px] text-slate-500 font-medium block mb-0.5">Hasta</label>
+                                <input type="date" className="w-full text-xs border border-slate-200 rounded px-2 py-1 outline-none focus:ring-1 focus:ring-slate-300" onChange={e => header.column.setFilterValue((old:any) => ({ ...old, end: e.target.value }))} />
+                              </div>
                             </div>
                           ) : (
-                            <div className="max-h-60 overflow-y-auto px-1 custom-scrollbar">
+                            <div className="max-h-56 overflow-y-auto px-1">
                                 {getFacetedValues(header.column.id).map(([val, count]) => {
-                                    const isChecked = (columnFilters.find(f => f.id === header.column.id)?.value as string[] || []).includes(val);
+                                    const activeValues = (columnFilters.find(f => f.id === header.column.id)?.value as string[]) || [];
+                                    const isChecked = activeValues.includes(val);
                                     return (
-                                        <label key={val} className="flex items-center justify-between px-3 py-2 hover:bg-slate-50 rounded-lg cursor-pointer group transition-colors">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${isChecked ? 'bg-brand-600 border-brand-600 shadow-sm' : 'bg-white border-slate-300'}`}>{isChecked && <i className="fa-solid fa-check text-[10px] text-white"></i>}</div>
-                                                <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">{val}</span>
-                                            </div>
-                                            <span className="text-[10px] font-bold text-slate-400 group-hover:text-brand-600">({count})</span>
-                                            <input type="checkbox" className="hidden" checked={isChecked} onChange={() => {
-                                                const current = (columnFilters.find(f => f.id === header.column.id)?.value as string[]) || [];
-                                                const next = current.includes(val) ? current.filter(v => v !== val) : [...current, val];
-                                                header.column.setFilterValue(next.length ? next : undefined);
-                                            }} />
+                                        <label key={val} className="flex items-center gap-2.5 px-2.5 py-1.5 hover:bg-slate-50 rounded-md cursor-pointer transition-colors">
+                                          <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center flex-shrink-0 transition-all ${isChecked ? 'bg-slate-700 border-slate-700' : 'border-slate-300'}`}>
+                                            {isChecked && <i className="fa-solid fa-check text-[7px] text-white"></i>}
+                                          </div>
+                                          <span className="text-xs text-slate-700 truncate flex-1">{val}</span>
+                                          <span className="text-[10px] text-slate-400 flex-shrink-0">{count}</span>
+                                          <input type="checkbox" className="hidden" checked={isChecked} onChange={() => {
+                                              const next = isChecked ? activeValues.filter(v => v !== val) : [...activeValues, val];
+                                              header.column.setFilterValue(next.length ? next : undefined);
+                                          }} />
                                         </label>
                                     );
                                 })}
                             </div>
                           )}
-                          {isFiltered && <div className="mt-2 pt-2 border-t px-3 text-center"><button onClick={() => header.column.setFilterValue(undefined)} className="text-[10px] font-black text-red-500 hover:underline uppercase">Limpiar Filtro</button></div>}
+                          {isFiltered && (
+                            <div className="mt-1 pt-1.5 border-t border-slate-100 px-3">
+                              <button onClick={() => header.column.setFilterValue(undefined)} className="text-[10px] text-red-400 hover:text-red-600 font-medium">Limpiar filtro</button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </th>
@@ -930,20 +1009,47 @@ const FinancialsList: React.FC = () => {
             ))}
           </thead>
           <tbody className="bg-white">
+            {grouping.length > 0 && (
+              <tr className="bg-slate-50 border-b border-slate-100">
+                <td colSpan={columns.length} className="px-4 py-1.5">
+                  <div className="flex items-center gap-1.5 text-[10px]">
+                    <button onClick={() => setExpanded(true)} className="text-slate-400 hover:text-slate-700 transition-colors leading-none">expandir</button>
+                    <span className="text-slate-300">/</span>
+                    <button onClick={() => setExpanded({})} className="text-slate-400 hover:text-slate-700 transition-colors leading-none">contraer</button>
+                  </div>
+                </td>
+              </tr>
+            )}
             {loading ? (
                 <tr><td colSpan={columns.length} className="py-24 text-center"><div className="flex flex-col items-center"><BrandSpinner size="lg" className="mb-2" /><p className="text-slate-400 text-sm font-medium">Cargando datos...</p></div></td></tr>
             ) : table.getRowModel().rows.length === 0 ? (
                 <tr><td colSpan={columns.length} className="py-24 text-center text-slate-500">No se encontraron transacciones.</td></tr>
             ) : table.getRowModel().rows.map(row => {
                 const isGrouped = row.getIsGrouped();
+                if (isGrouped) {
+                    const groupedCell = row.getVisibleCells().find(cell => cell.column.id === row.groupingColumnId);
+                    const rawLabel = groupedCell ? groupedCell.getValue() : '';
+                    const label = rawLabel === null || rawLabel === undefined || rawLabel === '' ? 'Sin asignar' : String(rawLabel);
+                    return (
+                        <tr
+                            key={row.id}
+                            onClick={() => row.toggleExpanded()}
+                            className="bg-slate-50 hover:bg-slate-100 cursor-pointer border-b border-slate-100 transition-colors"
+                        >
+                            <td colSpan={row.getVisibleCells().length} className="px-4 py-2">
+                                {renderGroupCell(row, label)}
+                            </td>
+                        </tr>
+                    );
+                }
                 return (
-                    <tr 
-                        key={row.id} 
-                        onClick={() => { if(isGrouped) row.toggleExpanded(); else navigate(`/app/financials/${row.original.id_transaction}`); }}
-                        className={`${isGrouped ? 'bg-slate-50/80 border-l-4 border-l-brand-500 cursor-pointer font-bold' : 'hover:bg-blue-50/30 cursor-pointer group'} border-b border-slate-100 transition-colors`}
+                    <tr
+                        key={row.id}
+                        onClick={() => navigate(`/app/financials/${row.original.id_transaction}`)}
+                        className="bg-white hover:bg-blue-50/70 group cursor-pointer border-b border-slate-100 transition-colors"
                     >
                         {row.getVisibleCells().map(cell => (
-                            <td key={cell.id} className={`px-4 py-2 border-r border-slate-50 ${isGrouped ? 'py-3' : ''}`}>
+                            <td key={cell.id} className="px-4 py-2.5 align-middle">
                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
                             </td>
                         ))}
@@ -955,16 +1061,21 @@ const FinancialsList: React.FC = () => {
       </div>
 
       {/* FOOTER */}
-      <div className="bg-slate-50 border-t border-slate-200 px-4 py-3 flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest shrink-0">
-          <div className="flex items-center gap-6">
-            <span>{transactions.length} REGISTROS</span>
-                        <span className="text-brand-600">TOTAL: <span className="tabular-nums">{formatCurrency(transactions.reduce((acc, t) => acc + Number(t.total_value || 0), 0))}</span></span>
+      <div className="border-t border-zinc-200 px-4 py-1.5 bg-zinc-50 shrink-0">
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center justify-between sm:justify-start gap-3 sm:gap-4 text-xs text-slate-600 min-w-0">
+            <span className="font-semibold shrink-0">{totalRows} registros</span>
+            <div className="inline-flex items-center justify-between sm:justify-start gap-2 px-2.5 py-0.5 rounded-md bg-white border border-zinc-200 min-w-0 w-[190px] sm:w-auto">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">Total</span>
+              <span className="text-[11px] sm:text-[12px] font-semibold text-slate-800 tabular-nums">{formatCurrency(totalValue)}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-left"></i></button>
-            <span className="bg-white px-3 py-1 border border-slate-200 rounded shadow-sm text-brand-600 font-black tracking-normal">{table.getState().pagination.pageIndex + 1} / {table.getPageCount()}</span>
-            <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="p-1 hover:text-brand-600 disabled:opacity-20 transition-colors"><i className="fa-solid fa-chevron-right"></i></button>
+          <div className="flex items-center justify-end sm:justify-start gap-1.5 text-xs text-slate-600 shrink-0">
+            <button onClick={() => table.previousPage()} disabled={!table.getCanPreviousPage()} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-zinc-100 disabled:opacity-30 transition-colors"><i className="fa-solid fa-chevron-left text-[9px]"></i></button>
+            <span className="px-2 py-0.5 text-[10px] font-semibold text-slate-700">{table.getState().pagination.pageIndex + 1} / {table.getPageCount() || 1}</span>
+            <button onClick={() => table.nextPage()} disabled={!table.getCanNextPage()} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-zinc-100 disabled:opacity-30 transition-colors"><i className="fa-solid fa-chevron-right text-[9px]"></i></button>
           </div>
+        </div>
       </div>
 
       {/* MODALS (Iguales que antes) */}
@@ -992,7 +1103,6 @@ const FinancialsList: React.FC = () => {
   );
 };
 
-// Helper faltante (debe estar arriba o importado)
-const formatCurrency = (val: number) => val.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+
 
 export default FinancialsList;

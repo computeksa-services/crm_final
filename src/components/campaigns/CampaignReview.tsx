@@ -8,6 +8,12 @@ interface CampaignReviewProps {
   campaignId?: string;
   onSuccess: (campaign: any) => void;
   onClose: () => void;
+  missingItems?: string[];
+  audienceSummary?: {
+    selectedCount: number;
+    selectedWithContactsCount: number;
+    totalSubscribers: number;
+  };
 }
 
 interface LoadingState {
@@ -24,6 +30,8 @@ const CampaignReview: React.FC<CampaignReviewProps> = ({
   campaignId,
   onSuccess,
   onClose,
+  missingItems = [],
+  audienceSummary,
 }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState<LoadingState>({
@@ -136,6 +144,7 @@ const CampaignReview: React.FC<CampaignReviewProps> = ({
 
   const totalSubscribers = calculateTotalSubscribers();
   const isLoading = loading.isSaving || loading.isLaunching;
+  const hasPendingRequirements = missingItems.length > 0;
 
   return (
     <div className="campaign-review">
@@ -273,6 +282,33 @@ const CampaignReview: React.FC<CampaignReviewProps> = ({
         </ul>
       </div>
 
+      <div className={`requirements-box ${hasPendingRequirements ? 'pending' : 'ready'}`}>
+        <div className="requirements-header">
+          <span>{hasPendingRequirements ? '⚠️' : '✅'}</span>
+          <strong>
+            {hasPendingRequirements
+              ? 'Resumen de lo que falta antes de lanzar'
+              : 'Todo listo para lanzar'}
+          </strong>
+        </div>
+        {hasPendingRequirements ? (
+          <ul className="requirements-list">
+            {missingItems.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="requirements-ok">
+            Cumples con todos los requisitos del wizard.
+          </p>
+        )}
+        {audienceSummary && (
+          <p className="requirements-meta">
+            Audiencia seleccionada: {audienceSummary.selectedCount} lista(s), {audienceSummary.selectedWithContactsCount} con contactos, {audienceSummary.totalSubscribers.toLocaleString()} contacto(s) total.
+          </p>
+        )}
+      </div>
+
       {/* Action Buttons */}
       <div className="actions-section">
         <button
@@ -295,7 +331,7 @@ const CampaignReview: React.FC<CampaignReviewProps> = ({
           type="button"
           className="btn btn-success btn-launch"
           onClick={handleLaunchCampaign}
-          disabled={isLoading}
+          disabled={isLoading || hasPendingRequirements}
         >
           {loading.isLaunching ? (
             <>
@@ -503,6 +539,52 @@ const CampaignReview: React.FC<CampaignReviewProps> = ({
           border-left: 4px solid #007bff;
           border-radius: 4px;
           padding: 16px;
+        }
+
+        .requirements-box {
+          border-radius: 6px;
+          padding: 14px 16px;
+          border: 1px solid;
+        }
+
+        .requirements-box.pending {
+          background: #fff8e6;
+          border-color: #ffd27a;
+        }
+
+        .requirements-box.ready {
+          background: #ecf8ef;
+          border-color: #a9dfb6;
+        }
+
+        .requirements-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          margin-bottom: 8px;
+        }
+
+        .requirements-list {
+          margin: 0;
+          padding-left: 18px;
+          color: #5e4b16;
+          font-size: 13px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .requirements-ok {
+          margin: 0;
+          font-size: 13px;
+          color: #1f5d2f;
+        }
+
+        .requirements-meta {
+          margin: 8px 0 0 0;
+          font-size: 12px;
+          color: #555;
         }
 
         .info-header {

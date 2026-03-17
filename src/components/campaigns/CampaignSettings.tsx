@@ -108,7 +108,10 @@ const CampaignSettings: React.FC<CampaignSettingsProps> = ({
               {formData.name || <em className="text-muted">Sin definir</em>}
             </li>
             <li>
-              <strong>Asunto:</strong>{' '}
+              <strong>
+                Asunto
+                <span className="required">*</span>:
+              </strong>{' '}
               {formData.subject || <em className="text-muted">Sin definir</em>}
             </li>
             <li>

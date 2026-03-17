@@ -167,7 +167,7 @@ const CampaignWizard: React.FC = () => {
                     corporate_email_address: tenant?.corporate_email_address,
                     corporate_send_emails: tenant?.corporate_send_emails,
                     name_tenant: tenant?.name_tenant,
-                    isMicrosoft: user?.outlookConnected || false
+                    isMicrosoft: Boolean((user as any)?.outlookConnected)
                 });
       }
     } catch (error) { console.error(error); }
@@ -179,12 +179,23 @@ const CampaignWizard: React.FC = () => {
       const campaign = Array.isArray(response) ? response[0] : response;
       if (!campaign) return;
       
-      const normalizedLists = Array.isArray(campaign.target_lists) 
-        ? campaign.target_lists.map((listId: any) => String(listId))
+      const normalizedLists = Array.isArray(campaign.target_lists)
+        ? campaign.target_lists
+            .map((item: any) => {
+              if (!item) return '';
+              if (typeof item === 'string') return item;
+              // El API puede retornar objetos {id_list, name, count} en lugar de strings
+              return String(item.id_list || item.list_id || item.id || '');
+            })
+            .filter(Boolean)
         : [];
+            const currentUserId = user?.id_user != null ? String(user.id_user) : null;
+            const campaignCreatorId = campaign.created_by != null ? String(campaign.created_by) : null;
+            const isCurrentUserCreator = currentUserId !== null && campaignCreatorId !== null
+                ? currentUserId === campaignCreatorId
+                : user?.id_user === campaign.created_by;
       
-      // Verificar si el usuario actual es el creador
-      setIsCreator(user?.id_user === campaign.created_by);
+            setIsCreator(isCurrentUserCreator);
       
       setFormData(prev => ({
                 ...prev,
@@ -225,17 +236,6 @@ const CampaignWizard: React.FC = () => {
             }));
         }
     }, [tenantData?.corporate_email_address, tenantData?.corporate_send_emails, formData.senderType, user?.email_user, user?.name_user]);
-
-  // --- MANEJADORES DE PASOS ---
-  const handleNext = () => {
-    if (currentStep === 1) {
-        if (!formData.name) {
-            setToast({ message: 'El nombre interno es obligatorio.', type: 'error' });
-            return;
-        }
-    }
-    setCurrentStep(prev => Math.min(prev + 1, 4));
-  };
 
   const handleBack = () => setCurrentStep(prev => Math.max(prev - 1, 1));
 
@@ -414,15 +414,83 @@ const CampaignWizard: React.FC = () => {
       return { label: 'Selecciona remitente', className: 'bg-slate-100 text-slate-600 border-slate-200' };
   }, [formData.senderType, canUseCorporate, canUsePersonal, canSendCampaign]);
 
+    const hasMeaningfulDesignContent = useMemo(() => {
+        const normalized = (formData.htmlContent || '')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/g, '')
+            .trim();
+        return normalized.length > 0;
+    }, [formData.htmlContent]);
+
+    const selectedListsData = useMemo(() => {
+        return lists.filter((l) => {
+            const idList = String(l.id_list ?? l.list_id);
+            return formData.selectedLists.includes(idList);
+        });
+    }, [lists, formData.selectedLists]);
+
+    const selectedListsWithContacts = useMemo(() => {
+        return selectedListsData.filter((l) => (Number(l.member_count) || 0) > 0);
+    }, [selectedListsData]);
+
+    const detailsComplete = useMemo(() => {
+        return formData.name.trim() !== '' && formData.subject.trim() !== '';
+    }, [formData.name, formData.subject]);
+
+    const audienceComplete = selectedListsWithContacts.length > 0;
+    const designComplete = hasMeaningfulDesignContent;
+
+    const missingItems = useMemo(() => {
+        const pending: string[] = [];
+        if (!formData.name.trim()) pending.push('Completa el nombre interno.');
+        if (!formData.subject.trim()) pending.push('Completa el asunto del correo.');
+        if (formData.selectedLists.length === 0) {
+            pending.push('Selecciona al menos una lista de audiencia.');
+        } else if (!audienceComplete) {
+            pending.push('Selecciona al menos una lista que tenga contactos.');
+        }
+        if (!designComplete) pending.push('Completa el contenido en la pestaña Diseño.');
+        return pending;
+    }, [formData.name, formData.subject, formData.selectedLists.length, audienceComplete, designComplete]);
+
   const isValidForSending = useMemo(() => {
       return (
-          formData.name.trim() !== '' &&
-          formData.subject.trim() !== '' &&
-          formData.selectedLists.length > 0 &&
-          formData.htmlContent.trim() !== '' &&
-          formData.htmlContent !== '<p><br></p>' // Jodit empty state sometimes
+                    detailsComplete &&
+                    audienceComplete &&
+                    designComplete
       );
-  }, [formData]);
+    }, [detailsComplete, audienceComplete, designComplete]);
+
+
+
+    const handleNext = () => {
+        if (currentStep === 1) {
+            if (!formData.name.trim()) {
+                setToast({ message: 'El nombre interno es obligatorio.', type: 'error' });
+                return;
+            }
+            if (!formData.subject.trim()) {
+                setToast({ message: 'El asunto del correo es obligatorio.', type: 'error' });
+                return;
+            }
+        }
+        if (currentStep === 2) {
+            if (formData.selectedLists.length === 0) {
+                setToast({ message: 'Selecciona al menos una lista de audiencia.', type: 'error' });
+                return;
+            }
+            if (!audienceComplete) {
+                setToast({ message: 'Selecciona al menos una lista con contactos.', type: 'error' });
+                return;
+            }
+        }
+        if (currentStep === 3 && !designComplete) {
+            setToast({ message: 'Debes completar el contenido en Diseño.', type: 'error' });
+            return;
+        }
+
+        setCurrentStep((prev) => Math.min(prev + 1, 4));
+    };
 
   // --- GUARDADO ---
 // --- GUARDADO Y ENVÍO ---
@@ -458,7 +526,7 @@ const CampaignWizard: React.FC = () => {
         // Datos del formulario
         dataToSend.append('name', formData.name);
         dataToSend.append('subject', formData.subject);
-        dataToSend.append('preview_text', formData.preview_text || '');
+        dataToSend.append('preview_text', formData.previewText || '');
         dataToSend.append('html_content', formData.htmlContent);
         dataToSend.append('sender_type', formData.senderType);
         dataToSend.append('sender_name', formData.senderName);
@@ -582,7 +650,7 @@ const CampaignWizard: React.FC = () => {
           formDataToSend.append('id_user', user.id_user);
           formDataToSend.append('name', formData.name);
           formDataToSend.append('subject', formData.subject);
-          formDataToSend.append('preview_text', formData.preview_text);
+          formDataToSend.append('preview_text', formData.previewText);
           formDataToSend.append('html_content', formData.htmlContent);
           formDataToSend.append('sender_type', formData.senderType);
           formDataToSend.append('sender_name', formData.senderName);
@@ -672,7 +740,11 @@ const CampaignWizard: React.FC = () => {
             <div className="flex gap-8 mt-2 overflow-x-auto no-scrollbar">
                 {STEPS.map((step) => {
                     const isActive = step.id === currentStep;
-                    const isCompleted = step.id < currentStep;
+                    const isCompleted =
+                      step.id === 1 ? detailsComplete :
+                      step.id === 2 ? audienceComplete :
+                      step.id === 3 ? designComplete :
+                      isValidForSending;
                     return (
                         <button 
                             key={step.id} 
@@ -714,7 +786,7 @@ const CampaignWizard: React.FC = () => {
                         </div>
                         <div className="grid md:grid-cols-2 gap-5">
                             <div>
-                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Asunto del Correo</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Asunto del Correo <span className="text-red-500">*</span></label>
                                 <input 
                                     type="text" 
                                     className="w-full px-4 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none"
@@ -733,6 +805,11 @@ const CampaignWizard: React.FC = () => {
                                     onChange={e => updateForm({ previewText: e.target.value })}
                                 />
                             </div>
+                            {formData.selectedLists.length > 0 && !audienceComplete && (
+                                <p className="text-xs text-amber-600 font-semibold mt-1">
+                                    Debes elegir al menos una lista con contactos para continuar.
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -988,13 +1065,26 @@ const CampaignWizard: React.FC = () => {
             {/* STEP 4: REVIEW */}
             {currentStep === 4 && (
                 <div className="max-w-3xl mx-auto space-y-6 animate-fadeIn py-4">
-                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-6 flex gap-5 shadow-sm">
+                                        <div className={`${missingItems.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200'} border rounded-xl p-6 flex gap-5 shadow-sm`}>
                         <div className="w-12 h-12 rounded-full bg-white text-emerald-600 flex items-center justify-center shrink-0 shadow-sm text-xl border border-emerald-100">
-                            <i className="fa-solid fa-rocket"></i>
+                                                        <i className={`fa-solid ${missingItems.length > 0 ? 'fa-triangle-exclamation text-amber-600' : 'fa-rocket text-emerald-600'}`}></i>
                         </div>
                         <div>
-                            <h3 className="font-bold text-emerald-900 text-lg">¡Todo listo para el lanzamiento!</h3>
-                            <p className="text-emerald-700 text-sm mt-1">Revisa cuidadosamente los detalles. Una vez enviada, no podrás editar el contenido.</p>
+                                                        <h3 className={`font-bold text-lg ${missingItems.length > 0 ? 'text-amber-900' : 'text-emerald-900'}`}>
+                                                            {missingItems.length > 0 ? 'Faltan datos obligatorios' : 'Todo listo para el lanzamiento'}
+                                                        </h3>
+                                                        <p className={`text-sm mt-1 ${missingItems.length > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
+                                                            {missingItems.length > 0
+                                                                ? 'Completa estos puntos antes de enviar la campaña:'
+                                                                : 'Revisa cuidadosamente los detalles. Una vez enviada, no podrás editar el contenido.'}
+                                                        </p>
+                                                        {missingItems.length > 0 && (
+                                                            <ul className="mt-3 list-disc list-inside text-sm text-amber-800 space-y-1">
+                                                                {missingItems.map((item) => (
+                                                                    <li key={item}>{item}</li>
+                                                                ))}
+                                                            </ul>
+                                                        )}
                         </div>
                     </div>
 

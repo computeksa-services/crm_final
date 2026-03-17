@@ -30,6 +30,16 @@ interface CampaignDetailData extends MarketingCampaign {
   remaining_count?: number;
   open_rate?: number;
   chart_data?: ChartDataPoint[];
+  created_at_human?: string | null;
+  sent_at_human?: string | null;
+  scheduled_at_local?: string | null;
+  target_lists?: Array<
+    string | {
+      id_list?: string;
+      name?: string;
+      count?: number | string;
+    }
+  > | string;
 }
 
 const CampaignDetail: React.FC = () => {
@@ -91,6 +101,27 @@ const CampaignDetail: React.FC = () => {
     return isNaN(n) ? 0 : n;
   };
 
+  const getAudienceSize = (campaignData?: CampaignDetailData | null): number => {
+    if (!campaignData) return 0;
+
+    const totalTarget = toNumber(campaignData.total_target);
+    const audienceDetailCount = campaignData.audience_detail?.length || 0;
+    const targetListsCount = Array.isArray(campaignData.target_lists)
+      ? campaignData.target_lists.reduce((sum, list) => {
+          if (!list || typeof list === 'string') return sum;
+          return sum + toNumber(list.count);
+        }, 0)
+      : 0;
+
+    return Math.max(totalTarget, audienceDetailCount, targetListsCount);
+  };
+
+  const formatDisplayDate = (humanized?: string | null, raw?: string | null, fallback = '-') => {
+    if (humanized && String(humanized).trim()) return humanized;
+    if (raw) return new Date(raw).toLocaleString();
+    return fallback;
+  };
+
   // Filtro de Audiencia
   const filteredAudience = useMemo(() => {
       if (!campaign?.audience_detail) return [];
@@ -112,6 +143,8 @@ const CampaignDetail: React.FC = () => {
     return false;
   })();
 
+
+
   const handleAction = (actionType: 'delete' | 'launch' | 'pause' | 'resume') => {
     if (!campaign || !user?.id_tenant || !user?.id_user) return;
     
@@ -122,7 +155,7 @@ const CampaignDetail: React.FC = () => {
     }
 
     if (actionType === 'launch') {
-        const totalAudience = toNumber(campaign.total_target);
+      const totalAudience = getAudienceSize(campaign);
         if (totalAudience <= 0) {
             alert("⚠️ No puedes lanzar esta campaña.\n\nLa audiencia es 0. Asegúrate de asignar listas de distribución y que estas contengan contactos activos.");
             return;
@@ -146,7 +179,7 @@ const CampaignDetail: React.FC = () => {
         },
         launch: {
             title: 'Lanzar Campaña',
-            message: `Se enviará a ${campaign.total_target} destinatarios. ¿Confirmar envío?`,
+          message: `Se enviará a ${getAudienceSize(campaign)} destinatarios. ¿Confirmar envío?`,
             confirmText: 'Enviar Ahora',
             isDestructive: false,
             fn: async () => {
@@ -179,7 +212,7 @@ const CampaignDetail: React.FC = () => {
         },
         sendNow: {
             title: 'Enviar Ahora',
-            message: `Se enviará inmediatamente a ${campaign.total_target} destinatarios. ¿Confirmar?`,
+          message: `Se enviará inmediatamente a ${getAudienceSize(campaign)} destinatarios. ¿Confirmar?`,
             confirmText: 'Enviar',
             isDestructive: false,
             fn: async () => {
@@ -214,7 +247,7 @@ const CampaignDetail: React.FC = () => {
   const renderMainActionButton = () => {
     if (!campaign) return null;
     const status = normalizeStatus(campaign.status);
-    const audienceSize = toNumber(campaign.total_target);
+    const audienceSize = getAudienceSize(campaign);
     const hasAudience = audienceSize > 0;
 
     if (status === 'DRAFT') {
@@ -353,13 +386,24 @@ const CampaignDetail: React.FC = () => {
 
             <div className="flex items-center gap-4 text-xs text-slate-500">
                 <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[10px] text-slate-600 border border-white shadow-sm">
+                    {campaign.avatar_url ? (
+                        <img
+                            src={campaign.avatar_url}
+                            alt={campaign.created_by_name || 'Avatar'}
+                            className="w-5 h-5 rounded-full object-cover border border-white shadow-sm"
+                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextSibling as HTMLElement | null)?.style && ((e.currentTarget.nextSibling as HTMLElement).style.display = 'flex'); }}
+                        />
+                    ) : null}
+                    <div
+                        className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[10px] text-slate-600 border border-white shadow-sm"
+                        style={{ display: campaign.avatar_url ? 'none' : 'flex' }}
+                    >
                         {(campaign.created_by_name || 'U').charAt(0)}
                     </div>
                     <span>{campaign.created_by_name || 'Desconocido'}</span>
                 </div>
                 <span>•</span>
-                <span>{new Date(campaign.created_at).toLocaleDateString()}</span>
+                <span>{formatDisplayDate(campaign.created_at_human, campaign.created_at)}</span>
             </div>
          </div>
 
@@ -414,7 +458,7 @@ const CampaignDetail: React.FC = () => {
                         style={{ width: `${toNumber(campaign.progress_percentage)}%` }} 
                     />
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">{toNumber(campaign.processed_count)} / {toNumber(campaign.total_target)} procesados</p>
+                <p className="text-[10px] text-slate-400 mt-1">{toNumber(campaign.processed_count)} / {getAudienceSize(campaign)} procesados</p>
            </div>
         </div>
 
@@ -425,7 +469,7 @@ const CampaignDetail: React.FC = () => {
                <i className="fa-solid fa-users text-slate-300"></i>
            </div>
            <div className="mt-2">
-                <p className="text-2xl font-bold text-slate-800">{toNumber(campaign.total_target).toLocaleString()}</p>
+                <p className="text-2xl font-bold text-slate-800">{getAudienceSize(campaign).toLocaleString()}</p>
                 <p className="text-xs text-slate-500 mt-1">Contactos únicos</p>
            </div>
         </div>
@@ -543,7 +587,15 @@ const CampaignDetail: React.FC = () => {
                     <div className="space-y-3 text-sm">
                       <div className="flex justify-between border-b border-slate-200 pb-2">
                         <span className="text-slate-500">Programado:</span>
-                        <span className="font-bold text-slate-700">{campaign.scheduled_at ? new Date(campaign.scheduled_at).toLocaleString() : 'Envío Inmediato'}</span>
+                        <span className="font-bold text-slate-700">{formatDisplayDate(campaign.scheduled_at_local, campaign.scheduled_at, 'Envío Inmediato')}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-200 pb-2">
+                        <span className="text-slate-500">Creado:</span>
+                        <span className="font-bold text-slate-700">{formatDisplayDate(campaign.created_at_human, campaign.created_at)}</span>
+                      </div>
+                      <div className="flex justify-between border-b border-slate-200 pb-2">
+                        <span className="text-slate-500">Enviado:</span>
+                        <span className="font-bold text-slate-700">{formatDisplayDate(campaign.sent_at_human, campaign.sent_at, 'Pendiente')}</span>
                       </div>
                       <div className="flex justify-between border-b border-slate-200 pb-2">
                         <span className="text-slate-500">Última Act.:</span>
