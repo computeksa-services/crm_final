@@ -81,22 +81,22 @@ const formatCurrency = (value: number | string) => {
 // 1. KPI Card (Diseño compacto)
 const KpiCard: React.FC<{ title: string; value: number; icon: string; color: 'blue' | 'green' | 'red' | 'orange'; subtext?: string; }> = ({ title, value, icon, color, subtext }) => {
     const styles = {
-        blue: 'bg-blue-50 text-blue-700 border-blue-100',
-        green: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-        red: 'bg-rose-50 text-rose-700 border-rose-100',
-        orange: 'bg-amber-50 text-amber-700 border-amber-100',
+    blue: 'bg-blue-50 text-blue-600',
+    green: 'bg-emerald-50 text-emerald-600',
+    red: 'bg-rose-50 text-rose-600',
+    orange: 'bg-amber-50 text-amber-600',
     };
     return (
-        <div className={`p-2 rounded-lg border ${styles[color]} flex items-center gap-2`}>
-            <div className={`w-8 h-8 rounded-md flex items-center justify-center bg-white bg-opacity-60 flex-shrink-0`}>
-                <i className={`fa-solid ${icon} text-base`}></i>
+    <div className="bg-white flex flex-col p-3 md:p-4 rounded-lg shadow-sm border border-slate-200 hover:shadow-md transition-shadow cursor-default min-w-0 h-full">
+      <div className="flex items-center gap-3 mb-2 min-w-0">
+        <div className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${styles[color]}`}>
+          <i className={`fa-solid ${icon} text-sm md:text-base`}></i>
+        </div>
+        <p className="text-xl md:text-2xl font-bold text-slate-800 truncate">{formatCurrency(value)}</p>
             </div>
-            <div className="flex-1 min-w-0">
-                <span className="text-[10px] font-bold uppercase opacity-70 tracking-widest">{title}</span>
-                <div className="text-sm font-bold font-mono tracking-tight mt-0.5 truncate">
-                    {formatCurrency(value)}
-                </div>
-                {subtext && <div className="text-[10px] opacity-80 font-medium -mt-1">{subtext}</div>}
+      <div className="flex flex-col min-w-0">
+        <span className="text-sm text-slate-500 font-medium truncate">{title}</span>
+        {subtext && <span className="text-[11px] text-slate-400 truncate">{subtext}</span>}
             </div>
         </div>
     );
@@ -241,18 +241,33 @@ const DateRangeSelector: React.FC<{ availableList: YearWithMonths[], selectedYea
 }
 
 // 3. Selector Inline (Estilo QuotesList)
+const STATUS_OPTIONS = [
+  { val: 'PENDIENTE', label: 'Pendiente', color: '#f59e0b', icon: 'fa-solid fa-clock' },
+  { val: 'PAGADO', label: 'Pagado', color: '#10b981', icon: 'fa-solid fa-check-circle' },
+  { val: 'VENCIDO', label: 'Vencido', color: '#ef4444', icon: 'fa-solid fa-circle-exclamation', system_only: true },
+  { val: 'ANULADO', label: 'Anulado', color: '#6b7280', icon: 'fa-solid fa-ban' },
+];
+
 const InlineStatusSelector: React.FC<{ status: string; onChange: (val: string) => void }> = ({ status, onChange }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    // Filtrar opciones editables (excluir VENCIDO, que es automático)
+    const EDITABLE_STATUS = STATUS_OPTIONS.filter(o => o.val !== 'VENCIDO');
+    const current = STATUS_OPTIONS.find(o => o.val === status) || STATUS_OPTIONS[0];
+    const currentIndex = EDITABLE_STATUS.findIndex(i => i.val === current.val);
+    const itemsAbove = currentIndex > 0 ? EDITABLE_STATUS.slice(0, currentIndex) : [];
+    const itemsBelow = currentIndex < EDITABLE_STATUS.length - 1 ? EDITABLE_STATUS.slice(currentIndex + 1) : [];
 
-    const options = [
-        { val: 'PENDIENTE', label: 'Pendiente', color: '#f59e0b', icon: 'fa-solid fa-clock' },
-        { val: 'PAGADO', label: 'Pagado', color: '#10b981', icon: 'fa-solid fa-check-circle' },
-        { val: 'VENCIDO', label: 'Vencido', color: '#ef4444', icon: 'fa-solid fa-circle-exclamation' },
-        { val: 'ANULADO', label: 'Anulado', color: '#6b7280', icon: 'fa-solid fa-ban' },
-    ];
-
-    const current = options.find(o => o.val === status) || options[0];
+    useEffect(() => {
+        if (isOpen && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            const spaceAbove = rect.top;
+            setDropdownPosition(spaceAbove > spaceBelow && spaceBelow < 200 ? 'top' : 'bottom');
+        }
+    }, [isOpen]);
 
     useEffect(() => {
         const handleClick = (e: MouseEvent) => {
@@ -265,29 +280,70 @@ const InlineStatusSelector: React.FC<{ status: string; onChange: (val: string) =
     return (
         <div className="relative inline-block" ref={dropdownRef}>
             <button
+                ref={buttonRef}
                 type="button"
                 onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-lg border text-[11px] font-black uppercase tracking-tight transition-all hover:bg-white active:scale-95"
-                style={{ backgroundColor: `${current.color}15`, color: current.color, borderColor: `${current.color}30` }}
+                className="inline-flex items-center justify-between gap-2 px-2.5 py-1 min-h-[24px] rounded-md text-[11px] font-semibold transition-all whitespace-nowrap hover:opacity-90 uppercase"
+                style={{ backgroundColor: current.color, color: '#ffffff' }}
             >
-                <i className={current.icon}></i>
-                {current.label}
-                <i className="fa-solid fa-chevron-down opacity-50 text-[8px] ml-1"></i>
+              <span className="inline-flex items-center gap-1.5 min-w-0">
+                <span className="inline-flex w-3.5 h-3.5 items-center justify-center leading-none">
+                  <i className={`${current.icon} text-[9px] leading-none`}></i>
+                </span>
+                <span className="truncate">{current.label}</span>
+              </span>
+              <span className="inline-flex w-3.5 h-3.5 items-center justify-center leading-none ml-1 opacity-60">
+                <i className="fa-solid fa-chevron-down text-[7px] leading-none"></i>
+              </span>
             </button>
             {isOpen && (
-                <div className="absolute z-[100] mt-1 w-40 bg-white border border-slate-200 rounded-xl shadow-xl py-1 overflow-hidden animate-in fade-in slide-in-from-top-1">
-                    {options.map(opt => (
-                        <button
-                            key={opt.val}
-                            onClick={(e) => { e.stopPropagation(); onChange(opt.val); setIsOpen(false); }}
-                            className="w-full px-3 py-2.5 hover:bg-slate-50 flex items-center gap-3 text-left border-b border-slate-50 last:border-0"
-                        >
-                            <div className="w-6 h-6 rounded flex items-center justify-center" style={{ backgroundColor: `${opt.color}20`, color: opt.color }}>
-                                <i className={opt.icon}></i>
+                <div
+                    onMouseLeave={() => setIsOpen(false)}
+                    className={`absolute z-[200] ${dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'} left-0 w-52 bg-white border border-slate-200 rounded-lg shadow-lg overflow-hidden`}
+                >
+                  <div className="max-h-64 overflow-y-auto py-1">
+                    {itemsAbove.length > 0 && (
+                      <div>
+                        {itemsAbove.map(item => (
+                          <button
+                            key={item.val}
+                            onClick={(e) => { e.stopPropagation(); onChange(item.val); setIsOpen(false); }}
+                            className="w-full px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors"
+                          >
+                            <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: item.color }}>
+                              <i className={`${item.icon} text-[8px] text-white`}></i>
                             </div>
-                            <span className="text-[11px] font-bold text-slate-700 uppercase tracking-tight">{opt.label}</span>
-                        </button>
-                    ))}
+                            <span className="text-[11px] font-medium text-slate-700 uppercase">{item.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="bg-slate-50 border-y border-slate-100 px-3 py-2">
+                      <div className="w-full flex items-center gap-2 opacity-50 cursor-not-allowed">
+                        <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: current.color }}>
+                          <i className={`${current.icon} text-[8px] text-white`}></i>
+                        </div>
+                        <span className="text-[11px] font-medium text-slate-700 uppercase">{current.label}</span>
+                        <i className="fa-solid fa-check text-[8px] ml-auto text-slate-400"></i>
+                      </div>
+                    </div>
+                    {itemsBelow.length > 0 && (
+                      <div>
+                        {itemsBelow.map(item => (
+                          <button
+                            key={item.val}
+                            onClick={(e) => { e.stopPropagation(); onChange(item.val); setIsOpen(false); }}
+                            className="w-full px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-left transition-colors"
+                          >
+                            <div className="w-4 h-4 rounded flex items-center justify-center" style={{ backgroundColor: item.color }}>
+                              <i className={`${item.icon} text-[8px] text-white`}></i>
+                            </div>
+                            <span className="text-[11px] font-medium text-slate-700 uppercase">{item.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
             )}
         </div>
@@ -297,12 +353,24 @@ const InlineStatusSelector: React.FC<{ status: string; onChange: (val: string) =
 // 3. Helper Group Cell
 const renderGroupCell = (row: any, label: string) => {
   const subtotal = row.subRows.reduce((sum: number, subRow: any) => sum + Number(subRow.original?.total_value || 0), 0);
+  const colId = row.groupingColumnId;
+  const matchedStatus = colId === 'status'
+    ? STATUS_OPTIONS.find((item) => item.val === String(label || '').toUpperCase() || item.label.toUpperCase() === String(label || '').toUpperCase())
+    : null;
+
   return (
     <div className="flex items-center gap-3 py-0.5">
       <i className={`fa-solid fa-chevron-right text-slate-400 text-[10px] transition-transform duration-150 ${row.getIsExpanded() ? 'rotate-90' : ''}`}></i>
-      <span className="font-semibold text-slate-700 text-xs">{label || 'Sin asignar'}</span>
+      {matchedStatus ? (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold text-white" style={{ backgroundColor: matchedStatus.color }}>
+          <i className={`${matchedStatus.icon} text-[9px]`} />
+          {matchedStatus.label}
+        </span>
+      ) : (
+        <span className="font-semibold text-slate-700 text-xs">{label || 'Sin asignar'}</span>
+      )}
       <span className="text-[10px] text-slate-500 bg-slate-200 px-2 py-0.5 rounded-full">{row.subRows.length}</span>
-      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-800 tabular-nums">
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-800 tabular-nums">
         {formatCurrency(subtotal)}
       </span>
     </div>
@@ -313,7 +381,7 @@ const renderGroupCell = (row: any, label: string) => {
 const getTypeBadge = (type: string) => {
     const map: any = { VENTA: { color: '#10b981', icon: 'fa-arrow-trend-up' }, GASTO: { color: '#ef4444', icon: 'fa-arrow-trend-down' }, OTRO: { color: '#6b7280', icon: 'fa-circle-question' } };
     const t = map[type] || map.OTRO;
-    return <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border text-[10px] font-bold" style={{ backgroundColor: `${t.color}15`, color: t.color, borderColor: `${t.color}30` }}><i className={`fa-solid ${t.icon}`}></i> {type}</span>;
+    return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold text-white whitespace-nowrap uppercase" style={{ backgroundColor: t.color }}><i className={`fa-solid ${t.icon} text-[9px]`}></i>{type}</span>;
 };
 
 const getPaymentStatusColor = (code?: string) => {
@@ -321,6 +389,137 @@ const getPaymentStatusColor = (code?: string) => {
     if (code === 'OVERDUE') return 'bg-rose-50 text-rose-700 border-rose-200';
     if (code === 'WARNING') return 'bg-amber-50 text-amber-700 border-amber-200';
     return 'bg-slate-50 text-slate-600 border-slate-200';
+};
+
+const FinancialActionsMenu: React.FC<{
+  tx: FinancialTransaction;
+  hasEmailIntegration: boolean;
+  onCollect: (tx: FinancialTransaction) => void;
+  onEdit: (tx: FinancialTransaction) => void;
+  onDelete: (tx: FinancialTransaction) => void;
+}> = ({ tx, hasEmailIntegration, onCollect, onEdit, onDelete }) => {
+  const HOVER_CLOSE_DELAY_MS = 550;
+  const [isOpen, setIsOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const menuRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
+  const showCollect = tx.status === 'VENCIDO';
+
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const scheduleClose = () => {
+    clearCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
+      setIsOpen(false);
+      closeTimerRef.current = null;
+    }, HOVER_CLOSE_DELAY_MS);
+  };
+
+  const openMenu = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    clearCloseTimer();
+    if (!buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const menuH = showCollect ? 150 : 112;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const top = spaceBelow < menuH ? rect.top - menuH - 4 : rect.bottom + 4;
+    setMenuStyle({ position: 'fixed', top, left: rect.left, zIndex: 9999 });
+    setIsOpen((prev) => !prev);
+  };
+
+  useEffect(() => {
+    return () => clearCloseTimer();
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node) && buttonRef.current && !buttonRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    const handleScroll = () => setIsOpen(false);
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setIsOpen(false);
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('scroll', handleScroll, true);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('scroll', handleScroll, true);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [isOpen]);
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        onMouseEnter={clearCloseTimer}
+        onMouseLeave={() => { if (isOpen) scheduleClose(); }}
+        onClick={openMenu}
+        className="w-6 h-6 flex items-center justify-center rounded text-slate-500 hover:text-slate-700 hover:bg-slate-100 transition-all flex-shrink-0"
+        title="Opciones"
+      >
+        <i className="fa-solid fa-ellipsis-vertical text-[11px]" />
+      </button>
+      {isOpen && (
+        <div
+          ref={menuRef}
+          style={menuStyle}
+          className="w-44 bg-white border border-slate-200 rounded-lg shadow-xl py-1 text-sm"
+          onMouseEnter={clearCloseTimer}
+          onMouseLeave={scheduleClose}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {showCollect && (
+            <button
+              onMouseDown={(e) => {
+                e.stopPropagation();
+                onCollect(tx);
+                setIsOpen(false);
+              }}
+              className={`w-full text-left px-3 py-1.5 flex items-center gap-2.5 text-xs transition-colors ${hasEmailIntegration ? 'hover:bg-slate-50 text-slate-700' : 'text-slate-400 hover:bg-slate-50'}`}
+              title={hasEmailIntegration ? 'Notificar Cobranza' : 'Integración de correo no configurada'}
+            >
+              <i className="fa-solid fa-bell w-3.5 text-orange-500" /> Enviar Notificación
+            </button>
+          )}
+          <button
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              onEdit(tx);
+              setIsOpen(false);
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2.5 text-xs transition-colors"
+          >
+            <i className="fa-solid fa-pen text-slate-400 w-3.5" /> Editar
+          </button>
+          <div className="my-1 border-t border-slate-100" />
+          <button
+            onMouseDown={(e) => {
+              e.stopPropagation();
+              onDelete(tx);
+              setIsOpen(false);
+            }}
+            className="w-full text-left px-3 py-1.5 hover:bg-red-50 text-red-600 flex items-center gap-2.5 text-xs transition-colors"
+          >
+            <i className="fa-solid fa-trash text-red-500 w-3.5" /> Eliminar
+          </button>
+        </div>
+      )}
+    </>
+  );
 };
 
 // 5. Grouping Dropdown (Phase C - Toolbar parity with QuotesList)
@@ -585,6 +784,11 @@ const FinancialsList: React.FC = () => {
 
   // --- ACTIONS ---
   const handleStatusChange = async (tx: FinancialTransaction, newStatus: string) => {
+      // Validación: nunca permitir cambio manual a VENCIDO (lo determina el sistema)
+      if (newStatus === 'VENCIDO') {
+          setToast({ message: 'El estado "Vencido" se determina automáticamente por el sistema', type: 'warning' });
+          return;
+      }
       if (newStatus === 'PAGADO') {
           const amount = Number((tx as any).balance_due || tx.total_value || 0);
           setPaymentModal({ isOpen: true, tx, date: new Date().toISOString().split('T')[0], amount, method: 'TRANSFERENCIA', ref: '' });
@@ -656,10 +860,27 @@ const FinancialsList: React.FC = () => {
         size: 300,
         enableColumnFilter: false,
         cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
-            <div className="font-bold text-brand-600 text-xs flex items-center gap-1 whitespace-nowrap">
-                {getValue() as string}
-                {row.original.is_urgent && <i className="fa-solid fa-triangle-exclamation text-red-500" title="Urgente"></i>}
-            </div>
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            <FinancialActionsMenu
+              tx={row.original}
+              hasEmailIntegration={hasEmailIntegration()}
+              onCollect={(selectedTx) => {
+                if (!hasEmailIntegration()) {
+                  alert('No tienes una integración de correo configurada. Ve a Configuración → Integraciones para conectar Gmail o Outlook.');
+                  return;
+                }
+                setCollectionData(selectedTx);
+              }}
+              onEdit={(selectedTx) => navigate(`/app/financials/edit?id=${selectedTx.id_transaction}`)}
+              onDelete={(selectedTx) => setDeleteId(selectedTx.id_transaction)}
+            />
+          </div>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[13px] font-semibold text-slate-800 truncate">{getValue() as string}</span>
+            {row.original.is_urgent && <i className="fa-solid fa-triangle-exclamation text-red-500 text-[11px] shrink-0" title="Urgente"></i>}
+          </div>
+        </div>
         )
     },
     {
@@ -667,7 +888,7 @@ const FinancialsList: React.FC = () => {
         header: 'Descripción',
         size: 225,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <div className="text-slate-600 text-xs italic line-clamp-2 w-[225px]">{getValue() as string}</div>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <div className="text-xs leading-tight text-slate-700 line-clamp-2 w-[225px] font-medium">{getValue() as string}</div>
     },
     {
         accessorKey: 'client_company_name',
@@ -676,7 +897,7 @@ const FinancialsList: React.FC = () => {
         enableColumnFilter: true,
         cell: ({ row, getValue, column }) => {
             if (row.getIsGrouped()) return grouping.includes(column.id) ? renderGroupCell(row, getValue() as string) : null;
-            return <div className="text-xs font-bold text-slate-700 uppercase w-[140px]">{getValue() as string || 'Sin Cliente'}</div>;
+          return <div className="text-[13px] leading-tight text-slate-800 font-semibold w-[140px] truncate">{getValue() as string || 'Sin Cliente'}</div>;
         }
     },
     {
@@ -704,28 +925,36 @@ const FinancialsList: React.FC = () => {
         header: 'Emisión',
         size: 100,
         filterFn: dateRangeFilter,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs text-slate-500">{formatDateDDMMYYYY(getValue() as string)}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-[11px] text-slate-700 whitespace-nowrap">{formatDateDDMMYYYY(getValue() as string)}</span>
     },
     {
         accessorKey: 'due_date',
         header: 'Vence',
         size: 100,
         filterFn: dateRangeFilter,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs text-slate-500">{formatDateDDMMYYYY(getValue() as string)}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-[11px] text-slate-700 whitespace-nowrap">{formatDateDDMMYYYY(getValue() as string)}</span>
     },
     {
         accessorKey: 'subtotal',
         header: 'Subtotal',
         size: 100,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono text-slate-600 text-right block">{formatCurrency(getValue() as number)}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50">
+            <span className="text-[11px] font-semibold text-slate-700 whitespace-nowrap tabular-nums">{formatCurrency(getValue() as number)}</span>
+          </span>
+        )
     },
     {
         accessorKey: 'tax_amount',
         header: 'IVA',
         size: 80,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono text-slate-500 text-right block">{formatCurrency((row.original.subtotal||0) * (getValue() as number||0)/100)}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50">
+            <span className="text-[11px] font-semibold text-slate-700 whitespace-nowrap tabular-nums">{formatCurrency((row.original.subtotal||0) * (getValue() as number||0)/100)}</span>
+          </span>
+        )
     },
     {
         accessorKey: 'retention_value',
@@ -733,9 +962,9 @@ const FinancialsList: React.FC = () => {
         size: 100,
         enableColumnFilter: false,
         cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
-            (getValue() as number) > 0 
-                ? <span className="text-xs font-mono text-indigo-600 text-right block">{formatCurrency(getValue() as number)}</span>
-                : <span className="text-xs text-slate-400 text-right block">-</span>
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-indigo-200 bg-indigo-50">
+            <span className="text-[11px] font-semibold text-indigo-700 whitespace-nowrap tabular-nums">{formatCurrency(getValue() as number)}</span>
+          </span>
         )
     },
     {
@@ -743,21 +972,33 @@ const FinancialsList: React.FC = () => {
         header: 'Total',
         size: 110,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono font-bold text-slate-800 bg-slate-50 px-2 py-1 rounded border border-slate-100 text-right block">{formatCurrency(getValue() as number)}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-slate-200 bg-slate-50">
+            <span className="text-[11px] font-semibold text-slate-800 whitespace-nowrap tabular-nums">{formatCurrency(getValue() as number)}</span>
+          </span>
+        )
     },
     {
         accessorKey: 'paid_amount',
         header: 'Pagado',
         size: 100,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono text-emerald-600 font-medium text-right block">{formatCurrency(getValue() as number)}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-emerald-200 bg-emerald-50">
+            <span className="text-[11px] font-semibold text-emerald-700 whitespace-nowrap tabular-nums">{formatCurrency(getValue() as number)}</span>
+          </span>
+        )
     },
     {
         accessorKey: 'balance_due',
         header: 'Saldo',
         size: 100,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <span className="text-xs font-mono font-bold text-red-600 text-right block">{formatCurrency(getValue() as number)}</span>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
+          <span className="inline-flex items-center px-2.5 py-1 rounded-md border border-red-200 bg-red-50">
+            <span className="text-[11px] font-semibold text-red-700 whitespace-nowrap tabular-nums">{formatCurrency(getValue() as number)}</span>
+          </span>
+        )
     },
     {
         id: 'payment_status',
@@ -765,41 +1006,9 @@ const FinancialsList: React.FC = () => {
         size: 120,
         cell: ({ row }) => {
             if (row.getIsGrouped()) return null;
-            return <span className={`px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase whitespace-nowrap ${getPaymentStatusColor(row.original.payment_status_code)}`}>{row.original.payment_status_label || '-'}</span>
+          return <span className={`inline-flex items-center px-2.5 py-1 rounded-md border text-[11px] font-semibold whitespace-nowrap uppercase ${getPaymentStatusColor(row.original.payment_status_code)}`}>{row.original.payment_status_label || '-'}</span>
         }
     },
-    {
-        id: 'actions',
-        header: 'Acciones',
-        size: 100,
-        cell: ({ row }) => {
-            if (row.getIsGrouped()) return null;
-            const tx = row.original;
-            return (
-                <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {tx.status === 'VENCIDO' && (
-                      <button 
-                        onClick={(e) => { 
-                          e.stopPropagation();
-                          if (!hasEmailIntegration()) {
-                            alert('No tienes una integración de correo configurada. Ve a Configuración → Integraciones para conectar Gmail o Outlook.');
-                            return;
-                          }
-                          setCollectionData(tx);
-                        }} 
-                        disabled={!hasEmailIntegration()}
-                        className={`w-7 h-7 flex items-center justify-center rounded transition-colors ${!hasEmailIntegration() ? 'text-slate-300 cursor-not-allowed' : 'text-orange-500 hover:bg-orange-50'}`}
-                        title={!hasEmailIntegration() ? 'Integración de correo no configurada' : 'Cobranza'}
-                      >
-                        <i className="fa-solid fa-bell text-[10px]"></i>
-                      </button>
-                    )}
-                    <button onClick={(e) => { e.stopPropagation(); navigate(`/app/financials/edit?id=${tx.id_transaction}`); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-brand-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-pen text-[10px]"></i></button>
-                    <button onClick={(e) => { e.stopPropagation(); setDeleteId(tx.id_transaction); }} className="w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-white rounded border border-transparent hover:border-slate-200 transition-all"><i className="fa-solid fa-trash text-[10px]"></i></button>
-                </div>
-            );
-        }
-    }
   ], [grouping]);
 
   // --- TABLE INSTANCE ---
@@ -928,7 +1137,7 @@ const FinancialsList: React.FC = () => {
           onClick={() => navigate('/app/financials/new')}
           className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 sm:py-1.5 bg-slate-800 text-white rounded-md text-sm sm:text-xs font-medium hover:bg-slate-700 transition-colors whitespace-nowrap"
         >
-          <i className="fa-solid fa-plus text-[10px]" /> Nueva
+          <i className="fa-solid fa-plus text-[10px]" /> Nuevo Registro
         </button>
       </div>
 
@@ -1021,9 +1230,18 @@ const FinancialsList: React.FC = () => {
               </tr>
             )}
             {loading ? (
-                <tr><td colSpan={columns.length} className="py-24 text-center"><div className="flex flex-col items-center"><BrandSpinner size="lg" className="mb-2" /><p className="text-slate-400 text-sm font-medium">Cargando datos...</p></div></td></tr>
+                <tr><td colSpan={columns.length} className="py-24 text-center"><div className="flex flex-col items-center gap-2"><BrandSpinner size="lg" /><p className="text-slate-400 text-sm font-medium">Cargando datos...</p></div></td></tr>
             ) : table.getRowModel().rows.length === 0 ? (
-                <tr><td colSpan={columns.length} className="py-24 text-center text-slate-500">No se encontraron transacciones.</td></tr>
+                <tr>
+                  <td colSpan={columns.length} className="py-20 text-center">
+                    <div className="flex flex-col items-center gap-3 text-slate-500">
+                      <i className="fa-regular fa-file-lines text-4xl text-slate-300"></i>
+                      <p className="font-bold text-slate-600">No hay transacciones aún</p>
+                      <p className="text-sm text-slate-400">Crea tu primer registro financiero para visualizarlo aquí.</p>
+                      <button onClick={() => navigate('/app/financials/new')} className="px-4 py-2 bg-emerald-600 text-white rounded-lg shadow-sm hover:bg-emerald-700 transition-all text-sm font-bold">Crear registro</button>
+                    </div>
+                  </td>
+                </tr>
             ) : table.getRowModel().rows.map(row => {
                 const isGrouped = row.getIsGrouped();
                 if (isGrouped) {

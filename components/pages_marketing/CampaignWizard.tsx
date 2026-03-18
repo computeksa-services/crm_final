@@ -30,6 +30,8 @@ interface Attachment {
     url?: string;
     file_url?: string;
     url_archivo?: string;
+    nombre?: string;
+    tipo?: string;
 }
 
 const getAttachmentUrl = (att: Attachment | undefined | null): string | null => {
@@ -189,11 +191,17 @@ const CampaignWizard: React.FC = () => {
             })
             .filter(Boolean)
         : [];
-            const currentUserId = user?.id_user != null ? String(user.id_user) : null;
-            const campaignCreatorId = campaign.created_by != null ? String(campaign.created_by) : null;
-            const isCurrentUserCreator = currentUserId !== null && campaignCreatorId !== null
-                ? currentUserId === campaignCreatorId
-                : user?.id_user === campaign.created_by;
+            const normalizeId = (v?: string | number | null) => String(v ?? '').trim().toLowerCase();
+            const currentUserId = normalizeId(user?.id_user);
+            const campaignCreatorId = normalizeId(campaign.created_by);
+            let isCurrentUserCreator: boolean;
+            if (currentUserId && campaignCreatorId) {
+              isCurrentUserCreator = currentUserId === campaignCreatorId;
+            } else {
+              const userName = normalizeId(user?.name_user);
+              const creatorName = normalizeId(campaign.created_by_name);
+                            isCurrentUserCreator = userName && creatorName ? userName === creatorName : false;
+            }
       
             setIsCreator(isCurrentUserCreator);
       
@@ -212,6 +220,9 @@ const CampaignWizard: React.FC = () => {
                 attachments: Array.isArray(campaign.attachments)
                     ? campaign.attachments.map((att: any) => ({
                             ...att,
+                            name: att?.nombre || att?.name || att?.file_name || 'Adjunto',
+                            type: att?.tipo || att?.type || '',
+                            size: att?.size || '',
                             url_archivo: att?.url_archivo || att?.url || att?.file_url || att?.attachment_url || null,
                         }))
                     : []

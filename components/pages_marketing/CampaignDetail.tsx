@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import ConfirmModal from '../ConfirmModal';
 import Toast from '../Toast';
 import { BrandSpinner, SimpleSpinner } from '../AppLoaders';
+import Avatar from '../Avatar';
 
 // Tipos adicionales para la nueva data
 interface AudienceMember {
@@ -116,6 +117,53 @@ const CampaignDetail: React.FC = () => {
     return Math.max(totalTarget, audienceDetailCount, targetListsCount);
   };
 
+  const hasValue = (v: any): boolean => v !== null && v !== undefined && String(v).trim() !== '';
+
+  const getProcessedCount = (campaignData?: CampaignDetailData | null): number => {
+    if (!campaignData) return 0;
+
+    if (hasValue(campaignData.processed_count)) {
+      return toNumber(campaignData.processed_count);
+    }
+
+    const sentBased = toNumber(campaignData.sent_count) + toNumber(campaignData.failed_count);
+    if (sentBased > 0) return sentBased;
+
+    if (Array.isArray(campaignData.audience_detail) && campaignData.audience_detail.length > 0) {
+      return campaignData.audience_detail.filter((member) => {
+        const status = String(member.status || '').toUpperCase();
+        return status !== 'PENDING' && status !== 'QUEUED';
+      }).length;
+    }
+
+    return 0;
+  };
+
+  const getRemainingCount = (campaignData?: CampaignDetailData | null): number => {
+    if (!campaignData) return 0;
+
+    if (hasValue(campaignData.remaining_count)) {
+      return toNumber(campaignData.remaining_count);
+    }
+
+    return Math.max(getAudienceSize(campaignData) - getProcessedCount(campaignData), 0);
+  };
+
+  const getProgressPercentage = (campaignData?: CampaignDetailData | null): number => {
+    if (!campaignData) return 0;
+
+    if (hasValue(campaignData.progress_percentage)) {
+      const explicitProgress = toNumber(campaignData.progress_percentage);
+      return Math.min(Math.max(explicitProgress, 0), 100);
+    }
+
+    const audienceSize = getAudienceSize(campaignData);
+    if (audienceSize <= 0) return 0;
+
+    const calculated = (getProcessedCount(campaignData) / audienceSize) * 100;
+    return Math.min(Math.max(Math.round(calculated), 0), 100);
+  };
+
   const formatDisplayDate = (humanized?: string | null, raw?: string | null, fallback = '-') => {
     if (humanized && String(humanized).trim()) return humanized;
     if (raw) return new Date(raw).toLocaleString();
@@ -142,6 +190,19 @@ const CampaignDetail: React.FC = () => {
     if (userName && creatorName) return userName === creatorName;
     return false;
   })();
+
+  const cachedUserAvatarUrl = useMemo(() => {
+    try {
+      const storedUser = localStorage.getItem('user');
+      if (!storedUser) return null;
+      const parsedUser = JSON.parse(storedUser);
+      return parsedUser?.avatar_url || null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const creatorAvatarUrl = campaign?.avatar_url || (isCreator ? user?.avatar_url || cachedUserAvatarUrl : null);
 
 
 
@@ -386,20 +447,12 @@ const CampaignDetail: React.FC = () => {
 
             <div className="flex items-center gap-4 text-xs text-slate-500">
                 <div className="flex items-center gap-2">
-                    {campaign.avatar_url ? (
-                        <img
-                            src={campaign.avatar_url}
-                            alt={campaign.created_by_name || 'Avatar'}
-                            className="w-5 h-5 rounded-full object-cover border border-white shadow-sm"
-                            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; (e.currentTarget.nextSibling as HTMLElement | null)?.style && ((e.currentTarget.nextSibling as HTMLElement).style.display = 'flex'); }}
-                        />
-                    ) : null}
-                    <div
-                        className="w-5 h-5 rounded-full bg-slate-200 flex items-center justify-center font-bold text-[10px] text-slate-600 border border-white shadow-sm"
-                        style={{ display: campaign.avatar_url ? 'none' : 'flex' }}
-                    >
-                        {(campaign.created_by_name || 'U').charAt(0)}
-                    </div>
+                <Avatar
+                  src={creatorAvatarUrl}
+                  name={campaign.created_by_name || 'Desconocido'}
+                  size="xs"
+                  className="w-5 h-5 border border-white shadow-sm"
+                />
                     <span>{campaign.created_by_name || 'Desconocido'}</span>
                 </div>
                 <span>•</span>
@@ -449,16 +502,16 @@ const CampaignDetail: React.FC = () => {
                )}
            </div>
            <div className="mt-2 z-10 relative">
-                <p className="text-2xl font-bold text-slate-800">{toNumber(campaign.progress_percentage)}%</p>
+              <p className="text-2xl font-bold text-slate-800">{getProgressPercentage(campaign)}%</p>
                 
                 {/* Mini Barra dentro del Card */}
                 <div className="h-1.5 w-full bg-slate-100 rounded-full mt-2 overflow-hidden">
                     <div 
                         className={`h-full rounded-full transition-all duration-1000 ${normalizeStatus(campaign.status) === 'PAUSED' ? 'bg-amber-400' : 'bg-blue-500'}`} 
-                        style={{ width: `${toNumber(campaign.progress_percentage)}%` }} 
+                  style={{ width: `${getProgressPercentage(campaign)}%` }} 
                     />
                 </div>
-                <p className="text-[10px] text-slate-400 mt-1">{toNumber(campaign.processed_count)} / {getAudienceSize(campaign)} procesados</p>
+              <p className="text-[10px] text-slate-400 mt-1">{getProcessedCount(campaign)} / {getAudienceSize(campaign)} procesados</p>
            </div>
         </div>
 
@@ -507,7 +560,7 @@ const CampaignDetail: React.FC = () => {
                <i className="fa-regular fa-clock text-amber-300"></i>
            </div>
            <div className="mt-2">
-                <p className="text-2xl font-bold text-amber-500">{toNumber(campaign.remaining_count).toLocaleString()}</p>
+             <p className="text-2xl font-bold text-amber-500">{getRemainingCount(campaign).toLocaleString()}</p>
                 <p className="text-xs text-slate-500 mt-1">En cola de envío</p>
            </div>
         </div>

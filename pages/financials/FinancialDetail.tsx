@@ -56,6 +56,55 @@ const getPaymentStatusColor = (code?: string) => {
     return 'bg-blue-50 text-blue-700 border-blue-200';
 };
 
+const toNumberSafe = (val: unknown) => {
+  const num = Number(val);
+  return Number.isFinite(num) ? num : 0;
+};
+
+const normalizeAutomationRecipients = (raw: unknown) => {
+  if (!Array.isArray(raw)) return [] as Array<{ name: string; email: string; type: 'contact' | 'team' | 'external' }>;
+  return raw
+    .map((item) => {
+      if (typeof item === 'string') {
+        const value = item.trim();
+        if (!value) return null;
+        return { name: value, email: value, type: 'external' as const };
+      }
+      if (!item || typeof item !== 'object') return null;
+      const rec = item as any;
+      const email = String(rec.email || rec.address || '').trim();
+      const name = String(rec.name || email || 'Destinatario').trim();
+      const type = rec.type === 'team' ? 'team' : rec.type === 'contact' ? 'contact' : 'external';
+      if (!email && !name) return null;
+      return { name: name || email, email: email || name, type };
+    })
+    .filter(Boolean) as Array<{ name: string; email: string; type: 'contact' | 'team' | 'external' }>;
+};
+
+const normalizeNotificationType = (rawType: unknown) => {
+  const normalized = String(rawType || '').trim().toUpperCase();
+  if (normalized === 'AUTO' || normalized === 'AUTOMATICO' || normalized === 'AUTOMATIC') return 'AUTOMATICO';
+  return 'MANUAL';
+};
+
+const normalizeNotificationLogs = (rawLogs: unknown) => {
+  if (!Array.isArray(rawLogs)) return [] as Array<{ fecha: string; hora: string; tipo: string; enviado_por: string; accionado_por: string; destinatarios: string }>;
+  return rawLogs.map((item: any) => {
+    const recipientsRaw = item?.destinatarios;
+    const recipients = Array.isArray(recipientsRaw)
+      ? recipientsRaw.join(', ')
+      : String(recipientsRaw || '').trim();
+    return {
+      fecha: String(item?.fecha_human || item?.fecha || item?.fecha_raw || '-'),
+      hora: String(item?.hora || ''),
+      tipo: normalizeNotificationType(item?.tipo),
+      enviado_por: String(item?.enviado_por || 'Sistema'),
+      accionado_por: String(item?.accionado_por || '-'),
+      destinatarios: recipients || '-',
+    };
+  });
+};
+
 // --- COMPONENTE: Selector de Estado Estilo Deal ---
 const StatusSelector: React.FC<{
   currentStatus: string;
@@ -64,15 +113,30 @@ const StatusSelector: React.FC<{
 }> = ({ currentStatus, onSelect, disabled }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
   
-  const options = [
+  const allOptions = [
     { id: 'PENDIENTE', name: 'Pendiente', color: '#f59e0b', icon: 'fa-clock' },
     { id: 'PAGADO', name: 'Pagado', color: '#10b981', icon: 'fa-circle-check' },
     { id: 'ANULADO', name: 'Anulado', color: '#6b7280', icon: 'fa-ban' },
     { id: 'VENCIDO', name: 'Vencido', color: '#ef4444', icon: 'fa-circle-exclamation' },
   ];
 
-  const current = options.find(o => o.id === currentStatus) || options[0];
+  const editableOptions = allOptions.filter(opt => opt.id !== 'VENCIDO');
+  const current = allOptions.find(o => o.id === currentStatus) || allOptions[0];
+  const currentIndex = editableOptions.findIndex(o => o.id === current.id);
+  const optionsAbove = currentIndex > 0 ? editableOptions.slice(0, currentIndex) : [];
+  const optionsBelow = currentIndex >= 0 && currentIndex < editableOptions.length - 1 ? editableOptions.slice(currentIndex + 1) : editableOptions;
+
+  useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      setDropdownPosition(spaceAbove > spaceBelow && spaceBelow < 200 ? 'top' : 'bottom');
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -85,9 +149,10 @@ const StatusSelector: React.FC<{
   return (
     <div className="relative inline-block w-full sm:w-auto" ref={dropdownRef}>
       <button
+        ref={buttonRef}
         type="button"
         disabled={disabled}
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
         className={`w-full sm:w-auto flex items-center justify-between gap-3 px-3 py-2 rounded-lg font-bold text-xs border transition-all ${disabled ? 'opacity-70' : 'hover:brightness-95 active:scale-95'}`}
         style={{ backgroundColor: `${current.color}15`, color: current.color, borderColor: `${current.color}40` }}
       >
@@ -99,17 +164,45 @@ const StatusSelector: React.FC<{
       </button>
 
       {isOpen && !disabled && (
-        <div className="absolute right-0 mt-1 w-full sm:w-48 bg-white rounded-lg shadow-xl border border-slate-200 z-50 overflow-hidden animate-in fade-in slide-in-from-top-2">
-          {options.map((opt) => (
-            <button
-              key={opt.id}
-              onClick={() => { onSelect(opt.id); setIsOpen(false); }}
-              className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2 transition-colors border-b border-slate-50 last:border-0"
-            >
-              <i className={`fa-solid ${opt.icon} text-[10px]`} style={{ color: opt.color }}></i>
-              <span className="text-xs font-bold text-slate-700 uppercase">{opt.name}</span>
-            </button>
-          ))}
+        <div
+          onMouseLeave={() => setIsOpen(false)}
+          className={`absolute z-50 ${dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'} right-0 w-full sm:w-52 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-top-2`}
+        >
+          <div className="max-h-64 overflow-y-auto py-1">
+            {optionsAbove.map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => { onSelect(opt.id); setIsOpen(false); }}
+                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+              >
+                <i className={`fa-solid ${opt.icon} text-[10px]`} style={{ color: opt.color }}></i>
+                <span className="text-xs font-bold text-slate-700 uppercase">{opt.name}</span>
+              </button>
+            ))}
+
+            <div className="bg-slate-50 border-y border-slate-100 px-4 py-2.5">
+              <div className="w-full flex items-center gap-2 opacity-60 cursor-not-allowed">
+                <i className={`fa-solid ${current.icon} text-[10px]`} style={{ color: current.color }}></i>
+                <span className="text-xs font-bold text-slate-700 uppercase">{current.name}</span>
+                {current.id === 'VENCIDO' ? (
+                  <span className="text-[9px] ml-auto text-slate-500 italic">(automático)</span>
+                ) : (
+                  <i className="fa-solid fa-check text-[8px] ml-auto text-slate-400"></i>
+                )}
+              </div>
+            </div>
+
+            {optionsBelow.map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => { onSelect(opt.id); setIsOpen(false); }}
+                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2 transition-colors"
+              >
+                <i className={`fa-solid ${opt.icon} text-[10px]`} style={{ color: opt.color }}></i>
+                <span className="text-xs font-bold text-slate-700 uppercase">{opt.name}</span>
+              </button>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -152,6 +245,11 @@ const FinancialDetail: React.FC = () => {
 
       if (!tx) { navigate('/app/financials'); return; }
 
+      const subtotal = toNumberSafe(tx.subtotal);
+      const taxAmount = toNumberSafe(tx.impuestos ?? tx.tax_amount);
+      const totalValue = toNumberSafe(tx.total_factura ?? tx.total_value);
+      const paidAmount = toNumberSafe(tx.monto_pagado_caja ?? tx.v_total_abonado ?? tx.paid_amount);
+
       const normalizedTx = {
         ...tx,
         id_transaction: tx.id_transaccion,
@@ -161,23 +259,31 @@ const FinancialDetail: React.FC = () => {
         status: tx.estado_registro,
         issue_date_input: tx.v_input_fecha_emision,
         due_date_input: tx.v_input_fecha_vencimiento,
+        payment_date_input: tx.v_input_fecha_pago,
+        retention_date_input: tx.v_input_fecha_retencion,
+        issue_date_human: tx.v_texto_fecha_emision_human,
+        due_date_human: tx.v_texto_fecha_vencimiento_human,
+        payment_date_human: tx.v_texto_fecha_pago_human,
         payment_status_code: tx.v_codigo_estado,
         payment_status_label: tx.v_etiqueta_estado,
         client_company_name: tx.nombre_cliente_proveedor,
         client_ruc: tx.ruc_cliente_proveedor,
         client_address: tx.direccion_cliente,
+        client_phone: tx.telefono_cliente,
+        client_email: tx.email_cliente,
         id_client_company: tx.id_empresa_cliente,
-        subtotal: parseFloat(tx.subtotal || 0),
-        tax_amount: parseFloat(tx.impuestos || 0),
-        retention_value: parseFloat(tx.valor_retencion || 0),
-        total_value: parseFloat(tx.total_factura || 0),
-        paid_amount: parseFloat(tx.monto_pagado_caja || tx.v_total_abonado || 0),
-        balance_due: deriveBalanceDue(tx.v_saldo_pendiente || tx.balance_due, tx.total_factura, tx.monto_pagado_caja || tx.v_total_abonado),
+        subtotal,
+        tax_amount: taxAmount,
+        tax_rate: toNumberSafe(tx.impuestos_porcentaje ?? tx.tax_rate ?? tx.v_tax_rate),
+        retention_value: toNumberSafe(tx.valor_retencion),
+        total_value: totalValue,
+        paid_amount: paidAmount,
+        balance_due: deriveBalanceDue(tx.v_saldo_pendiente || tx.balance_due, totalValue, paidAmount),
         enable_automation: tx.enable_automation === true,
-        automation_frequency: tx.automation_frequency,
-        automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : [],
-        next_reminder_label: tx.v_proximo_recordatorio,
-        notification_logs: Array.isArray(tx.notification_logs) ? tx.notification_logs : [],
+        automation_frequency: toNumberSafe(tx.automation_frequency),
+        automation_recipients: normalizeAutomationRecipients(tx.automation_recipients),
+        next_reminder_label: tx.v_texto_proximo_recordatorio_human || tx.v_proximo_recordatorio || tx.v_input_proximo_recordatorio,
+        notification_logs: normalizeNotificationLogs(tx.notification_logs),
         usuario_creador: tx.usuario_creador
       };
 
@@ -200,6 +306,10 @@ const FinancialDetail: React.FC = () => {
   // --- HANDLERS ---
   const handleStatusChange = async (newStatus: string) => {
     if (!transaction) return;
+    if (newStatus === 'VENCIDO') {
+      setToast({ message: 'El estado VENCIDO lo determina automáticamente el sistema.', type: 'error' });
+      return;
+    }
     setProcessing(true);
     try {
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
@@ -294,107 +404,145 @@ const FinancialDetail: React.FC = () => {
   if (!transaction) return null;
 
   return (
-    <div className="w-full px-4 md:px-6 pb-20 animate-fade-in font-sans">
+    <div className="min-h-screen bg-[#F9F9F8] text-zinc-800 pb-20 font-sans selection:bg-orange-100 selection:text-orange-900 animate-fade-in">
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} isOpen={confirmState.isOpen} onClose={() => setConfirmState(p => ({...p, isOpen: false}))} />
 
       {/* --- HEADER PRINCIPAL --- */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-            <div className="flex-1 min-w-0 space-y-1 w-full">
-                <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-bold text-slate-800 tracking-tight leading-tight">
-                        Factura #{transaction.invoice_number}
-                    </h1>
+      <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/90 backdrop-blur">
+        <div className="mx-auto max-w-[1240px] px-4 sm:px-6 lg:px-8 py-5">
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
+            <div className="min-w-0 flex-1 space-y-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-600">
+                  <i className={`fa-solid ${transaction.transaction_type === 'VENTA' ? 'fa-arrow-trend-up text-emerald-500' : transaction.transaction_type === 'GASTO' ? 'fa-arrow-trend-down text-rose-500' : 'fa-circle text-slate-400'} text-[9px]`}></i>
+                  {transaction.transaction_type || 'OTRO'}
+                </span>
+                <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] ${getPaymentStatusColor(transaction.payment_status_code)}`}>
+                  {transaction.payment_status_label || 'SIN ESTADO'}
+                </span>
+                {transaction.is_urgent && (
+                  <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-rose-600">
+                    <i className="fa-solid fa-triangle-exclamation text-[9px]"></i>
+                    Urgente
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-1">
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-zinc-900 truncate">
+                  Factura #{transaction.invoice_number}
+                </h1>
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <Link to={`/app/client-companies/${transaction.id_client_company}`} className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900">
+                    <i className="fa-solid fa-building text-zinc-400"></i>
+                    <span className="font-semibold uppercase">{transaction.client_company_name}</span>
+                  </Link>
+                  {transaction.description && (
+                    <span className="max-w-2xl truncate text-[13px] italic text-zinc-500">{transaction.description}</span>
+                  )}
                 </div>
-                <div className="flex flex-wrap items-center gap-3 text-xs pl-0">
-                    <Link to={`/app/client-companies/${transaction.id_client_company}`} className="flex items-center gap-2 group px-2 py-1 rounded hover:bg-slate-50 transition-colors">
-                        <i className="fa-solid fa-building text-slate-400"></i>
-                        <span className="font-semibold text-slate-600 group-hover:text-brand-600 transition-colors uppercase">{transaction.client_company_name}</span>
-                    </Link>
-                    {transaction.description && (
-                        <>
-                            <span className="text-slate-300">|</span>
-                            <span className="text-slate-500 italic truncate max-w-md">{transaction.description}</span>
-                        </>
-                    )}
-                </div>
+              </div>
             </div>
 
-            <div className="flex flex-col items-start lg:items-end gap-2 w-full lg:w-auto">
-                <div className="text-left lg:text-right w-full lg:w-auto">
-                    <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-0.5">Saldo por Cobrar</div>
-                    <div className="text-2xl font-mono font-bold text-rose-600 tracking-tight tabular-nums">
-                        {formatCurrency(transaction.balance_due)}
-                    </div>
+            <div className="flex flex-col gap-3 lg:items-end w-full lg:w-auto shrink-0">
+              <div className="rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50 via-white to-white px-5 py-4 shadow-sm min-w-[240px]">
+                <div className="text-[11px] font-semibold uppercase tracking-widest text-rose-400 mb-1">Saldo por cobrar</div>
+                <div className="text-3xl font-semibold tracking-tight text-rose-600 tabular-nums">
+                  {formatCurrency(transaction.balance_due)}
                 </div>
+              </div>
 
-                <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
-                    <StatusSelector 
-                        currentStatus={transaction.status || ''} 
-                        onSelect={handleStatusChange} 
-                        disabled={processing}
-                    />
-                    <button onClick={() => navigate(`/app/financials/edit?id=${transaction.id_transaction}`)} className="flex-1 sm:flex-none px-3 py-2 flex items-center justify-center gap-2 rounded-lg border border-slate-200 text-slate-600 font-bold text-xs hover:text-brand-600 hover:bg-brand-50 transition-all shadow-sm">
-                        <i className="fa-solid fa-pen"></i> Editar
-                    </button>
-                    <button onClick={() => setConfirmState({ isOpen: true, title: '¿Seguro desea eliminar este registro?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="flex-1 sm:flex-none px-3 py-2 flex items-center justify-center gap-2 rounded-lg border border-rose-100 text-rose-600 font-bold text-xs hover:bg-rose-50 transition-all shadow-sm">
-                        <i className="fa-solid fa-trash"></i>
-                    </button>
-                </div>
+              <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:justify-end">
+                <StatusSelector 
+                  currentStatus={transaction.status || ''} 
+                  onSelect={handleStatusChange} 
+                  disabled={processing}
+                />
+                <button onClick={() => navigate(`/app/financials/edit?id=${transaction.id_transaction}`)} className="h-9 px-4 bg-zinc-900 text-white rounded-md font-medium text-[13px] hover:bg-zinc-800 transition-colors shadow-sm flex items-center gap-2">
+                  <i className="fa-solid fa-pen text-[11px]"></i>
+                  Editar
+                </button>
+                <button onClick={() => setConfirmState({ isOpen: true, title: '¿Seguro desea eliminar este registro?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="h-9 w-9 flex items-center justify-center rounded-md bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors shadow-sm">
+                  <i className="fa-solid fa-trash text-[12px]"></i>
+                </button>
+              </div>
             </div>
+          </div>
         </div>
-      </div>
-      {/* --- GRID DE CONTENIDO (2/3 y 1/3) --- */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      </header>
+
+      {/* --- GRID DE CONTENIDO (4/8) --- */}
+      <div className="mx-auto max-w-[1240px] px-4 sm:px-6 lg:px-8 pt-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* SIDEBAR (1/3) */}
-        <div className="space-y-6">
+        {/* SIDEBAR */}
+        <aside className="lg:col-span-4 space-y-6">
             
             {/* Registro de Pago Rápido */}
             <button 
               onClick={() => setIsPaymentModalOpen(true)}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white p-4 rounded-2xl shadow-lg shadow-emerald-600/20 flex items-center justify-between group transition-all"
+              className="w-full overflow-hidden rounded-[24px] bg-gradient-to-br from-emerald-600 via-emerald-600 to-emerald-700 p-5 text-white shadow-xl shadow-emerald-600/20 transition-all hover:-translate-y-0.5 hover:shadow-emerald-600/30"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-xl">
+              <div className="flex items-center gap-4 text-left">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 text-xl shadow-inner shadow-white/10">
                   <i className="fa-solid fa-hand-holding-dollar"></i>
                 </div>
-                <div>
-                  <p className="text-xs font-bold text-emerald-100 uppercase tracking-widest text-left">Acción</p>
-                  <p className="font-bold text-lg leading-tight">Registrar Abono</p>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-100">Acción rápida</p>
+                  <p className="text-lg font-bold leading-tight">Registrar Abono</p>
+                  <p className="text-xs text-emerald-100/90">Aplica un pago parcial o total al documento.</p>
                 </div>
               </div>
-              <i className="fa-solid fa-chevron-right text-emerald-300"></i>
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-emerald-100">
+                <i className="fa-solid fa-chevron-right"></i>
+              </span>
             </button>
 
             {/* Datos del Cliente */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-3">
-                    <span className="w-2 h-6 bg-blue-500 rounded-full"></span>
-                    <h3 className="font-bold text-slate-800 text-sm">Empresa Cliente</h3>
-                </div>
-                <div className="p-6 space-y-4">
+            <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+                <div className="flex items-center gap-3 border-b border-zinc-100 px-6 py-4">
+                    <span className="h-6 w-2 rounded-full bg-blue-500"></span>
                     <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase mb-0.5">RUC / Identificación</p>
-                        <p className="text-sm font-bold text-slate-700 font-mono">{transaction.client_ruc || 'N/A'}</p>
+                      <h3 className="text-sm font-bold text-zinc-900">Empresa Cliente</h3>
+                      <p className="text-[11px] text-zinc-500">Ficha de referencia</p>
                     </div>
-                    <div>
-                        <p className="text-[10px] font-black text-slate-400 uppercase mb-0.5">Dirección</p>
-                        <p className="text-xs text-slate-600 leading-relaxed">{transaction.client_address || 'No registrada'}</p>
+                </div>
+                <div className="p-6 space-y-5">
+                    <Link to={`/app/client-companies/${transaction.id_client_company}`} className="block rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 transition-colors hover:bg-zinc-100">
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Empresa</p>
+                      <div className="mt-1 flex items-center gap-2 text-[13px] font-bold text-zinc-800">
+                        <i className="fa-solid fa-building text-zinc-400"></i>
+                        <span className="truncate uppercase">{transaction.client_company_name || 'Sin empresa'}</span>
+                      </div>
+                    </Link>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                      <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">RUC / Identificación</p>
+                        <p className="mt-1 text-sm font-bold text-zinc-700 font-mono">{transaction.client_ruc || 'N/A'}</p>
+                      </div>
+                      <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Email</p>
+                        <p className="mt-1 truncate text-[13px] font-semibold text-zinc-700">{transaction.client_email || 'No registrado'}</p>
+                      </div>
+                      <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 sm:col-span-2 lg:col-span-1 xl:col-span-2">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Dirección</p>
+                        <p className="mt-1 text-[13px] leading-relaxed text-zinc-600">{transaction.client_address || 'No registrada'}</p>
+                      </div>
                     </div>
                 </div>
             </div>
 
             {/* Automatización (OCULTAR SI ESTÁ PAGADO) */}
             {transaction.status !== 'PAGADO' && (
-                <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
+                <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+                    <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
                     <div className="flex items-center gap-3">
-                        <span className="w-2 h-6 bg-indigo-500 rounded-full"></span>
+                        <span className="h-6 w-2 rounded-full bg-indigo-500"></span>
                         <div>
-                            <h3 className="font-bold text-slate-800 text-sm">Cobranza Automática</h3>
-                            <p className="text-xs text-slate-500">Seguimiento</p>
+                            <h3 className="text-sm font-bold text-zinc-900">Cobranza Automática</h3>
+                            <p className="text-[11px] text-zinc-500">Seguimiento programado</p>
                         </div>
                     </div>
                     {/* Botón de Campaña Condicional */}
@@ -415,43 +563,45 @@ const FinancialDetail: React.FC = () => {
                         </button>
                     )}
                     </div>
-                    <div className="p-6 space-y-4">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-tighter">Estado</span>
+                    <div className="p-6 space-y-5">
+                        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Estado</span>
                             <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${transaction.enable_automation ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
                                 {transaction.enable_automation ? 'Activado' : 'Inactivo'}
                             </span>
+                          </div>
                         </div>
                         {transaction.enable_automation && (
                         <>
-                            <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-500 uppercase tracking-tighter">Frecuencia</span>
-                            <span className="text-sm font-bold text-slate-700">Cada {transaction.automation_frequency} días</span>
+                            <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Frecuencia</span>
+                            <span className="text-[13px] font-bold text-zinc-700">Cada {transaction.automation_frequency} días</span>
                             </div>
-                            <div className="p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-center">
-                            <p className="text-[10px] font-black text-indigo-400 uppercase tracking-wider mb-1">Próximo Envío Estimado</p>
-                            <p className="text-xs font-bold text-indigo-700">{transaction.next_reminder_label || 'Calculando...'}</p>
+                            <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-center">
+                            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.18em] text-indigo-400">Próximo envío estimado</p>
+                            <p className="text-[13px] font-bold text-indigo-700">{transaction.next_reminder_label || 'Calculando...'}</p>
                             </div>
                             
                             {/* DESTINATARIOS CONFIGURADOS */}
                             <div className="space-y-2 mt-4">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1">Enviando Alertas A:</p>
+                                <p className="border-b border-zinc-100 pb-1 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Enviando alertas a</p>
                                 {transaction.automation_recipients?.length > 0 ? (
                                     <div className="space-y-1.5">
                                         {transaction.automation_recipients.map((r: any, idx: number) => (
-                                            <div key={idx} className="flex items-center gap-3 p-2 bg-slate-50 rounded-lg border border-slate-100">
-                                                <div className="w-6 h-6 rounded bg-white flex items-center justify-center shadow-sm border border-slate-100 shrink-0">
+                                            <div key={idx} className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+                                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm border border-zinc-100 shrink-0">
                                                     <i className={`fa-solid ${r.type === 'team' ? 'fa-user-group text-blue-500' : 'fa-user text-indigo-500'} text-[10px]`}></i>
                                                 </div>
                                                 <div className="min-w-0">
-                                                    <p className="text-[11px] font-bold text-slate-700 truncate">{r.name}</p>
-                                                    <p className="text-[9px] text-slate-400 truncate leading-none">{r.email}</p>
+                                                    <p className="text-[12px] font-bold text-zinc-700 truncate">{r.name}</p>
+                                                    <p className="text-[10px] text-zinc-400 truncate leading-none">{r.email}</p>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-[10px] text-slate-400 italic">No hay destinatarios guardados.</p>
+                                    <p className="text-[11px] italic text-zinc-400">No hay destinatarios guardados.</p>
                                 )}
                             </div>
                         </>
@@ -459,65 +609,91 @@ const FinancialDetail: React.FC = () => {
                     </div>
                 </div>
             )}
-        </div>
+        </aside>
 
-        {/* CONTENIDO PRINCIPAL (2/3) */}
-        <div className="lg:col-span-2 space-y-6">
+        {/* CONTENIDO PRINCIPAL */}
+        <section className="lg:col-span-8 space-y-6">
             
             {/* Resumen Financiero */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
                     <div className="flex items-center gap-3">
-                        <span className="w-2 h-6 bg-brand-500 rounded-full"></span>
-                        <h3 className="font-bold text-slate-800 text-sm">Resumen del Documento</h3>
+                        <span className="h-6 w-2 rounded-full bg-brand-500"></span>
+                        <div>
+                          <h3 className="text-sm font-bold text-zinc-900">Resumen del Documento</h3>
+                          <p className="text-[11px] text-zinc-500">Detalle financiero principal</p>
+                        </div>
                     </div>
                     <div className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase border ${getPaymentStatusColor(transaction.payment_status_code)} shadow-sm`}>
                         {transaction.payment_status_label}
                     </div>
                 </div>
-                <div className="p-6">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Subtotal</p>
-                          <p className="text-lg font-mono font-bold text-slate-700 tabular-nums">{formatCurrency(transaction.subtotal)}</p>
+                <div className="p-6 space-y-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 shadow-sm">
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Subtotal</p>
+                          <p className="mt-2 text-2xl font-mono font-bold text-zinc-700 tabular-nums">{formatCurrency(transaction.subtotal)}</p>
                         </div>
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">IVA ({transaction.tax_amount}%)</p>
-                          <p className="text-lg font-mono font-bold text-slate-700 tabular-nums">{formatCurrency((transaction.subtotal||0) * (transaction.tax_amount||0)/100)}</p>
+                        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 shadow-sm">
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">IVA{transaction.tax_rate > 0 ? ` (${transaction.tax_rate}%)` : ''}</p>
+                          <p className="mt-2 text-2xl font-mono font-bold text-zinc-700 tabular-nums">{formatCurrency(transaction.tax_amount)}</p>
                         </div>
-                        <div className="space-y-1">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Factura</p>
-                          <p className="text-lg font-mono font-black text-slate-900 tabular-nums">{formatCurrency(transaction.total_value)}</p>
+                        <div className="rounded-2xl border border-zinc-900 bg-zinc-900 px-4 py-4 shadow-sm">
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Total Factura</p>
+                          <p className="mt-2 text-2xl font-mono font-black text-white tabular-nums">{formatCurrency(transaction.total_value)}</p>
                         </div>
-                        <div className="space-y-1 bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                          <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Monto Abonado</p>
-                          <p className="text-lg font-mono font-black text-emerald-700 tabular-nums">{formatCurrency(transaction.paid_amount)}</p>
+                        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4 shadow-sm">
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">Monto Abonado</p>
+                          <p className="mt-2 text-2xl font-mono font-black text-emerald-700 tabular-nums">{formatCurrency(transaction.paid_amount)}</p>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8 pt-8 border-t border-slate-100">
-                        <div className="space-y-3">
+                    <div className="rounded-[24px] border border-rose-100 bg-gradient-to-r from-rose-50 via-white to-white px-5 py-5 shadow-sm">
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                        <div>
+                          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-rose-400">Saldo pendiente actual</p>
+                          <p className="mt-2 text-3xl font-mono font-black text-rose-600 tabular-nums">{formatCurrency(transaction.balance_due)}</p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-left sm:grid-cols-3 lg:min-w-[420px]">
+                          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Emisión</p>
+                            <p className="mt-1 text-[13px] font-bold text-zinc-700">{transaction.issue_date_human || transaction.issue_date_input}</p>
+                          </div>
+                          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Vencimiento</p>
+                            <p className="mt-1 text-[13px] font-bold text-zinc-700">{transaction.due_date_human || transaction.due_date_input}</p>
+                          </div>
+                          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 col-span-2 sm:col-span-1">
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Registrado por</p>
+                            <p className="mt-1 text-[13px] font-bold text-zinc-700 truncate">{transaction.usuario_creador || 'Sistema'}</p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                        <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 shadow-sm">
                             <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 border border-slate-200 shrink-0">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 text-zinc-500 shrink-0">
                                     {getInitials(transaction.usuario_creador)}
                                 </div>
                                 <div>
-                                  <p className="text-[10px] font-black text-slate-400 uppercase">Registrado por</p>
-                                  <p className="text-xs font-bold text-slate-700">{transaction.usuario_creador || 'Sistema'}</p>
+                                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Autor del registro</p>
+                                  <p className="text-[13px] font-bold text-zinc-700">{transaction.usuario_creador || 'Sistema'}</p>
                                 </div>
                             </div>
                         </div>
                         {transaction.retention_value > 0 ? (
-                          <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex justify-between items-center">
-                            <div><p className="text-[10px] font-bold text-slate-400 uppercase mb-0.5">Retención</p><p className="text-xs font-bold text-slate-700">{transaction.v_input_fecha_retencion || 'S/F'}</p></div>
-                            <p className="text-lg font-mono font-black text-indigo-600 tabular-nums">{formatCurrency(transaction.retention_value)}</p>
+                          <div className="flex items-center justify-between rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-4 shadow-sm">
+                            <div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-400 mb-0.5">Retención</p><p className="text-[13px] font-bold text-indigo-700">{transaction.retention_date_input || 'S/F'}</p></div>
+                            <p className="text-xl font-mono font-black text-indigo-600 tabular-nums">{formatCurrency(transaction.retention_value)}</p>
                           </div>
-                        ) : <div />}
-                        <div className="text-right">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Control de Fechas</p>
-                            <div className="space-y-1">
-                                <p className="text-xs font-medium text-slate-500">EMISIÓN: <span className="text-slate-700 font-bold">{transaction.issue_date_input}</span></p>
-                                <p className="text-xs font-medium text-slate-500">VENCE: <span className="text-slate-700 font-bold">{transaction.due_date_input}</span></p>
+                        ) : <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-4 text-[11px] italic text-zinc-400 flex items-center justify-center">Sin retención asociada</div>}
+                        <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 shadow-sm text-right">
+                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400 mb-2">Control de Fechas</p>
+                            <div className="space-y-1.5">
+                                <p className="text-[12px] font-medium text-zinc-500">EMISIÓN: <span className="text-zinc-700 font-bold">{transaction.issue_date_human || transaction.issue_date_input}</span></p>
+                                <p className="text-[12px] font-medium text-zinc-500">VENCE: <span className="text-zinc-700 font-bold">{transaction.due_date_human || transaction.due_date_input}</span></p>
                             </div>
                         </div>
                     </div>
@@ -525,17 +701,23 @@ const FinancialDetail: React.FC = () => {
             </div>
 
             {/* Historial de Notificaciones (5 Columnas - Eliminado Estado Envío) */}
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
                     <div className="flex items-center gap-3">
-                        <span className="w-2 h-6 bg-slate-500 rounded-full"></span>
-                        <h3 className="font-bold text-slate-800 text-sm">Historial de Notificaciones</h3>
+                        <span className="h-6 w-2 rounded-full bg-slate-500"></span>
+                        <div>
+                          <h3 className="text-sm font-bold text-zinc-900">Historial de Notificaciones</h3>
+                          <p className="text-[11px] text-zinc-500">Seguimiento de envíos manuales y automáticos</p>
+                        </div>
                     </div>
+                    <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
+                      {transaction.notification_logs?.length || 0} registros
+                    </span>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
                       <thead>
-                        <tr className="bg-slate-50 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-200">
+                        <tr className="bg-zinc-50 text-[10px] font-black text-zinc-500 uppercase tracking-[0.18em] border-b border-zinc-200">
                           <th className="px-6 py-3">Fecha</th>
                           <th className="px-6 py-3">Tipo</th>
                           <th className="px-6 py-3">Enviado por</th>
@@ -543,25 +725,29 @@ const FinancialDetail: React.FC = () => {
                           <th className="px-6 py-3">Destinatarios</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-100">
+                      <tbody className="divide-y divide-zinc-100">
                         {transaction.notification_logs?.length ? transaction.notification_logs.map((log: any, idx: number) => (
-                          <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-4 text-xs font-bold text-slate-700 whitespace-nowrap">{log.fecha}</td>
+                          <tr key={idx} className="transition-colors hover:bg-zinc-50/80">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div>{log.fecha}</div>
+                              {log.hora && <div className="text-[10px] font-medium text-zinc-500">{log.hora}</div>}
+                            </td>
                             <td className="px-6 py-4">
-                                <span className={`px-2 py-0.5 rounded text-[10px] font-black border ${log.tipo === 'AUTOMATICO' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-black border uppercase ${log.tipo === 'AUTOMATICO' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
                                     {log.tipo}
                                 </span>
                             </td>
-                            <td className="px-6 py-4 text-[11px] font-medium text-slate-600">{log.enviado_por}</td>
-                            <td className="px-6 py-4 text-[11px] text-slate-500">{log.accionado_por || '-'}</td>
-                            <td className="px-6 py-4 text-[11px] text-slate-500 italic max-w-xs truncate" title={log.destinatarios}>{log.destinatarios}</td>
+                            <td className="px-6 py-4 text-[11px] font-semibold text-zinc-700">{log.enviado_por}</td>
+                            <td className="px-6 py-4 text-[11px] text-zinc-500">{log.accionado_por || '-'}</td>
+                            <td className="px-6 py-4 max-w-xs text-[11px] italic text-zinc-500 truncate" title={log.destinatarios}>{log.destinatarios}</td>
                           </tr>
-                        )) : <tr><td colSpan={5} className="px-6 py-10 text-center text-slate-400 italic text-xs">Sin registros de cobranza.</td></tr>}
+                        )) : <tr><td colSpan={5} className="px-6 py-12 text-center text-zinc-400 italic text-xs">Sin registros de cobranza.</td></tr>}
                       </tbody>
                     </table>
                 </div>
             </div>
-        </div>
+        </section>
+      </div>
       </div>
 
       {/* --- MODALES --- */}

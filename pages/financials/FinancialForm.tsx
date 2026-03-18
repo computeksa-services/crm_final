@@ -1328,7 +1328,22 @@ const FinancialForm: React.FC = () => {
                   <i className="fa-solid fa-triangle-exclamation text-rose-500 text-[10px]"></i>
                   Marcar urgente
                 </span>
-                <input type="checkbox" name="is_urgent" checked={transaction.is_urgent || false} onChange={handleInputChange} className="w-4 h-4 text-rose-600 rounded" />
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={transaction.is_urgent || false}
+                  onClick={() => setTransaction(prev => ({ ...prev, is_urgent: !prev.is_urgent }))}
+                  className="inline-flex items-center justify-center"
+                >
+                  <span
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${transaction.is_urgent ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                    aria-hidden="true"
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform ${transaction.is_urgent ? 'translate-x-5' : 'translate-x-0'}`}
+                    />
+                  </span>
+                </button>
               </label>
 
               <label className="flex items-center justify-between p-3 border border-zinc-200 rounded-lg bg-zinc-50/70">
@@ -1336,18 +1351,28 @@ const FinancialForm: React.FC = () => {
                   <i className="fa-solid fa-file-invoice-dollar text-zinc-500 text-[10px]"></i>
                   Retención
                 </span>
-                <input
-                  type="checkbox"
-                  checked={showRetentionSection}
-                  onChange={(e) => {
-                    const enabled = e.target.checked;
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showRetentionSection}
+                  onClick={() => {
+                    const enabled = !showRetentionSection;
                     setShowRetentionSection(enabled);
                     if (!enabled) {
                       setTransaction(prev => ({ ...prev, retention_number: '', retention_value: '' }));
                     }
                   }}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
+                  className="inline-flex items-center justify-center"
+                >
+                  <span
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showRetentionSection ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                    aria-hidden="true"
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform ${showRetentionSection ? 'translate-x-5' : 'translate-x-0'}`}
+                    />
+                  </span>
+                </button>
               </label>
 
               <label className="flex items-center justify-between p-3 border border-zinc-200 rounded-lg bg-zinc-50/70">
@@ -1355,19 +1380,29 @@ const FinancialForm: React.FC = () => {
                   <i className="fa-regular fa-bell text-zinc-500 text-[10px]"></i>
                   Recordatorio
                 </span>
-                <input
-                  type="checkbox"
-                  checked={transaction.enable_automation || false}
-                  onChange={(e) => {
-                    const enabled = e.target.checked;
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={transaction.enable_automation || false}
+                  onClick={() => {
+                    const enabled = !(transaction.enable_automation || false);
                     if (enabled && !hasEmailIntegration) {
                       setToast({ message: 'No puedes activar recordatorios sin integracion de correo (personal o corporativa).', type: 'error' });
                       return;
                     }
                     setTransaction(prev => ({ ...prev, enable_automation: enabled }));
                   }}
-                  className="w-4 h-4 text-blue-600 rounded"
-                />
+                  className="inline-flex items-center justify-center"
+                >
+                  <span
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${transaction.enable_automation ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                    aria-hidden="true"
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 inline-block h-5 w-5 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform ${transaction.enable_automation ? 'translate-x-5' : 'translate-x-0'}`}
+                    />
+                  </span>
+                </button>
               </label>
             </div>
           </div>
