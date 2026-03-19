@@ -115,20 +115,20 @@ function ago(d?: string | null) {
 
 function getStatusStyle(color?: string) {
   const map: Record<string, any> = {
-    '#3b82f6': { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe', dot: '#3b82f6' },
-    '#f97316': { bg: '#fff7ed', text: '#c2410c', border: '#fed7aa', dot: '#f97316' },
-    '#10b981': { bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0', dot: '#10b981' },
-    '#94a3b8': { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', dot: '#94a3b8' },
-    '#6366f1': { bg: '#eef2ff', text: '#4338ca', border: '#c7d2fe', dot: '#6366f1' },
+    '#3b82f6': { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe', dot: '#3b82f6', darkBg: '#1e3a5f', darkText: '#93c5fd', darkBorder: '#1e40af' },
+    '#f97316': { bg: '#fff7ed', text: '#c2410c', border: '#fed7aa', dot: '#f97316', darkBg: '#5f2e0f', darkText: '#fb923c', darkBorder: '#c2410c' },
+    '#10b981': { bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0', dot: '#10b981', darkBg: '#064e3b', darkText: '#6ee7b7', darkBorder: '#059669' },
+    '#94a3b8': { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1', dot: '#94a3b8', darkBg: '#2d2d30', darkText: '#9da1a6', darkBorder: '#3c3c3c' },
+    '#6366f1': { bg: '#eef2ff', text: '#4338ca', border: '#c7d2fe', dot: '#6366f1', darkBg: '#3730a3', darkText: '#a5b4fc', darkBorder: '#4f46e5' },
   };
-  return map[color || ''] || { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0', dot: '#94a3b8' };
+  return map[color || ''] || { bg: '#f1f5f9', text: '#475569', border: '#e2e8f0', dot: '#94a3b8', darkBg: '#2d2d30', darkText: '#9da1a6', darkBorder: '#3c3c3c' };
 }
 
 const URGENCY_CONFIG = {
-  overdue: { label: 'Vencido', icon: <IconExclamation/>, bg: '#fef2f2', border: '#ef4444', textColor: '#b91c1c', timeColor: '#dc2626' },
-  today: { label: 'Para Hoy', icon: <IconClock/>, bg: '#fffbeb', border: '#f59e0b', textColor: '#92400e', timeColor: '#d97706' },
-  upcoming: { label: 'Programado', icon: <IconCalendar/>, bg: '#f8fafc', border: '#cbd5e1', textColor: '#475569', timeColor: '#64748b' },
-  none: { label: 'Sin fecha', icon: null, bg: '#f8fafc', border: '#e2e8f0', textColor: '#64748b', timeColor: '#94a3b8' },
+  overdue: { label: 'Vencido', icon: <IconExclamation/>, bg: '#fef2f2', border: '#ef4444', textColor: '#b91c1c', timeColor: '#dc2626', darkBg: '#5f0f0f', darkBorder: '#991b1b', darkTextColor: '#f87171', darkTimeColor: '#fca5a5' },
+  today: { label: 'Para Hoy', icon: <IconClock/>, bg: '#fffbeb', border: '#f59e0b', textColor: '#92400e', timeColor: '#d97706', darkBg: '#78350f', darkBorder: '#b45309', darkTextColor: '#fbbf24', darkTimeColor: '#fcd34d' },
+  upcoming: { label: 'Programado', icon: <IconCalendar/>, bg: '#f8fafc', border: '#cbd5e1', textColor: '#475569', timeColor: '#64748b', darkBg: '#2d2d30', darkBorder: '#3c3c3c', darkTextColor: '#c5c5c5', darkTimeColor: '#9da1a6' },
+  none: { label: 'Sin fecha', icon: null, bg: '#f8fafc', border: '#e2e8f0', textColor: '#64748b', timeColor: '#94a3b8', darkBg: '#2d2d30', darkBorder: '#3c3c3c', darkTextColor: '#9da1a6', darkTimeColor: '#6e7681' },
 };
 
 const AV_COLORS = ['#0ea5e9', '#8b5cf6', '#10b981', '#f97316', '#ef4444', '#ec4899'];
@@ -255,11 +255,18 @@ function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: F
   };
 
   return (
-    <div className="crm-card bg-white border border-gray-200 rounded-2xl flex flex-col cursor-pointer" onClick={handleCardClick}>
+    <div className="crm-card bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl flex flex-col cursor-pointer" onClick={handleCardClick}>
       <div className="p-5 flex-1">
         {/* Row 1: Status badge + Avatars */}
         <div className="flex justify-between items-start mb-4 overflow-visible">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border" style={{ background: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border" style={{ 
+            background: statusStyle.bg, 
+            color: statusStyle.text, 
+            borderColor: statusStyle.border,
+            '--dark-bg': statusStyle.darkBg,
+            '--dark-text': statusStyle.darkText,
+            '--dark-border': statusStyle.darkBorder
+          } as React.CSSProperties & Record<string, string>}>
             {item.category_icon ? (
               <i className={`${item.category_icon} text-xs`} />
             ) : (
@@ -272,14 +279,14 @@ function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: F
 
         {/* Row 2: Title + Subtitle */}
         <div className="mb-4">
-          <h3 className="text-base font-bold text-gray-900 leading-snug">{item.title}</h3>
+          <h3 className="text-base font-bold text-gray-900 dark:text-gray-100 leading-snug">{item.title}</h3>
           <div className="flex flex-col gap-0.5 mt-1">
-            <div className="flex items-center gap-1.5 text-sm text-gray-500">
+            <div className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400">
               <IconBuilding/>
               <span>{item.subtitle}</span>
             </div>
             {isDeal && item.contact_name && (
-              <div className="flex items-center gap-1.5 text-sm text-gray-600">
+              <div className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
                 <IconUser/>
                 <span className="font-medium">{item.contact_name}</span>
               </div>
@@ -287,32 +294,43 @@ function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: F
           </div>
         </div>
 
-        <hr className="border-gray-100 mb-4" />
+        <hr className="border-gray-100 dark:border-slate-700 mb-4" />
 
         {/* Row 3: Next action (urgency box) */}
         {item.next_action_desc ? (
-          <div className="border-l-4 rounded-r-lg p-3 mb-4" style={{ backgroundColor: urg.bg, borderColor: urg.border }}>
+          <div className="border-l-4 rounded-r-lg p-3 mb-4" style={{ 
+            backgroundColor: urg.bg, 
+            borderColor: urg.border,
+            '--dark-bg': urg.darkBg,
+            '--dark-border': urg.darkBorder
+          } as React.CSSProperties & Record<string, string>}>
             <div className="flex justify-between items-center mb-1">
               {(item as any).is_calendar_scheduled ? (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 px-2 py-0.5 rounded-full">
                   <IconCalendar className="text-[10px]" />
                   Programado
                 </span>
               ) : (
-                <span className="text-xs font-bold uppercase tracking-wide flex items-center gap-2" style={{ color: urg.textColor }}>
+                <span className="text-xs font-bold uppercase tracking-wide flex items-center gap-2" style={{ 
+                  color: urg.textColor,
+                  '--dark-color': urg.darkTextColor
+                } as React.CSSProperties & Record<string, string>}>
                   {urg.icon}
                   {urg.label}
                 </span>
               )}
-              <span className="text-xs font-semibold" style={{ color: urg.timeColor }}>
+              <span className="text-xs font-semibold" style={{ 
+                color: urg.timeColor,
+                '--dark-color': urg.darkTimeColor
+              } as React.CSSProperties & Record<string, string>}>
                 {fmtTime(item.next_contact_date)}
               </span>
             </div>
-            <p className="text-sm font-medium text-gray-900">{item.next_action_desc}</p>
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.next_action_desc}</p>
           </div>
         ) : (
-          <div className="border-l-4 border-gray-200 rounded-r-lg p-3 mb-4 bg-gray-50">
-            <p className="text-xs text-gray-400 italic">Sin próxima acción definida</p>
+          <div className="border-l-4 border-gray-200 dark:border-slate-700 rounded-r-lg p-3 mb-4 bg-gray-50 dark:bg-slate-700/30">
+            <p className="text-xs text-gray-400 dark:text-gray-500 italic">Sin próxima acción definida</p>
           </div>
         )}
 
@@ -324,7 +342,7 @@ function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: F
                 src={(item as any).last_management_user_avatar || null}
                 name={(item as any).last_management_user_name || 'Usuario'}
                 size="xs"
-                className="rounded-full border border-gray-200 shrink-0"
+                className="rounded-full border border-gray-200 dark:border-slate-700 shrink-0"
               />
             ) : (
               <div className="mt-0.5 w-6 h-6 rounded-full flex items-center justify-center text-white shrink-0" style={{ backgroundColor: (item as any).last_management_channel_color || '#d1d5db' }}>
@@ -342,9 +360,9 @@ function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: F
             ) : null}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-gray-500">Última actividad · {ago(item.last_management_date)}</p>
-            <p className="text-xs text-gray-600 italic line-clamp-2 mt-0.5">
-              {item.last_management_desc ? `"${item.last_management_desc}"` : <span className="not-italic text-gray-400">Sin registros previos.</span>}
+            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Última actividad · {ago(item.last_management_date)}</p>
+            <p className="text-xs text-gray-600 dark:text-gray-300 italic line-clamp-2 mt-0.5">
+              {item.last_management_desc ? `"${item.last_management_desc}"` : <span className="not-italic text-gray-400 dark:text-gray-500">Sin registros previos.</span>}
             </p>
           </div>
         </div>
@@ -389,9 +407,9 @@ function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: F
               </button>
               
               {/* Tooltip elegante */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/convert:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                <div className="font-bold text-amber-300">✨ Convertir a Trato</div>
-                <div className="text-[9px] text-slate-300 mt-0.5">Crear negociación desde contacto</div>
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 dark:bg-slate-950 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/convert:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                <div className="font-bold text-amber-300">Convertir a Trato</div>
+                <div className="text-[9px] text-slate-300 dark:text-slate-400 mt-0.5">Crear negociacion desde contacto</div>
                 {/* Flecha */}
                 <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
                   <div className="border-4 border-transparent border-t-slate-900"></div>
@@ -422,17 +440,17 @@ function TableRow({ item, onManage, idx, users, onNavigate, navigate }: { item: 
   };
 
   return (
-    <tr className={`border-b border-gray-50 hover:bg-gray-50/60 transition-colors cursor-pointer ${idx % 2 === 1 ? 'bg-gray-50/30' : ''}`} onClick={handleRowClick}>
+    <tr className={`border-b border-gray-50 dark:border-slate-700 hover:bg-gray-50/60 dark:hover:bg-slate-700/30 transition-colors cursor-pointer ${idx % 2 === 1 ? 'bg-gray-50/30 dark:bg-slate-800/20' : 'dark:bg-slate-800/10'}`} onClick={handleRowClick}>
       <td className="px-5 py-4">
         <div>
-          <p className="text-sm font-semibold text-gray-900">{item.title}</p>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{item.title}</p>
           <div className="flex flex-col gap-0.5 mt-0.5">
-            <div className="flex items-center gap-1 text-xs text-gray-400">
+            <div className="flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
               <IconBuilding/>
               <span>{item.subtitle}</span>
             </div>
             {isDeal && item.contact_name && (
-              <div className="flex items-center gap-1 text-xs text-gray-500">
+              <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                 <IconUser/>
                 <span className="font-medium">{item.contact_name}</span>
               </div>
@@ -455,38 +473,38 @@ function TableRow({ item, onManage, idx, users, onNavigate, navigate }: { item: 
                 {urg.icon} {urg.label}
               </span>
               {(item as any).is_calendar_scheduled && (
-                <span className="text-[9px] font-bold text-blue-500 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full flex items-center gap-0.5 whitespace-nowrap">
+                <span className="text-[9px] font-bold text-blue-500 dark:text-blue-400 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 rounded-full flex items-center gap-0.5 whitespace-nowrap">
                   <IconCalendar/> Calendario
                 </span>
               )}
             </div>
-            <p className="text-xs font-medium text-gray-800 line-clamp-1">{item.next_action_desc}</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">{fmtDateTime(item.next_contact_date)}</p>
+            <p className="text-xs font-medium text-gray-800 dark:text-gray-200 line-clamp-1">{item.next_action_desc}</p>
+            <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{fmtDateTime(item.next_contact_date)}</p>
           </div>
         ) : (
-          <span className="text-xs text-gray-300 italic">Sin acción</span>
+          <span className="text-xs text-gray-300 dark:text-gray-500 italic">Sin accion</span>
         )}
       </td>
       <td className="px-5 py-4 min-w-[180px]">
         <AvatarGroup collaborators={item.collaborators} users={users} />
       </td>
       <td className="px-5 py-4 max-w-[200px]">
-        <p className="text-xs text-gray-500 italic line-clamp-2">
-          {item.last_management_desc ? `"${item.last_management_desc}"` : <span className="not-italic text-gray-300">—</span>}
+        <p className="text-xs text-gray-500 dark:text-gray-400 italic line-clamp-2">
+          {item.last_management_desc ? `"${item.last_management_desc}"` : <span className="not-italic text-gray-300 dark:text-gray-500">—</span>}
         </p>
-        <p className="text-[10px] text-gray-400 mt-0.5">{ago(item.last_management_date)}</p>
+        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{ago(item.last_management_date)}</p>
       </td>
       <td className="px-5 py-4">
         <div className="flex items-center justify-end gap-2">
           {item.phone && (
             <a href={`https://wa.me/${item.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer"
-              className="w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-400 hover:text-green-500 hover:border-green-200 flex items-center justify-center transition-colors">
+              className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-400 dark:text-gray-500 hover:text-green-500 dark:hover:text-green-400 hover:border-green-200 dark:hover:border-green-700 flex items-center justify-center transition-colors">
               <IconWhatsApp/>
             </a>
           )}
           {item.email && (
             <a href={`mailto:${item.email}`}
-              className="w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-400 hover:text-blue-500 hover:border-blue-200 flex items-center justify-center transition-colors">
+              className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-400 dark:text-gray-500 hover:text-blue-500 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-700 flex items-center justify-center transition-colors">
               <IconMail/>
             </a>
           )}
@@ -525,7 +543,7 @@ function TableRow({ item, onManage, idx, users, onNavigate, navigate }: { item: 
             </div>
           )}
           <button onClick={() => onManage(item)}
-            className="px-4 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-1.5">
+            className="px-4 py-1.5 bg-gray-900 dark:bg-slate-700 text-white text-xs font-medium rounded-lg hover:bg-gray-800 dark:hover:bg-slate-600 transition-colors flex items-center gap-1.5">
             Gestionar <IconArrow/>
           </button>
         </div>
@@ -683,7 +701,7 @@ const FollowUpsPage: React.FC = () => {
 
             {/* Search */}
             <div className="relative flex-1 min-w-[180px]">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500">
                 <IconSearch/>
               </span>
               <input
@@ -691,24 +709,24 @@ const FollowUpsPage: React.FC = () => {
                 value={search}
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar contacto o empresa..."
-                className="w-full bg-gray-50 border border-gray-200 text-sm rounded-lg pl-9 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all"
+                className="w-full bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-900 dark:text-gray-100 text-sm rounded-lg pl-9 pr-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 focus:border-blue-400 dark:focus:border-blue-600 transition-all placeholder-gray-400 dark:placeholder-gray-500"
               />
             </div>
 
             {/* View toggle */}
-            <div className="flex border border-gray-200 rounded-lg overflow-hidden">
+            <div className="flex border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
               <button
                 onClick={() => setView('grid')}
                 className={`px-3 py-2.5 text-sm transition-colors ${
-                  view === 'grid' ? 'bg-gray-100 text-blue-600' : 'bg-white text-gray-400 hover:text-gray-600'
+                  view === 'grid' ? 'bg-gray-100 dark:bg-slate-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-slate-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400'
                 }`}
               >
                 ⊞
               </button>
               <button
                 onClick={() => setView('table')}
-                className={`px-3 py-2.5 text-sm transition-colors border-l border-gray-200 ${
-                  view === 'table' ? 'bg-gray-100 text-blue-600' : 'bg-white text-gray-400 hover:text-gray-600'
+                className={`px-3 py-2.5 text-sm transition-colors border-l border-gray-200 dark:border-slate-700 ${
+                  view === 'table' ? 'bg-gray-100 dark:bg-slate-700 text-blue-600 dark:text-blue-400' : 'bg-white dark:bg-slate-800 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400'
                 }`}
               >
                 ≡
@@ -719,9 +737,9 @@ const FollowUpsPage: React.FC = () => {
 
         {/* CONTENT */}
         {filtered.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-2xl py-20 text-center">
-            <p className="text-base font-semibold text-gray-800">Sin seguimientos pendientes</p>
-            <p className="text-sm text-gray-400 mt-1">¡Todo al día por el momento!</p>
+          <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl py-20 text-center">
+            <p className="text-base font-semibold text-gray-800 dark:text-gray-200">Sin seguimientos pendientes</p>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">Todo al dia por el momento!</p>
           </div>
         ) : view === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -730,13 +748,13 @@ const FollowUpsPage: React.FC = () => {
             ))}
           </div>
         ) : (
-          <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+          <div className="bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-2xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full text-left min-w-[900px]">
-                <thead className="border-b border-gray-100 bg-gray-50">
+                <thead className="border-b border-gray-100 dark:border-slate-700 bg-gray-50 dark:bg-slate-700/50">
                   <tr>
-                    {['Cliente', 'Estado', 'Próxima acción', 'Equipo', 'Última gestión', ''].map((h, i) => (
-                      <th key={i} className="px-5 py-3.5 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    {['Cliente', 'Estado', 'Proxima accion', 'Equipo', 'Ultima gestion', ''].map((h, i) => (
+                      <th key={i} className="px-5 py-3.5 text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">
                         {h}
                       </th>
                     ))}

@@ -3,6 +3,7 @@ import { BrandSpinner } from '../../components/AppLoaders';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import ProfileSection from './sections/ProfileSection';
+import UserPreferences from './sections/UserPreferences';
 import PersonalIntegrations from './sections/PersonalIntegrations';
 import TenantIntegrations from './sections/TenantIntegrations';
 import TenantUsers from './sections/TenantUsers';
@@ -14,7 +15,7 @@ import SettingsDealInterests from '../../components/SettingsDealInterests';
 import SettingsDealChannels from '../../components/SettingsDealChannels';
 import SettingsCompanyLabels from '../../components/SettingsCompanyLabels';
 
-type SettingsTab = 'profile' | 'personalIntegrations' | 'tenantIntegrations' | 'tenantUsers' | 'tenantConfigurations';
+type SettingsTab = 'profile' | 'preferences' | 'personalIntegrations' | 'tenantIntegrations' | 'tenantUsers' | 'tenantConfigurations';
 type ConfigurationType = 'dealStatuses' | 'quoteStatuses' | 'productTypes' | 'dealInterests' | 'dealChannels' | 'companyLabels';
 
 interface NavItem {
@@ -60,6 +61,12 @@ const NAV_ITEMS: NavItem[] = [
     section: 'perfil'
   },
   {
+    id: 'preferences',
+    label: 'Preferencias',
+    icon: 'fa-sliders',
+    section: 'perfil'
+  },
+  {
     id: 'personalIntegrations',
     label: 'Integraciones',
     icon: 'fa-plug',
@@ -87,7 +94,7 @@ const NAV_ITEMS: NavItem[] = [
 ];
 
 const STORAGE_KEY = 'accountSettings-activeTab';
-const VALID_TABS: SettingsTab[] = ['profile', 'personalIntegrations', 'tenantIntegrations', 'tenantUsers', 'tenantConfigurations'];
+const VALID_TABS: SettingsTab[] = ['profile', 'preferences', 'personalIntegrations', 'tenantIntegrations', 'tenantUsers', 'tenantConfigurations'];
 
 const AccountSettings: React.FC = () => {
   const { user } = useAuth();
@@ -158,6 +165,8 @@ const AccountSettings: React.FC = () => {
     switch (activeTab) {
       case 'profile':
         return <ProfileSection />;
+      case 'preferences':
+        return <UserPreferences />;
       case 'personalIntegrations':
         return <PersonalIntegrations />;
       case 'tenantIntegrations':

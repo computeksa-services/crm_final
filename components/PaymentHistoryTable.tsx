@@ -44,7 +44,7 @@ export const PaymentHistoryTable: React.FC<PaymentHistoryTableProps> = ({ paymen
     return (
       <div className="text-center py-12">
         <i className="fa-solid fa-inbox text-4xl text-gray-300 mb-3 block"></i>
-        <p className="text-sm text-gray-500 font-medium">No hay pagos registrados</p>
+        <p className="text-sm font-semibold text-gray-700">No hay pagos registrados</p>
       </div>
     );
   }

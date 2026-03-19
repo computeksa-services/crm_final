@@ -33,14 +33,14 @@ td {
 }
 
 .dark {
-  color: #e2e8f0;
-  background-color: #0f172a;
-  --app-bg: #0f172a;
-  --app-text: #e2e8f0;
-  --app-card: #111827;
-  --app-border: #334155;
-  --app-muted: #94a3b8;
-  --app-muted-2: #64748b;
+  color: #d4d4d4;
+  background-color: #1e1e1e;
+  --app-bg: #1e1e1e;
+  --app-text: #d4d4d4;
+  --app-card: #252526;
+  --app-border: #3c3c3c;
+  --app-muted: #9da1a6;
+  --app-muted-2: #6e7681;
 }
 
 body {
@@ -57,76 +57,76 @@ body {
 }
 
 /* Overrides globales para modo oscuro en clases comunes de Tailwind */
-.dark .bg-white { background-color: #111827 !important; }
-.dark .bg-white\/95 { background-color: rgba(45, 45, 48, 0.95) !important; }
-.dark .bg-white\/90 { background-color: rgba(45, 45, 48, 0.9) !important; }
-.dark .bg-white\/80 { background-color: rgba(45, 45, 48, 0.8) !important; }
-.dark .bg-white\/70 { background-color: rgba(45, 45, 48, 0.7) !important; }
-.dark .bg-white\/60 { background-color: rgba(45, 45, 48, 0.6) !important; }
-.dark .bg-white\/50 { background-color: rgba(45, 45, 48, 0.5) !important; }
-.dark .bg-white\/40 { background-color: rgba(45, 45, 48, 0.4) !important; }
-.dark .bg-white\/30 { background-color: rgba(45, 45, 48, 0.3) !important; }
-.dark .bg-white\/20 { background-color: rgba(45, 45, 48, 0.2) !important; }
-.dark .bg-white\/10 { background-color: rgba(45, 45, 48, 0.1) !important; }
-.dark .bg-slate-50 { background-color: #0f172a !important; }
+.dark .bg-white { background-color: #252526 !important; }
+.dark .bg-white\/95 { background-color: rgba(37, 37, 38, 0.95) !important; }
+.dark .bg-white\/90 { background-color: rgba(37, 37, 38, 0.9) !important; }
+.dark .bg-white\/80 { background-color: rgba(37, 37, 38, 0.8) !important; }
+.dark .bg-white\/70 { background-color: rgba(37, 37, 38, 0.7) !important; }
+.dark .bg-white\/60 { background-color: rgba(37, 37, 38, 0.6) !important; }
+.dark .bg-white\/50 { background-color: rgba(37, 37, 38, 0.5) !important; }
+.dark .bg-white\/40 { background-color: rgba(37, 37, 38, 0.4) !important; }
+.dark .bg-white\/30 { background-color: rgba(37, 37, 38, 0.3) !important; }
+.dark .bg-white\/20 { background-color: rgba(37, 37, 38, 0.2) !important; }
+.dark .bg-white\/10 { background-color: rgba(37, 37, 38, 0.1) !important; }
+.dark .bg-slate-50 { background-color: #1e1e1e !important; }
 .dark .bg-slate-50\/90 { background-color: rgba(30, 30, 30, 0.9) !important; }
 .dark .bg-slate-50\/80 { background-color: rgba(30, 30, 30, 0.8) !important; }
 .dark .bg-slate-50\/70 { background-color: rgba(30, 30, 30, 0.7) !important; }
 .dark .bg-slate-50\/60 { background-color: rgba(30, 30, 30, 0.6) !important; }
-.dark .bg-slate-50\/50 { background-color: rgba(23, 23, 23, 0.7) !important; }
-.dark .bg-slate-50\/40 { background-color: rgba(23, 23, 23, 0.4) !important; }
-.dark .bg-slate-50\/30 { background-color: rgba(23, 23, 23, 0.3) !important; }
-.dark .bg-slate-50\/20 { background-color: rgba(23, 23, 23, 0.2) !important; }
-.dark .bg-slate-50\/10 { background-color: rgba(23, 23, 23, 0.1) !important; }
-.dark .bg-slate-100 { background-color: #111827 !important; }
-.dark .bg-slate-100\/80 { background-color: rgba(28, 28, 28, 0.8) !important; }
-.dark .bg-slate-100\/60 { background-color: rgba(28, 28, 28, 0.6) !important; }
-.dark .bg-slate-100\/40 { background-color: rgba(28, 28, 28, 0.4) !important; }
-.dark .bg-slate-200 { background-color: #1e293b !important; }
-.dark .bg-slate-300 { background-color: #334155 !important; }
-.dark .bg-brand-50 { background-color: #0f172a !important; }
+.dark .bg-slate-50\/50 { background-color: rgba(30, 30, 30, 0.5) !important; }
+.dark .bg-slate-50\/40 { background-color: rgba(30, 30, 30, 0.4) !important; }
+.dark .bg-slate-50\/30 { background-color: rgba(30, 30, 30, 0.3) !important; }
+.dark .bg-slate-50\/20 { background-color: rgba(30, 30, 30, 0.2) !important; }
+.dark .bg-slate-50\/10 { background-color: rgba(30, 30, 30, 0.1) !important; }
+.dark .bg-slate-100 { background-color: #252526 !important; }
+.dark .bg-slate-100\/80 { background-color: rgba(37, 37, 38, 0.8) !important; }
+.dark .bg-slate-100\/60 { background-color: rgba(37, 37, 38, 0.6) !important; }
+.dark .bg-slate-100\/40 { background-color: rgba(37, 37, 38, 0.4) !important; }
+.dark .bg-slate-200 { background-color: #2d2d30 !important; }
+.dark .bg-slate-300 { background-color: #3c3c3c !important; }
+.dark .bg-brand-50 { background-color: #1e1e1e !important; }
 
 .dark .hover\:bg-white:hover { background-color: var(--app-card) !important; }
-.dark .hover\:bg-white\/50:hover { background-color: rgba(26, 26, 26, 0.5) !important; }
-.dark .hover\:bg-slate-50:hover { background-color: #0b1220 !important; }
-.dark .hover\:bg-slate-50\/60:hover { background-color: rgba(26, 26, 26, 0.6) !important; }
-.dark .hover\:bg-slate-50\/80:hover { background-color: rgba(26, 26, 26, 0.8) !important; }
-.dark .hover\:bg-slate-100:hover { background-color: #1e293b !important; }
+.dark .hover\:bg-white\/50:hover { background-color: rgba(45, 45, 48, 0.5) !important; }
+.dark .hover\:bg-slate-50:hover { background-color: #252526 !important; }
+.dark .hover\:bg-slate-50\/60:hover { background-color: rgba(37, 37, 38, 0.6) !important; }
+.dark .hover\:bg-slate-50\/80:hover { background-color: rgba(37, 37, 38, 0.8) !important; }
+.dark .hover\:bg-slate-100:hover { background-color: #2d2d30 !important; }
 
 .dark .focus\:bg-white:focus { background-color: var(--app-card) !important; }
-.dark .focus\:bg-slate-50:focus { background-color: #1a1a1a !important; }
+.dark .focus\:bg-slate-50:focus { background-color: #252526 !important; }
 
-.dark .text-slate-900 { color: #e5e7eb !important; }
-.dark .text-slate-800 { color: #e5e7eb !important; }
-.dark .text-slate-700 { color: #cbd5e1 !important; }
-.dark .text-slate-600 { color: #cbd5e1 !important; }
-.dark .text-slate-500 { color: #94a3b8 !important; }
-.dark .text-slate-400 { color: #94a3b8 !important; }
+.dark .text-slate-900 { color: #d4d4d4 !important; }
+.dark .text-slate-800 { color: #d4d4d4 !important; }
+.dark .text-slate-700 { color: #c5c5c5 !important; }
+.dark .text-slate-600 { color: #c5c5c5 !important; }
+.dark .text-slate-500 { color: #9da1a6 !important; }
+.dark .text-slate-400 { color: #9da1a6 !important; }
 
 /* Zinc palette support for pages using zinc utilities (e.g. DealDetail) */
-.dark .text-zinc-900 { color: #e5e7eb !important; }
-.dark .text-zinc-800 { color: #e5e7eb !important; }
-.dark .text-zinc-700 { color: #cbd5e1 !important; }
-.dark .text-zinc-600 { color: #cbd5e1 !important; }
-.dark .text-zinc-500 { color: #94a3b8 !important; }
-.dark .text-zinc-400 { color: #94a3b8 !important; }
+.dark .text-zinc-900 { color: #d4d4d4 !important; }
+.dark .text-zinc-800 { color: #d4d4d4 !important; }
+.dark .text-zinc-700 { color: #c5c5c5 !important; }
+.dark .text-zinc-600 { color: #c5c5c5 !important; }
+.dark .text-zinc-500 { color: #9da1a6 !important; }
+.dark .text-zinc-400 { color: #9da1a6 !important; }
 
-.dark .border-slate-200 { border-color: #334155 !important; }
-.dark .border-slate-300 { border-color: #475569 !important; }
-.dark .border-slate-100 { border-color: #1e293b !important; }
+.dark .border-slate-200 { border-color: #3c3c3c !important; }
+.dark .border-slate-300 { border-color: #4b4b4b !important; }
+.dark .border-slate-100 { border-color: #2d2d30 !important; }
 
-.dark .border-zinc-300 { border-color: #475569 !important; }
-.dark .border-zinc-200 { border-color: #334155 !important; }
-.dark .border-zinc-100 { border-color: #1e293b !important; }
+.dark .border-zinc-300 { border-color: #4b4b4b !important; }
+.dark .border-zinc-200 { border-color: #3c3c3c !important; }
+.dark .border-zinc-100 { border-color: #2d2d30 !important; }
 
-.dark .bg-zinc-50 { background-color: #0f172a !important; }
-.dark .bg-zinc-100 { background-color: #111827 !important; }
-.dark .bg-zinc-200 { background-color: #1e293b !important; }
+.dark .bg-zinc-50 { background-color: #1e1e1e !important; }
+.dark .bg-zinc-100 { background-color: #252526 !important; }
+.dark .bg-zinc-200 { background-color: #2d2d30 !important; }
 
-.dark .hover\:bg-zinc-50:hover { background-color: #0b1220 !important; }
-.dark .hover\:bg-zinc-100:hover { background-color: #1e293b !important; }
+.dark .hover\:bg-zinc-50:hover { background-color: #252526 !important; }
+.dark .hover\:bg-zinc-100:hover { background-color: #2d2d30 !important; }
 
-.dark .bg-\[\#F9F9F8\] { background-color: #0f172a !important; }
+.dark .bg-\[\#F9F9F8\] { background-color: #1e1e1e !important; }
 
 /* Avatar Badge Dark Mode Support */
 div[style*="--avatar-dark"] {
@@ -208,8 +208,8 @@ div[style*="--avatar-dark"] {
 
 /* Dark mode Kanban adjustments */
 .dark .drop-indicator {
-  border-color: #60a5fa;
-  background-color: rgba(96, 165, 250, 0.1);
+  border-color: #6b7280;
+  background-color: rgba(107, 114, 128, 0.12);
 }
 
 .dark .kanban-column::-webkit-scrollbar-thumb {

@@ -1244,7 +1244,12 @@ const FinancialsList: React.FC = () => {
                       <i className="fa-regular fa-file-lines text-4xl text-slate-300"></i>
                       <p className="font-bold text-slate-600">No hay transacciones aún</p>
                       <p className="text-sm text-slate-400">Crea tu primer registro financiero para visualizarlo aquí.</p>
-                      <button onClick={() => navigate('/app/financials/new')} className="px-4 py-2 bg-emerald-600 text-white rounded-lg shadow-sm hover:bg-emerald-700 transition-all text-sm font-bold">Crear registro</button>
+                      <button
+                        onClick={() => navigate('/app/financials/new')}
+                        className="flex-shrink-0 flex items-center gap-1.5 px-3 py-2 sm:py-1.5 bg-slate-800 text-white rounded-md text-sm sm:text-xs font-medium hover:bg-slate-700 transition-colors whitespace-nowrap"
+                      >
+                        <i className="fa-solid fa-plus text-[10px]" /> Nuevo Registro
+                      </button>
                     </div>
                   </td>
                 </tr>

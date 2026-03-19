@@ -126,6 +126,55 @@ const Breadcrumb: React.FC = () => {
         isActive: true,
       });
     }
+  } else if (segments[0] === 'marketing') {
+    // Marketing Center
+    breadcrumbs.push({ label: 'Marketing Center', path: '/app/marketing', isActive: false });
+    
+    if (segments[1] === 'dashboard') {
+      breadcrumbs.push({
+        label: 'Dashboard',
+        path: '/app/marketing/dashboard',
+        isActive: true,
+      });
+    } else if (segments[1] === 'campaigns') {
+      breadcrumbs.push({
+        label: 'Campañas',
+        path: '/app/marketing/campaigns',
+        isActive: segments[2] ? false : true,
+      });
+      if (segments[2] === 'new') {
+        breadcrumbs.push({
+          label: 'Nueva Campaña',
+          path: location.pathname,
+          isActive: true,
+        });
+      } else if (segments[2] === 'edit' && segments[3]) {
+        breadcrumbs.push({
+          label: location.state?.breadcrumb || 'Editar Campaña',
+          path: location.pathname,
+          isActive: true,
+        });
+      } else if (ID_PATTERN.test(segments[2])) {
+        breadcrumbs.push({
+          label: location.state?.breadcrumb || 'Detalle Campaña',
+          path: location.pathname,
+          isActive: true,
+        });
+      }
+    } else if (segments[1] === 'lists') {
+      breadcrumbs.push({
+        label: 'Listas',
+        path: '/app/marketing/lists',
+        isActive: segments[2] ? false : true,
+      });
+      if (ID_PATTERN.test(segments[2])) {
+        breadcrumbs.push({
+          label: location.state?.breadcrumb || 'Detalle Lista',
+          path: location.pathname,
+          isActive: true,
+        });
+      }
+    }
   } else {
     // Otros módulos
     let path = '/app';

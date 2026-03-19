@@ -120,6 +120,7 @@ export const GATEWAY_CONFIG = {
       LIST: buildFullUrl('/api/users'),
       ME: buildFullUrl('/api/v1/me'),
       UPDATE_SETTINGS: buildFullUrl('/api/v1/users/me/settings'),
+      UPDATE_PREFERENCES: buildFullUrl('/api/v1/users/me/preferences'),
     },
     
     // Eventos

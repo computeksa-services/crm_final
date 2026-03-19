@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar 
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
 import { useAuth } from '../../contexts/AuthContext';
 import { marketingApi } from '../../services/marketingApi';
@@ -9,25 +9,26 @@ import { MarketingCampaign, MarketingList } from '../../types';
 import CreateListModal from './CreateListModal';
 import { BrandSpinner } from '../AppLoaders';
 
-// Componente de Tarjeta de Estadística (Pequeño y reutilizable)
-const StatCard = ({ title, value, icon, subtext, color = "blue" }: any) => {
-  const colorClasses = {
-    blue: "bg-blue-50 text-blue-600",
-    green: "bg-green-50 text-green-600",
-    purple: "bg-purple-50 text-purple-600",
-    orange: "bg-orange-50 text-orange-600",
-  };
-
+// Componente de Tarjeta de Estadística - Minimalista
+const StatCard = ({ title, value, icon, subtext }: any) => {
   return (
-    <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all">
-      <div className="flex items-center justify-between mb-4">
-        <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-xl ${colorClasses[color as keyof typeof colorClasses] || colorClasses.blue}`}>
-          <i className={`fa-solid ${icon}`}></i>
+    <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-slate-700 flex items-center justify-center">
+          <i className={`fa-solid ${icon} text-sm text-gray-600 dark:text-gray-400`}></i>
         </div>
       </div>
-      <h3 className="text-slate-500 text-xs font-bold uppercase tracking-wider">{title}</h3>
-      <p className="text-2xl font-bold text-slate-800 mt-1">{value}</p>
-      {subtext && <p className="text-xs text-slate-400 mt-2">{subtext}</p>}
+      <div className="text-[11px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">
+        {title}
+      </div>
+      <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+        {value}
+      </div>
+      {subtext && (
+        <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+          {subtext}
+        </div>
+      )}
     </div>
   );
 };
@@ -41,14 +42,12 @@ const Dashboard: React.FC = () => {
   const [lists, setLists] = useState<MarketingList[]>([]);
   const [isCreateListModalOpen, setIsCreateListModalOpen] = useState(false);
 
-  // Cargar datos al montar
   useEffect(() => {
     const loadData = async () => {
       if (!user?.id_tenant || !user?.id_user) return;
       
       try {
         setLoading(true);
-        // Hacemos las peticiones en paralelo para mayor velocidad
         const [campaignsData, listsData] = await Promise.all([
           marketingApi.getCampaigns(user.id_tenant, user.id_user),
           marketingApi.getLists(user.id_tenant, user.id_user)
@@ -75,26 +74,17 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // --- CÁLCULOS DE MÉTRICAS (MEMOIZED) ---
   const stats = useMemo(() => {
-    // 1. Total Suscriptores
     const totalSubscribers = lists.reduce((acc, curr) => acc + (Number(curr.member_count) || 0), 0);
-    
-    // 2. Total Enviados (Sumamos sent_count de todas las campañas)
     const totalSent = campaigns.reduce((acc, curr) => acc + (Number(curr.sent_count) || 0), 0);
-
-    // 3. Tasa de Apertura Global (Total Aperturas / Total Enviados)
     const totalOpens = campaigns.reduce((acc, curr) => acc + (Number(curr.open_count) || 0), 0);
     const globalOpenRate = totalSent > 0 ? ((totalOpens / totalSent) * 100).toFixed(1) : "0.0";
-
-    // 4. Tasa de Clicks Global
     const totalClicks = campaigns.reduce((acc, curr) => acc + (Number(curr.click_count) || 0), 0);
     const globalClickRate = totalSent > 0 ? ((totalClicks / totalSent) * 100).toFixed(1) : "0.0";
 
     return { totalSubscribers, totalSent, globalOpenRate, totalOpens, globalClickRate, totalClicks };
   }, [campaigns, lists]);
 
-  // --- DATOS PARA EL GRÁFICO (Últimos 7 días) ---
   const chartData = useMemo(() => {
     const days = 7;
     const data = [];
@@ -103,11 +93,9 @@ const Dashboard: React.FC = () => {
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0]; // YYYY-MM-DD
-      const dayLabel = d.toLocaleDateString('es-ES', { weekday: 'short' }); // Lun, Mar
+      const dateStr = d.toISOString().split('T')[0];
+      const dayLabel = d.toLocaleDateString('es-ES', { weekday: 'short' });
 
-      // Buscar campañas enviadas este día (o creadas si no se enviaron, para mostrar actividad)
-      // Nota: Usamos sent_at para envíos reales
       const campaignsThatDay = campaigns.filter(c => 
         c.sent_at && c.sent_at.startsWith(dateStr)
       );
@@ -125,7 +113,6 @@ const Dashboard: React.FC = () => {
     return data;
   }, [campaigns]);
 
-  // Filtrar campañas recientes (Las 5 últimas creadas)
   const recentCampaigns = useMemo(() => {
     return [...campaigns]
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -134,190 +121,223 @@ const Dashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="w-full h-96 flex flex-col items-center justify-center text-slate-400">
-        <BrandSpinner size="xl" className="mb-3" />
-        <p>Calculando estadísticas...</p>
+      <div className="w-full h-96 flex flex-col items-center justify-center">
+        <BrandSpinner size="lg" />
+        <p className="text-sm text-gray-400 dark:text-gray-500 mt-3">Cargando dashboard...</p>
       </div>
     );
   }
 
   return (
-    <div className="w-full space-y-8 animate-fadeIn pb-10">
+    <div className="w-full space-y-6">
       
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">Panel de Marketing</h2>
-          <p className="text-slate-500">Visión general de tu rendimiento en tiempo real.</p>
+          <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Dashboard</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            Resumen de rendimiento
+          </p>
         </div>
-        <div className="flex gap-3">
-            <button 
+        <div className="flex items-center gap-2">
+          <button 
             onClick={() => setIsCreateListModalOpen(true)}
-            className="px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2 text-sm"
-            >
-            <i className="fa-solid fa-plus"></i> Crear Lista
-            </button>
-            <Link 
+            className="h-9 px-4 text-[13px] font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors flex items-center gap-2"
+          >
+            <i className="fa-solid fa-plus text-xs"></i>
+            Nueva Lista
+          </button>
+          <Link 
             to="/app/marketing/campaigns/new"
-            className="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2 text-sm"
-            >
-            <i className="fa-solid fa-plus"></i> Crear Campaña
-            </Link>
+            className="h-9 px-4 text-[13px] font-medium bg-gray-900 dark:bg-slate-700 text-white rounded-lg hover:bg-gray-800 dark:hover:bg-slate-600 transition-colors flex items-center gap-2"
+          >
+            <i className="fa-solid fa-plus text-xs"></i>
+            Nueva Campaña
+          </Link>
         </div>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard 
-            title="Correos Enviados" 
-            value={stats.totalSent.toLocaleString()} 
-            icon="fa-paper-plane" 
-            subtext="Total histórico"
-            color="blue"
+          title="Enviados" 
+          value={stats.totalSent.toLocaleString()} 
+          icon="fa-paper-plane" 
+          subtext="Total histórico"
         />
         <StatCard 
-            title="Tasa de Apertura" 
-            value={`${stats.globalOpenRate}%`} 
-            icon="fa-envelope-open" 
-            subtext={`${stats.totalOpens.toLocaleString()} aperturas únicas`}
-            color="green"
+          title="Apertura" 
+          value={`${stats.globalOpenRate}%`} 
+          icon="fa-envelope-open" 
+          subtext={`${stats.totalOpens.toLocaleString()} aperturas`}
         />
         <StatCard 
-            title="Total Audiencia" 
-            value={stats.totalSubscribers.toLocaleString()} 
-            icon="fa-users" 
-            subtext="Suscriptores activos"
-            color="purple"
+          title="Audiencia" 
+          value={stats.totalSubscribers.toLocaleString()} 
+          icon="fa-users" 
+          subtext="Suscriptores activos"
         />
         <StatCard 
-            title="Tasa de Clicks" 
-            value={`${stats.globalClickRate}%`} 
-            icon="fa-mouse-pointer" 
-            subtext={`${stats.totalClicks.toLocaleString()} clicks únicos`}
-            color="orange"
+          title="Clicks" 
+          value={`${stats.globalClickRate}%`} 
+          icon="fa-mouse-pointer" 
+          subtext={`${stats.totalClicks.toLocaleString()} clicks`}
         />
       </div>
 
-      {/* Charts & Lists Section */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 w-full">
+      {/* Charts & Lists */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Chart Area */}
-        <div className="xl:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col h-[450px]">
-          <div className="flex justify-between items-center mb-6">
-             <h3 className="text-lg font-bold text-slate-800">Actividad de Envío (Últimos 7 días)</h3>
-             <span className="text-xs font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded">Volumen Diario</span>
+        {/* Chart */}
+        <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Últimos 7 días
+            </h3>
+            <div className="flex items-center gap-3 text-xs">
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-blue-500"></div>
+                <span className="text-gray-600 dark:text-gray-400">Enviados</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                <span className="text-gray-600 dark:text-gray-400">Aperturas</span>
+              </div>
+            </div>
           </div>
           
-          <div className="flex-1 w-full min-h-0">
+          <div className="h-[300px]">
             {chartData.every(d => d.enviados === 0) ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                    <i className="fa-solid fa-chart-area text-4xl mb-2 opacity-20"></i>
-                    <p className="text-sm">No hay actividad de envíos reciente</p>
+              <div className="h-full flex flex-col items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center mb-3">
+                  <i className="fa-solid fa-chart-area text-gray-400 dark:text-gray-500"></i>
                 </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Sin actividad reciente</p>
+              </div>
             ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                    <defs>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                  <defs>
                     <linearGradient id="colorEnviados" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
                     </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} dy={10} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 12}} />
-                    <Tooltip 
-                    contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
-                    itemStyle={{ color: '#1e293b' }}
-                    labelStyle={{ color: '#64748b', marginBottom: '0.5rem' }}
-                    />
-                    <Area 
-                        type="monotone" 
-                        dataKey="enviados" 
-                        stroke="#3B82F6" 
-                        strokeWidth={3} 
-                        fillOpacity={1} 
-                        fill="url(#colorEnviados)" 
-                        name="Emails Enviados" 
-                        activeDot={{ r: 6, strokeWidth: 0 }}
-                    />
-                    <Area 
-                        type="monotone" 
-                        dataKey="aperturas" 
-                        stroke="#10B981" 
-                        strokeWidth={2} 
-                        fill="transparent" 
-                        name="Aperturas" 
-                        strokeDasharray="5 5"
-                    />
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" className="dark:stroke-slate-700" />
+                  <XAxis 
+                    dataKey="name" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: '#9ca3af', fontSize: 11 }} 
+                    dy={5}
+                  />
+                  <YAxis 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{ fill: '#9ca3af', fontSize: 11 }} 
+                  />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: 'white', 
+                      borderRadius: '8px', 
+                      border: '1px solid #e5e7eb',
+                      fontSize: '12px'
+                    }} 
+                    itemStyle={{ color: '#1f2937' }}
+                    labelStyle={{ color: '#6b7280', marginBottom: '4px', fontSize: '11px' }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="enviados" 
+                    stroke="#3B82F6" 
+                    strokeWidth={2} 
+                    fillOpacity={1} 
+                    fill="url(#colorEnviados)" 
+                    name="Enviados" 
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="aperturas" 
+                    stroke="#10B981" 
+                    strokeWidth={2} 
+                    fill="transparent" 
+                    name="Aperturas" 
+                    strokeDasharray="3 3"
+                  />
                 </AreaChart>
-                </ResponsiveContainer>
+              </ResponsiveContainer>
             )}
           </div>
         </div>
 
-        {/* Recent Campaigns List */}
-        <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col h-[450px]">
-           <div className="flex justify-between items-center mb-6 shrink-0">
-             <h3 className="text-lg font-bold text-slate-800">Campañas Recientes</h3>
-             <Link to="/app/marketing/campaigns" className="text-xs text-brand-600 font-semibold hover:underline">
-               Ver todas
-             </Link>
-           </div>
+        {/* Recent Campaigns */}
+        <div className="bg-white dark:bg-slate-800 rounded-lg border border-gray-200 dark:border-slate-700 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+              Recientes
+            </h3>
+            <Link 
+              to="/app/marketing/campaigns" 
+              className="text-xs font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"
+            >
+              Ver todas
+            </Link>
+          </div>
            
-           <div className="flex-1 overflow-y-auto pr-2 space-y-3 custom-scrollbar">
-             {recentCampaigns.length === 0 ? (
-                 <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                     <p className="text-sm">No has creado campañas aún</p>
-                 </div>
-             ) : (
-                recentCampaigns.map(campaign => (
-                <div 
-                    key={campaign.id_campaign} 
-                    onClick={() => navigate(`/app/marketing/campaigns/${campaign.id_campaign}`)}
-                    className="group flex flex-col gap-2 p-3 rounded-lg border border-slate-100 hover:border-brand-200 hover:bg-brand-50/30 transition-all cursor-pointer"
-                >
-                    <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-2 overflow-hidden">
-                            <div className={`w-2 h-2 rounded-full shrink-0 ${
-                                campaign.status === 'SENT' || campaign.status === 'COMPLETED' ? 'bg-green-500' : 
-                                campaign.status === 'SENDING' ? 'bg-blue-500 animate-pulse' :
-                                campaign.status === 'PAUSED' ? 'bg-amber-400' : 'bg-slate-300'
-                            }`}></div>
-                            <h4 className="text-sm font-semibold text-slate-700 truncate group-hover:text-brand-700 transition-colors">
-                                {campaign.name}
-                            </h4>
-                        </div>
-                        <span className="text-[10px] text-slate-400 shrink-0">
-                            {new Date(campaign.created_at).toLocaleDateString()}
-                        </span>
-                    </div>
-
-                    <div className="flex items-center justify-between mt-1">
-                        <div className="text-xs text-slate-500 flex gap-3">
-                             {campaign.status === 'DRAFT' ? (
-                                <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-500">Borrador</span>
-                             ) : (
-                                <>
-                                    <span className="flex items-center gap-1" title="Enviados">
-                                        <i className="fa-regular fa-paper-plane"></i> {campaign.sent_count || 0}
-                                    </span>
-                                    <span className="flex items-center gap-1" title="Aperturas">
-                                        <i className="fa-regular fa-eye"></i> {campaign.open_count || 0}
-                                    </span>
-                                </>
-                             )}
-                        </div>
-                        <i className="fa-solid fa-chevron-right text-xs text-slate-300 group-hover:text-brand-400 transition-colors"></i>
-                    </div>
+          <div className="space-y-2">
+            {recentCampaigns.length === 0 ? (
+              <div className="h-64 flex flex-col items-center justify-center">
+                <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center mb-3">
+                  <i className="fa-solid fa-paper-plane text-gray-400 dark:text-gray-500"></i>
                 </div>
-                ))
-             )}
-           </div>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Sin campañas</p>
+              </div>
+            ) : (
+              recentCampaigns.map(campaign => (
+                <button
+                  key={campaign.id_campaign} 
+                  onClick={() => navigate(`/app/marketing/campaigns/${campaign.id_campaign}`)}
+                  className="w-full text-left p-3 rounded-lg border border-gray-100 dark:border-slate-700 hover:border-gray-200 dark:hover:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                        campaign.status === 'SENT' || campaign.status === 'COMPLETED' ? 'bg-green-500' : 
+                        campaign.status === 'SENDING' ? 'bg-blue-500 animate-pulse' :
+                        campaign.status === 'PAUSED' ? 'bg-amber-400' : 'bg-gray-300 dark:bg-gray-600'
+                      }`}></div>
+                      <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                        {campaign.name}
+                      </span>
+                    </div>
+                    <i className="fa-solid fa-chevron-right text-[10px] text-gray-300 dark:text-gray-600 group-hover:text-gray-400 dark:group-hover:text-gray-500 transition-colors flex-shrink-0"></i>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                    {campaign.status === 'DRAFT' ? (
+                      <span className="px-2 py-0.5 bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-gray-400 rounded text-[11px]">
+                        Borrador
+                      </span>
+                    ) : (
+                      <>
+                        <span className="flex items-center gap-1">
+                          <i className="fa-solid fa-paper-plane text-[10px]"></i>
+                          {campaign.sent_count || 0}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <i className="fa-solid fa-eye text-[10px]"></i>
+                          {campaign.open_count || 0}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Create List Modal */}
       <CreateListModal 
         isOpen={isCreateListModalOpen} 
         onClose={() => setIsCreateListModalOpen(false)}

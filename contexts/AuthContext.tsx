@@ -2,6 +2,13 @@ import React, { createContext, useContext, useState, useEffect, ReactNode, useCa
 import { User } from '../types';
 import { authService } from '../services/authService';
 import { GATEWAY_CONFIG } from '../services/gatewayConfig';
+import {
+  applyLanguagePreference,
+  applyThemePreference,
+  mergeUserPreferences,
+  normalizeUserPreferences,
+  UserPreferencesPatch,
+} from '../utils/userPreferences';
 
 interface AuthContextType {
   user: User | null;
@@ -11,6 +18,7 @@ interface AuthContextType {
   loading: boolean;
   isAuthenticated: boolean;
   refreshUser: () => Promise<void>;
+  updateUserPreferences: (patch: UserPreferencesPatch) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -27,6 +35,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/login';
+  }, []);
+
+  const normalizeGatewayUser = useCallback((userData: any): User => {
+    const flattenedUser = userData.integrations ? {
+      ...userData,
+      send_emails: userData.integrations?.send_emails,
+      sync_emails: userData.integrations?.sync_emails,
+      sync_calendar: userData.integrations?.sync_calendar,
+      watch_active: userData.integrations?.watch_active,
+      granted_scopes: userData.integrations?.granted_scopes,
+    } : userData;
+
+    const preferences = normalizeUserPreferences(flattenedUser.preferences);
+    applyThemePreference(preferences.general.theme);
+    applyLanguagePreference(preferences.general.language);
+
+    return {
+      ...flattenedUser,
+      preferences,
+    };
   }, []);
 
   const fetchUser = useCallback(async () => {
@@ -76,15 +104,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
           }
           
-          // ⚠️ IMPORTANTE: Aplanar integrations al nivel raíz si existen
-          const flattenedUser = userData.integrations ? {
-            ...userData,
-            send_emails: userData.integrations?.send_emails,
-            sync_emails: userData.integrations?.sync_emails,
-            sync_calendar: userData.integrations?.sync_calendar,
-            watch_active: userData.integrations?.watch_active,
-            granted_scopes: userData.integrations?.granted_scopes,
-          } : userData;
+          const flattenedUser = normalizeGatewayUser(userData);
           
           setUser(flattenedUser);
           localStorage.setItem('user', JSON.stringify(flattenedUser));
@@ -114,15 +134,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const parsedUser = JSON.parse(storedUser);
         if (parsedUser && parsedUser.id_user) {
-          // ⚠️ IMPORTANTE: Aplanar integrations al nivel raíz si existen
-          const flattenedUser = parsedUser.integrations ? {
-            ...parsedUser,
-            send_emails: parsedUser.integrations?.send_emails,
-            sync_emails: parsedUser.integrations?.sync_emails,
-            sync_calendar: parsedUser.integrations?.sync_calendar,
-            watch_active: parsedUser.integrations?.watch_active,
-            granted_scopes: parsedUser.integrations?.granted_scopes,
-          } : parsedUser;
+          const flattenedUser = normalizeGatewayUser(parsedUser);
           
           setUser(flattenedUser);
         }
@@ -130,7 +142,25 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         console.error('Error parsing stored user', e);
       }
     }
-  }, [user]);
+  }, [user, normalizeGatewayUser]);
+
+  const updateUserPreferences = useCallback((patch: UserPreferencesPatch) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+
+      const nextPreferences = mergeUserPreferences(prev.preferences, patch);
+      const nextUser = {
+        ...prev,
+        preferences: nextPreferences,
+      };
+
+      applyThemePreference(nextPreferences.general.theme);
+      applyLanguagePreference(nextPreferences.general.language);
+      localStorage.setItem('user', JSON.stringify(nextUser));
+
+      return nextUser;
+    });
+  }, []);
 
   const login = async (newToken: string, partialUser: Partial<User>) => {
     if (typeof partialUser !== 'object' || !partialUser || !partialUser.id_user || !partialUser.id_tenant) {
@@ -154,7 +184,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       logout, 
       loading,
       isAuthenticated: !!user && !!token,
-      refreshUser: fetchUser
+      refreshUser: fetchUser,
+      updateUserPreferences
     }}>
       {children}
     </AuthContext.Provider>

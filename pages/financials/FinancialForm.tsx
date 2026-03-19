@@ -417,9 +417,8 @@ const FinancialForm: React.FC = () => {
       const next: FinancialFormData = { ...prev };
       let changed = false;
 
-      if (companyCreditDays !== undefined) {
+      if (companyCreditDays !== undefined && (prev.credit_days === undefined || prev.credit_days === null || String(prev.credit_days).trim() === '')) {
         next.credit_days = String(companyCreditDays);
-        next.due_date = calculateDueDate(prev.issue_date || new Date().toISOString().split('T')[0], companyCreditDays);
         changed = true;
       }
 
@@ -431,6 +430,18 @@ const FinancialForm: React.FC = () => {
       return changed ? next : prev;
     });
   }, [selectedCompany, isEditMode]);
+
+  useEffect(() => {
+    if (!transaction.issue_date) return;
+    const creditDays = parseInt(String(transaction.credit_days || '0'), 10);
+    const normalizedCreditDays = Number.isFinite(creditDays) ? creditDays : 0;
+    const calculatedDueDate = calculateDueDate(transaction.issue_date, normalizedCreditDays);
+
+    setTransaction(prev => {
+      if (!prev.issue_date) return prev;
+      return prev.due_date === calculatedDueDate ? prev : { ...prev, due_date: calculatedDueDate };
+    });
+  }, [transaction.issue_date, transaction.credit_days]);
 
   useEffect(() => {
     if (loading || retentionToggleInitializedRef.current) return;
@@ -797,31 +808,13 @@ const FinancialForm: React.FC = () => {
         // Validar que sea número válido o vacío (Regex: dígitos, opcionalmente un punto, más dígitos)
         if (value !== '' && !/^\d*\.?\d*$/.test(value)) return;
 
-        setTransaction(prev => {
-            const updated = { ...prev, [name]: value };
-
-            // Cálculo de fechas solo si cambia credit_days
-            if (name === 'credit_days') {
-                const days = parseInt(value || '0', 10);
-                const date = new Date(prev.issue_date || new Date());
-                date.setDate(date.getDate() + days);
-                updated.due_date = date.toISOString().split('T')[0];
-            }
-            return updated;
-        });
+      setTransaction(prev => ({ ...prev, [name]: value }));
         return;
     }
 
     // 3. Fechas
     if (name === 'issue_date') {
-        setTransaction(prev => {
-            const updated = { ...prev, issue_date: value };
-            const days = parseInt(String(prev.credit_days || 0), 10);
-            const date = new Date(value);
-            date.setDate(date.getDate() + days);
-            updated.due_date = date.toISOString().split('T')[0];
-            return updated;
-        });
+      setTransaction(prev => ({ ...prev, issue_date: value }));
         return;
     }
 

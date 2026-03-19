@@ -85,17 +85,19 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       return NAV_GROUPS.map(group => ({
         ...group,
         items: group.items.filter(item => {
-          if (!item.module) return true;
-          if (item.module === 'crm') return true;
-          return currentUser?.module_access?.[item.module as keyof typeof currentUser.module_access];
+          const moduleKey = ('module' in item ? item.module : undefined) as 'crm' | 'marketing' | 'financials' | undefined;
+          if (!moduleKey) return true;
+          if (moduleKey === 'crm') return true;
+          return currentUser?.module_access?.[moduleKey];
         })
       })).filter(group => group.items.length > 0);
     }
     return NAV_GROUPS.map(group => ({
       ...group,
       items: group.items.filter(item => {
-        if (!item.module) return true;
-        return currentUser?.module_access?.[item.module as keyof typeof currentUser.module_access];
+        const moduleKey = ('module' in item ? item.module : undefined) as 'crm' | 'marketing' | 'financials' | undefined;
+        if (!moduleKey) return true;
+        return currentUser?.module_access?.[moduleKey];
       })
     })).filter(group => group.items.length > 0);
   }, [user, currentUser?.module_access]);
@@ -108,6 +110,17 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     document.documentElement.classList.toggle('dark', isDarkMode);
     localStorage.setItem('theme-dark', JSON.stringify(isDarkMode));
   }, [isDarkMode]);
+
+  useEffect(() => {
+    const themePreference = user?.preferences?.general?.theme;
+    if (!themePreference) return;
+
+    const shouldUseDark =
+      themePreference === 'dark' ||
+      (themePreference === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+    setIsDarkMode(shouldUseDark);
+  }, [user?.preferences?.general?.theme]);
 
   useEffect(() => {
     if (userMenuOpen && userMenuButtonRef.current) {
@@ -130,7 +143,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     setShowLogoutConfirm(true);
   };
 
-  const openAccountSettings = (tab: 'profile' | 'personalIntegrations' | 'tenantIntegrations' | 'tenantUsers' | 'tenantConfigurations' = 'profile') => {
+  const openAccountSettings = (tab: 'profile' | 'preferences' | 'personalIntegrations' | 'tenantIntegrations' | 'tenantUsers' | 'tenantConfigurations' = 'profile') => {
     localStorage.setItem('accountSettings-activeTab', tab);
     setUserMenuOpen(false);
     navigate(`/app/account-settings?tab=${tab}`);
@@ -290,9 +303,33 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 if (location.pathname === '/app/followups') {
                   return <span className="text-slate-800 dark:text-slate-100 font-medium text-[13px]">Seguimiento</span>;
                 }
-                const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'account-settings', 'integrations', 'workspace-settings', 'settings', 'calendar', 'dashboard', 'new', 'edit', 'marketing'];
+                const knownRoutes = ['quotes', 'deals', 'financials', 'client-companies', 'client-contacts', 'companies', 'products', 'users', 'profile', 'account-settings', 'integrations', 'workspace-settings', 'settings', 'calendar', 'dashboard', 'new', 'edit', 'marketing', 'campaigns', 'lists'];
                 let breadcrumbs: { label: string; path: string; isActive: boolean }[] = [];
-                if (lastSegment === 'edit' && pathSegments.length > 1) {
+                
+                // Manejo especial para Marketing Center
+                if (pathSegments[1] === 'marketing') {
+                  breadcrumbs.push({ label: 'Marketing Center', path: '/app/marketing', isActive: false });
+                  
+                  if (pathSegments[2] === 'dashboard') {
+                    breadcrumbs.push({ label: 'Dashboard', path: '/app/marketing/dashboard', isActive: true });
+                  } else if (pathSegments[2] === 'campaigns') {
+                    breadcrumbs.push({ label: 'Campañas', path: '/app/marketing/campaigns', isActive: pathSegments.length === 3 });
+                    
+                    if (pathSegments[3] === 'new') {
+                      breadcrumbs.push({ label: 'Nueva Campaña', path: location.pathname, isActive: true });
+                    } else if (pathSegments[3] === 'edit') {
+                      breadcrumbs.push({ label: location.state?.breadcrumb || 'Editar Campaña', path: location.pathname, isActive: true });
+                    } else if (pathSegments[3] && pathSegments[3] !== 'new' && pathSegments[3] !== 'edit') {
+                      breadcrumbs.push({ label: location.state?.breadcrumb || 'Detalle Campaña', path: location.pathname, isActive: true });
+                    }
+                  } else if (pathSegments[2] === 'lists') {
+                    breadcrumbs.push({ label: 'Listas', path: '/app/marketing/lists', isActive: pathSegments.length === 3 });
+                    
+                    if (pathSegments[3]) {
+                      breadcrumbs.push({ label: location.state?.breadcrumb || 'Detalle Lista', path: location.pathname, isActive: true });
+                    }
+                  }
+                } else if (lastSegment === 'edit' && pathSegments.length > 1) {
                   const collectionKey = pathSegments[pathSegments.length - 2];
                   const collectionName = PAGE_NAMES[collectionKey] || collectionKey.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
                   breadcrumbs = [
@@ -412,8 +449,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   onAddCompany={() => setIsCompanyFormOpen(true)}
                   onAddQuote={() => navigate('/app/quotes/new')}
                   onAddProduct={() => { /* TODO: Implementar */ }}
-                  onAddPortfolio={() => { /* TODO: Implementar */ }}
-                  onAddCampaign={() => { /* TODO: Implementar */ }}
+                  onAddPortfolio={() => navigate('/app/financials/new')}
+                  onAddCampaign={() => navigate('/app/marketing/campaigns/new')}
                 />
               </li>
 
@@ -595,6 +632,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               label="Perfil"
               onClick={() => openAccountSettings('profile')}
             />
+            <MenuItem
+              icon="fa-solid fa-sliders"
+              label="Preferencias"
+              onClick={() => openAccountSettings('preferences')}
+            />
           </MenuSection>
 
           <MenuDivider />
@@ -626,7 +668,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           {/* Preferencias */}
           <button
             type="button"
-            onClick={() => { setIsDarkMode((prev) => !prev); setUserMenuOpen(false); }}
+            onClick={() => { setIsDarkMode((prev: boolean) => !prev); setUserMenuOpen(false); }}
             className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition-colors rounded-md mx-auto"
             style={{ width: 'calc(100% - 8px)', marginLeft: 4, marginRight: 4 }}
           >

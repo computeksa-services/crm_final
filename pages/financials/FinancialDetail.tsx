@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
@@ -302,7 +302,7 @@ const FinancialDetail: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const { invalidateFinancials } = useDataCache();
+  const { invalidateFinancials, users: cachedUsers } = useDataCache();
 
   const [transaction, setTransaction] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
@@ -320,6 +320,51 @@ const FinancialDetail: React.FC = () => {
   const [confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const invoiceFileInputRef = useRef<HTMLInputElement | null>(null);
   const retentionFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const creatorAvatarFromCache = useMemo(() => {
+    if (!transaction) return null;
+
+    const creatorId = String(
+      transaction.creator_user_id ||
+      transaction.id_usuario_creador ||
+      transaction.id_user_creador ||
+      transaction.created_by ||
+      ''
+    ).trim();
+
+    if (creatorId) {
+      const userById = (cachedUsers || []).find((u: any) => String(u?.id_user) === creatorId);
+      if (userById?.avatar_url) return userById.avatar_url;
+    }
+
+    const creatorName = String(transaction.usuario_creador || transaction.created_by_name || '').trim().toLowerCase();
+    if (creatorName) {
+      const userByName = (cachedUsers || []).find((u: any) => String(u?.name_user || '').trim().toLowerCase() === creatorName);
+      if (userByName?.avatar_url) return userByName.avatar_url;
+    }
+
+    return null;
+  }, [cachedUsers, transaction]);
+
+  const creatorIsCurrentUser = useMemo(() => {
+    if (!transaction || !user) return false;
+
+    const creatorId = String(
+      transaction.creator_user_id ||
+      transaction.id_usuario_creador ||
+      transaction.id_user_creador ||
+      transaction.created_by ||
+      ''
+    ).trim();
+
+    if (creatorId && String(user.id_user) === creatorId) return true;
+
+    const creatorName = String(transaction.usuario_creador || transaction.created_by_name || '').trim().toLowerCase();
+    const currentUserName = String(user.name_user || '').trim().toLowerCase();
+    if (creatorName && currentUserName && creatorName === currentUserName) return true;
+
+    return false;
+  }, [transaction, user]);
 
   // Verificar si hay integración de correo activa
   const hasEmailIntegration = () => {
@@ -365,6 +410,7 @@ const FinancialDetail: React.FC = () => {
         client_phone: tx.telefono_cliente,
         client_email: tx.email_cliente,
         id_client_company: tx.id_empresa_cliente,
+        is_urgent: Boolean(tx.is_urgent ?? tx.es_urgente),
         subtotal,
         tax_amount: taxAmount,
         tax_rate: toNumberSafe(tx.impuestos_porcentaje ?? tx.tax_rate ?? tx.v_tax_rate),
@@ -382,6 +428,7 @@ const FinancialDetail: React.FC = () => {
         notification_logs: normalizeNotificationLogs(tx.notification_logs),
         usuario_creador: tx.usuario_creador,
         creator_avatar: tx.avatar_usuario_creador || tx.usuario_creador_avatar || tx.created_by_avatar || tx.owner_avatar || null,
+        creator_user_id: tx.id_usuario_creador || tx.id_user_creador || tx.created_by || null,
         invoice_file_url: tx.invoice_file_url || tx.url_factura || null,
         retention_file_url: tx.retention_file_url || tx.url_retencion || null,
         payment_history: Array.isArray(tx.historial_abonos)
@@ -683,6 +730,9 @@ const FinancialDetail: React.FC = () => {
     transaction.payment_status_label
   );
   const paymentCount = Array.isArray(transaction.payment_history) ? transaction.payment_history.length : 0;
+  const canNotifyByEmail = hasEmailIntegration();
+  const isClosedStatus = transaction.status === 'PAGADO' || transaction.status === 'ANULADO';
+  const balanceLabel = transaction.status === 'VENCIDO' ? 'Saldo Vencido' : 'Saldo Pendiente';
 
   return (
     <div className="min-h-screen bg-[#F9F9FA]">
@@ -690,36 +740,54 @@ const FinancialDetail: React.FC = () => {
       <ConfirmModal {...confirmState} isOpen={confirmState.isOpen} onClose={() => setConfirmState(p => ({...p, isOpen: false}))} />
       
       {/* HEADER */}
-      <header className="bg-white border-b border-gray-200 px-8 py-6">
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               <h1 className="text-2xl font-bold text-gray-900 whitespace-nowrap truncate">Factura #{transaction.invoice_number}</h1>
               <span className={`text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 border shrink-0 ${getPaymentStatusColor(transaction.payment_status_code, transaction.status)}`}>
                 {getBaseStatusLabel(transaction.status)}
               </span>
+              {transaction.is_urgent && (
+                <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 border shrink-0 bg-rose-50 text-rose-700 border-rose-200 uppercase">
+                  <i className="fa-solid fa-triangle-exclamation text-[10px]"></i>
+                  URGENTE
+                </span>
+              )}
             </div>
             <p className="mt-1 text-sm text-gray-600 max-w-[560px] truncate">{transaction.description || '-'}</p>
           </div>
           
-          <div className="ml-auto w-full md:w-auto flex items-center justify-end gap-6">
+          <div className="ml-auto w-full md:w-auto flex items-center justify-end gap-4">
             <div className="text-right">
-              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Saldo Pendiente</p>
+              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">{balanceLabel}</p>
               <div className="flex items-baseline gap-1 justify-end">
                 <span className="text-xl font-bold text-gray-900">{formatCurrency(transaction.balance_due)}</span>
               </div>
             </div>
             <div className="flex gap-2">
+              {!isClosedStatus && (
+                <button
+                  onClick={() => setIsCollectionModalOpen(true)}
+                  disabled={processing || !canNotifyByEmail}
+                  className="px-3 py-1.5 border border-amber-300 bg-amber-50 text-amber-800 rounded text-sm font-medium hover:bg-amber-100 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  title={!canNotifyByEmail ? 'Activa tu integración de correo para notificar vencimientos.' : 'Notificar vencimiento'}
+                >
+                  <i className="fa-solid fa-bell text-xs"></i>
+                  {transaction.status === 'VENCIDO' ? 'Notificar Vencimiento' : 'Enviar Recordatorio'}
+                </button>
+              )}
               <button onClick={() => navigate(`/app/financials/edit?id=${transaction.id_transaction}`)} className="px-4 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded text-sm font-medium transition flex items-center gap-2">
                 <i className="fa-solid fa-pen text-xs"></i> Editar
               </button>
               <button onClick={() => setConfirmState({ isOpen: true, title: '¿Seguro desea eliminar este registro?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="px-3 py-1.5 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50 text-gray-700 transition"><i className="fa-solid fa-trash text-xs"></i></button>
             </div>
           </div>
-        </div>
+          </div>
 
-        {/* PROGRESS BAR */}
-        <div className="flex items-center w-full max-w-3xl gap-2 mt-2">
+          {/* PROGRESS BAR */}
+          <div className="flex items-center w-full max-w-[700px] gap-2.5 mt-5">
           <div className="flex-1 flex flex-col gap-1">
             <div className={`h-1.5 w-full rounded-full ${transaction.status === 'PENDIENTE' ? 'bg-amber-500' : 'bg-gray-200'}`}></div>
             <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'PENDIENTE' ? 'text-amber-600' : 'text-gray-400'}`}>
@@ -743,6 +811,7 @@ const FinancialDetail: React.FC = () => {
             <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'ANULADO' ? 'text-slate-600' : 'text-gray-400'}`}>
               <i className={`fa-solid ${transaction.status === 'ANULADO' ? 'fa-circle' : 'fa-circle-notch'} text-[8px]`}></i> ANULADO
             </span>
+          </div>
           </div>
         </div>
       </header>
@@ -819,12 +888,15 @@ const FinancialDetail: React.FC = () => {
               <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Creado por</h2>
               <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg bg-white">
                 <Avatar
-                  src={transaction.creator_avatar || null}
+                  src={creatorAvatarFromCache || transaction.creator_avatar || null}
                   name={transaction.usuario_creador || transaction.created_by_name || 'Sistema'}
                   size="sm"
                 />
                 <div>
-                  <p className="text-sm font-semibold text-gray-900 leading-none">{transaction.usuario_creador || transaction.created_by_name || 'Sistema'}</p>
+                  <p className="text-sm font-semibold text-gray-900 leading-none">
+                    {transaction.usuario_creador || transaction.created_by_name || 'Sistema'}
+                    {creatorIsCurrentUser && <span className="text-gray-400 font-medium"> (Tú)</span>}
+                  </p>
                 </div>
               </div>
             </div>
@@ -915,9 +987,9 @@ const FinancialDetail: React.FC = () => {
                       <span className="tabular-nums font-medium">- {formatCurrency(transaction.paid_amount)}</span>
                     </div>
 
-                    {/* Saldo Pendiente (Destacado) */}
+                    {/* Saldo */}
                     <div className="flex justify-between items-center bg-amber-50 border border-amber-200/60 rounded-lg p-3">
-                      <span className="font-bold text-amber-800 uppercase text-xs tracking-wider">Saldo Pendiente</span>
+                      <span className="font-bold text-amber-800 uppercase text-xs tracking-wider">{balanceLabel}</span>
                       <span className="text-xl font-black text-amber-600 tabular-nums">{formatCurrency(transaction.balance_due)}</span>
                     </div>
                   </div>
@@ -974,9 +1046,9 @@ const FinancialDetail: React.FC = () => {
                   {transaction.status !== 'PAGADO' && (
                     <button 
                       onClick={() => setIsPaymentModalOpen(true)}
-                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded transition flex items-center gap-1"
+                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm transition flex items-center justify-center gap-2"
                     >
-                      <i className="fa-solid fa-plus text-xs"></i> Agregar
+                      <i className="fa-solid fa-money-bill-transfer text-xs"></i> Registrar Abono
                     </button>
                   )}
                 </div>

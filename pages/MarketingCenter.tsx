@@ -8,10 +8,7 @@ const MarketingCenter: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // ---------------------------------------------------------
-  // LÓGICA DE MEMORIA (Recordar última vista)
-  // ---------------------------------------------------------
-  
+  // Lógica de memoria
   useEffect(() => {
     const isRoot = location.pathname === '/app/marketing' || location.pathname === '/app/marketing/';
     const isWizard = location.pathname.includes('/new') || location.pathname.includes('/edit');
@@ -32,96 +29,89 @@ const MarketingCenter: React.FC = () => {
     }
   }, [location.pathname, navigate]);
 
-  // ---------------------------------------------------------
-  // RENDERIZADO
-  // ---------------------------------------------------------
-
   if (!user?.id_tenant || !user?.id_user) {
     return (
-      <div className="h-full flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-2 text-slate-400">
+      <div className="h-full flex items-center justify-center bg-gray-50 dark:bg-slate-900">
+        <div className="flex flex-col items-center gap-2 text-gray-400">
           <BrandSpinner size="lg" />
-          <p>Cargando sesión...</p>
+          <p className="text-sm">Cargando sesión...</p>
         </div>
       </div>
     );
   }
 
-  // Detectar si estamos en el "Wizard" para ocultar el menú principal
+  // Detectar wizard para ocultar navegación
   const isWizardRoute = location.pathname.includes('/app/marketing/campaigns/new')
     || location.pathname.includes('/app/marketing/campaigns/edit');
 
   if (isWizardRoute) {
     return (
-      <div className="h-full w-full bg-slate-50">
+      <div className="h-full w-full bg-gray-50 dark:bg-slate-900">
         <Outlet />
       </div>
     );
   }
 
-  // Helper para clases de los botones (Más compacto: py-2 en lugar de py-3)
-  const getNavLinkClass = (isActive: boolean) => `
-    flex items-center justify-center px-3 py-2 rounded-lg text-sm font-semibold transition-all border
-    ${isActive
-      ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700 shadow-sm ring-1 ring-blue-100 dark:ring-blue-800'
-      : 'bg-white dark:bg-slate-500 text-slate-500 dark:text-slate-200 border-slate-200 dark:border-slate-400 hover:border-slate-300 dark:hover:border-slate-300 hover:text-slate-700 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-400'
-    }
-  `;
-
   return (
-    <div className="flex flex-col h-full w-full bg-slate-50 dark:bg-slate-600 overflow-y-auto">
+    <div className="flex flex-col h-full w-full bg-gray-50 dark:bg-slate-900">
       
-      {/* HEADER COMPACTO */}
-      <div className="bg-white dark:bg-slate-500 border-b border-slate-200 dark:border-slate-400 shrink-0">
-        <div className="w-full px-4 md:px-6 py-3">
+      {/* HEADER CON NAVEGACIÓN */}
+      <header className="bg-white dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex-shrink-0">
+        <div className="max-w-[1600px] mx-auto px-6 py-4">
           
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Navegación horizontal - estilo tabs */}
+          <nav className="flex items-center gap-1 bg-gray-100 dark:bg-slate-700 p-1 rounded-lg w-fit">
+            <NavLink
+              to="/app/marketing/dashboard"
+              className={({ isActive }) => `
+                flex items-center gap-2 px-4 py-1.5 rounded-md text-[13px] font-medium transition-all whitespace-nowrap
+                ${isActive
+                  ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }
+              `}
+            >
+              <i className="fa-solid fa-chart-pie text-xs"></i>
+              <span>Dashboard</span>
+            </NavLink>
             
-            {/* Título a la izquierda */}
-            <div className="shrink-0 flex items-center gap-3">
-              <h1 className="text-xl font-bold text-slate-900 tracking-tight">
-                <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-600">
-                  Marketing Center
-                </span>
-              </h1>
-              {/* Separador visual opcional para desktop */}
-              <div className="hidden md:block h-5 w-px bg-slate-200 mx-1"></div>
-            </div>
-
-            {/* Menú a la derecha (Horizontal) */}
-            <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2">
-              <NavLink
-                to="/app/marketing/dashboard"
-                className={({ isActive }) => getNavLinkClass(isActive)}
-              >
-                <i className="fa-solid fa-chart-pie mr-2"></i> Dashboard
-              </NavLink>
-              
-              <NavLink
-                to="/app/marketing/campaigns"
-                className={({ isActive }) => getNavLinkClass(isActive || location.pathname.includes('/app/marketing/campaigns'))}
-              >
-                <i className="fa-solid fa-paper-plane mr-2"></i> Campañas
-              </NavLink>
-              
-              <NavLink
-                to="/app/marketing/lists"
-                className={({ isActive }) => getNavLinkClass(isActive || location.pathname.includes('/app/marketing/lists'))}
-              >
-                <i className="fa-solid fa-users mr-2"></i> Listas
-              </NavLink>
-            </div>
-
-          </div>
+            <NavLink
+              to="/app/marketing/campaigns"
+              className={({ isActive }) => `
+                flex items-center gap-2 px-4 py-1.5 rounded-md text-[13px] font-medium transition-all whitespace-nowrap
+                ${isActive || location.pathname.includes('/campaigns')
+                  ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }
+              `}
+            >
+              <i className="fa-solid fa-paper-plane text-xs"></i>
+              <span>Campañas</span>
+            </NavLink>
+            
+            <NavLink
+              to="/app/marketing/lists"
+              className={({ isActive }) => `
+                flex items-center gap-2 px-4 py-1.5 rounded-md text-[13px] font-medium transition-all whitespace-nowrap
+                ${isActive || location.pathname.includes('/lists')
+                  ? 'bg-white dark:bg-slate-600 text-gray-900 dark:text-gray-100 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                }
+              `}
+            >
+              <i className="fa-solid fa-users text-xs"></i>
+              <span>Listas</span>
+            </NavLink>
+          </nav>
         </div>
-      </div>
+      </header>
 
-      {/* ÁREA DE CONTENIDO */}
-      <div className="flex-1 w-full p-4 md:p-6">
-        <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+      {/* CONTENIDO */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-[1600px] mx-auto px-6 py-6">
           <Outlet />
         </div>
-      </div>
+      </main>
 
     </div>
   );

@@ -4,6 +4,7 @@ import { MarketingList } from '../../../types';
 import Toast from '../../Toast';
 import { marketingApi } from '../../../services/marketingApi';
 import { SimpleSpinner } from '../../AppLoaders';
+import AppModalViewport from '../../AppModalViewport';
 
 interface AudienceListModalProps {
   isOpen: boolean;
@@ -118,7 +119,7 @@ const AudienceListModal: React.FC<AudienceListModalProps> = ({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 backdrop-blur-sm transition-all animate-in fade-in duration-200">
+    <AppModalViewport className="bg-slate-900/50 flex items-center justify-center z-50 backdrop-blur-sm transition-all animate-in fade-in duration-200">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6 transform transition-all scale-100">
         
         {/* Header */}
@@ -242,7 +243,7 @@ const AudienceListModal: React.FC<AudienceListModalProps> = ({
           </div>
         )}
       </div>
-    </div>,
+    </AppModalViewport>,
     document.body
   );
 };

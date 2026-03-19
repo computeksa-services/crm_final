@@ -55,6 +55,32 @@ export interface User {
     watch_active?: boolean;
     granted_scopes?: string[];
   };
+  preferences?: UserPreferences;
+}
+
+export type UserThemeMode = 'light' | 'dark' | 'system';
+export type UserLanguage = 'es' | 'en';
+export type CarteraMode = 'internal_first' | 'auto_client';
+
+export interface UserPreferences {
+  general: {
+    theme: UserThemeMode;
+    timezone: string;
+    language: UserLanguage;
+  };
+  cartera: {
+    mode: CarteraMode;
+    reminder_days: number;
+    internal_alerts_enabled: boolean;
+    schedule: {
+      days: number[];
+      time: string;
+    };
+  };
+  notifications: {
+    deal_updates: boolean;
+    marketing_alerts: boolean;
+  };
 }
 
 // NUEVA INTERFAZ PARA TIPOS DE PRODUCTO
