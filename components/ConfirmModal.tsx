@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import AppModalViewport from './AppModalViewport';
 
 interface ConfirmModalProps {
   isOpen: boolean;
@@ -39,23 +40,12 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
     : 'bg-brand-600 hover:bg-brand-700';
 
   const backdrop = (
-    <div 
-      style={{ 
-        position: 'fixed', 
-        top: 0, 
-        left: 0, 
-        right: 0, 
-        bottom: 0, 
-        width: '100vw', 
-        height: '100vh', 
-        zIndex: 99999, 
-        backgroundColor: 'rgba(0, 0, 0, 0.7)', 
+    <AppModalViewport
+      className="z-[99999] flex items-center justify-center p-4"
+      style={{
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
         backdropFilter: 'blur(4px)',
         WebkitBackdropFilter: 'blur(4px)',
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        padding: '1rem'
       }}
       onClick={onClose}
     >
@@ -103,7 +93,7 @@ const ConfirmModal: React.FC<ConfirmModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </AppModalViewport>
   );
 
   // Renderizar en el body para que no esté afectado por otros z-index

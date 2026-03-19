@@ -7,6 +7,7 @@ import { financialService } from '../../services/financials.service';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import CollectionModal from '../../components/CollectionModal';
+import AppModalViewport from '../../components/AppModalViewport';
 import type { FinancialTransaction } from '../../types';
 import {
   useReactTable,
@@ -721,6 +722,7 @@ const FinancialsList: React.FC = () => {
                 id_transaction: t.id_transaction || t.id_transaccion,
                 invoice_number: t.invoice_number || t.numero_factura,
                 description: t.description || t.descripcion_concepto,
+              is_urgent: Boolean(t.is_urgent ?? t.es_urgente),
                 client_company_name: t.client_company_name || t.nombre_cliente_proveedor,
                 status: t.status || t.estado_registro,
                 transaction_type: normalizeTransactionType(t.tipo_transaccion || t.transaction_type),
@@ -786,7 +788,7 @@ const FinancialsList: React.FC = () => {
   const handleStatusChange = async (tx: FinancialTransaction, newStatus: string) => {
       // Validación: nunca permitir cambio manual a VENCIDO (lo determina el sistema)
       if (newStatus === 'VENCIDO') {
-          setToast({ message: 'El estado "Vencido" se determina automáticamente por el sistema', type: 'warning' });
+          setToast({ message: 'El estado "Vencido" se determina automáticamente por el sistema', type: 'error' });
           return;
       }
       if (newStatus === 'PAGADO') {
@@ -878,7 +880,6 @@ const FinancialsList: React.FC = () => {
           </div>
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="text-[13px] font-semibold text-slate-800 truncate">{getValue() as string}</span>
-            {row.original.is_urgent && <i className="fa-solid fa-triangle-exclamation text-red-500 text-[11px] shrink-0" title="Urgente"></i>}
           </div>
         </div>
         )
@@ -888,7 +889,12 @@ const FinancialsList: React.FC = () => {
         header: 'Descripción',
         size: 225,
         enableColumnFilter: false,
-        cell: ({ getValue, row }) => row.getIsGrouped() ? null : <div className="text-xs leading-tight text-slate-700 line-clamp-2 w-[225px] font-medium">{getValue() as string}</div>
+        cell: ({ getValue, row }) => row.getIsGrouped() ? null : (
+          <div className="flex items-start gap-1.5 w-[225px]">
+            {row.original.is_urgent && <i className="fa-solid fa-triangle-exclamation text-red-500 text-[11px] shrink-0 mt-[2px]" title="Urgente"></i>}
+            <div className="text-xs leading-tight text-slate-700 line-clamp-2 font-medium">{getValue() as string}</div>
+          </div>
+        )
     },
     {
         accessorKey: 'client_company_name',
@@ -1303,8 +1309,8 @@ const FinancialsList: React.FC = () => {
         <CollectionModal isOpen={true} onClose={() => setCollectionData(null)} onSend={async (data) => { await financialService.notifyOverdue({ id_transaction: collectionData.id_transaction, id_tenant: user.id_tenant, id_user: user.id_user, ...data }); setCollectionData(null); setToast({ message: 'Notificación enviada', type: 'success' }); }} transactionData={{ id_transaction: collectionData.id_transaction, invoice_number: collectionData.invoice_number, id_client_company: collectionData.id_client_company || (collectionData as any).id_empresa_cliente, automation_enabled: collectionData.enable_automation, automation_frequency: collectionData.automation_frequency, automation_recipients: collectionData.automation_recipients }} />
       )}
 
-      {paymentModal.isOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fade-in">
+        {paymentModal.isOpen && (
+          <AppModalViewport className="z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fade-in">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
                   <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 className="font-bold text-slate-800">Registrar Pago</h3><button onClick={() => setPaymentModal(p => ({...p, isOpen:false}))} className="text-slate-400 hover:text-slate-600"><i className="fa-solid fa-times"></i></button></div>
                   <div className="p-6 space-y-4">
@@ -1314,8 +1320,8 @@ const FinancialsList: React.FC = () => {
                       <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Referencia</label><input type="text" placeholder="Ej: #12345" value={paymentModal.ref} onChange={e => setPaymentModal(p => ({...p, ref: e.target.value}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" /></div>
                   </div>
                   <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2"><button onClick={() => setPaymentModal(p => ({...p, isOpen:false}))} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancelar</button><button onClick={confirmPayment} className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm">Confirmar Pago</button></div>
-              </div>
-          </div>
+                </div>
+              </AppModalViewport>
       )}
     </div>
   );

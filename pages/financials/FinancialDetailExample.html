@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM - Detalle de Factura</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body { 
+      font-family: 'Inter', sans-serif;
+      background-color: #F8F9FA; /* Gris muy claro, típico de SaaS */
+    }
+    /* Clase para que los números mantengan el mismo ancho verticalmente */
+    .tabular-nums { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body class="min-h-screen flex text-slate-800">
+
+  <!-- SIDEBAR (Simulación visual para contexto SaaS) -->
+  <aside class="w-16 bg-white border-r border-gray-200 flex flex-col items-center py-4 gap-6 hidden md:flex shrink-0 z-10">
+    <div class="text-blue-600 text-2xl font-black mb-4"><i class="fa-solid fa-chart-pie"></i></div>
+    <a href="#" class="text-gray-400 hover:text-blue-600 transition-colors"><i class="fa-solid fa-house"></i></a>
+    <a href="#" class="text-blue-600 bg-blue-50 w-10 h-10 rounded-lg flex items-center justify-center transition-colors"><i class="fa-solid fa-file-invoice"></i></a>
+    <a href="#" class="text-gray-400 hover:text-blue-600 transition-colors"><i class="fa-solid fa-users"></i></a>
+    <a href="#" class="text-gray-400 hover:text-blue-600 transition-colors"><i class="fa-solid fa-chart-line"></i></a>
+  </aside>
+
+  <!-- CONTENIDO PRINCIPAL -->
+  <main class="flex-1 flex flex-col h-screen overflow-hidden">
+    
+    <!-- TOP BAR (Navegación superior) -->
+    <header class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shrink-0">
+      <div class="flex items-center gap-2 text-sm text-gray-500">
+        <span class="hover:text-gray-800 cursor-pointer">Facturación</span>
+        <i class="fa-solid fa-chevron-right text-[10px]"></i>
+        <span class="font-medium text-gray-800">Detalle</span>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="text-sm font-medium text-right mr-2 leading-tight">
+          <p class="text-gray-900">Usuario Demo</p>
+          <p class="text-gray-500 text-xs">Finanzas</p>
+        </div>
+        <img src="https://ui-avatars.com/api/?name=Admin&background=0D8ABC&color=fff" class="w-8 h-8 rounded-full">
+      </div>
+    </header>
+
+    <!-- ÁREA DESPLAZABLE -->
+    <div class="flex-1 overflow-y-auto">
+      
+      <!-- HEADER DE LA FACTURA (Similar a la foto) -->
+      <div class="bg-white border-b border-gray-200 px-8 py-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div class="flex items-center gap-4">
+            <h1 class="text-2xl font-bold text-gray-900">Factura #001-001-1007</h1>
+            <span class="bg-amber-100 text-amber-700 border border-amber-200 text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5">
+              <i class="fa-solid fa-circle text-[8px]"></i> PAGO PARCIAL
+            </span>
+          </div>
+          
+          <div class="flex items-center gap-6">
+            <div class="text-right">
+              <p class="text-xs text-gray-500 font-semibold uppercase tracking-wide">Saldo Pendiente</p>
+              <div class="flex items-baseline gap-1 justify-end">
+                <span class="text-xl font-bold text-gray-900">$74</span><span class="text-sm font-semibold text-gray-500">.60</span>
+              </div>
+            </div>
+            <div class="flex gap-2">
+              <button class="px-3 py-1.5 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50 text-gray-700 transition"><i class="fa-solid fa-share-nodes"></i></button>
+              <button class="px-4 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded text-sm font-medium transition flex items-center gap-2">
+                <i class="fa-solid fa-pen text-xs"></i> Editar
+              </button>
+              <button class="px-3 py-1.5 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50 text-gray-700 transition"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PIPELINE DE ESTADO -->
+        <div class="flex items-center w-full max-w-3xl gap-2 mt-2">
+          <div class="flex-1 flex flex-col gap-1">
+            <div class="h-1.5 w-full bg-emerald-500 rounded-full"></div>
+            <span class="text-[11px] font-semibold text-gray-500 uppercase flex items-center gap-1"><i class="fa-solid fa-check-circle text-emerald-500"></i> Emitida</span>
+          </div>
+          <div class="flex-1 flex flex-col gap-1">
+            <div class="h-1.5 w-full bg-emerald-500 rounded-full"></div>
+            <span class="text-[11px] font-semibold text-emerald-600 uppercase flex items-center gap-1"><i class="fa-solid fa-circle text-emerald-500 text-[8px]"></i> Pago Parcial</span>
+          </div>
+          <div class="flex-1 flex flex-col gap-1">
+            <div class="h-1.5 w-full bg-gray-200 rounded-full"></div>
+            <span class="text-[11px] font-semibold text-gray-400 uppercase flex items-center gap-1"><i class="fa-regular fa-circle"></i> Pagada</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRID DE DOS COLUMNAS -->
+      <div class="max-w-7xl mx-auto p-6 md:p-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          <!-- ==========================================
+               COLUMNA IZQUIERDA: DATOS RÁPIDOS
+               ========================================== -->
+          <div class="lg:col-span-4 2xl:col-span-3 space-y-6">
+            
+            <div>
+              <h2 class="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Acerca del Documento</h2>
+              <div class="space-y-4">
+                
+                <!-- Fila Cliente -->
+                <div class="flex items-start gap-3">
+                  <div class="w-6 flex justify-center pt-0.5"><i class="fa-regular fa-building text-gray-400"></i></div>
+                  <div>
+                    <p class="text-xs text-gray-500 mb-0.5">Cliente</p>
+                    <p class="text-sm font-medium text-gray-900 leading-tight">SUPERMERCADOS EL AHORRO</p>
+                  </div>
+                </div>
+
+                <!-- Fila RUC -->
+                <div class="flex items-start gap-3">
+                  <div class="w-6 flex justify-center pt-0.5"><i class="fa-regular fa-id-card text-gray-400"></i></div>
+                  <div>
+                    <p class="text-xs text-gray-500 mb-0.5">RUC / NIT</p>
+                    <p class="text-sm text-gray-900 tabular-nums">0990022222001</p>
+                  </div>
+                </div>
+
+                <!-- Fila Contacto -->
+                <div class="flex items-start gap-3">
+                  <div class="w-6 flex justify-center pt-0.5"><i class="fa-regular fa-user text-gray-400"></i></div>
+                  <div>
+                    <p class="text-xs text-gray-500 mb-0.5">Contacto</p>
+                    <div class="flex items-center gap-2">
+                      <p class="text-sm text-gray-900">Ana Álvarez</p>
+                      <i class="fa-brands fa-whatsapp text-emerald-500 cursor-pointer"></i>
+                      <i class="fa-regular fa-envelope text-blue-500 cursor-pointer"></i>
+                    </div>
+                  </div>
+                </div>
+
+                <hr class="border-gray-200 my-2">
+
+                <!-- Fechas -->
+                <div class="flex items-start gap-3">
+                  <div class="w-6 flex justify-center pt-0.5"><i class="fa-regular fa-calendar-plus text-gray-400"></i></div>
+                  <div class="w-full flex justify-between items-center">
+                    <p class="text-sm text-gray-600">Emisión</p>
+                    <p class="text-sm text-gray-900 tabular-nums">01 Mar 2026</p>
+                  </div>
+                </div>
+                
+                <div class="flex items-start gap-3">
+                  <div class="w-6 flex justify-center pt-0.5"><i class="fa-regular fa-calendar-xmark text-gray-400"></i></div>
+                  <div class="w-full flex justify-between items-center">
+                    <p class="text-sm text-gray-600">Vencimiento</p>
+                    <p class="text-sm text-amber-600 font-medium tabular-nums">10 Mar 2026</p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Equipo Asignado (estilo CRM) -->
+            <div>
+              <h2 class="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Vendedor Asignado</h2>
+              <div class="flex items-center gap-3 p-3 border border-gray-200 rounded-lg bg-white">
+                <img src="https://ui-avatars.com/api/?name=Carlos+Ventas&background=f3f4f6" class="w-8 h-8 rounded-full">
+                <div>
+                  <p class="text-sm font-semibold text-gray-900 leading-none">Carlos Ventas</p>
+                  <p class="text-xs text-gray-500 mt-1">Ejecutivo Comercial</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- ==========================================
+               COLUMNA DERECHA: CARTERA Y DESGLOSE
+               ========================================== -->
+          <div class="lg:col-span-8 2xl:col-span-9">
+            
+            <!-- TABS -->
+            <div class="border-b border-gray-200 mb-6 flex gap-6">
+              <button class="pb-3 border-b-2 border-gray-900 text-sm font-semibold text-gray-900">Resumen Financiero</button>
+              <button class="pb-3 border-b-2 border-transparent text-sm font-medium text-gray-500 hover:text-gray-700">Archivos (2)</button>
+              <button class="pb-3 border-b-2 border-transparent text-sm font-medium text-gray-500 hover:text-gray-700">Bitácora</button>
+            </div>
+
+            <!-- CONTENEDOR DE CARTERA (GRID INTERNO) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              <!-- PANEL IZQUIERDO: EL DESGLOSE QUE TE GUSTÓ -->
+              <div class="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                <div class="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
+                  <h3 class="text-sm font-bold text-gray-800"><i class="fa-solid fa-calculator text-gray-400 mr-2"></i>Estructura del Valor</h3>
+                </div>
+                
+                <div class="p-5 text-sm">
+                  <!-- Bloque Base -->
+                  <div class="space-y-3 text-gray-600 mb-4">
+                    <div class="flex justify-between">
+                      <span>Subtotal (Base Imponible)</span>
+                      <span class="tabular-nums">$156.52</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span>IVA (15%)</span>
+                      <span class="tabular-nums">$23.48</span>
+                    </div>
+                  </div>
+
+                  <div class="border-t border-dashed border-gray-200 mb-4"></div>
+
+                  <!-- Total y Retención -->
+                  <div class="space-y-3 mb-4">
+                    <div class="flex justify-between text-gray-900 font-medium">
+                      <span>Total Factura</span>
+                      <span class="tabular-nums font-semibold">$180.00</span>
+                    </div>
+                    <div class="flex justify-between text-rose-600">
+                      <span class="flex items-center gap-1 cursor-help" title="Ver comprobante de retención">
+                        Retención Aplicada (3%) <i class="fa-regular fa-circle-question text-[10px]"></i>
+                      </span>
+                      <span class="tabular-nums">- $5.40</span>
+                    </div>
+                  </div>
+
+                  <!-- Neto -->
+                  <div class="flex justify-between items-center bg-gray-50 -mx-5 px-5 py-3 border-y border-gray-100 mb-4">
+                    <span class="font-bold text-gray-800">Total Neto a Cobrar</span>
+                    <span class="text-lg font-bold text-gray-900 tabular-nums">$174.60</span>
+                  </div>
+
+                  <!-- Abonos -->
+                  <div class="flex justify-between text-emerald-600 mb-4">
+                    <span>Abonos Recibidos</span>
+                    <span class="tabular-nums font-medium">- $100.00</span>
+                  </div>
+
+                  <!-- Saldo Pendiente (Destacado, serio) -->
+                  <div class="flex justify-between items-center bg-amber-50 border border-amber-200/60 rounded-lg p-3">
+                    <span class="font-bold text-amber-800 uppercase text-xs tracking-wider">Saldo Pendiente</span>
+                    <span class="text-xl font-black text-amber-600 tabular-nums">$74.60</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- PANEL DERECHO: HISTORIAL DE PAGOS Y ACCIÓN -->
+              <div class="flex flex-col gap-6">
+                
+                <!-- Botón Principal de Acción -->
+                <button class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium p-3 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+                  <i class="fa-solid fa-cash-register"></i>
+                  Registrar Nuevo Abono
+                </button>
+
+                <!-- Tabla de Historial (SaaS Style) -->
+                <div class="bg-white border border-gray-200 rounded-xl shadow-sm flex-1">
+                  <div class="px-5 py-4 border-b border-gray-100 flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-gray-800">Historial de Pagos</h3>
+                    <span class="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-0.5 rounded">1 Registro</span>
+                  </div>
+                  
+                  <div class="divide-y divide-gray-100">
+                    
+                    <!-- Fila de Abono -->
+                    <div class="p-4 flex items-center justify-between hover:bg-gray-50 transition">
+                      <div class="flex items-start gap-3">
+                        <div class="mt-0.5 w-8 h-8 rounded bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100">
+                          <i class="fa-solid fa-money-bill-transfer text-xs"></i>
+                        </div>
+                        <div>
+                          <p class="text-sm font-semibold text-gray-900">Transferencia Bancaria</p>
+                          <p class="text-xs text-gray-500 mt-0.5">Ref: TRN-998273 • 15 Mar 2026</p>
+                        </div>
+                      </div>
+                      <div class="text-right">
+                        <p class="text-sm font-bold text-emerald-600 tabular-nums">$100.00</p>
+                        <button class="text-[10px] text-gray-400 hover:text-blue-600 mt-1 uppercase font-semibold">Ver recibo</button>
+                      </div>
+                    </div>
+                    
+                    <!-- Empty State para más espacio -->
+                    <div class="p-6 text-center text-gray-400">
+                      <p class="text-xs">No hay más transacciones registradas.</p>
+                    </div>
+
+                  </div>
+                </div>
+              </div>
+
+            </div> <!-- Fin Grid Interno -->
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+</body>
+</html>

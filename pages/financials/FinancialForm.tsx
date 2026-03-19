@@ -343,9 +343,12 @@ const FinancialForm: React.FC = () => {
   const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [showRetentionSection, setShowRetentionSection] = useState(false);
   const [tenantEmailConfig, setTenantEmailConfig] = useState<TenantEmailConfig | null>(null);
+  const [quotesLoading, setQuotesLoading] = useState(false);
+  const [emailPolicyLoading, setEmailPolicyLoading] = useState(false);
   const dealPrefillAppliedRef = useRef(false);
   const skippedInitialEditCompanyPrefillRef = useRef(false);
   const retentionToggleInitializedRef = useRef(false);
+  const quotesFetchedRef = useRef(false);
 
 
   // --- FILTRADO DINÁMICO ---
@@ -567,11 +570,62 @@ const FinancialForm: React.FC = () => {
     setTeamMembers(mappedTeam);
   }, [cachedUsers]);
 
-  const applyDealPrefill = useCallback(async (allQuotes: Quote[]) => {
+  const fetchTenantEmailConfig = useCallback(async () => {
+    if (!user?.id_tenant) return null;
+    if (tenantEmailConfig) return tenantEmailConfig;
+
+    setEmailPolicyLoading(true);
+    try {
+      const tenantRes = await apiFetch(buildUrl(GATEWAY_CONFIG.API.TENANTS.DETAIL, { id_tenant: user.id_tenant }));
+      if (!tenantRes.ok) return null;
+
+      const tenantRaw = await tenantRes.json();
+      const tenantData = Array.isArray(tenantRaw) ? tenantRaw[0] : tenantRaw;
+      const config: TenantEmailConfig = {
+        email_policy: tenantData?.email_policy,
+        corporate_email_address: tenantData?.corporate_email_address,
+        corporate_send_emails: Boolean(tenantData?.corporate_send_emails),
+      };
+      setTenantEmailConfig(config);
+      return config;
+    } catch {
+      return null;
+    } finally {
+      setEmailPolicyLoading(false);
+    }
+  }, [user?.id_tenant, tenantEmailConfig]);
+
+  const fetchQuotesCatalog = useCallback(async () => {
+    if (!user?.id_tenant || !user?.id_user || quotesLoading || quotesFetchedRef.current) return;
+
+    setQuotesLoading(true);
+    try {
+      const quotesResScoped = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`);
+      const quotesRawScoped = quotesResScoped.ok ? await quotesResScoped.json() : [];
+      let qData = normalizeQuotesResponse(quotesRawScoped);
+
+      if (!qData.length) {
+        const quotesResGlobal = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`);
+        const quotesRawGlobal = quotesResGlobal.ok ? await quotesResGlobal.json() : [];
+        qData = normalizeQuotesResponse(quotesRawGlobal);
+      }
+
+      setQuotes(qData);
+      quotesFetchedRef.current = true;
+    } catch {
+      setToast({ message: 'No se pudieron cargar las cotizaciones.', type: 'error' });
+    } finally {
+      setQuotesLoading(false);
+    }
+  }, [user?.id_tenant, user?.id_user, quotesLoading]);
+
+  const applyDealPrefill = useCallback(async (allQuotes?: Quote[]) => {
     if (isEditMode || dealPrefillAppliedRef.current || !fromDealId) return;
 
+    const quotePool = allQuotes || quotes;
+
     const selectedQuote = fromQuoteId
-      ? allQuotes.find((q: any) => String(q.id_cotizacion) === String(fromQuoteId))
+      ? quotePool.find((q: any) => String(q.id_cotizacion) === String(fromQuoteId))
       : undefined;
 
     let dealName = '';
@@ -610,12 +664,15 @@ const FinancialForm: React.FC = () => {
       };
     });
 
+    // Si viene quote_id pero aun no hay catálogo, esperamos al siguiente ciclo.
+    if (fromQuoteId && !selectedQuote && !quotePool.length) return;
+
     dealPrefillAppliedRef.current = true;
 
-    if (!selectedQuote) {
+    if (fromQuoteId && !selectedQuote) {
       setToast({ message: 'No se encontró la cotización en catálogo. Se cargó borrador parcial.', type: 'success' });
     }
-  }, [isEditMode, fromDealId, fromQuoteId, fromClientId, user?.id_tenant, user?.id_user]);
+  }, [isEditMode, fromDealId, fromQuoteId, fromClientId, user?.id_tenant, user?.id_user, quotes]);
 
   const fetchData = useCallback(async () => {
     if (!user?.id_tenant || !user?.id_user) return;
@@ -625,36 +682,10 @@ const FinancialForm: React.FC = () => {
     const isEditingMode = !!transactionId;
     
     try {
-      // Resolver politica/configuracion de correo del tenant para validar recordatorios.
-      const tenantRes = await apiFetch(buildUrl(GATEWAY_CONFIG.API.TENANTS.DETAIL, { id_tenant: user.id_tenant }));
-      if (tenantRes.ok) {
-        const tenantRaw = await tenantRes.json();
-        const tenantData = Array.isArray(tenantRaw) ? tenantRaw[0] : tenantRaw;
-        setTenantEmailConfig({
-          email_policy: tenantData?.email_policy,
-          corporate_email_address: tenantData?.corporate_email_address,
-          corporate_send_emails: Boolean(tenantData?.corporate_send_emails),
-        });
-      }
-
-      // Fetch only quotes; companies/contacts/users come from cache effects above
-      const quotesResScoped = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes?id_user=${user.id_user}&id_tenant=${user.id_tenant}`);
-      const quotesRawScoped = quotesResScoped.ok ? await quotesResScoped.json() : [];
-      let qData = normalizeQuotesResponse(quotesRawScoped);
-
-      if (!qData.length) {
-        const quotesResGlobal = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes`);
-        const quotesRawGlobal = quotesResGlobal.ok ? await quotesResGlobal.json() : [];
-        qData = normalizeQuotesResponse(quotesRawGlobal);
-      }
-
-      setQuotes(qData);
-
       // Si es modo edición, cargar los datos de la transacción
       if (isEditingMode && transactionId) {
-
         const detailRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${transactionId}`);
-        if (detailRes.ok) {
+        if (detailRes?.ok) {
           const data = await detailRes.json();
           const tx = Array.isArray(data) ? data[0] : data;
           
@@ -707,14 +738,15 @@ const FinancialForm: React.FC = () => {
         }
       } else {
         setDefaults();
-        await applyDealPrefill(qData);
+        setLoading(false);
+        return;
       }
     } catch (error) {
       setToast({ message: 'Error al cargar recursos.', type: 'error' });
     } finally {
       setLoading(false);
     }
-  }, [user, location.search, navigate, applyDealPrefill]);
+  }, [user, location.search, navigate]);
 
   const setDefaults = () => {
     const today = new Date().toISOString().split('T')[0];
@@ -734,6 +766,18 @@ const FinancialForm: React.FC = () => {
   };
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    if (!transaction.id_client_company) return;
+    if (quotesFetchedRef.current || quotesLoading) return;
+    void fetchQuotesCatalog();
+  }, [transaction.id_client_company, quotesLoading, fetchQuotesCatalog]);
+
+  useEffect(() => {
+    if (!fromDealId || isEditMode || dealPrefillAppliedRef.current) return;
+    if (!quotes.length) return;
+    void applyDealPrefill(quotes);
+  }, [fromDealId, isEditMode, quotes, applyDealPrefill]);
 
   // --- HANDLERS ---
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -848,9 +892,13 @@ const FinancialForm: React.FC = () => {
       return;
     }
 
-    if (transaction.enable_automation && !hasEmailIntegration) {
-      setToast({ message: 'Recordatorios por correo requieren una integracion activa (personal o corporativa).', type: 'error' });
-      return;
+    if (transaction.enable_automation) {
+      const cfg = await fetchTenantEmailConfig();
+      const canSend = personalEmailReady || Boolean(cfg?.corporate_email_address && cfg?.corporate_send_emails);
+      if (!canSend) {
+        setToast({ message: 'Recordatorios por correo requieren una integracion activa (personal o corporativa).', type: 'error' });
+        return;
+      }
     }
 
     if (transaction.enable_automation && selectedRecipients.length === 0) {
@@ -1073,15 +1121,25 @@ const FinancialForm: React.FC = () => {
                 <SearchableClientSelector
                   currentId={String(transaction.id_related_quote || '')}
                   options={quoteOptions}
-                  disabled={!transaction.id_client_company}
+                  disabled={!transaction.id_client_company || quotesLoading}
                   onClear={() => setTransaction(prev => ({ ...prev, id_related_quote: '' }))}
-                  placeholder={transaction.id_client_company ? 'Seleccionar una cotización...' : 'Seleccione primero una empresa'}
+                  placeholder={
+                    !transaction.id_client_company
+                      ? 'Seleccione primero una empresa'
+                      : quotesLoading
+                        ? 'Cargando cotizaciones...'
+                        : 'Seleccionar una cotización...'
+                  }
                   searchPlaceholder="Escribe para buscar cotización..."
-                  emptyText="No se encontraron cotizaciones"
+                  emptyText={quotesLoading ? 'Cargando cotizaciones...' : 'No se encontraron cotizaciones'}
                   onSelect={handleQuoteSelect}
                 />
                 <p className="mt-2 text-[11px] text-zinc-500">
-                  {transaction.id_client_company ? 'Opcional. Puedes dejar este campo vacío.' : 'La búsqueda se habilita al seleccionar una empresa.'}
+                  {!transaction.id_client_company
+                    ? 'La búsqueda se habilita al seleccionar una empresa.'
+                    : quotesLoading
+                      ? 'Cargando catálogo de cotizaciones para esta empresa...'
+                      : 'Opcional. Puedes dejar este campo vacío.'}
                 </p>
               </div>
             </div>
@@ -1384,18 +1442,23 @@ const FinancialForm: React.FC = () => {
                   type="button"
                   role="switch"
                   aria-checked={transaction.enable_automation || false}
-                  onClick={() => {
+                  disabled={emailPolicyLoading}
+                  onClick={async () => {
                     const enabled = !(transaction.enable_automation || false);
-                    if (enabled && !hasEmailIntegration) {
-                      setToast({ message: 'No puedes activar recordatorios sin integracion de correo (personal o corporativa).', type: 'error' });
-                      return;
+                    if (enabled) {
+                      const cfg = await fetchTenantEmailConfig();
+                      const canSend = personalEmailReady || Boolean(cfg?.corporate_email_address && cfg?.corporate_send_emails);
+                      if (!canSend) {
+                        setToast({ message: 'No puedes activar recordatorios sin integracion de correo (personal o corporativa).', type: 'error' });
+                        return;
+                      }
                     }
                     setTransaction(prev => ({ ...prev, enable_automation: enabled }));
                   }}
-                  className="inline-flex items-center justify-center"
+                  className="inline-flex items-center justify-center disabled:cursor-not-allowed"
                 >
                   <span
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${transaction.enable_automation ? 'bg-emerald-500' : 'bg-slate-300'}`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${transaction.enable_automation ? 'bg-emerald-500' : 'bg-slate-300'} ${emailPolicyLoading ? 'opacity-70' : ''}`}
                     aria-hidden="true"
                   >
                     <span

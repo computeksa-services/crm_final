@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { BrandSpinner } from './AppLoaders';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
+import AppModalViewport from './AppModalViewport';
 
 type PermissionLevel = 'VIEW' | 'EDIT' | 'BLOCKED';
 
@@ -247,7 +248,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+    <AppModalViewport className="z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
       <div className="bg-white dark:bg-slate-500 rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="px-4 sm:px-6 py-4 border-b border-slate-200 dark:border-slate-400 bg-white dark:bg-slate-500 flex justify-between items-start gap-3">
           <div className="flex items-start gap-3 min-w-0">
@@ -462,7 +463,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </AppModalViewport>
   );
 };
 

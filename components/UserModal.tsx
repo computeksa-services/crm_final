@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrandSpinner } from './AppLoaders';
 import { User, Tenant } from '../types';
+import AppModalViewport from './AppModalViewport';
 
 interface UserModalProps {
   isOpen: boolean;
@@ -64,7 +65,7 @@ const UserModal: React.FC<UserModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 transition-opacity">
+    <AppModalViewport className="z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 transition-opacity">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
         <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-gradient-to-r from-slate-50 to-slate-100">
           <h2 className="text-xl font-bold text-slate-800 flex items-center gap-3">
@@ -378,7 +379,7 @@ const UserModal: React.FC<UserModalProps> = ({
           </div>
         </form>
       </div>
-    </div>
+    </AppModalViewport>
   );
 };
 

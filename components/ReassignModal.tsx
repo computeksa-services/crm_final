@@ -4,6 +4,7 @@ import { apiFetch } from '../services/apiClient';
 import { ClientContact, User } from '../types';
 import { X, ArrowRightLeft } from 'lucide-react';
 import { SimpleSpinner } from './AppLoaders';
+import AppModalViewport from './AppModalViewport';
 
 interface ReassignModalProps {
   isOpen: boolean;
@@ -65,7 +66,7 @@ const ReassignModal: React.FC<ReassignModalProps> = ({ isOpen, onClose, onSucces
   const contactName = contact.title || `${contact.first_name || ''} ${contact.last_name || ''}`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in-fast">
+    <AppModalViewport className="z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in-fast">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-slide-in-from-bottom-fast">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
           <div>
@@ -136,7 +137,7 @@ const ReassignModal: React.FC<ReassignModalProps> = ({ isOpen, onClose, onSucces
           </div>
         </form>
       </div>
-    </div>
+    </AppModalViewport>
   );
 };
 

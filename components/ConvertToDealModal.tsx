@@ -4,6 +4,7 @@ import { ClientContact, DealStatus, DealInterest, DealChannel } from '../types';
 import { apiFetch } from '../services/apiClient';
 import { X } from 'lucide-react';
 import { SimpleSpinner } from './AppLoaders';
+import AppModalViewport from './AppModalViewport';
 
 interface ConvertToDealModalProps {
   contact: ClientContact;
@@ -77,7 +78,7 @@ const ConvertToDealModal: React.FC<ConvertToDealModalProps> = ({ contact, dealSt
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in-fast">
+    <AppModalViewport className="z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-fade-in-fast">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all animate-slide-in-from-bottom-fast">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
           <div>
@@ -134,7 +135,7 @@ const ConvertToDealModal: React.FC<ConvertToDealModalProps> = ({ contact, dealSt
           </div>
         </form>
       </div>
-    </div>
+    </AppModalViewport>
   );
 };
 

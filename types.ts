@@ -507,6 +507,20 @@ export interface Quote {
   }>;
 }
 
+// 8.5 PAYMENT RECORD (Registro individual de abono/pago)
+export interface PaymentRecord {
+  id?: string;
+  id_abono?: string; // Backend ID
+  amount: number;
+  payment_date: string; // ISO Date
+  payment_method: 'TRANSFERENCIA' | 'EFECTIVO' | 'CHEQUE' | 'TARJETA' | string;
+  reference?: string; // Número de referencia o transacción
+  notes?: string; // Notas adicionales
+  created_by: string; // User ID who created payment
+  created_by_name?: string; // User name
+  created_at?: string; // ISO Timestamp
+}
+
 // 9. FINANCIAL TRANSACTIONS (Transacciones financieras)
 export interface FinancialTransaction {
   id_transaction: string;
@@ -573,6 +587,9 @@ export interface FinancialTransaction {
     estado_envio?: string;
     destinatarios?: string;
   }>;
+
+  // Historial de abonos/pagos
+  payment_history?: PaymentRecord[];
 }
 
 // 10. QUOTE ITEMS (Artículos de la cotización)

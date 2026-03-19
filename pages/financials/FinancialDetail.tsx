@@ -3,6 +3,9 @@ import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import CollectionModal from '../../components/CollectionModal';
+import PaymentFormModal from '../../components/PaymentFormModal';
+import PaymentHistoryTable from '../../components/PaymentHistoryTable';
+import Avatar from '../../components/Avatar';
 import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
 import { apiFetch } from '../../services/apiClient';
@@ -42,23 +45,106 @@ const deriveBalanceDue = (rawBalance: any, totalValue: any, paidAmount: any) => 
   return Math.max(Number(totalValue || 0) - Number(paidAmount || 0), 0);
 };
 
-const getInitials = (fullName?: string) => {
-  if (!fullName) return '?';
-  const parts = fullName.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+const getPaymentStatusColor = (code?: string, statusRaw?: unknown) => {
+    const normalizedCode = String(code || '').trim().toUpperCase();
+    const normalizedStatus = String(statusRaw || '').trim().toUpperCase();
+
+    if (normalizedCode === 'PAID' || normalizedStatus === 'PAGADO') {
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+    if (normalizedCode === 'OVERDUE' || normalizedStatus === 'VENCIDO') {
+      return 'bg-rose-50 text-rose-700 border-rose-200';
+    }
+    if (normalizedCode === 'WARNING' || normalizedCode === 'PENDING' || normalizedStatus === 'PENDIENTE') {
+      return 'bg-amber-50 text-amber-700 border-amber-200';
+    }
+    if (normalizedStatus === 'ANULADO') {
+      return 'bg-slate-50 text-slate-700 border-slate-200';
+    }
+    return 'bg-slate-50 text-slate-700 border-slate-200';
 };
 
-const getPaymentStatusColor = (code?: string) => {
-    if (code === 'PAID') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-    if (code === 'OVERDUE') return 'bg-rose-50 text-rose-700 border-rose-200';
-    if (code === 'WARNING') return 'bg-amber-50 text-amber-700 border-amber-200';
-    return 'bg-blue-50 text-blue-700 border-blue-200';
+const getBaseStatusLabel = (statusRaw?: unknown) => {
+  const status = String(statusRaw || '').trim().toUpperCase();
+  if (status === 'PAGADO') return 'PAGADO';
+  if (status === 'VENCIDO') return 'VENCIDO';
+  if (status === 'ANULADO') return 'ANULADO';
+  if (status === 'PENDIENTE') return 'PENDIENTE';
+  return 'SIN ESTADO';
 };
 
 const toNumberSafe = (val: unknown) => {
   const num = Number(val);
   return Number.isFinite(num) ? num : 0;
+};
+
+const getDueTimePresentation = (indicatorRaw: unknown, absoluteDaysRaw: unknown, statusLabelRaw?: unknown) => {
+  const indicator = String(indicatorRaw || '').trim().toUpperCase();
+  const absoluteDays = toNumberSafe(absoluteDaysRaw);
+  const statusLabel = String(statusLabelRaw || '').trim();
+
+  if (indicator === 'PAGADO_A_TIEMPO') {
+    return {
+      text: statusLabel || 'Pagado a tiempo',
+      className: 'text-emerald-600',
+    };
+  }
+  if (indicator === 'PAGADO_ATRASADO') {
+    return {
+      text: statusLabel || `Pagado (Atraso de ${absoluteDays} días)`,
+      className: 'text-red-600',
+    };
+  }
+
+  if (indicator === 'ATRASADO') {
+    return {
+      text: `Vencido hace ${absoluteDays} días`,
+      className: 'text-red-600',
+    };
+  }
+  if (indicator === 'HOY') {
+    return {
+      text: 'Vence HOY',
+      className: 'text-amber-600',
+    };
+  }
+  if (indicator === 'A_TIEMPO') {
+    return {
+      text: `Vence en ${absoluteDays} días`,
+      className: 'text-emerald-600',
+    };
+  }
+  return {
+    text: '-',
+    className: 'text-gray-500',
+  };
+};
+
+const getFileNameFromUrl = (fileUrl?: string | null) => {
+  if (!fileUrl) return '';
+  const cleanUrl = fileUrl.split('?')[0];
+  const encodedName = cleanUrl.split('/').pop() || cleanUrl;
+  try {
+    return decodeURIComponent(encodedName);
+  } catch {
+    return encodedName;
+  }
+};
+
+const getFileExtension = (fileUrl?: string | null) => {
+  const fileName = getFileNameFromUrl(fileUrl);
+  const dotIndex = fileName.lastIndexOf('.');
+  return dotIndex >= 0 ? fileName.slice(dotIndex + 1).toLowerCase() : '';
+};
+
+const getFileIconClass = (fileUrl?: string | null) => {
+  const ext = getFileExtension(fileUrl);
+  if (['pdf'].includes(ext)) return 'fa-file-pdf text-red-500';
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) return 'fa-file-image text-purple-500';
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return 'fa-file-excel text-emerald-500';
+  if (['doc', 'docx'].includes(ext)) return 'fa-file-word text-blue-500';
+  if (['zip', 'rar', '7z'].includes(ext)) return 'fa-file-zipper text-amber-500';
+  return 'fa-file-lines text-slate-400';
 };
 
 const normalizeAutomationRecipients = (raw: unknown) => {
@@ -117,10 +203,10 @@ const StatusSelector: React.FC<{
   const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
   
   const allOptions = [
-    { id: 'PENDIENTE', name: 'Pendiente', color: '#f59e0b', icon: 'fa-clock' },
-    { id: 'PAGADO', name: 'Pagado', color: '#10b981', icon: 'fa-circle-check' },
-    { id: 'ANULADO', name: 'Anulado', color: '#6b7280', icon: 'fa-ban' },
-    { id: 'VENCIDO', name: 'Vencido', color: '#ef4444', icon: 'fa-circle-exclamation' },
+    { id: 'PENDIENTE', name: 'PENDIENTE', color: '#f59e0b', icon: 'fa-clock' },
+    { id: 'PAGADO', name: 'PAGADO', color: '#10b981', icon: 'fa-circle-check' },
+    { id: 'ANULADO', name: 'ANULADO', color: '#6b7280', icon: 'fa-ban' },
+    { id: 'VENCIDO', name: 'VENCIDO', color: '#ef4444', icon: 'fa-circle-exclamation' },
   ];
 
   const editableOptions = allOptions.filter(opt => opt.id !== 'VENCIDO');
@@ -223,20 +309,27 @@ const FinancialDetail: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
+  const [currentTab, setCurrentTab] = useState<'resumen' | 'abonos' | 'archivos'>('resumen');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [companyContacts, setCompanyContacts] = useState<any[]>([]);
+  const [uploadingInvoiceFile, setUploadingInvoiceFile] = useState(false);
+  const [uploadingRetentionFile, setUploadingRetentionFile] = useState(false);
+  const [deletingFileKey, setDeletingFileKey] = useState<'invoice' | 'retention' | null>(null);
   const [confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+  const invoiceFileInputRef = useRef<HTMLInputElement | null>(null);
+  const retentionFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Verificar si hay integración de correo activa
   const hasEmailIntegration = () => {
     return !!(user?.provider && user?.send_emails && user?.email_connected);
   };
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (silent = false) => {
     if (!id || !user?.id_tenant) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
+    let uiReady = false;
     try {
       const txResponse = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${id}`);
       if (!txResponse.ok) throw new Error('Error de red');
@@ -261,8 +354,8 @@ const FinancialDetail: React.FC = () => {
         due_date_input: tx.v_input_fecha_vencimiento,
         payment_date_input: tx.v_input_fecha_pago,
         retention_date_input: tx.v_input_fecha_retencion,
-        issue_date_human: tx.v_texto_fecha_emision_human,
-        due_date_human: tx.v_texto_fecha_vencimiento_human,
+        issue_date_human: tx.v_texto_fecha_emision_human || tx.v_texto_fecha_emision,
+        due_date_human: tx.v_texto_fecha_vencimiento_human || tx.v_texto_fecha_vencimiento,
         payment_date_human: tx.v_texto_fecha_pago_human,
         payment_status_code: tx.v_codigo_estado,
         payment_status_label: tx.v_etiqueta_estado,
@@ -279,25 +372,54 @@ const FinancialDetail: React.FC = () => {
         total_value: totalValue,
         paid_amount: paidAmount,
         balance_due: deriveBalanceDue(tx.v_saldo_pendiente || tx.balance_due, totalValue, paidAmount),
+        days_until_due: tx.v_dias_restantes ?? tx.days_until_due,
+        due_time_indicator: tx.v_indicador_tiempo,
+        due_time_absolute_days: tx.v_dias_absolutos,
         enable_automation: tx.enable_automation === true,
         automation_frequency: toNumberSafe(tx.automation_frequency),
         automation_recipients: normalizeAutomationRecipients(tx.automation_recipients),
         next_reminder_label: tx.v_texto_proximo_recordatorio_human || tx.v_proximo_recordatorio || tx.v_input_proximo_recordatorio,
         notification_logs: normalizeNotificationLogs(tx.notification_logs),
-        usuario_creador: tx.usuario_creador
+        usuario_creador: tx.usuario_creador,
+        creator_avatar: tx.avatar_usuario_creador || tx.usuario_creador_avatar || tx.created_by_avatar || tx.owner_avatar || null,
+        invoice_file_url: tx.invoice_file_url || tx.url_factura || null,
+        retention_file_url: tx.retention_file_url || tx.url_retencion || null,
+        payment_history: Array.isArray(tx.historial_abonos)
+          ? tx.historial_abonos.map((p: any) => ({
+              id: p.id_payment,
+              id_abono: p.id_payment,
+              amount: toNumberSafe(p.amount),
+              payment_date: String(p.payment_date || ''),
+              payment_method: String(p.payment_method || ''),
+              reference: p.reference_number ? String(p.reference_number) : undefined,
+              notes: p.notes ? String(p.notes) : undefined,
+              created_by: String(p.registrado_por || tx.usuario_creador || 'Sistema'),
+              created_by_name: String(p.registrado_por || tx.usuario_creador || 'Sistema'),
+              created_at: p.fecha_registro ? String(p.fecha_registro) : undefined,
+            }))
+          : [],
       };
 
       setTransaction(normalizedTx);
       navigate(location.pathname, { state: { breadcrumb: normalizedTx.invoice_number }, replace: true });
+      if (!silent) setLoading(false);
+      uiReady = true;
 
       if (normalizedTx.id_client_company) {
-        const cRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies_contacts/detail?id_client_company=${normalizedTx.id_client_company}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
-        if (cRes.ok) setCompanyContacts(await cRes.json());
+        // No bloquear el primer render por carga secundaria de contactos.
+        void (async () => {
+          try {
+            const cRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies_contacts/detail?id_client_company=${normalizedTx.id_client_company}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
+            if (cRes.ok) setCompanyContacts(await cRes.json());
+          } catch {
+            // silencioso: contactos no son criticos para mostrar el detalle
+          }
+        })();
       }
     } catch (error) {
       setToast({ message: 'Error de carga', type: 'error' });
     } finally {
-      setLoading(false);
+      if (!uiReady && !silent) setLoading(false);
     }
   }, [id, user]);
 
@@ -326,30 +448,52 @@ const FinancialDetail: React.FC = () => {
     } finally { setProcessing(false); }
   };
 
-  const handleAddPayment = async () => {
-    if (!transaction || paymentAmount <= 0) return;
+  const handleAddPayment = async (paymentData: {
+    amount: number;
+    payment_date: string;
+    payment_method: string;
+    reference?: string;
+    notes?: string;
+  }) => {
+    if (!transaction || !user?.id_tenant) return;
     setProcessing(true);
     try {
-      const currentBalance = parseFloat(transaction.balance_due as any) || 0;
-      const appliedAmount = Math.min(paymentAmount, currentBalance);
-      if (appliedAmount <= 0) {
-        setToast({ message: 'El monto del abono no es válido.', type: 'error' });
-        return;
-      }
-
-      const newPaid = (parseFloat(transaction.paid_amount as any) || 0) + appliedAmount;
-      const newBalance = Math.max(currentBalance - appliedAmount, 0);
-      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/abono`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...transaction, paid_amount: newPaid, balance_due: newBalance, status: newBalance === 0 ? 'PAGADO' : transaction.status, id_tenant: user?.id_tenant })
+        body: JSON.stringify({
+          id_transaction: transaction.id_transaction,
+          id_tenant: user.id_tenant,
+          created_by: user.id_user,
+          ...paymentData,
+        })
       });
-      if (!res.ok) throw new Error();
-      setIsPaymentModalOpen(false); setPaymentAmount(0);
-      setToast({ message: 'Abono registrado', type: 'success' });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Error al registrar el abono');
+      }
+
+      const responseData = await res.json().catch(() => null);
+      const updatedSummary = Array.isArray(responseData) ? responseData[0] : responseData;
+      const updatedSummaryId = updatedSummary?.id_transaction ?? updatedSummary?.id_transaccion;
+      if (updatedSummary && updatedSummaryId === transaction.id_transaction) {
+        setTransaction((prev: any) => prev ? {
+          ...prev,
+          status: updatedSummary.status ?? updatedSummary.estado_registro ?? prev.status,
+          paid_amount: toNumberSafe(updatedSummary.paid_amount ?? updatedSummary.monto_pagado_caja ?? prev.paid_amount),
+        } : prev);
+      }
+
+      setToast({ message: 'Abono registrado exitosamente', type: 'success' });
       await invalidateFinancials(getCurrentMonthRange());
-      fetchData();
-    } catch { setToast({ message: 'Error en abono', type: 'error' }); } finally { setProcessing(false); }
+      await fetchData(true); // Silent soft refresh transaction data
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error al registrar el abono';
+      setToast({ message, type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -367,6 +511,136 @@ const FinancialDetail: React.FC = () => {
       setProcessing(false);
       setConfirmState(p => ({ ...p, isOpen: false }));
     }
+  };
+
+  const openFileSecure = useCallback(async (fileUrl?: string | null) => {
+    if (!fileUrl) {
+      setToast({ message: 'No se encontró el archivo.', type: 'error' });
+      return;
+    }
+
+    try {
+      const response = await apiFetch(
+        `${import.meta.env.VITE_WEBHOOK_URL}/api/crm/view?url_archivo=${encodeURIComponent(fileUrl)}`,
+        { method: 'GET' }
+      );
+
+      if (!response.ok) throw new Error();
+
+      const blob = await response.blob();
+      if (!blob || blob.size === 0) throw new Error();
+
+      const blobUrl = URL.createObjectURL(blob);
+      const popup = window.open(blobUrl, '_blank', 'noopener,noreferrer');
+
+      if (!popup) {
+        setToast({ message: 'Si no se abrió la vista, habilita ventanas emergentes para este sitio.', type: 'success' });
+      }
+
+      window.setTimeout(() => {
+        URL.revokeObjectURL(blobUrl);
+      }, 60000);
+    } catch {
+      setToast({ message: 'No se pudo cargar el archivo.', type: 'error' });
+    }
+  }, []);
+
+  const handleUploadFile = async (file: File, target: 'invoice' | 'retention') => {
+    if (!transaction?.id_transaction || !user?.id_tenant || !user?.id_user) return;
+    const setUploading = target === 'invoice' ? setUploadingInvoiceFile : setUploadingRetentionFile;
+    const inputRef = target === 'invoice' ? invoiceFileInputRef : retentionFileInputRef;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append(target === 'invoice' ? 'invoice_file' : 'retention_file', file);
+      formData.append('id_transaction', transaction.id_transaction);
+      formData.append('id_tenant', user.id_tenant);
+      formData.append('id_user', user.id_user);
+
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error();
+
+      setToast({
+        message: target === 'invoice' ? 'Factura subida correctamente.' : 'Retención subida correctamente.',
+        type: 'success',
+      });
+      await invalidateFinancials(getCurrentMonthRange());
+      await fetchData(true);
+    } catch {
+      setToast({
+        message: target === 'invoice' ? 'Error al subir archivo de factura.' : 'Error al subir archivo de retención.',
+        type: 'error',
+      });
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = '';
+    }
+  };
+
+  const handleUploadInvoiceFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await handleUploadFile(file, 'invoice');
+  };
+
+  const handleUploadRetentionFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await handleUploadFile(file, 'retention');
+  };
+
+  const handleDeleteFile = (target: 'invoice' | 'retention') => {
+    if (!transaction?.id_transaction || !user?.id_tenant || !user?.id_user) return;
+    const fileUrl = target === 'invoice' ? transaction.invoice_file_url : transaction.retention_file_url;
+    if (!fileUrl) return;
+
+    setConfirmState({
+      isOpen: true,
+      title: target === 'invoice' ? 'Eliminar Archivo de Factura' : 'Eliminar Archivo de Retención',
+      message: '¿Seguro que deseas eliminar este archivo?',
+      onConfirm: async () => {
+        setConfirmState((prev) => ({ ...prev, isOpen: false }));
+        setDeletingFileKey(target);
+        try {
+          const formData = new FormData();
+          formData.append('id_transaction', transaction.id_transaction);
+          formData.append('id_tenant', user.id_tenant);
+          formData.append('id_user', user.id_user);
+          if (target === 'invoice') {
+            formData.append('delete_invoice_file', 'true');
+            formData.append('old_invoice_key', String(fileUrl));
+          } else {
+            formData.append('delete_retention_file', 'true');
+            formData.append('old_retention_key', String(fileUrl));
+          }
+
+          const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!res.ok) throw new Error();
+
+          setToast({
+            message: target === 'invoice' ? 'Archivo de factura eliminado.' : 'Archivo de retención eliminado.',
+            type: 'success',
+          });
+          await invalidateFinancials(getCurrentMonthRange());
+          await fetchData(true);
+        } catch {
+          setToast({
+            message: target === 'invoice' ? 'Error al eliminar archivo de factura.' : 'Error al eliminar archivo de retención.',
+            type: 'error',
+          });
+        } finally {
+          setDeletingFileKey(null);
+        }
+      },
+    });
   };
 
   const handleSendCollection = async (modalData: any) => {
@@ -393,7 +667,7 @@ const FinancialDetail: React.FC = () => {
   };
 
   if (loading) return (
-    <div className="flex h-[calc(100vh-200px)] items-center justify-center">
+    <div className="flex h-screen items-center justify-center">
       <div className="flex flex-col items-center gap-3">
         <BrandSpinner size="xl" />
         <p className="text-slate-400 font-medium animate-pulse">Cargando detalles financieros...</p>
@@ -403,383 +677,441 @@ const FinancialDetail: React.FC = () => {
 
   if (!transaction) return null;
 
+  const dueTime = getDueTimePresentation(
+    transaction.due_time_indicator,
+    transaction.due_time_absolute_days,
+    transaction.payment_status_label
+  );
+  const paymentCount = Array.isArray(transaction.payment_history) ? transaction.payment_history.length : 0;
+
   return (
-    <div className="min-h-screen bg-[#F9F9F8] text-zinc-800 pb-20 font-sans selection:bg-orange-100 selection:text-orange-900 animate-fade-in">
+    <div className="min-h-screen bg-[#F9F9FA]">
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} isOpen={confirmState.isOpen} onClose={() => setConfirmState(p => ({...p, isOpen: false}))} />
-
-      {/* --- HEADER PRINCIPAL --- */}
-      <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/90 backdrop-blur">
-        <div className="mx-auto max-w-[1240px] px-4 sm:px-6 lg:px-8 py-5">
-          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
-            <div className="min-w-0 flex-1 space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-zinc-600">
-                  <i className={`fa-solid ${transaction.transaction_type === 'VENTA' ? 'fa-arrow-trend-up text-emerald-500' : transaction.transaction_type === 'GASTO' ? 'fa-arrow-trend-down text-rose-500' : 'fa-circle text-slate-400'} text-[9px]`}></i>
-                  {transaction.transaction_type || 'OTRO'}
-                </span>
-                <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] ${getPaymentStatusColor(transaction.payment_status_code)}`}>
-                  {transaction.payment_status_label || 'SIN ESTADO'}
-                </span>
-                {transaction.is_urgent && (
-                  <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.18em] text-rose-600">
-                    <i className="fa-solid fa-triangle-exclamation text-[9px]"></i>
-                    Urgente
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-1">
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-zinc-900 truncate">
-                  Factura #{transaction.invoice_number}
-                </h1>
-                <div className="flex flex-wrap items-center gap-3 text-xs">
-                  <Link to={`/app/client-companies/${transaction.id_client_company}`} className="inline-flex items-center gap-2 rounded-md px-2 py-1 text-zinc-600 transition-colors hover:bg-zinc-100 hover:text-zinc-900">
-                    <i className="fa-solid fa-building text-zinc-400"></i>
-                    <span className="font-semibold uppercase">{transaction.client_company_name}</span>
-                  </Link>
-                  {transaction.description && (
-                    <span className="max-w-2xl truncate text-[13px] italic text-zinc-500">{transaction.description}</span>
-                  )}
-                </div>
+      
+      {/* HEADER */}
+      <header className="bg-white border-b border-gray-200 px-8 py-6">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+          <div className="min-w-0 shrink-0">
+            <div className="flex items-center gap-3 min-w-0">
+              <h1 className="text-2xl font-bold text-gray-900 whitespace-nowrap truncate">Factura #{transaction.invoice_number}</h1>
+              <span className={`text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 border shrink-0 ${getPaymentStatusColor(transaction.payment_status_code, transaction.status)}`}>
+                {getBaseStatusLabel(transaction.status)}
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-gray-600 max-w-[560px] truncate">{transaction.description || '-'}</p>
+          </div>
+          
+          <div className="ml-auto w-full md:w-auto flex items-center justify-end gap-6">
+            <div className="text-right">
+              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">Saldo Pendiente</p>
+              <div className="flex items-baseline gap-1 justify-end">
+                <span className="text-xl font-bold text-gray-900">{formatCurrency(transaction.balance_due)}</span>
               </div>
             </div>
-
-            <div className="flex flex-col gap-3 lg:items-end w-full lg:w-auto shrink-0">
-              <div className="rounded-2xl border border-rose-100 bg-gradient-to-br from-rose-50 via-white to-white px-5 py-4 shadow-sm min-w-[240px]">
-                <div className="text-[11px] font-semibold uppercase tracking-widest text-rose-400 mb-1">Saldo por cobrar</div>
-                <div className="text-3xl font-semibold tracking-tight text-rose-600 tabular-nums">
-                  {formatCurrency(transaction.balance_due)}
-                </div>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:justify-end">
-                <StatusSelector 
-                  currentStatus={transaction.status || ''} 
-                  onSelect={handleStatusChange} 
-                  disabled={processing}
-                />
-                <button onClick={() => navigate(`/app/financials/edit?id=${transaction.id_transaction}`)} className="h-9 px-4 bg-zinc-900 text-white rounded-md font-medium text-[13px] hover:bg-zinc-800 transition-colors shadow-sm flex items-center gap-2">
-                  <i className="fa-solid fa-pen text-[11px]"></i>
-                  Editar
-                </button>
-                <button onClick={() => setConfirmState({ isOpen: true, title: '¿Seguro desea eliminar este registro?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="h-9 w-9 flex items-center justify-center rounded-md bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 transition-colors shadow-sm">
-                  <i className="fa-solid fa-trash text-[12px]"></i>
-                </button>
-              </div>
+            <div className="flex gap-2">
+              <button onClick={() => navigate(`/app/financials/edit?id=${transaction.id_transaction}`)} className="px-4 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded text-sm font-medium transition flex items-center gap-2">
+                <i className="fa-solid fa-pen text-xs"></i> Editar
+              </button>
+              <button onClick={() => setConfirmState({ isOpen: true, title: '¿Seguro desea eliminar este registro?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="px-3 py-1.5 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50 text-gray-700 transition"><i className="fa-solid fa-trash text-xs"></i></button>
             </div>
+          </div>
+        </div>
+
+        {/* PROGRESS BAR */}
+        <div className="flex items-center w-full max-w-3xl gap-2 mt-2">
+          <div className="flex-1 flex flex-col gap-1">
+            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'PENDIENTE' ? 'bg-amber-500' : 'bg-gray-200'}`}></div>
+            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'PENDIENTE' ? 'text-amber-600' : 'text-gray-400'}`}>
+              <i className={`fa-solid ${transaction.status === 'PENDIENTE' ? 'fa-circle' : 'fa-circle-notch'} text-[8px]`}></i> PENDIENTE
+            </span>
+          </div>
+          <div className="flex-1 flex flex-col gap-1">
+            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'VENCIDO' ? 'bg-rose-500' : 'bg-gray-200'}`}></div>
+            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'VENCIDO' ? 'text-rose-600' : 'text-gray-400'}`}>
+              <i className={`fa-solid ${transaction.status === 'VENCIDO' ? 'fa-circle' : 'fa-circle-notch'} text-[8px]`}></i> VENCIDO
+            </span>
+          </div>
+          <div className="flex-1 flex flex-col gap-1">
+            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'PAGADO' ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
+            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'PAGADO' ? 'text-emerald-600' : 'text-gray-400'}`}>
+              <i className={`fa-solid ${transaction.status === 'PAGADO' ? 'fa-circle' : 'fa-circle-notch'} text-[8px]`}></i> PAGADO
+            </span>
+          </div>
+          <div className="flex-1 flex flex-col gap-1">
+            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'ANULADO' ? 'bg-slate-500' : 'bg-gray-200'}`}></div>
+            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'ANULADO' ? 'text-slate-600' : 'text-gray-400'}`}>
+              <i className={`fa-solid ${transaction.status === 'ANULADO' ? 'fa-circle' : 'fa-circle-notch'} text-[8px]`}></i> ANULADO
+            </span>
           </div>
         </div>
       </header>
 
-      {/* --- GRID DE CONTENIDO (4/8) --- */}
-      <div className="mx-auto max-w-[1240px] px-4 sm:px-6 lg:px-8 pt-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* SIDEBAR */}
-        <aside className="lg:col-span-4 space-y-6">
+      {/* CONTENIDO PRINCIPAL */}
+      <div className="max-w-7xl mx-auto p-6 md:p-8">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          
+          {/* COLUMNA IZQUIERDA: DATOS RÁPIDOS */}
+          <div className="lg:col-span-4 space-y-6">
             
-            {/* Registro de Pago Rápido */}
-            <button 
-              onClick={() => setIsPaymentModalOpen(true)}
-              className="w-full overflow-hidden rounded-[24px] bg-gradient-to-br from-emerald-600 via-emerald-600 to-emerald-700 p-5 text-white shadow-xl shadow-emerald-600/20 transition-all hover:-translate-y-0.5 hover:shadow-emerald-600/30"
-            >
-              <div className="flex items-center gap-4 text-left">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 text-xl shadow-inner shadow-white/10">
-                  <i className="fa-solid fa-hand-holding-dollar"></i>
+            <div>
+              <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Acerca del Documento</h2>
+              <div className="space-y-4">
+                
+                {/* Cliente */}
+                <div className="flex items-start gap-3">
+                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-building text-gray-400"></i></div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-0.5">Cliente</p>
+                    <Link to={`/app/client-companies/${transaction.id_client_company}`} className="text-sm font-medium text-gray-900 hover:text-blue-600 leading-tight">
+                      {transaction.client_company_name}
+                    </Link>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-100">Acción rápida</p>
-                  <p className="text-lg font-bold leading-tight">Registrar Abono</p>
-                  <p className="text-xs text-emerald-100/90">Aplica un pago parcial o total al documento.</p>
+
+                {/* RUC */}
+                <div className="flex items-start gap-3">
+                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-id-card text-gray-400"></i></div>
+                  <div>
+                    <p className="text-xs text-gray-500 mb-0.5">RUC / NIT</p>
+                    <p className="text-sm text-gray-900 tabular-nums">{transaction.client_ruc || '-'}</p>
+                  </div>
+                </div>
+
+                <hr className="border-gray-200 my-2" />
+
+                {/* Emisión */}
+                <div className="flex items-start gap-3">
+                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-calendar-plus text-gray-400"></i></div>
+                  <div className="w-full flex justify-between items-center">
+                    <p className="text-sm text-gray-600">Emisión</p>
+                    <p className="text-sm text-gray-900 tabular-nums">{transaction.issue_date_human || transaction.issue_date_input || '-'}</p>
+                  </div>
+                </div>
+                
+                {/* Vencimiento */}
+                <div className="flex items-start gap-3">
+                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-calendar-xmark text-gray-400"></i></div>
+                  <div className="w-full flex justify-between items-center">
+                    <p className="text-sm text-gray-600">Vencimiento</p>
+                    <p className={`text-sm font-medium tabular-nums ${transaction.status === 'VENCIDO' ? 'text-red-600' : 'text-gray-900'}`}>
+                      {transaction.due_date_human || transaction.due_date_input || '-'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Estado Pago */}
+                <div className="flex items-start gap-3">
+                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-clock text-gray-400"></i></div>
+                  <div className="w-full flex justify-between items-center">
+                    <p className="text-sm text-gray-600">Estado Pago</p>
+                    <p className={`text-sm font-medium ${dueTime.className}`}>
+                      {dueTime.text}
+                    </p>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            {/* Creado por */}
+            <div>
+              <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Creado por</h2>
+              <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg bg-white">
+                <Avatar
+                  src={transaction.creator_avatar || null}
+                  name={transaction.usuario_creador || transaction.created_by_name || 'Sistema'}
+                  size="sm"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-gray-900 leading-none">{transaction.usuario_creador || transaction.created_by_name || 'Sistema'}</p>
                 </div>
               </div>
-              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-emerald-100">
-                <i className="fa-solid fa-chevron-right"></i>
-              </span>
-            </button>
-
-            {/* Datos del Cliente */}
-            <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-                <div className="flex items-center gap-3 border-b border-zinc-100 px-6 py-4">
-                    <span className="h-6 w-2 rounded-full bg-blue-500"></span>
-                    <div>
-                      <h3 className="text-sm font-bold text-zinc-900">Empresa Cliente</h3>
-                      <p className="text-[11px] text-zinc-500">Ficha de referencia</p>
-                    </div>
-                </div>
-                <div className="p-6 space-y-5">
-                    <Link to={`/app/client-companies/${transaction.id_client_company}`} className="block rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3 transition-colors hover:bg-zinc-100">
-                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Empresa</p>
-                      <div className="mt-1 flex items-center gap-2 text-[13px] font-bold text-zinc-800">
-                        <i className="fa-solid fa-building text-zinc-400"></i>
-                        <span className="truncate uppercase">{transaction.client_company_name || 'Sin empresa'}</span>
-                      </div>
-                    </Link>
-
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                      <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">RUC / Identificación</p>
-                        <p className="mt-1 text-sm font-bold text-zinc-700 font-mono">{transaction.client_ruc || 'N/A'}</p>
-                      </div>
-                      <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Email</p>
-                        <p className="mt-1 truncate text-[13px] font-semibold text-zinc-700">{transaction.client_email || 'No registrado'}</p>
-                      </div>
-                      <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 sm:col-span-2 lg:col-span-1 xl:col-span-2">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Dirección</p>
-                        <p className="mt-1 text-[13px] leading-relaxed text-zinc-600">{transaction.client_address || 'No registrada'}</p>
-                      </div>
-                    </div>
-                </div>
             </div>
 
-            {/* Automatización (OCULTAR SI ESTÁ PAGADO) */}
-            {transaction.status !== 'PAGADO' && (
-                <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-                    <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
-                    <div className="flex items-center gap-3">
-                        <span className="h-6 w-2 rounded-full bg-indigo-500"></span>
-                        <div>
-                            <h3 className="text-sm font-bold text-zinc-900">Cobranza Automática</h3>
-                            <p className="text-[11px] text-zinc-500">Seguimiento programado</p>
-                        </div>
-                    </div>
-                    {/* Botón de Campaña Condicional */}
-                    {transaction.status === 'VENCIDO' && (
-                        <button 
-                            onClick={() => {
-                              if (!hasEmailIntegration()) {
-                                alert('No tienes una integración de correo configurada. Ve a Configuración → Integraciones para conectar Gmail o Outlook.');
-                                return;
-                              }
-                              setIsCollectionModalOpen(true);
-                            }} 
-                            disabled={!hasEmailIntegration()}
-                            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all shadow-sm ${!hasEmailIntegration() ? 'bg-slate-100 text-slate-400 cursor-not-allowed opacity-50' : transaction.enable_automation ? 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white' : 'bg-orange-50 text-orange-600 hover:bg-orange-600 hover:text-white'}`}
-                            title={!hasEmailIntegration() ? 'Integración de correo no configurada. Ve a Configuración → Integraciones' : transaction.enable_automation ? 'Automatización encendida. Haz clic para enviar una notificación manual extra.' : 'Enviar notificación manual'}
-                        >
-                        <i className="fa-solid fa-bell text-sm"></i>
-                        </button>
-                    )}
-                    </div>
-                    <div className="p-6 space-y-5">
-                        <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Estado</span>
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase border ${transaction.enable_automation ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
-                                {transaction.enable_automation ? 'Activado' : 'Inactivo'}
-                            </span>
-                          </div>
-                        </div>
-                        {transaction.enable_automation && (
-                        <>
-                            <div className="flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                            <span className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Frecuencia</span>
-                            <span className="text-[13px] font-bold text-zinc-700">Cada {transaction.automation_frequency} días</span>
-                            </div>
-                            <div className="rounded-2xl border border-indigo-100 bg-indigo-50 p-4 text-center">
-                            <p className="mb-1 text-[10px] font-black uppercase tracking-[0.18em] text-indigo-400">Próximo envío estimado</p>
-                            <p className="text-[13px] font-bold text-indigo-700">{transaction.next_reminder_label || 'Calculando...'}</p>
-                            </div>
-                            
-                            {/* DESTINATARIOS CONFIGURADOS */}
-                            <div className="space-y-2 mt-4">
-                                <p className="border-b border-zinc-100 pb-1 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Enviando alertas a</p>
-                                {transaction.automation_recipients?.length > 0 ? (
-                                    <div className="space-y-1.5">
-                                        {transaction.automation_recipients.map((r: any, idx: number) => (
-                                            <div key={idx} className="flex items-center gap-3 rounded-xl border border-zinc-100 bg-zinc-50 p-3">
-                                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm border border-zinc-100 shrink-0">
-                                                    <i className={`fa-solid ${r.type === 'team' ? 'fa-user-group text-blue-500' : 'fa-user text-indigo-500'} text-[10px]`}></i>
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="text-[12px] font-bold text-zinc-700 truncate">{r.name}</p>
-                                                    <p className="text-[10px] text-zinc-400 truncate leading-none">{r.email}</p>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-[11px] italic text-zinc-400">No hay destinatarios guardados.</p>
-                                )}
-                            </div>
-                        </>
-                        )}
-                    </div>
-                </div>
-            )}
-        </aside>
+          </div>
 
-        {/* CONTENIDO PRINCIPAL */}
-        <section className="lg:col-span-8 space-y-6">
+          {/* COLUMNA DERECHA: TABS */}
+          <div className="lg:col-span-8">
             
-            {/* Resumen Financiero */}
-            <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
-                    <div className="flex items-center gap-3">
-                        <span className="h-6 w-2 rounded-full bg-brand-500"></span>
-                        <div>
-                          <h3 className="text-sm font-bold text-zinc-900">Resumen del Documento</h3>
-                          <p className="text-[11px] text-zinc-500">Detalle financiero principal</p>
-                        </div>
-                    </div>
-                    <div className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase border ${getPaymentStatusColor(transaction.payment_status_code)} shadow-sm`}>
-                        {transaction.payment_status_label}
-                    </div>
-                </div>
-                <div className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-                        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 shadow-sm">
-                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Subtotal</p>
-                          <p className="mt-2 text-2xl font-mono font-bold text-zinc-700 tabular-nums">{formatCurrency(transaction.subtotal)}</p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4 shadow-sm">
-                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">IVA{transaction.tax_rate > 0 ? ` (${transaction.tax_rate}%)` : ''}</p>
-                          <p className="mt-2 text-2xl font-mono font-bold text-zinc-700 tabular-nums">{formatCurrency(transaction.tax_amount)}</p>
-                        </div>
-                        <div className="rounded-2xl border border-zinc-900 bg-zinc-900 px-4 py-4 shadow-sm">
-                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Total Factura</p>
-                          <p className="mt-2 text-2xl font-mono font-black text-white tabular-nums">{formatCurrency(transaction.total_value)}</p>
-                        </div>
-                        <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-4 shadow-sm">
-                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-600">Monto Abonado</p>
-                          <p className="mt-2 text-2xl font-mono font-black text-emerald-700 tabular-nums">{formatCurrency(transaction.paid_amount)}</p>
-                        </div>
-                    </div>
+            {/* TABS */}
+            <div className="border-b border-gray-200 mb-6 flex gap-6">
+              <button onClick={() => setCurrentTab('resumen')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'resumen' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                Resumen Financiero
+              </button>
+              <button onClick={() => setCurrentTab('abonos')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'abonos' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                <span className="inline-flex items-center gap-2">
+                  <span>Historial de Abonos</span>
+                  <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-gray-100 px-1 text-[10px] font-bold text-gray-600">
+                    {paymentCount}
+                  </span>
+                </span>
+              </button>
+              <button onClick={() => setCurrentTab('archivos')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'archivos' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                <span className="inline-flex items-center gap-2">
+                  <span>Archivos</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      title="Factura"
+                      className={`h-2.5 w-2.5 rounded-full ${transaction.invoice_file_url ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                    ></span>
+                    <span
+                      title="Retención"
+                      className={`h-2.5 w-2.5 rounded-full ${transaction.retention_file_url ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                    ></span>
+                  </span>
+                </span>
+              </button>
+            </div>
 
-                    <div className="rounded-[24px] border border-rose-100 bg-gradient-to-r from-rose-50 via-white to-white px-5 py-5 shadow-sm">
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-rose-400">Saldo pendiente actual</p>
-                          <p className="mt-2 text-3xl font-mono font-black text-rose-600 tabular-nums">{formatCurrency(transaction.balance_due)}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 text-left sm:grid-cols-3 lg:min-w-[420px]">
-                          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Emisión</p>
-                            <p className="mt-1 text-[13px] font-bold text-zinc-700">{transaction.issue_date_human || transaction.issue_date_input}</p>
-                          </div>
-                          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3">
-                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Vencimiento</p>
-                            <p className="mt-1 text-[13px] font-bold text-zinc-700">{transaction.due_date_human || transaction.due_date_input}</p>
-                          </div>
-                          <div className="rounded-xl border border-zinc-200 bg-white px-4 py-3 col-span-2 sm:col-span-1">
-                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Registrado por</p>
-                            <p className="mt-1 text-[13px] font-bold text-zinc-700 truncate">{transaction.usuario_creador || 'Sistema'}</p>
-                          </div>
-                        </div>
+            {/* TAB 1: RESUMEN FINANCIERO */}
+            {currentTab === 'resumen' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* PANEL IZQUIERDO: ESTRUCTURA DEL VALOR */}
+                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
+                    <h3 className="text-sm font-bold text-gray-800"><i className="fa-solid fa-calculator text-gray-400 mr-2"></i>Estructura del Valor</h3>
+                  </div>
+                  
+                  <div className="p-5 text-sm">
+                    {/* Bloque Base */}
+                    <div className="space-y-3 text-gray-600 mb-4">
+                      <div className="flex justify-between">
+                        <span>Subtotal (Base Imponible)</span>
+                        <span className="tabular-nums">{formatCurrency(transaction.subtotal)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>IVA {transaction.tax_rate > 0 ? `(${transaction.tax_rate}%)` : ''}</span>
+                        <span className="tabular-nums">{formatCurrency(transaction.tax_amount)}</span>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-                        <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 shadow-sm">
-                            <div className="flex items-center gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 text-zinc-500 shrink-0">
-                                    {getInitials(transaction.usuario_creador)}
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">Autor del registro</p>
-                                  <p className="text-[13px] font-bold text-zinc-700">{transaction.usuario_creador || 'Sistema'}</p>
-                                </div>
-                            </div>
-                        </div>
-                        {transaction.retention_value > 0 ? (
-                          <div className="flex items-center justify-between rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-4 shadow-sm">
-                            <div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-indigo-400 mb-0.5">Retención</p><p className="text-[13px] font-bold text-indigo-700">{transaction.retention_date_input || 'S/F'}</p></div>
-                            <p className="text-xl font-mono font-black text-indigo-600 tabular-nums">{formatCurrency(transaction.retention_value)}</p>
-                          </div>
-                        ) : <div className="rounded-2xl border border-dashed border-zinc-200 bg-zinc-50 px-4 py-4 text-[11px] italic text-zinc-400 flex items-center justify-center">Sin retención asociada</div>}
-                        <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-4 shadow-sm text-right">
-                            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400 mb-2">Control de Fechas</p>
-                            <div className="space-y-1.5">
-                                <p className="text-[12px] font-medium text-zinc-500">EMISIÓN: <span className="text-zinc-700 font-bold">{transaction.issue_date_human || transaction.issue_date_input}</span></p>
-                                <p className="text-[12px] font-medium text-zinc-500">VENCE: <span className="text-zinc-700 font-bold">{transaction.due_date_human || transaction.due_date_input}</span></p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                    <div className="border-t border-dashed border-gray-200 mb-4"></div>
 
-            {/* Historial de Notificaciones (5 Columnas - Eliminado Estado Envío) */}
-            <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-zinc-100 px-6 py-4">
-                    <div className="flex items-center gap-3">
-                        <span className="h-6 w-2 rounded-full bg-slate-500"></span>
-                        <div>
-                          <h3 className="text-sm font-bold text-zinc-900">Historial de Notificaciones</h3>
-                          <p className="text-[11px] text-zinc-500">Seguimiento de envíos manuales y automáticos</p>
+                    {/* Total y Retención */}
+                    <div className="space-y-3 mb-4">
+                      <div className="flex justify-between text-gray-900 font-medium">
+                        <span>Total Factura</span>
+                        <span className="tabular-nums font-semibold">{formatCurrency(transaction.total_value)}</span>
+                      </div>
+                      {transaction.retention_value > 0 && (
+                        <div className="flex justify-between text-rose-600">
+                          <span>Retención Aplicada ({(transaction.retention_value / transaction.total_value * 100).toFixed(1)}%)</span>
+                          <span className="tabular-nums">- {formatCurrency(transaction.retention_value)}</span>
                         </div>
+                      )}
                     </div>
-                    <span className="rounded-full border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500">
-                      {transaction.notification_logs?.length || 0} registros
-                    </span>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="bg-zinc-50 text-[10px] font-black text-zinc-500 uppercase tracking-[0.18em] border-b border-zinc-200">
-                          <th className="px-6 py-3">Fecha</th>
-                          <th className="px-6 py-3">Tipo</th>
-                          <th className="px-6 py-3">Enviado por</th>
-                          <th className="px-6 py-3">Accionado por</th>
-                          <th className="px-6 py-3">Destinatarios</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100">
-                        {transaction.notification_logs?.length ? transaction.notification_logs.map((log: any, idx: number) => (
-                          <tr key={idx} className="transition-colors hover:bg-zinc-50/80">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div>{log.fecha}</div>
-                              {log.hora && <div className="text-[10px] font-medium text-zinc-500">{log.hora}</div>}
-                            </td>
-                            <td className="px-6 py-4">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-black border uppercase ${log.tipo === 'AUTOMATICO' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-                                    {log.tipo}
-                                </span>
-                            </td>
-                            <td className="px-6 py-4 text-[11px] font-semibold text-zinc-700">{log.enviado_por}</td>
-                            <td className="px-6 py-4 text-[11px] text-zinc-500">{log.accionado_por || '-'}</td>
-                            <td className="px-6 py-4 max-w-xs text-[11px] italic text-zinc-500 truncate" title={log.destinatarios}>{log.destinatarios}</td>
-                          </tr>
-                        )) : <tr><td colSpan={5} className="px-6 py-12 text-center text-zinc-400 italic text-xs">Sin registros de cobranza.</td></tr>}
-                      </tbody>
-                    </table>
-                </div>
-            </div>
-        </section>
-      </div>
-      </div>
 
-      {/* --- MODALES --- */}
-      
-      {isPaymentModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="p-8 space-y-6">
-               <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-2xl font-black text-slate-800 tracking-tight">Registrar Abono</h3>
-                    <p className="text-sm text-slate-500 font-medium italic">#{transaction.invoice_number}</p>
+                    {/* Neto */}
+                    <div className="flex justify-between items-center bg-gray-50 -mx-5 px-5 py-3 border-y border-gray-100 mb-4">
+                      <span className="font-bold text-gray-800">Total Neto a Cobrar</span>
+                      <span className="text-lg font-bold text-gray-900 tabular-nums">{formatCurrency((transaction.total_value || 0) - (transaction.retention_value || 0))}</span>
+                    </div>
+
+                    {/* Abonos */}
+                    <div className="flex justify-between text-emerald-600 mb-4">
+                      <span>Abonos Recibidos</span>
+                      <span className="tabular-nums font-medium">- {formatCurrency(transaction.paid_amount)}</span>
+                    </div>
+
+                    {/* Saldo Pendiente (Destacado) */}
+                    <div className="flex justify-between items-center bg-amber-50 border border-amber-200/60 rounded-lg p-3">
+                      <span className="font-bold text-amber-800 uppercase text-xs tracking-wider">Saldo Pendiente</span>
+                      <span className="text-xl font-black text-amber-600 tabular-nums">{formatCurrency(transaction.balance_due)}</span>
+                    </div>
                   </div>
-                  <button onClick={() => setIsPaymentModalOpen(false)} className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center hover:bg-rose-50 hover:text-rose-500 transition-all"><i className="fa-solid fa-times"></i></button>
-               </div>
-               <div className="bg-rose-50 border border-rose-100 p-4 rounded-2xl flex justify-between items-center">
-                  <span className="text-xs font-bold text-rose-600 uppercase">Saldo Pendiente:</span>
-                <span className="text-xl font-mono font-black text-rose-700 tabular-nums">{formatCurrency(transaction.balance_due)}</span>
-               </div>
-               <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-2xl">$</span>
-                  <input autoFocus type="number" max={transaction.balance_due || undefined} value={paymentAmount} onChange={e => setPaymentAmount(parseFloat(e.target.value) || 0)} className="w-full bg-slate-50 border-2 border-slate-100 focus:border-emerald-500 focus:bg-white rounded-2xl py-5 pl-10 pr-4 outline-none text-3xl font-mono font-black text-slate-800 transition-all" placeholder="0.00" />
-               </div>
-               <div className="flex gap-3">
-                  <button onClick={() => setIsPaymentModalOpen(false)} className="flex-1 py-4 rounded-2xl font-bold text-slate-500 bg-slate-100 hover:bg-slate-200 transition-colors">Cancelar</button>
-                  <button onClick={handleAddPayment} disabled={processing || paymentAmount <= 0} className="flex-[2] py-4 rounded-2xl font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 disabled:opacity-50 transition-all uppercase tracking-wide">Confirmar Pago</button>
-               </div>
-            </div>
+                </div>
+
+                {/* PANEL DERECHO: BOTÓN Y RESUMEN */}
+                <div className="flex flex-col gap-6">
+                  
+                  {/* Botón Principal */}
+                  {transaction.status !== 'PAGADO' && (
+                    <button 
+                      onClick={() => setIsPaymentModalOpen(true)}
+                      className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium p-3 rounded-lg shadow-sm transition flex items-center justify-center gap-2">
+                      <i className="fa-solid fa-money-bill-transfer"></i> Registrar Abono
+                    </button>
+                  )}
+
+                  {/* Resumen Rápido */}
+                  <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                    <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
+                      <h3 className="text-sm font-bold text-gray-800">Progreso de Pagos</h3>
+                    </div>
+                    <div className="p-5 space-y-4">
+                      <div className="text-center">
+                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Porcentaje Pagado</p>
+                        <p className="text-3xl font-bold text-gray-900">
+                          {transaction.total_value > 0 ? `${Math.round((transaction.paid_amount / transaction.total_value) * 100)}%` : '0%'}
+                        </p>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-emerald-500 h-2 rounded-full transition-all"
+                          style={{ width: `${Math.min((transaction.paid_amount / Math.max(transaction.total_value, 1)) * 100, 100)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+            )}
+
+            {/* TAB 2: HISTORIAL DE ABONOS */}
+            {currentTab === 'abonos' && (
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-gray-800">Historial de Pagos</h3>
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                      {paymentCount}
+                    </span>
+                  </div>
+                  {transaction.status !== 'PAGADO' && (
+                    <button 
+                      onClick={() => setIsPaymentModalOpen(true)}
+                      className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded transition flex items-center gap-1"
+                    >
+                      <i className="fa-solid fa-plus text-xs"></i> Agregar
+                    </button>
+                  )}
+                </div>
+                <div className="p-5">
+                  <PaymentHistoryTable paymentHistory={transaction.payment_history} />
+                </div>
+              </div>
+            )}
+
+            {currentTab === 'archivos' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-800">Archivo de Factura</h3>
+                      <p className="text-xs text-gray-500 mt-1">Documento principal de la factura</p>
+                    </div>
+                    <input
+                      type="file"
+                      ref={invoiceFileInputRef}
+                      className="hidden"
+                      onChange={handleUploadInvoiceFile}
+                    />
+                    <button
+                      onClick={() => invoiceFileInputRef.current?.click()}
+                      disabled={processing || uploadingInvoiceFile || Boolean(transaction.invoice_file_url)}
+                      title={transaction.invoice_file_url ? 'Ya existe un archivo de factura. Elimínalo para subir otro.' : 'Subir archivo de factura'}
+                      className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center transition-colors disabled:opacity-50"
+                    >
+                      {uploadingInvoiceFile ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-upload text-xs"></i>}
+                    </button>
+                  </div>
+                  <div className="p-5">
+                    {!transaction.invoice_file_url ? (
+                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                        No hay archivo de factura.
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-gray-200 px-4 py-4 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                            <i className={`fa-solid ${getFileIconClass(transaction.invoice_file_url)} text-base`}></i>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 truncate">{getFileNameFromUrl(transaction.invoice_file_url)}</p>
+                            <p className="text-xs text-slate-500 truncate">Factura cargada</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => openFileSecure(transaction.invoice_file_url)} className="p-2 text-slate-400 hover:text-blue-600 transition-colors">
+                            <i className="fa-solid fa-eye"></i>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteFile('invoice')}
+                            disabled={deletingFileKey === 'invoice'}
+                            className="p-2 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                          >
+                            {deletingFileKey === 'invoice' ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-trash-can"></i>}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                  <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-800">Archivo de Retención</h3>
+                      <p className="text-xs text-gray-500 mt-1">Comprobante o soporte de retención</p>
+                    </div>
+                    <input
+                      type="file"
+                      ref={retentionFileInputRef}
+                      className="hidden"
+                      onChange={handleUploadRetentionFile}
+                    />
+                    <button
+                      onClick={() => retentionFileInputRef.current?.click()}
+                      disabled={processing || uploadingRetentionFile || Boolean(transaction.retention_file_url)}
+                      title={transaction.retention_file_url ? 'Ya existe un archivo de retención. Elimínalo para subir otro.' : 'Subir archivo de retención'}
+                      className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition-colors disabled:opacity-50"
+                    >
+                      {uploadingRetentionFile ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-upload text-xs"></i>}
+                    </button>
+                  </div>
+                  <div className="p-5">
+                    {!transaction.retention_file_url ? (
+                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                        No hay archivo de retención.
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-gray-200 px-4 py-4 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                            <i className={`fa-solid ${getFileIconClass(transaction.retention_file_url)} text-base`}></i>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-slate-800 truncate">{getFileNameFromUrl(transaction.retention_file_url)}</p>
+                            <p className="text-xs text-slate-500 truncate">Retención cargada</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => openFileSecure(transaction.retention_file_url)} className="p-2 text-slate-400 hover:text-blue-600 transition-colors">
+                            <i className="fa-solid fa-eye"></i>
+                          </button>
+                          <button
+                            onClick={() => handleDeleteFile('retention')}
+                            disabled={deletingFileKey === 'retention'}
+                            className="p-2 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                          >
+                            {deletingFileKey === 'retention' ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-trash-can"></i>}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
-      )}
+      </div>
 
+      {/* PAYMENT FORM MODAL */}
+      <PaymentFormModal
+        isOpen={isPaymentModalOpen}
+        onClose={() => setIsPaymentModalOpen(false)}
+        balanceDue={transaction.balance_due}
+        onSubmit={handleAddPayment}
+        isLoading={processing}
+      />
+
+      {/* COLLECTION MODAL */}
       {isCollectionModalOpen && (
         <CollectionModal 
           isOpen={true} 
@@ -791,7 +1123,7 @@ const FinancialDetail: React.FC = () => {
             id_client_company: transaction.id_client_company, 
             automation_enabled: transaction.enable_automation, 
             automation_frequency: transaction.automation_frequency,
-            automation_recipients: transaction.automation_recipients // Pasamos los destinatarios actuales al modal
+            automation_recipients: transaction.automation_recipients
           }} 
         />
       )}

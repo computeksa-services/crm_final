@@ -8,6 +8,7 @@ import { useEmailSendPolicy } from '../../src/hooks/useEmailSendPolicy';
 import Toast from '../../components/Toast';
 import ConfirmModal from '../../components/ConfirmModal';
 import ShareModal from '../../components/ShareModal';
+import AppModalViewport from '../../components/AppModalViewport';
 
 // --- TIPOS EXTENDIDOS ---
 interface Attachment {
@@ -2024,7 +2025,7 @@ const QuoteDetail: React.FC = () => {
 
       {/* MODAL DE PRODUCTOS - IMPROVED */}
       {isProductModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+        <AppModalViewport className="z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]">
              <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
                 <div className="flex items-center gap-3">
@@ -2463,7 +2464,7 @@ const QuoteDetail: React.FC = () => {
                 </div>
              </div>
           </div>
-        </div>
+        </AppModalViewport>
       )}
     </div>
   );

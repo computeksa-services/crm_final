@@ -759,13 +759,15 @@ const QuotesDetailNew: React.FC = () => {
     }
 
     const destEmail = quote.contact_detail?.email || 'el cliente';
+    // Generar ID único para este envío
+    const sendingId = isManualSend ? 'send-manual' : `send-version-${idVersion || 'generated'}`;
     setConfirmState({
       isOpen: true,
       title: 'Enviar Cotización',
       message: `¿Enviar ${isManualSend ? 'la cotización manual' : idVersion ? 'esta versión' : 'la cotización'} a ${destEmail}?`,
       onConfirm: async () => {
         setConfirmState(prev => ({ ...prev, isOpen: false }));
-        setSendingQuoteId(isManualSend ? 'manual' : idVersion || 'manual');
+        setSendingQuoteId(sendingId);
         try {
           const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/quotes/send`, {
             method: 'POST',
@@ -2044,10 +2046,10 @@ Valor                </div>
                         </button>
                         <button
                           onClick={() => handleSendQuote()}
-                          disabled={isSendingAnyQuote || processing || deletingManualQuote}
+                          disabled={sendingQuoteId !== null || processing || deletingManualQuote}
                           className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-md hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
                         >
-                          {sendingQuoteId === 'manual' ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
+                          {sendingQuoteId === 'send-manual' ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
                         </button>
                         {canEdit && (
                           <button
@@ -2103,10 +2105,10 @@ Valor                </div>
                             {canEdit && (
                               <button
                                 onClick={() => handleSendQuote(version.id_version)}
-                                disabled={isSendingAnyQuote || processing}
+                                disabled={sendingQuoteId !== null || processing}
                                 className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1.5 rounded-md hover:bg-emerald-100 border border-emerald-100 transition-colors flex items-center disabled:opacity-50"
                               >
-                                {sendingQuoteId === (version.id_version || 'manual') ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
+                                {sendingQuoteId === `send-version-${version.id_version || 'generated'}` ? <BrandSpinner size="xs" /> : <><i className="fa-solid fa-paper-plane mr-1"></i>Enviar</>}
                               </button>
                             )}
                           </div>

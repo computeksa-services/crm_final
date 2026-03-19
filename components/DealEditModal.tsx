@@ -9,6 +9,7 @@ import CompanyForm from '../pages/clients/CompanyForm';
 import ContactForm from '../pages/clients/ContactForm';
 import { createPortal } from 'react-dom';
 import { BrandSpinner } from './AppLoaders';
+import AppModalViewport from './AppModalViewport';
 
 interface DealEditModalProps {
   isOpen: boolean;
@@ -290,7 +291,7 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6">
+    <AppModalViewport className="z-[70] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-6">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col animate-in fade-in zoom-in-95">
         {/* Header */}
         <div className="sticky top-0 z-40 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between">
@@ -607,7 +608,7 @@ const DealEditModal: React.FC<DealEditModalProps> = ({
         onSuccess={handleContactCreated}
         companies={companies}
       />
-    </div>,
+    </AppModalViewport>,
     document.body
   );
 };

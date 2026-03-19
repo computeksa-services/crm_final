@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
 import { BrandSpinner } from './AppLoaders';
+import AppModalViewport from './AppModalViewport';
 
 // --- TIPOS ---
 type ContactOption = {
@@ -277,7 +278,7 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
+    <AppModalViewport className="z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-fade-in">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
         
         {/* Header */}
@@ -463,7 +464,7 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
         </div>
 
       </div>
-    </div>
+    </AppModalViewport>
   );
 };
 

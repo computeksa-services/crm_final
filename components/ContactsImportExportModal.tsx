@@ -3,6 +3,7 @@ import { GATEWAY_CONFIG } from '../services/gatewayConfig';
 import { useDataCache } from '../contexts/DataCacheContext';
 import DownloadContactsTemplate from '../components/DownloadContactsTemplate';
 import { BrandSpinner } from './AppLoaders';
+import AppModalViewport from './AppModalViewport';
 
 const ContactsImportExportModal: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
 
@@ -68,7 +69,7 @@ const ContactsImportExportModal: React.FC<{ open: boolean; onClose: () => void }
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+    <AppModalViewport className="z-50 flex items-center justify-center bg-black bg-opacity-30">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-md relative">
         <button
           className="absolute top-3 right-3 text-slate-400 hover:text-slate-700 text-xl z-10"
@@ -156,7 +157,7 @@ const ContactsImportExportModal: React.FC<{ open: boolean; onClose: () => void }
           </div>
         </div>
       </div>
-    </div>
+    </AppModalViewport>
   );
 };
 

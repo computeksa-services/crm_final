@@ -9,6 +9,7 @@ import { GATEWAY_CONFIG } from '../services/gatewayConfig';
 import CompanyForm from '../pages/clients/CompanyForm';
 import ContactForm from '../pages/clients/ContactForm';
 import { BrandSpinner } from './AppLoaders';
+import AppModalViewport from './AppModalViewport';
 
 interface DealFormModalProps {
   isOpen: boolean;
@@ -184,7 +185,7 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+    <AppModalViewport className="z-[70] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
@@ -430,7 +431,7 @@ const DealFormModal: React.FC<DealFormModalProps> = ({
           setToast({ message: 'Contacto creado exitosamente.', type: 'success' });
         }}
       />
-    </div>,
+    </AppModalViewport>,
     document.body
   );
 };
