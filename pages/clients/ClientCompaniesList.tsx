@@ -425,19 +425,6 @@ const ClientCompaniesList: React.FC = () => {
       },
     },
     {
-      id: 'payment_terms_days',
-      accessorFn: (row) => getPaymentTermsDays(row),
-      header: 'Crédito',
-      size: 110,
-      enableColumnFilter: false,
-      cell: ({ row, getValue }) => {
-        if (row.getIsGrouped()) return null;
-        const days = getValue() as number | undefined;
-        if (days === undefined) return <span className="text-slate-400 text-sm">-</span>;
-        return <span className="text-sm font-medium text-slate-700">{days} días</span>;
-      },
-    },
-    {
       accessorKey: 'created_by_name',
       header: 'Creado',
       size: 200,
@@ -448,8 +435,16 @@ const ClientCompaniesList: React.FC = () => {
       },
       cell: ({ row, getValue }) => {
         if (row.getIsGrouped()) return null;
-        const avatar = row.original.created_by_avatar;
         const name = getValue() as string || 'Desconocido';
+        let avatar = row.original.created_by_avatar;
+        // Buscar avatar en cache de usuarios igual que QuotesList
+        const { users } = useDataCache();
+        let creatorId = row.original.created_by;
+        // Normalizar id (puede ser string o number)
+        if (creatorId && Array.isArray(users)) {
+          const userObj = users.find(u => String(u.id_user) === String(creatorId));
+          if (userObj && userObj.avatar_url) avatar = userObj.avatar_url;
+        }
         return (
           <div className="flex items-center gap-2 py-1">
             <Avatar src={avatar || ''} name={name} size="sm" className="border border-slate-200" />
