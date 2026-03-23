@@ -132,7 +132,6 @@ type TenantEmailConfig = {
   corporate_send_emails?: boolean;
 };
 
-// Modificamos el tipo para permitir strings en los inputs numéricos durante la edición
 type FinancialFormData = Partial<Omit<FinancialTransaction, 'subtotal' | 'tax_amount' | 'total_value' | 'retention_value' | 'credit_days' | 'automation_frequency'>> & {
     subtotal?: number | string;
     tax_amount?: number | string;
@@ -142,6 +141,9 @@ type FinancialFormData = Partial<Omit<FinancialTransaction, 'subtotal' | 'tax_am
     enable_automation?: boolean;
     automation_frequency?: number | string;
     status?: 'PENDIENTE' | 'PAGADO' | 'ANULADO';
+    retention_date?: string;
+    payment_date?: string;
+    payment_document_number?: string;
 };
 
 const SearchableClientSelector: React.FC<{
@@ -350,7 +352,6 @@ const FinancialForm: React.FC = () => {
   const retentionToggleInitializedRef = useRef(false);
   const quotesFetchedRef = useRef(false);
 
-
   // --- FILTRADO DINÁMICO ---
   const filteredQuotes = useMemo(() => {
     if (!transaction.id_client_company) return [];
@@ -452,23 +453,14 @@ const FinancialForm: React.FC = () => {
 
   // --- PRESELECCIÓN DE DESTINATARIOS ---
   useEffect(() => {
-    // Si NO se activa automación o no hay empresa seleccionada, no hacer nada
     if (!transaction.enable_automation || !transaction.id_client_company) return;
 
-    // IMPORTANTE: Si ya hay recipientes cargados desde la API (edición),
-    // no sobrescribir. Pero si fueron preseleccionados por este efecto antes,
-    // sí podemos actualizar.
     const hasLoadedFromApi = transaction.automation_recipients && transaction.automation_recipients.length > 0;
-    
-    // Si estamos en modo edición y ya hay datos cargados, no sobrescribir
     if (hasLoadedFromApi && selectedRecipients.length > 0) return;
-
-    // Si ya tenemos recipientes y no es edición, verificar si son los que preseleccionamos
     if (selectedRecipients.length > 0 && !hasLoadedFromApi) return;
 
     const recipientsToSelect: SelectedRecipient[] = [];
 
-    // 1. Preseleccionar al usuario actual
     if (user?.email_user && user?.name_user) {
       recipientsToSelect.push({
         email: user.email_user,
@@ -478,11 +470,9 @@ const FinancialForm: React.FC = () => {
       });
     }
 
-    // 2. Preseleccionar el contacto principal de la empresa
     const companyContacts = filteredContacts;
     
     if (companyContacts.length > 0) {
-      // Buscar contacto marcado como principal
       const mainContact = companyContacts.find((c: any) => c.es_principal || c.is_main);
       const contactToSelect = mainContact || companyContacts[0];
       
@@ -494,20 +484,17 @@ const FinancialForm: React.FC = () => {
       });
     }
 
-    // Aplicar preselección
     if (recipientsToSelect.length > 0) {
       setSelectedRecipients(recipientsToSelect);
     }
   }, [transaction.enable_automation, transaction.id_client_company, filteredContacts, user]);
 
   // --- LÓGICA DE CÁLCULO ---
-  // Calcula el total visualmente basado en el estado actual de los inputs
   const calculatedTotal = useMemo(() => {
     const sub = parseFloat(String(transaction.subtotal)) || 0;
     const tax = parseFloat(String(transaction.tax_amount)) || 0;
     const ret = parseFloat(String(transaction.retention_value)) || 0;
     
-    // Fórmula: (Subtotal + Impuestos) - Retención
     const total = (sub + (sub * (tax / 100))) - ret;
     return total > 0 ? total : 0;
   }, [transaction.subtotal, transaction.tax_amount, transaction.retention_value]);
@@ -532,8 +519,6 @@ const FinancialForm: React.FC = () => {
     () => Boolean(tenantEmailConfig?.corporate_email_address && tenantEmailConfig?.corporate_send_emails),
     [tenantEmailConfig?.corporate_email_address, tenantEmailConfig?.corporate_send_emails]
   );
-
-  const hasEmailIntegration = personalEmailReady || corporateEmailReady;
 
   const emailSourceInfo = useMemo(() => {
     if (corporateEmailReady) {
@@ -561,7 +546,6 @@ const FinancialForm: React.FC = () => {
   }, [corporateEmailReady, personalEmailReady, tenantEmailConfig?.corporate_email_address, user?.provider, user?.email_connected, user?.email_user]);
 
   // --- CARGA DE DATOS ---
-  // Sync local lists from cache for instant rendering
   useEffect(() => {
     setClientCompanies(cachedCompanies as unknown as ClientCompany[]);
   }, [cachedCompanies]);
@@ -675,7 +659,6 @@ const FinancialForm: React.FC = () => {
       };
     });
 
-    // Si viene quote_id pero aun no hay catálogo, esperamos al siguiente ciclo.
     if (fromQuoteId && !selectedQuote && !quotePool.length) return;
 
     dealPrefillAppliedRef.current = true;
@@ -693,7 +676,6 @@ const FinancialForm: React.FC = () => {
     const isEditingMode = !!transactionId;
     
     try {
-      // Si es modo edición, cargar los datos de la transacción
       if (isEditingMode && transactionId) {
         const detailRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/detail?id_tenant=${user.id_tenant}&id_transaction=${transactionId}`);
         if (detailRes?.ok) {
@@ -701,8 +683,6 @@ const FinancialForm: React.FC = () => {
           const tx = Array.isArray(data) ? data[0] : data;
           
           if (tx) {
-            // Mapear los datos desde el formato de la API al formato del formulario
-            // NOTA: Convertimos los números a String para que funcionen bien en los inputs de texto
             const normalized: FinancialFormData = {
               id_transaction: tx.id_transaccion || tx.id_transaction,
               invoice_number: tx.numero_factura || tx.invoice_number,
@@ -713,10 +693,9 @@ const FinancialForm: React.FC = () => {
               due_date: tx.v_input_fecha_vencimiento || tx.due_date || tx.fecha_vencimiento?.split('T')[0],
               id_client_company: tx.id_empresa_cliente || tx.id_client_company,
               
-              // Valores convertidos a string o vacíos si son 0/null para evitar "0" en el input
               subtotal: tx.subtotal ? String(tx.subtotal) : '',
               tax_amount: tx.impuestos !== undefined ? String(tx.impuestos) : '',
-              total_value: tx.total_factura || tx.total_value || 0, // Este es solo referencia inicial
+              total_value: tx.total_factura || tx.total_value || 0,
               retention_value: tx.valor_retencion ? String(tx.valor_retencion) : '',
               credit_days: tx.dias_credito ? String(tx.dias_credito) : '',
               
@@ -725,15 +704,17 @@ const FinancialForm: React.FC = () => {
               notes: tx.notas_internas || tx.notes,
               enable_automation: tx.enable_automation === true,
               automation_frequency: tx.automation_frequency ? String(tx.automation_frequency) : '3',
-              automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : []
+              automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : [],
+              
+              retention_date: tx.fecha_retencion?.split('T')[0] || tx.retention_date?.split('T')[0] || '',
+              payment_date: tx.fecha_pago?.split('T')[0] || tx.payment_date?.split('T')[0] || '',
+              payment_document_number: tx.numero_documento_pago || tx.payment_document_number || ''
             };
             
             setTransaction(normalized);
             
-            // Actualizar el breadcrumb
             navigate(location.pathname + location.search, { state: { breadcrumb: normalized.invoice_number }, replace: true });
 
-            // Cargar recipientes
             if (Array.isArray(tx.automation_recipients)) {
               const recipients: SelectedRecipient[] = tx.automation_recipients.map((r: any) => ({
                 email: r.email,
@@ -766,13 +747,16 @@ const FinancialForm: React.FC = () => {
       status: 'PENDIENTE',
       issue_date: today,
       due_date: today,
-      credit_days: '', // Vacío para permitir placeholder
+      credit_days: '',
       subtotal: '',
       tax_amount: '15',
       total_value: 0,
       enable_automation: false,
       automation_frequency: '3',
-      retention_value: ''
+      retention_value: '',
+      payment_date: '',
+      payment_document_number: '',
+      retention_date: ''
     });
   };
 
@@ -795,30 +779,24 @@ const FinancialForm: React.FC = () => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
 
-    // 1. Checkbox
     if (type === 'checkbox') {
         setTransaction(prev => ({ ...prev, [name]: checked }));
         return;
     }
 
-    // 2. Inputs Numéricos (tratados como texto para mejor UX)
     const numericFields = ['subtotal', 'tax_amount', 'retention_value', 'credit_days', 'automation_frequency'];
     
     if (numericFields.includes(name)) {
-        // Validar que sea número válido o vacío (Regex: dígitos, opcionalmente un punto, más dígitos)
         if (value !== '' && !/^\d*\.?\d*$/.test(value)) return;
-
       setTransaction(prev => ({ ...prev, [name]: value }));
         return;
     }
 
-    // 3. Fechas
     if (name === 'issue_date') {
       setTransaction(prev => ({ ...prev, issue_date: value }));
         return;
     }
 
-    // 4. Textos normales
     setTransaction(prev => {
       const updated: any = { ...prev, [name]: value };
       if (name === 'id_client_company') updated.id_related_quote = '';
@@ -839,7 +817,6 @@ const FinancialForm: React.FC = () => {
       return;
     }
     
-    // Validar formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(externalEmail)) {
       setToast({ message: 'El email no es válido.', type: 'error' });
@@ -876,12 +853,20 @@ const FinancialForm: React.FC = () => {
       return;
     }
     
-    // Convertir strings a números antes de validar
     const finalSubtotal = parseFloat(String(transaction.subtotal)) || 0;
     
-    // Validar que el subtotal sea mayor a 0
     if (finalSubtotal <= 0) {
       setToast({ message: 'El subtotal debe ser mayor a cero.', type: 'error' });
+      return;
+    }
+
+    if (transaction.status === 'PAGADO' && !transaction.payment_date) {
+      setToast({ message: 'La fecha de pago es obligatoria cuando el estado es PAGADO.', type: 'error' });
+      return;
+    }
+
+    if (showRetentionSection && !transaction.retention_date) {
+      setToast({ message: 'La fecha de retención es obligatoria cuando se aplica retención.', type: 'error' });
       return;
     }
 
@@ -910,7 +895,6 @@ const FinancialForm: React.FC = () => {
         return;
       }
       
-      // Calcular total final para el backend
       const finalTotal = grossTotal - finalRetention;
 
       const payload = {
@@ -919,12 +903,16 @@ const FinancialForm: React.FC = () => {
         subtotal: finalSubtotal,
         tax_amount: finalTax,
         retention_value: finalRetention,
-        total_value: finalTotal, // Asegurar que el backend reciba el cálculo correcto
+        total_value: finalTotal,
         credit_days: parseInt(String(transaction.credit_days)) || 0,
         automation_frequency: parseInt(String(transaction.automation_frequency)) || 3,
         id_tenant: user?.id_tenant,
         id_user: user?.id_user,
-        automation_recipients: transaction.enable_automation ? selectedRecipients : []
+        automation_recipients: transaction.enable_automation ? selectedRecipients : [],
+        
+        retention_date: showRetentionSection ? transaction.retention_date : null,
+        payment_date: transaction.status === 'PAGADO' ? transaction.payment_date : null,
+        payment_document_number: transaction.status === 'PAGADO' ? transaction.payment_document_number : null,
       };
 
       let res;
@@ -948,7 +936,6 @@ const FinancialForm: React.FC = () => {
     }
   };
 
-  // Etiqueta dinámica para el total
   const getActionLabel = () => {
     if (transaction.transaction_type === 'VENTA') return 'A Cobrar';
     if (transaction.transaction_type === 'GASTO') return 'A Pagar';
@@ -1047,6 +1034,31 @@ const FinancialForm: React.FC = () => {
                   <option value="ANULADO">Anulado</option>
                 </select>
               </div>
+
+              {transaction.status === 'PAGADO' && (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">Fecha de pago *</label>
+                    <input
+                      type="date"
+                      name="payment_date"
+                      value={transaction.payment_date || ''}
+                      onChange={handleInputChange}
+                      className="w-full text-sm text-zinc-900 bg-white border border-zinc-300 rounded-lg px-3 py-2.5 outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">Nro. documento de pago</label>
+                    <input
+                      name="payment_document_number"
+                      value={transaction.payment_document_number || ''}
+                      onChange={handleInputChange}
+                      placeholder="Ej: TRANSF-1234, CHQ-998..."
+                      className="w-full text-sm text-zinc-900 bg-white border border-zinc-300 rounded-lg px-3 py-2.5 outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="md:col-span-2">
                 <label className="block text-xs font-medium text-zinc-700 mb-1.5">Descripción / Concepto *</label>
@@ -1224,7 +1236,7 @@ const FinancialForm: React.FC = () => {
                   <i className="fa-solid fa-file-invoice-dollar text-[10px]" /> Retenciones
                 </h3>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-zinc-700 mb-1.5">Nro. comprobante</label>
                     <input
@@ -1233,6 +1245,17 @@ const FinancialForm: React.FC = () => {
                       onChange={handleInputChange}
                       className="w-full text-sm text-zinc-900 bg-white border border-zinc-300 rounded-lg px-3 py-2.5 outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                       placeholder="Ej: 001-001-..."
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">Fecha retención *</label>
+                    <input
+                      type="date"
+                      name="retention_date"
+                      value={transaction.retention_date || ''}
+                      onChange={handleInputChange}
+                      className="w-full text-sm text-zinc-900 bg-white border border-zinc-300 rounded-lg px-3 py-2.5 outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>
 
@@ -1410,7 +1433,7 @@ const FinancialForm: React.FC = () => {
                     const enabled = !showRetentionSection;
                     setShowRetentionSection(enabled);
                     if (!enabled) {
-                      setTransaction(prev => ({ ...prev, retention_number: '', retention_value: '' }));
+                      setTransaction(prev => ({ ...prev, retention_number: '', retention_value: '', retention_date: '' }));
                     }
                   }}
                   className="inline-flex items-center justify-center"

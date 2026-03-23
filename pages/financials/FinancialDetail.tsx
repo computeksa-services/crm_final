@@ -64,6 +64,12 @@ const getPaymentStatusColor = (code?: string, statusRaw?: unknown) => {
     return 'bg-slate-50 text-slate-700 border-slate-200';
 };
 
+const getTypeBadgeColor = (type?: string) => {
+  if (type === 'VENTA') return 'bg-sky-50 text-sky-700 border-sky-200';
+  if (type === 'GASTO' || type === 'COMPRA') return 'bg-rose-50 text-rose-700 border-rose-200';
+  return 'bg-slate-50 text-slate-700 border-slate-200';
+};
+
 const getBaseStatusLabel = (statusRaw?: unknown) => {
   const status = String(statusRaw || '').trim().toUpperCase();
   if (status === 'PAGADO') return 'PAGADO';
@@ -191,110 +197,6 @@ const normalizeNotificationLogs = (rawLogs: unknown) => {
   });
 };
 
-// --- COMPONENTE: Selector de Estado Estilo Deal ---
-const StatusSelector: React.FC<{
-  currentStatus: string;
-  onSelect: (val: string) => void;
-  disabled: boolean;
-}> = ({ currentStatus, onSelect, disabled }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const [dropdownPosition, setDropdownPosition] = useState<'bottom' | 'top'>('bottom');
-  
-  const allOptions = [
-    { id: 'PENDIENTE', name: 'PENDIENTE', color: '#f59e0b', icon: 'fa-clock' },
-    { id: 'PAGADO', name: 'PAGADO', color: '#10b981', icon: 'fa-circle-check' },
-    { id: 'ANULADO', name: 'ANULADO', color: '#6b7280', icon: 'fa-ban' },
-    { id: 'VENCIDO', name: 'VENCIDO', color: '#ef4444', icon: 'fa-circle-exclamation' },
-  ];
-
-  const editableOptions = allOptions.filter(opt => opt.id !== 'VENCIDO');
-  const current = allOptions.find(o => o.id === currentStatus) || allOptions[0];
-  const currentIndex = editableOptions.findIndex(o => o.id === current.id);
-  const optionsAbove = currentIndex > 0 ? editableOptions.slice(0, currentIndex) : [];
-  const optionsBelow = currentIndex >= 0 && currentIndex < editableOptions.length - 1 ? editableOptions.slice(currentIndex + 1) : editableOptions;
-
-  useEffect(() => {
-    if (isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-      setDropdownPosition(spaceAbove > spaceBelow && spaceBelow < 200 ? 'top' : 'bottom');
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    const handleClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setIsOpen(false);
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, []);
-
-  return (
-    <div className="relative inline-block w-full sm:w-auto" ref={dropdownRef}>
-      <button
-        ref={buttonRef}
-        type="button"
-        disabled={disabled}
-        onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
-        className={`w-full sm:w-auto flex items-center justify-between gap-3 px-3 py-2 rounded-lg font-bold text-xs border transition-all ${disabled ? 'opacity-70' : 'hover:brightness-95 active:scale-95'}`}
-        style={{ backgroundColor: `${current.color}15`, color: current.color, borderColor: `${current.color}40` }}
-      >
-        <div className="flex items-center gap-2">
-            <i className={`fa-solid ${current.icon}`}></i>
-            <span className="uppercase tracking-wider">{current.name}</span>
-        </div>
-        {!disabled && <i className="fa-solid fa-chevron-down text-[10px] opacity-70"></i>}
-      </button>
-
-      {isOpen && !disabled && (
-        <div
-          onMouseLeave={() => setIsOpen(false)}
-          className={`absolute z-50 ${dropdownPosition === 'top' ? 'bottom-full mb-1' : 'top-full mt-1'} right-0 w-full sm:w-52 bg-white rounded-lg shadow-xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-top-2`}
-        >
-          <div className="max-h-64 overflow-y-auto py-1">
-            {optionsAbove.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => { onSelect(opt.id); setIsOpen(false); }}
-                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-              >
-                <i className={`fa-solid ${opt.icon} text-[10px]`} style={{ color: opt.color }}></i>
-                <span className="text-xs font-bold text-slate-700 uppercase">{opt.name}</span>
-              </button>
-            ))}
-
-            <div className="bg-slate-50 border-y border-slate-100 px-4 py-2.5">
-              <div className="w-full flex items-center gap-2 opacity-60 cursor-not-allowed">
-                <i className={`fa-solid ${current.icon} text-[10px]`} style={{ color: current.color }}></i>
-                <span className="text-xs font-bold text-slate-700 uppercase">{current.name}</span>
-                {current.id === 'VENCIDO' ? (
-                  <span className="text-[9px] ml-auto text-slate-500 italic">(automático)</span>
-                ) : (
-                  <i className="fa-solid fa-check text-[8px] ml-auto text-slate-400"></i>
-                )}
-              </div>
-            </div>
-
-            {optionsBelow.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => { onSelect(opt.id); setIsOpen(false); }}
-                className="w-full text-left px-4 py-2.5 hover:bg-slate-50 flex items-center gap-2 transition-colors"
-              >
-                <i className={`fa-solid ${opt.icon} text-[10px]`} style={{ color: opt.color }}></i>
-                <span className="text-xs font-bold text-slate-700 uppercase">{opt.name}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 // --- COMPONENTE PRINCIPAL ---
 
 const FinancialDetail: React.FC = () => {
@@ -312,7 +214,6 @@ const FinancialDetail: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<'resumen' | 'abonos' | 'archivos'>('resumen');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
-  const [paymentAmount, setPaymentAmount] = useState<number>(0);
   const [companyContacts, setCompanyContacts] = useState<any[]>([]);
   const [uploadingInvoiceFile, setUploadingInvoiceFile] = useState(false);
   const [uploadingRetentionFile, setUploadingRetentionFile] = useState(false);
@@ -397,8 +298,14 @@ const FinancialDetail: React.FC = () => {
         status: tx.estado_registro,
         issue_date_input: tx.v_input_fecha_emision,
         due_date_input: tx.v_input_fecha_vencimiento,
-        payment_date_input: tx.v_input_fecha_pago,
-        retention_date_input: tx.v_input_fecha_retencion,
+        
+        // --- Nuevos campos mapeados ---
+        payment_date_input: tx.v_input_fecha_pago || tx.fecha_pago,
+        payment_document_number: tx.numero_documento_pago,
+        retention_date_input: tx.v_input_fecha_retencion || tx.fecha_retencion,
+        retention_number: tx.retention_number,
+        // ------------------------------
+        
         issue_date_human: tx.v_texto_fecha_emision_human || tx.v_texto_fecha_emision,
         due_date_human: tx.v_texto_fecha_vencimiento_human || tx.v_texto_fecha_vencimiento,
         payment_date_human: tx.v_texto_fecha_pago_human,
@@ -453,14 +360,11 @@ const FinancialDetail: React.FC = () => {
       uiReady = true;
 
       if (normalizedTx.id_client_company) {
-        // No bloquear el primer render por carga secundaria de contactos.
         void (async () => {
           try {
             const cRes = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/clients/companies_contacts/detail?id_client_company=${normalizedTx.id_client_company}&id_tenant=${user.id_tenant}&id_user=${user.id_user}`);
             if (cRes.ok) setCompanyContacts(await cRes.json());
-          } catch {
-            // silencioso: contactos no son criticos para mostrar el detalle
-          }
+          } catch { }
         })();
       }
     } catch (error) {
@@ -473,26 +377,26 @@ const FinancialDetail: React.FC = () => {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   // --- HANDLERS ---
-  const handleStatusChange = async (newStatus: string) => {
-    if (!transaction) return;
-    if (newStatus === 'VENCIDO') {
-      setToast({ message: 'El estado VENCIDO lo determina automáticamente el sistema.', type: 'error' });
-      return;
-    }
+  const handleNotifyAccountant = async () => {
+    if (!transaction?.id_transaction || !user) return;
     setProcessing(true);
     try {
-      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financials/update`, {
+      const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/notify/accountant`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...transaction, status: newStatus, id_tenant: user?.id_tenant, id_user: user?.id_user })
+        body: JSON.stringify({
+            id_transaction: transaction.id_transaction,
+            id_tenant: user.id_tenant,
+            id_user: user.id_user,
+        })
       });
       if (!res.ok) throw new Error();
-      setToast({ message: 'Estado actualizado', type: 'success' });
-      await invalidateFinancials(getCurrentMonthRange());
-      fetchData(); 
+      setToast({ message: 'Notificación enviada a contabilidad', type: 'success' });
     } catch {
-      setToast({ message: 'Error al actualizar', type: 'error' });
-    } finally { setProcessing(false); }
+      setToast({ message: 'Error al notificar a contabilidad', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleAddPayment = async (paymentData: {
@@ -534,7 +438,7 @@ const FinancialDetail: React.FC = () => {
 
       setToast({ message: 'Abono registrado exitosamente', type: 'success' });
       await invalidateFinancials(getCurrentMonthRange());
-      await fetchData(true); // Silent soft refresh transaction data
+      await fetchData(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al registrar el abono';
       setToast({ message, type: 'error' });
@@ -729,10 +633,18 @@ const FinancialDetail: React.FC = () => {
     transaction.due_time_absolute_days,
     transaction.payment_status_label
   );
+  
   const paymentCount = Array.isArray(transaction.payment_history) ? transaction.payment_history.length : 0;
   const canNotifyByEmail = hasEmailIntegration();
   const isClosedStatus = transaction.status === 'PAGADO' || transaction.status === 'ANULADO';
   const balanceLabel = transaction.status === 'VENCIDO' ? 'Saldo Vencido' : 'Saldo Pendiente';
+
+  // --- CÁLCULO CORREGIDO DEL PROGRESO ---
+  // Valor Neto a pagar (descontando la retención)
+  const netToPay = Math.max((transaction.total_value || 0) - (transaction.retention_value || 0), 1); 
+  // Porcentaje pagado en función del valor neto
+  const progressPercentRaw = (transaction.paid_amount / netToPay) * 100;
+  const progressPercent = Math.min(Math.round(progressPercentRaw), 100);
 
   return (
     <div className="min-h-screen bg-[#F9F9FA]">
@@ -746,9 +658,15 @@ const FinancialDetail: React.FC = () => {
           <div className="min-w-0 shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               <h1 className="text-2xl font-bold text-gray-900 whitespace-nowrap truncate">Factura #{transaction.invoice_number}</h1>
+              
+              <span className={`text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 border shrink-0 ${getTypeBadgeColor(transaction.transaction_type)}`}>
+                {transaction.transaction_type}
+              </span>
+
               <span className={`text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 border shrink-0 ${getPaymentStatusColor(transaction.payment_status_code, transaction.status)}`}>
                 {getBaseStatusLabel(transaction.status)}
               </span>
+
               {transaction.is_urgent && (
                 <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 border shrink-0 bg-rose-50 text-rose-700 border-rose-200 uppercase">
                   <i className="fa-solid fa-triangle-exclamation text-[10px]"></i>
@@ -767,6 +685,17 @@ const FinancialDetail: React.FC = () => {
               </div>
             </div>
             <div className="flex gap-2">
+              
+              {(transaction.transaction_type === 'GASTO' || transaction.transaction_type === 'COMPRA') && (
+                <button 
+                  onClick={handleNotifyAccountant} 
+                  disabled={processing} 
+                  className="px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 rounded text-sm font-medium transition flex items-center gap-2"
+                >
+                  <i className="fa-solid fa-paper-plane text-xs"></i> Notificar Contadora
+                </button>
+              )}
+
               {!isClosedStatus && (
                 <button
                   onClick={() => setIsCollectionModalOpen(true)}
@@ -869,11 +798,43 @@ const FinancialDetail: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Estado Pago */}
+                {/* NUEVO: Detalles de Retención */}
+                {transaction.retention_value > 0 && (
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-file-invoice-dollar text-gray-400"></i></div>
+                    <div className="w-full flex justify-between items-start">
+                      <p className="text-sm text-gray-600 mt-0.5">Retención</p>
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900 tabular-nums">{transaction.retention_number || 'Sin número'}</p>
+                        {transaction.retention_date_input && (
+                          <p className="text-xs text-gray-500">{transaction.retention_date_input}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* NUEVO: Fecha de Pago Directa */}
+                {transaction.payment_date_input && (
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-calendar-check text-gray-400"></i></div>
+                    <div className="w-full flex justify-between items-start">
+                      <p className="text-sm text-gray-600 mt-0.5">Fecha Pago</p>
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900 tabular-nums">{transaction.payment_date_human || transaction.payment_date_input}</p>
+                        {transaction.payment_document_number && (
+                          <p className="text-xs text-gray-500 truncate max-w-[120px]">{transaction.payment_document_number}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Estado Pago Relativo */}
                 <div className="flex items-start gap-3">
                   <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-clock text-gray-400"></i></div>
                   <div className="w-full flex justify-between items-center">
-                    <p className="text-sm text-gray-600">Estado Pago</p>
+                    <p className="text-sm text-gray-600">Estado</p>
                     <p className={`text-sm font-medium ${dueTime.className}`}>
                       {dueTime.text}
                     </p>
@@ -978,7 +939,7 @@ const FinancialDetail: React.FC = () => {
                     {/* Neto */}
                     <div className="flex justify-between items-center bg-gray-50 -mx-5 px-5 py-3 border-y border-gray-100 mb-4">
                       <span className="font-bold text-gray-800">Total Neto a Cobrar</span>
-                      <span className="text-lg font-bold text-gray-900 tabular-nums">{formatCurrency((transaction.total_value || 0) - (transaction.retention_value || 0))}</span>
+                      <span className="text-lg font-bold text-gray-900 tabular-nums">{formatCurrency(netToPay)}</span>
                     </div>
 
                     {/* Abonos */}
@@ -1007,7 +968,7 @@ const FinancialDetail: React.FC = () => {
                     </button>
                   )}
 
-                  {/* Resumen Rápido */}
+                  {/* Resumen Rápido (Corregido con Retención) */}
                   <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                     <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
                       <h3 className="text-sm font-bold text-gray-800">Progreso de Pagos</h3>
@@ -1016,13 +977,13 @@ const FinancialDetail: React.FC = () => {
                       <div className="text-center">
                         <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Porcentaje Pagado</p>
                         <p className="text-3xl font-bold text-gray-900">
-                          {transaction.total_value > 0 ? `${Math.round((transaction.paid_amount / transaction.total_value) * 100)}%` : '0%'}
+                          {transaction.total_value > 0 ? `${progressPercent}%` : '0%'}
                         </p>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div 
                           className="bg-emerald-500 h-2 rounded-full transition-all"
-                          style={{ width: `${Math.min((transaction.paid_amount / Math.max(transaction.total_value, 1)) * 100, 100)}%` }}
+                          style={{ width: `${progressPercent}%` }}
                         ></div>
                       </div>
                     </div>
