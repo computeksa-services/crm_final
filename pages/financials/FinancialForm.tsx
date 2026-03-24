@@ -683,6 +683,16 @@ const FinancialForm: React.FC = () => {
           const tx = Array.isArray(data) ? data[0] : data;
           
           if (tx) {
+            // Utilidad para convertir DD/MM/YYYY a YYYY-MM-DD
+            const convertDDMMYYYYToISO = (dateStr: string) => {
+              if (!dateStr || typeof dateStr !== 'string') return '';
+              const parts = dateStr.split('/');
+              if (parts.length !== 3) return dateStr;
+              const [dd, mm, yyyy] = parts;
+              if (yyyy && mm && dd) return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+              return dateStr;
+            };
+
             const normalized: FinancialFormData = {
               id_transaction: tx.id_transaccion || tx.id_transaction,
               invoice_number: tx.numero_factura || tx.invoice_number,
@@ -707,7 +717,11 @@ const FinancialForm: React.FC = () => {
               automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : [],
               
               retention_date: tx.fecha_retencion?.split('T')[0] || tx.retention_date?.split('T')[0] || '',
-              payment_date: tx.fecha_pago?.split('T')[0] || tx.payment_date?.split('T')[0] || '',
+              payment_date: (
+                tx.v_input_fecha_pago ? tx.v_input_fecha_pago :
+                (tx.fecha_pago ? convertDDMMYYYYToISO(tx.fecha_pago) :
+                (tx.payment_date?.split('T')[0] || ''))
+              ),
               payment_document_number: tx.numero_documento_pago || tx.payment_document_number || ''
             };
             
