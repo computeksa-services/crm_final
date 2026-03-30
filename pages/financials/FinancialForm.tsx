@@ -694,36 +694,36 @@ const FinancialForm: React.FC = () => {
             };
 
             const normalized: FinancialFormData = {
-              id_transaction: tx.id_transaccion || tx.id_transaction,
-              invoice_number: tx.numero_factura || tx.invoice_number,
-              description: tx.descripcion_concepto || tx.description,
-              transaction_type: normalizeTransactionType(tx.tipo_transaccion || tx.transaction_type),
-              status: tx.estado_registro || tx.status,
-              issue_date: tx.v_input_fecha_emision || tx.issue_date || tx.fecha_emision?.split('T')[0],
-              due_date: tx.v_input_fecha_vencimiento || tx.due_date || tx.fecha_vencimiento?.split('T')[0],
-              id_client_company: tx.id_empresa_cliente || tx.id_client_company,
-              
-              subtotal: tx.subtotal ? String(tx.subtotal) : '',
-              tax_amount: tx.impuestos !== undefined ? String(tx.impuestos) : '',
-              total_value: tx.total_factura || tx.total_value || 0,
-              retention_value: tx.valor_retencion ? String(tx.valor_retencion) : '',
-              credit_days: tx.dias_credito ? String(tx.dias_credito) : '',
-              
-              retention_number: tx.retention_number,
-              is_urgent: tx.es_urgente || tx.is_urgent,
-              notes: tx.notas_internas || tx.notes,
-              enable_automation: tx.enable_automation === true,
-              automation_frequency: tx.automation_frequency ? String(tx.automation_frequency) : '3',
-              automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : [],
-              
-              retention_date: tx.fecha_retencion?.split('T')[0] || tx.retention_date?.split('T')[0] || '',
-              payment_date: (
-                tx.v_input_fecha_pago ? tx.v_input_fecha_pago :
-                (tx.fecha_pago ? convertDDMMYYYYToISO(tx.fecha_pago) :
-                (tx.payment_date?.split('T')[0] || ''))
-              ),
-              payment_document_number: tx.numero_documento_pago || tx.payment_document_number || ''
-            };
+  id_transaction: tx.id_transaccion || tx.id_transaction,
+  invoice_number: tx.numero_factura || tx.invoice_number,
+  description: tx.descripcion_concepto || tx.description,
+  transaction_type: normalizeTransactionType(tx.tipo_transaccion || tx.transaction_type),
+  status: tx.estado_registro || tx.status,
+  
+  issue_date: tx.v_input_fecha_emision || tx.issue_date || tx.fecha_emision?.split('T')[0],
+  due_date: tx.v_input_fecha_vencimiento || tx.due_date || tx.fecha_vencimiento?.split('T')[0],
+  payment_date: tx.v_input_fecha_pago || tx.payment_date || tx.fecha_pago?.split('T')[0],
+  retention_date: tx.v_input_fecha_retencion || tx.retention_date || tx.fecha_retencion?.split('T')[0],
+  
+  id_client_company: tx.id_empresa_cliente || tx.id_client_company,
+  
+  subtotal: tx.subtotal ? String(tx.subtotal) : '',
+  tax_amount: tx.impuestos !== undefined ? String(tx.impuestos) : '',
+  total_value: tx.total_factura || tx.total_value || 0,
+  retention_value: tx.valor_retencion ? String(tx.valor_retencion) : '',
+  credit_days: tx.dias_credito ? String(tx.dias_credito) : '',
+  
+  retention_number: tx.retention_number,
+
+  // 🔥 ESTA ES LA LÍNEA QUE FALTA PARA QUE EL INPUT SE LLENE 🔥
+  payment_document_number: tx.numero_documento_pago || tx.payment_document_number || '',
+
+  is_urgent: tx.es_urgente || tx.is_urgent,
+  notes: tx.notas_internas || tx.notes,
+  enable_automation: tx.enable_automation === true,
+  automation_frequency: tx.automation_frequency ? String(tx.automation_frequency) : '3',
+  automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : []
+};
             
             setTransaction(normalized);
             
