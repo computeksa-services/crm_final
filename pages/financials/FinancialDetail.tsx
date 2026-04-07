@@ -285,9 +285,9 @@ const FinancialDetail: React.FC = () => {
       if (!tx) { navigate('/app/financials'); return; }
 
       const subtotal = toNumberSafe(tx.subtotal);
-      const taxAmount = toNumberSafe(tx.impuestos ?? tx.tax_amount);
+      const taxRate = toNumberSafe(tx.impuestos ?? tx.tax_rate ?? tx.impuestos_porcentaje ?? tx.v_tax_rate);
       const totalValue = toNumberSafe(tx.total_factura ?? tx.total_value);
-      const paidAmount = toNumberSafe(tx.monto_pagado_caja ?? tx.v_total_abonado ?? tx.paid_amount);
+      const paidAmount = toNumberSafe(tx.monto_pagado_caja ?? tx.paid_amount);
 
       const normalizedTx = {
         ...tx,
@@ -317,14 +317,14 @@ const FinancialDetail: React.FC = () => {
         client_phone: tx.telefono_cliente,
         client_email: tx.email_cliente,
         id_client_company: tx.id_empresa_cliente,
-        is_urgent: Boolean(tx.is_urgent ?? tx.es_urgente),
+        is_urgent: Boolean(tx.is_urgente ?? tx.es_urgente),
         subtotal,
-        tax_amount: taxAmount,
-        tax_rate: toNumberSafe(tx.impuestos_porcentaje ?? tx.tax_rate ?? tx.v_tax_rate),
+        tax_amount: taxRate,
+        tax_rate: taxRate,
         retention_value: toNumberSafe(tx.valor_retencion),
         total_value: totalValue,
         paid_amount: paidAmount,
-        balance_due: deriveBalanceDue(tx.v_saldo_pendiente || tx.balance_due, totalValue, paidAmount),
+        balance_due: Math.max(totalValue - paidAmount, 0),
         days_until_due: tx.v_dias_restantes ?? tx.days_until_due,
         due_time_indicator: tx.v_indicador_tiempo,
         due_time_absolute_days: tx.v_dias_absolutos,
@@ -432,7 +432,7 @@ const FinancialDetail: React.FC = () => {
         setTransaction((prev: any) => prev ? {
           ...prev,
           status: updatedSummary.status ?? updatedSummary.estado_registro ?? prev.status,
-          paid_amount: toNumberSafe(updatedSummary.paid_amount ?? updatedSummary.monto_pagado_caja ?? prev.paid_amount),
+          paid_amount: toNumberSafe(updatedSummary.monto_pagado_caja ?? updatedSummary.paid_amount ?? prev.paid_amount),
         } : prev);
       }
 
@@ -639,12 +639,16 @@ const FinancialDetail: React.FC = () => {
   const isClosedStatus = transaction.status === 'PAGADO' || transaction.status === 'ANULADO';
   const balanceLabel = transaction.status === 'VENCIDO' ? 'Saldo Vencido' : 'Saldo Pendiente';
 
-  // --- CÁLCULO CORREGIDO DEL PROGRESO ---
-  // Valor Neto a pagar (descontando la retención)
-  const netToPay = Math.max((transaction.total_value || 0) - (transaction.retention_value || 0), 1); 
-  // Porcentaje pagado en función del valor neto
-  const progressPercentRaw = (transaction.paid_amount / netToPay) * 100;
-  const progressPercent = Math.min(Math.round(progressPercentRaw), 100);
+  // --- PROGRESO Y NETO: SOLO BACKEND ---
+  // Usar valores directos del backend
+  const taxAmountCurrency = Math.max((transaction.subtotal || 0) * ((transaction.tax_rate || 0) / 100), 0);
+  const grossTotal = Math.max((transaction.subtotal || 0) + taxAmountCurrency, 0);
+  const netToPay = transaction.total_value;
+  const progressPercent = typeof transaction.progress_percent === 'number'
+    ? transaction.progress_percent
+    : (typeof transaction.paid_amount === 'number' && typeof transaction.total_value === 'number' && transaction.total_value > 0)
+      ? Math.min(Math.round((transaction.paid_amount / transaction.total_value) * 100), 100)
+      : 0;
 
   return (
     <div className="min-h-screen bg-[#F9F9FA]">
@@ -916,30 +920,30 @@ const FinancialDetail: React.FC = () => {
                       </div>
                       <div className="flex justify-between">
                         <span>IVA {transaction.tax_rate > 0 ? `(${transaction.tax_rate}%)` : ''}</span>
-                        <span className="tabular-nums">{formatCurrency(transaction.tax_amount)}</span>
+                        <span className="tabular-nums">{formatCurrency(taxAmountCurrency)}</span>
                       </div>
                     </div>
 
                     <div className="border-t border-dashed border-gray-200 mb-4"></div>
 
-                    {/* Total y Retención */}
+                    {/* Total Bruto antes de retención */}
                     <div className="space-y-3 mb-4">
                       <div className="flex justify-between text-gray-900 font-medium">
-                        <span>Total Factura</span>
-                        <span className="tabular-nums font-semibold">{formatCurrency(transaction.total_value)}</span>
+                        <span>Total antes de Retención</span>
+                        <span className="tabular-nums font-semibold">{formatCurrency(grossTotal)}</span>
                       </div>
                       {transaction.retention_value > 0 && (
                         <div className="flex justify-between text-rose-600">
-                          <span>Retención Aplicada ({(transaction.retention_value / transaction.total_value * 100).toFixed(1)}%)</span>
+                          <span>Retención Aplicada ({grossTotal > 0 ? `${((transaction.retention_value / grossTotal) * 100).toFixed(1)}%` : '0%'})</span>
                           <span className="tabular-nums">- {formatCurrency(transaction.retention_value)}</span>
                         </div>
                       )}
                     </div>
 
-                    {/* Neto */}
+                    {/* Neto: solo mostrar el total_value del backend */}
                     <div className="flex justify-between items-center bg-gray-50 -mx-5 px-5 py-3 border-y border-gray-100 mb-4">
                       <span className="font-bold text-gray-800">Total Neto a Cobrar</span>
-                      <span className="text-lg font-bold text-gray-900 tabular-nums">{formatCurrency(netToPay)}</span>
+                      <span className="text-lg font-bold text-gray-900 tabular-nums">{formatCurrency(transaction.total_value)}</span>
                     </div>
 
                     {/* Abonos */}
