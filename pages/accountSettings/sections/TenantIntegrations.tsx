@@ -66,9 +66,11 @@ const TenantFinanceSettings: React.FC<{ user: any }> = ({ user }) => {
       if (action === 'delete') {
         setContactData({ name: '', email: '' });
         setHasContact(false);
+        window.dispatchEvent(new CustomEvent('finance-contact-updated'));
         window.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Contacto financiero eliminado.', type: 'success' }}));
       } else {
         setHasContact(true);
+        window.dispatchEvent(new CustomEvent('finance-contact-updated'));
         window.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Contacto financiero guardado correctamente.', type: 'success' }}));
       }
     } catch (error) {

@@ -10,6 +10,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useDataCache } from '../../contexts/DataCacheContext';
 import { apiFetch } from '../../services/apiClient';
 import { financialService } from '../../services/financials.service';
+import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
 import { BrandSpinner } from '../../components/AppLoaders';
 import type { FinancialTransaction } from '../../types';
 
@@ -218,6 +219,7 @@ const FinancialDetail: React.FC = () => {
   const [uploadingInvoiceFile, setUploadingInvoiceFile] = useState(false);
   const [uploadingRetentionFile, setUploadingRetentionFile] = useState(false);
   const [deletingFileKey, setDeletingFileKey] = useState<'invoice' | 'retention' | null>(null);
+  const [financeContact, setFinanceContact] = useState<{ name?: string; email?: string } | null>(null);
   const [confirmState, setConfirmState] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
   const invoiceFileInputRef = useRef<HTMLInputElement | null>(null);
   const retentionFileInputRef = useRef<HTMLInputElement | null>(null);
@@ -376,9 +378,41 @@ const FinancialDetail: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const refreshTenantFinanceContact = useCallback(async () => {
+    if (!user?.id_tenant) return;
+    try {
+      const res = await apiFetch(buildUrl(GATEWAY_CONFIG.API.TENANTS.DETAIL, { id_tenant: user.id_tenant }));
+      if (!res.ok) return;
+      const data = await res.json();
+      const tenant = Array.isArray(data) ? data[0] : data;
+      const nextContact = tenant?.settings?.finance_contact;
+      setFinanceContact(nextContact || null);
+    } catch {
+      setFinanceContact(null);
+    }
+  }, [user?.id_tenant]);
+
+  useEffect(() => {
+    refreshTenantFinanceContact();
+  }, [refreshTenantFinanceContact]);
+
+  useEffect(() => {
+    const handleRefresh = () => { void refreshTenantFinanceContact(); };
+    window.addEventListener('finance-contact-updated', handleRefresh);
+    window.addEventListener('focus', handleRefresh);
+    return () => {
+      window.removeEventListener('finance-contact-updated', handleRefresh);
+      window.removeEventListener('focus', handleRefresh);
+    };
+  }, [refreshTenantFinanceContact]);
+
   // --- HANDLERS ---
   const handleNotifyAccountant = async () => {
     if (!transaction?.id_transaction || !user) return;
+    if (!financeContact?.email) {
+      setToast({ message: 'Configura el contacto financiero en Integraciones del workspace.', type: 'error' });
+      return;
+    }
     setProcessing(true);
     try {
       const res = await apiFetch(`${import.meta.env.VITE_WEBHOOK_URL}/api/financial/notify/accountant`, {
@@ -636,6 +670,7 @@ const FinancialDetail: React.FC = () => {
   
   const paymentCount = Array.isArray(transaction.payment_history) ? transaction.payment_history.length : 0;
   const canNotifyByEmail = hasEmailIntegration();
+  const hasFinanceContactConfigured = !!String(financeContact?.email || '').trim();
   const isClosedStatus = transaction.status === 'PAGADO' || transaction.status === 'ANULADO';
   const balanceLabel = transaction.status === 'VENCIDO' ? 'Saldo Vencido' : 'Saldo Pendiente';
 
@@ -693,8 +728,9 @@ const FinancialDetail: React.FC = () => {
               {(transaction.transaction_type === 'GASTO' || transaction.transaction_type === 'COMPRA') && (
                 <button 
                   onClick={handleNotifyAccountant} 
-                  disabled={processing} 
-                  className="px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 rounded text-sm font-medium transition flex items-center gap-2"
+                  disabled={processing || !hasFinanceContactConfigured}
+                  className="px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 rounded text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  title={!hasFinanceContactConfigured ? 'Configura un contacto financiero en Integraciones del workspace.' : 'Notificar a contabilidad'}
                 >
                   <i className="fa-solid fa-paper-plane text-xs"></i> Notificar Contadora
                 </button>
