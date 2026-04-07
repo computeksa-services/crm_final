@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { FollowUpItem } from '../types';
 import { apiFetch } from '../services/apiClient';
+import { GATEWAY_CONFIG } from '../services/gatewayConfig';
 import { parseISO, isBefore, startOfDay } from 'date-fns';
 import { Handshake } from 'lucide-react';
 import NewInteractionModal from '../components/NewInteractionModal';
 import ReassignModal from '../components/ReassignModal';
+import ConfirmModal from '../components/ConfirmModal';
 import Toast from '../components/Toast';
 import { BrandSpinner } from '../components/AppLoaders';
 import { useDataCache } from '../contexts/DataCacheContext';
@@ -148,6 +150,22 @@ function getInitials(collab: any) {
 
 const roleLabels: Record<string, string> = { OWNER: 'Propietario', EDIT: 'Edición', VIEW: 'Solo lectura', BLOCKED: 'Bloqueado' };
 
+function isClosedProspect(item: FollowUpItem) {
+  if (item.entity_type !== 'CONTACT') return false;
+  const status = String((item as any).contact_status || (item as any).status_category || '').toUpperCase();
+  const statusName = String((item as any).current_status_name || '').toUpperCase();
+  return status === 'DORMANT' || statusName === 'DORMANT';
+}
+
+function isDirectoryContact(item: FollowUpItem) {
+  return item.entity_type === 'CONTACT' && !item.next_contact_date;
+}
+
+function getVisibleStatusName(item: FollowUpItem) {
+  if (isClosedProspect(item)) return 'Perdido';
+  return item.current_status_name || 'Sin estado';
+}
+
 // ── AVATAR GROUP ───────────────────────────────────────────────────────────
 function AvatarGroupContent({ collaborators, users }: { collaborators?: any[]; users?: any[] }) {
   // Memoizar la búsqueda de cada usuario para no buscar en cada render
@@ -243,7 +261,7 @@ function Stat({ label, value, dark }: { label: string; value: number; dark?: boo
 }
 
 // ── CARD ──────────────────────────────────────────────────────────────────
-function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: FollowUpItem; onManage: (item: FollowUpItem) => void; users?: any[]; onNavigate?: (item: FollowUpItem) => void; navigate: any }) {
+function FollowUpCard({ item, onManage, users, onNavigate, navigate, onMarkLost, isMarkingLost }: { item: FollowUpItem; onManage: (item: FollowUpItem) => void; users?: any[]; onNavigate?: (item: FollowUpItem) => void; navigate: any; onMarkLost?: (item: FollowUpItem) => void; isMarkingLost?: boolean }) {
   const lvl = getUrgency(item.next_contact_date);
   const urg = URGENCY_CONFIG[lvl as keyof typeof URGENCY_CONFIG];
   const statusStyle = getStatusStyle(item.category_color);
@@ -272,7 +290,7 @@ function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: F
             ) : (
               <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: statusStyle.dot }} />
             )}
-            {item.current_status_name}
+            {getVisibleStatusName(item)}
           </span>
           <AvatarGroup collaborators={item.collaborators} users={users} />
         </div>
@@ -384,38 +402,50 @@ function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: F
             </a>
           )}
           {!isDeal && (
-            <div className="relative group/convert inline-block">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate('/app/deals/new', {
-                    state: {
-                      contactId: item.id_contact || item.id_entity,
-                      companyId: item.id_client_company,
-                      is_conversion: true,
-                      contactName: item.title,
-                      contactEmail: item.email,
-                      contactPhone: item.phone,
-                      companyName: item.subtitle || item.name_company
-                    }
-                  });
-                }}
-                className="relative w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-500 text-white flex items-center justify-center transition-all shadow-md hover:shadow-xl hover:scale-110 active:scale-95 overflow-hidden group-hover/convert:from-amber-500 group-hover/convert:via-yellow-600 group-hover/convert:to-amber-600 animate-pulse-slow">
-                {/* Efecto de brillo animado */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover/convert:opacity-30 group-hover/convert:animate-shine"></div>
-                <Handshake size={16} className="relative z-10 drop-shadow-sm" />
-              </button>
-              
-              {/* Tooltip elegante */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 dark:bg-slate-950 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/convert:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                <div className="font-bold text-amber-300">Convertir a Trato</div>
-                <div className="text-[9px] text-slate-300 dark:text-slate-400 mt-0.5">Crear negociacion desde contacto</div>
-                {/* Flecha */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                  <div className="border-4 border-transparent border-t-slate-900"></div>
+            <>
+              {!isClosedProspect(item) && (
+                <div className="relative group/convert inline-block">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate('/app/deals/new', {
+                        state: {
+                          contactId: item.id_contact || item.id_entity,
+                          companyId: item.id_client_company,
+                          is_conversion: true,
+                          contactName: item.title,
+                          contactEmail: item.email,
+                          contactPhone: item.phone,
+                          companyName: item.subtitle || item.name_company
+                        }
+                      });
+                    }}
+                    className="relative w-9 h-9 rounded-lg bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-500 text-white flex items-center justify-center transition-all shadow-md hover:shadow-xl hover:scale-110 active:scale-95 overflow-hidden group-hover/convert:from-amber-500 group-hover/convert:via-yellow-600 group-hover/convert:to-amber-600 animate-pulse-slow">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover/convert:opacity-30 group-hover/convert:animate-shine"></div>
+                    <Handshake size={16} className="relative z-10 drop-shadow-sm" />
+                  </button>
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 dark:bg-slate-950 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/convert:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                    <div className="font-bold text-amber-300">Convertir a Trato</div>
+                    <div className="text-[9px] text-slate-300 dark:text-slate-400 mt-0.5">Crear negociacion desde contacto</div>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                      <div className="border-4 border-transparent border-t-slate-900"></div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              )}
+              {!isDirectoryContact(item) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMarkLost?.(item);
+                  }}
+                  disabled={isMarkingLost || isClosedProspect(item)}
+                  title={isClosedProspect(item) ? 'Prospección finalizada' : 'Marcar como perdido'}
+                  className="w-9 h-9 rounded-lg bg-white border border-red-200 text-red-500 hover:bg-red-50 hover:border-red-300 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  <i className="fa-solid fa-circle-xmark text-[14px]"></i>
+                </button>
+              )}
+            </>
           )}
         </div>
         <button onClick={() => onManage(item)}
@@ -428,7 +458,7 @@ function FollowUpCard({ item, onManage, users, onNavigate, navigate }: { item: F
 }
 
 // ── TABLE ROW ──────────────────────────────────────────────────────────────
-function TableRow({ item, onManage, idx, users, onNavigate, navigate }: { item: FollowUpItem; onManage: (item: FollowUpItem) => void; idx: number; users?: any[]; onNavigate?: (item: FollowUpItem) => void; navigate: any }) {
+function TableRow({ item, onManage, idx, users, onNavigate, navigate, onMarkLost, isMarkingLost }: { item: FollowUpItem; onManage: (item: FollowUpItem) => void; idx: number; users?: any[]; onNavigate?: (item: FollowUpItem) => void; navigate: any; onMarkLost?: (item: FollowUpItem) => void; isMarkingLost?: boolean }) {
   const lvl = getUrgency(item.next_contact_date);
   const urg = URGENCY_CONFIG[lvl as keyof typeof URGENCY_CONFIG];
   const statusStyle = getStatusStyle(item.category_color);
@@ -509,38 +539,50 @@ function TableRow({ item, onManage, idx, users, onNavigate, navigate }: { item: 
             </a>
           )}
           {!isDeal && (
-            <div className="relative group/convert inline-block">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate('/app/deals/new', {
-                    state: {
-                      contactId: item.id_contact || item.id_entity,
-                      companyId: item.id_client_company,
-                      is_conversion: true,
-                      contactName: item.title,
-                      contactEmail: item.email,
-                      contactPhone: item.phone,
-                      companyName: item.subtitle || item.name_company
-                    }
-                  });
-                }}
-                className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-500 text-white flex items-center justify-center transition-all shadow-md hover:shadow-xl hover:scale-110 active:scale-95 overflow-hidden group-hover/convert:from-amber-500 group-hover/convert:via-yellow-600 group-hover/convert:to-amber-600 animate-pulse-slow">
-                {/* Efecto de brillo animado */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover/convert:opacity-30 group-hover/convert:animate-shine"></div>
-                <Handshake size={14} className="relative z-10 drop-shadow-sm" />
-              </button>
-              
-              {/* Tooltip elegante */}
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/convert:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                <div className="font-bold text-amber-300">✨ Convertir a Trato</div>
-                <div className="text-[9px] text-slate-300 mt-0.5">Crear negociación desde contacto</div>
-                {/* Flecha */}
-                <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
-                  <div className="border-4 border-transparent border-t-slate-900"></div>
+            <>
+              {!isClosedProspect(item) && (
+                <div className="relative group/convert inline-block">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigate('/app/deals/new', {
+                        state: {
+                          contactId: item.id_contact || item.id_entity,
+                          companyId: item.id_client_company,
+                          is_conversion: true,
+                          contactName: item.title,
+                          contactEmail: item.email,
+                          contactPhone: item.phone,
+                          companyName: item.subtitle || item.name_company
+                        }
+                      });
+                    }}
+                    className="relative w-8 h-8 rounded-lg bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-500 text-white flex items-center justify-center transition-all shadow-md hover:shadow-xl hover:scale-110 active:scale-95 overflow-hidden group-hover/convert:from-amber-500 group-hover/convert:via-yellow-600 group-hover/convert:to-amber-600 animate-pulse-slow">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 group-hover/convert:opacity-30 group-hover/convert:animate-shine"></div>
+                    <Handshake size={14} className="relative z-10 drop-shadow-sm" />
+                  </button>
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-slate-900 text-white text-[11px] rounded-lg whitespace-nowrap opacity-0 group-hover/convert:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                    <div className="font-bold text-amber-300">Convertir a Trato</div>
+                    <div className="text-[9px] text-slate-300 mt-0.5">Crear negociación desde contacto</div>
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                      <div className="border-4 border-transparent border-t-slate-900"></div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              )}
+              {!isDirectoryContact(item) && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMarkLost?.(item);
+                  }}
+                  disabled={isMarkingLost || isClosedProspect(item)}
+                  title={isClosedProspect(item) ? 'Prospección finalizada' : 'Marcar como perdido'}
+                  className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900 text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 hover:border-red-300 dark:hover:border-red-700 flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                  <i className="fa-solid fa-circle-xmark text-[12px]"></i>
+                </button>
+              )}
+            </>
           )}
           <button onClick={() => onManage(item)}
             className="px-4 py-1.5 bg-gray-900 dark:bg-slate-700 text-white text-xs font-medium rounded-lg hover:bg-gray-800 dark:hover:bg-slate-600 transition-colors flex items-center gap-1.5">
@@ -564,9 +606,19 @@ const FollowUpsPage: React.FC = () => {
   const [view, setView] = useState<'grid' | 'table'>(() => (localStorage.getItem('followups_view') as 'grid' | 'table') || 'grid');
   const [search, setSearch] = useState('');
   const [urgFilter, setUrg] = useState('ALL');
+  const [includeClosed, setIncludeClosed] = useState(() => localStorage.getItem('followups_include_closed') === 'true');
   const [managingItem, setManagingItem] = useState<FollowUpItem | null>(null);
   const [transferItem, setTransferItem] = useState<FollowUpItem | null>(null);
+  const [pendingLostItem, setPendingLostItem] = useState<FollowUpItem | null>(null);
+  const [confirmState, setConfirmState] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+    isDestructive: false,
+  });
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [markingLostId, setMarkingLostId] = useState<string | null>(null);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -593,6 +645,85 @@ const FollowUpsPage: React.FC = () => {
     localStorage.setItem('followups_view', view);
   }, [view]);
 
+  useEffect(() => {
+    localStorage.setItem('followups_include_closed', String(includeClosed));
+  }, [includeClosed]);
+
+  const confirmMarkAsLost = useCallback(async () => {
+    if (!pendingLostItem || pendingLostItem.entity_type !== 'CONTACT') {
+      setPendingLostItem(null);
+      setConfirmState(prev => ({ ...prev, isOpen: false }));
+      return;
+    }
+
+    const contactId = pendingLostItem.id_contact || pendingLostItem.id_entity;
+    if (!contactId) {
+      setToast({ message: 'No se encontró el contacto para actualizar.', type: 'error' });
+      setPendingLostItem(null);
+      setConfirmState(prev => ({ ...prev, isOpen: false }));
+      return;
+    }
+
+    setMarkingLostId(contactId);
+    try {
+      const payload = {
+        id_contact: contactId,
+        contact_status: 'DORMANT',
+      };
+
+      const res = await apiFetch(GATEWAY_CONFIG.API.CLIENTS.CONTACTS_UPDATE_STATUS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error('No se pudo actualizar el prospecto.');
+
+      setItems(prev => prev.map(current => {
+        const currentId = current.id_contact || current.id_entity;
+        if (currentId !== contactId) return current;
+        return {
+          ...current,
+          contact_status: 'DORMANT',
+          status_category: 'DORMANT',
+          current_status_name: 'Perdido',
+        } as FollowUpItem;
+      }));
+
+      setToast({ message: 'Prospecto marcado como perdido.', type: 'success' });
+      setPendingLostItem(null);
+      setConfirmState(prev => ({ ...prev, isOpen: false }));
+      await fetchItems();
+    } catch {
+      setToast({ message: 'Error al marcar prospecto como perdido.', type: 'error' });
+    } finally {
+      setMarkingLostId(null);
+    }
+  }, [fetchItems, pendingLostItem]);
+
+  const handleMarkAsLost = useCallback(async (item: FollowUpItem) => {
+    if (item.entity_type !== 'CONTACT') return;
+    if (isDirectoryContact(item)) {
+      setToast({ message: 'Esta acción aplica solo a contactos con seguimiento activo.', type: 'error' });
+      return;
+    }
+    if (isClosedProspect(item)) {
+      setToast({ message: 'Este prospecto ya está marcado como perdido.', type: 'success' });
+      return;
+    }
+
+    setPendingLostItem(item);
+    setConfirmState({
+      isOpen: true,
+      title: 'Finalizar prospección',
+      message: 'Este prospecto se marcará como Perdido y quedará como contacto simple.',
+      onConfirm: () => {
+        confirmMarkAsLost();
+      },
+      isDestructive: true,
+    });
+  }, [confirmMarkAsLost]);
+
   const base = tab === 'ALL' ? items : items.filter(i => i.entity_type === tab);
 
   const filtered = useMemo(() => {
@@ -600,6 +731,7 @@ const FollowUpsPage: React.FC = () => {
       .filter(i => {
         const q = search.toLowerCase();
         if (q && !i.title?.toLowerCase().includes(q) && !i.subtitle?.toLowerCase().includes(q)) return false;
+        if (!includeClosed && isClosedProspect(i)) return false;
         if (urgFilter !== 'ALL' && getUrgency(i.next_contact_date) !== urgFilter) return false;
         return true;
       })
@@ -609,7 +741,7 @@ const FollowUpsPage: React.FC = () => {
         if (!b.next_contact_date) return -1;
         return new Date(a.next_contact_date).getTime() - new Date(b.next_contact_date).getTime();
       });
-  }, [base, search, urgFilter]);
+  }, [base, search, urgFilter, includeClosed]);
 
   const counts = {
     total: base.length,
@@ -699,6 +831,17 @@ const FollowUpsPage: React.FC = () => {
               ))}
             </div>
 
+            <button
+              onClick={() => setIncludeClosed(prev => !prev)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                includeClosed
+                  ? 'bg-red-50 text-red-700 border-red-200'
+                  : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              {includeClosed ? 'Ocultando perdidos' : 'Mostrar perdidos'}
+            </button>
+
             {/* Search */}
             <div className="relative flex-1 min-w-[180px]">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-gray-500">
@@ -744,7 +887,16 @@ const FollowUpsPage: React.FC = () => {
         ) : view === 'grid' ? (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             {filtered.map(item => (
-              <FollowUpCard key={item.id_entity} item={item} onManage={setManagingItem} users={cachedUsers} onNavigate={handleNavigateToDetails} navigate={navigate}/>
+              <FollowUpCard
+                key={item.id_entity}
+                item={item}
+                onManage={setManagingItem}
+                users={cachedUsers}
+                onNavigate={handleNavigateToDetails}
+                navigate={navigate}
+                onMarkLost={handleMarkAsLost}
+                isMarkingLost={markingLostId === (item.id_contact || item.id_entity)}
+              />
             ))}
           </div>
         ) : (
@@ -762,7 +914,17 @@ const FollowUpsPage: React.FC = () => {
                 </thead>
                 <tbody>
                   {filtered.map((item, idx) => (
-                    <TableRow key={item.id_entity} item={item} onManage={setManagingItem} idx={idx} users={cachedUsers} onNavigate={handleNavigateToDetails} navigate={navigate}/>
+                    <TableRow
+                      key={item.id_entity}
+                      item={item}
+                      onManage={setManagingItem}
+                      idx={idx}
+                      users={cachedUsers}
+                      onNavigate={handleNavigateToDetails}
+                      navigate={navigate}
+                      onMarkLost={handleMarkAsLost}
+                      isMarkingLost={markingLostId === (item.id_contact || item.id_entity)}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -812,6 +974,20 @@ const FollowUpsPage: React.FC = () => {
           }}
         />
       )}
+
+      <ConfirmModal
+        {...confirmState}
+        onClose={() => {
+          if (!markingLostId) {
+            setPendingLostItem(null);
+            setConfirmState(prev => ({ ...prev, isOpen: false }));
+          }
+        }}
+        onConfirm={confirmMarkAsLost}
+        confirmText={markingLostId ? 'Procesando...' : 'Marcar perdido'}
+        cancelText="Cancelar"
+        isDestructive={confirmState.isDestructive}
+      />
     </div>
   );
 };

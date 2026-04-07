@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { ClientContact } from '../../types';
 import Toast from '../../components/Toast';
 import { apiFetch } from '../../services/apiClient';
+import { GATEWAY_CONFIG } from '../../services/gatewayConfig';
 import ConfirmModal from '../../components/ConfirmModal';
 import ContactForm from './ContactForm';
 import ShareModal from '../../components/ShareModal';
@@ -24,6 +25,8 @@ const ClientContactDetail: React.FC = () => {
   const [refreshTimelineKey, setRefreshTimelineKey] = useState(0);
   const [isTimelineVisible, setIsTimelineVisible] = useState(true);
   const [showNewInteractionModal, setShowNewInteractionModal] = useState(false);
+  const [markLostConfirmOpen, setMarkLostConfirmOpen] = useState(false);
+  const [markingLost, setMarkingLost] = useState(false);
   
   // Asignaciones
   const [shareModalOpen, setShareModalOpen] = useState(false);
@@ -37,6 +40,7 @@ const ClientContactDetail: React.FC = () => {
   const isOwnerCompany = contact?.company_details?.created_by === user?.id_user;
   const contactAccess: 'VIEW' | 'EDIT' = (contact?.access_level as any) || (user?.rol_user === 'admin' || isOwnerContact || isOwnerCompany ? 'EDIT' : 'VIEW');
   const canShare = (user?.rol_user === 'admin' || isOwnerContact || isOwnerCompany) && contactAccess === 'EDIT';
+  const isDirectoryContact = !contact?.next_contact_date;
 
 
   // --- CARGA DE DATOS ---
@@ -157,6 +161,54 @@ const ClientContactDetail: React.FC = () => {
     setToast({ message: 'Contacto actualizado.', type: 'success' });
   };
 
+  const getVisibleContactStatus = useCallback((status?: string | null) => {
+    const normalized = String(status || '').toUpperCase();
+    if (normalized === 'DORMANT') return 'Perdido';
+    if (!normalized) return 'SIN ESTADO';
+    return normalized;
+  }, []);
+
+  const handleMarkAsLost = useCallback(async () => {
+    if (!contact?.id_contact) return;
+    if (!contact?.next_contact_date) {
+      setMarkLostConfirmOpen(false);
+      setToast({ message: 'Esta acción aplica solo a contactos con seguimiento activo.', type: 'error' });
+      return;
+    }
+    if (String(contact.contact_status || '').toUpperCase() === 'DORMANT') {
+      setMarkLostConfirmOpen(false);
+      setToast({ message: 'Este contacto ya está marcado como perdido.', type: 'success' });
+      return;
+    }
+
+    setMarkingLost(true);
+    try {
+      const payload = {
+        id_contact: contact.id_contact,
+        contact_status: 'DORMANT',
+      };
+
+      const response = await apiFetch(GATEWAY_CONFIG.API.CLIENTS.CONTACTS_UPDATE_STATUS, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error('No se pudo actualizar el estado del contacto.');
+      }
+
+      setContact(prev => (prev ? { ...prev, contact_status: 'DORMANT' } : prev));
+      setToast({ message: 'Prospección finalizada. Estado: Perdido.', type: 'success' });
+      setMarkLostConfirmOpen(false);
+      await fetchData();
+    } catch {
+      setToast({ message: 'Error al marcar contacto como perdido.', type: 'error' });
+    } finally {
+      setMarkingLost(false);
+    }
+  }, [contact, fetchData]);
+
   // Función para obtener color de avatar basado en hash del nombre
   const getAvatarColor = (name: string = '') => {
     const colors = [
@@ -228,6 +280,16 @@ const ClientContactDetail: React.FC = () => {
             <div className="flex items-center gap-2">
               {contactAccess === 'EDIT' && (
                 <>
+                  {!isDirectoryContact && (
+                    <button
+                      onClick={() => setMarkLostConfirmOpen(true)}
+                      disabled={markingLost || String(contact.contact_status || '').toUpperCase() === 'DORMANT'}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-white border border-red-200 text-red-600 hover:border-red-300 hover:bg-red-50 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <i className="fa-solid fa-circle-xmark"></i>
+                      {String(contact.contact_status || '').toUpperCase() === 'DORMANT' ? 'Perdido' : 'Marcar perdido'}
+                    </button>
+                  )}
                   <button
                     onClick={() => setShowEditContact(true)}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-white border border-slate-200 text-slate-700 hover:border-brand-300 hover:text-brand-600 shadow-sm"
@@ -309,7 +371,7 @@ const ClientContactDetail: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-xs text-slate-400 mb-1">Estado</p>
-                    <span className="inline-block px-2 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 truncate">{(contact as any).contact_status || 'SIN ESTADO'}</span>
+                    <span className="inline-block px-2 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 truncate">{getVisibleContactStatus((contact as any).contact_status)}</span>
                   </div>
                 </div>
                 {contact.last_contact_date && (
@@ -552,6 +614,19 @@ const ClientContactDetail: React.FC = () => {
           currentCollaborators={shareCollaborators}
         />
       )}
+
+      <ConfirmModal
+        isOpen={markLostConfirmOpen}
+        onClose={() => {
+          if (!markingLost) setMarkLostConfirmOpen(false);
+        }}
+        onConfirm={handleMarkAsLost}
+        title="Finalizar prospección"
+        message="Este prospecto se marcará como Perdido y quedará como contacto simple."
+        confirmText={markingLost ? 'Procesando...' : 'Marcar perdido'}
+        cancelText="Cancelar"
+        isDestructive={true}
+      />
     </div>
   );
 };

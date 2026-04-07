@@ -100,6 +100,7 @@ export const GATEWAY_CONFIG = {
       CONTACTS_DETAIL: buildFullUrl('/api/clients/contacts/detail'),
       COMPANIES_CONTACTS_DETAIL: buildFullUrl('/api/clients/companies_contacts/detail'),
       CONTACTS_HISTORY: buildFullUrl('/api/clients/contacts/history'),
+      CONTACTS_UPDATE_STATUS: buildFullUrl('/api/clients/contacts/update/status'),
     },
     
     // Productos
