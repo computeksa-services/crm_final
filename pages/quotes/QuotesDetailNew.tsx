@@ -471,6 +471,7 @@ const QuotesDetailNew: React.FC = () => {
   const [productTypeFilter, setProductTypeFilter] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('');
   const [itemQtyDrafts, setItemQtyDrafts] = useState<Record<string, string>>({});
+  const [itemPriceDrafts, setItemPriceDrafts] = useState<Record<string, string>>({});
   const [syncingItemIds, setSyncingItemIds] = useState<Record<string, boolean>>({});
   const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [uploadingAttachments, setUploadingAttachments] = useState(false);
@@ -1074,8 +1075,14 @@ const QuotesDetailNew: React.FC = () => {
     })();
   };
 
-  const handleUpdateItem = async (idItem: string, cant: number, precio: number, prevCant: number) => {
-    if (!quote || !user) return;
+  const handleUpdateItem = async (
+    idItem: string,
+    cant: number,
+    precio: number,
+    prevCant: number,
+    prevPrecio: number = precio
+  ): Promise<boolean> => {
+    if (!quote || !user) return false;
 
     setItems(prev => {
       const next = prev.map(item => {
@@ -1109,6 +1116,7 @@ const QuotesDetailNew: React.FC = () => {
       });
 
       if (!res.ok) throw new Error();
+      return true;
     } catch {
       setItems(prev => {
         const next = prev.map(item => {
@@ -1117,13 +1125,15 @@ const QuotesDetailNew: React.FC = () => {
           return {
             ...item,
             cantidad: prevCant,
-            subtotal: (prevCant * precio) as any,
+            precio_unitario: prevPrecio as any,
+            subtotal: (prevCant * prevPrecio) as any,
           };
         });
         updateQuoteTotalFromItems(next);
         return next;
       });
       setToast({ message: 'Error al actualizar.', type: 'error' });
+      return false;
     } finally {
       setSyncingItemIds(prev => {
         const next = { ...prev };
@@ -1147,7 +1157,35 @@ const QuotesDetailNew: React.FC = () => {
     if (nextQty === currentQty) return;
 
     const precioUnitario = parseNumericValue(item.precio_unitario);
-    void handleUpdateItem(itemId, nextQty, precioUnitario, currentQty);
+    void handleUpdateItem(itemId, nextQty, precioUnitario, currentQty, precioUnitario);
+  };
+
+  const commitItemUnitPrice = async (item: QuoteItem, idx: number) => {
+    const itemId = item.id_articulo_cot || item.id_quote_item;
+    if (!itemId) return;
+
+    const key = itemId || `idx-${idx}`;
+    const currentPrice = parseNumericValue(item.precio_unitario);
+    const currentQty = Number(item.cantidad || 0);
+    const rawDraft = itemPriceDrafts[key] ?? String(currentPrice);
+    const nextPrice = Math.max(0, parseNumericValue(rawDraft));
+    const normalizedDraft = nextPrice.toFixed(2);
+
+    setItemPriceDrafts(prev => ({ ...prev, [key]: normalizedDraft }));
+
+    if (Math.abs(nextPrice - currentPrice) < 0.000001) return;
+
+    const updated = await handleUpdateItem(itemId, currentQty, nextPrice, currentQty, currentPrice);
+
+    setItemPriceDrafts(prev => {
+      const next = { ...prev };
+      if (updated) {
+        delete next[key];
+      } else {
+        next[key] = currentPrice.toFixed(2);
+      }
+      return next;
+    });
   };
 
   const handleDeleteItem = (idItem: string) => {
@@ -1170,6 +1208,12 @@ const QuotesDetailNew: React.FC = () => {
         });
 
         setItemQtyDrafts(prev => {
+          const next = { ...prev };
+          delete next[idItem];
+          return next;
+        });
+
+        setItemPriceDrafts(prev => {
           const next = { ...prev };
           delete next[idItem];
           return next;
@@ -1848,6 +1892,7 @@ Valor                </div>
                     const rowKey = itemId || `idx-${idx}`;
                     const quantityValue = itemQtyDrafts[rowKey] ?? String(item.cantidad || 0);
                     const unitPrice = parseNumericValue(item.precio_unitario);
+                    const unitPriceValue = itemPriceDrafts[rowKey] ?? unitPrice.toFixed(2);
                     const rowTotal = unitPrice * Number(item.cantidad || 0);
 
                     return (
@@ -1893,7 +1938,7 @@ Valor                </div>
                                 const nextQty = Math.max(1, currentValue - 1);
                                 setItemQtyDrafts(prev => ({ ...prev, [rowKey]: String(nextQty) }));
                                 if (nextQty !== Number(item.cantidad || 0)) {
-                                  void handleUpdateItem(itemId, nextQty, unitPrice, Number(item.cantidad || 0));
+                                  void handleUpdateItem(itemId, nextQty, unitPrice, Number(item.cantidad || 0), unitPrice);
                                 }
                               }}
                               disabled={!itemId || Boolean(syncingItemIds[rowKey]) || Number(itemQtyDrafts[rowKey] ?? item.cantidad ?? 1) <= 1}
@@ -1929,7 +1974,7 @@ Valor                </div>
                                 const nextQty = currentValue + 1;
                                 setItemQtyDrafts(prev => ({ ...prev, [rowKey]: String(nextQty) }));
                                 if (nextQty !== Number(item.cantidad || 0)) {
-                                  void handleUpdateItem(itemId, nextQty, unitPrice, Number(item.cantidad || 0));
+                                  void handleUpdateItem(itemId, nextQty, unitPrice, Number(item.cantidad || 0), unitPrice);
                                 }
                               }}
                               disabled={!itemId || Boolean(syncingItemIds[rowKey])}
@@ -1944,9 +1989,33 @@ Valor                </div>
                       </div>
 
                       <div className="col-span-2 flex justify-end">
-                        <span className="text-[13px] font-semibold text-zinc-900 tabular-nums">
-                          {formatCurrency(unitPrice)}
-                        </span>
+                        {canEdit ? (
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={unitPriceValue}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '' || /^\d*([.,]\d{0,4})?$/.test(value)) {
+                                setItemPriceDrafts(prev => ({ ...prev, [rowKey]: value }));
+                              }
+                            }}
+                            onBlur={() => {
+                              void commitItemUnitPrice(item, idx);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.currentTarget.blur();
+                              }
+                            }}
+                            disabled={!itemId || Boolean(syncingItemIds[rowKey])}
+                            className="w-20 text-right text-[13px] font-semibold text-zinc-900 tabular-nums bg-transparent border border-transparent hover:border-zinc-200 hover:bg-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-md px-2 py-1 outline-none disabled:text-zinc-400"
+                          />
+                        ) : (
+                          <span className="text-[13px] font-semibold text-zinc-900 tabular-nums">
+                            {formatCurrency(unitPrice)}
+                          </span>
+                        )}
                       </div>
 
                       <div className="col-span-3 text-right pr-10 text-[13px] font-bold text-zinc-900 tabular-nums">
