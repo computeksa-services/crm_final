@@ -573,6 +573,8 @@ export interface FinancialTransaction {
   paid_amount?: number;
   payment_method?: string;
   payment_reference?: string;
+  notify_contador?: boolean;
+  notify_provider?: boolean;
   invoice_file_url?: string;
   retention_file_url?: string;
   is_urgent?: boolean;

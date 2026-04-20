@@ -62,5 +62,15 @@ export const financialService = {
     });
     if (!res.ok) throw new Error('Error al enviar notificación');
     return res.json();
+  },
+
+  notifyProvider: async (payload: any) => {
+    const res = await apiFetch(`${API_URL}/api/financial/notify/provider`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Error al enviar notificación al proveedor');
+    return res.json();
   }
 };

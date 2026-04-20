@@ -11,6 +11,7 @@ import { useDataCache } from '../../contexts/DataCacheContext';
 import { apiFetch } from '../../services/apiClient';
 import { financialService } from '../../services/financials.service';
 import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
+import AppModalViewport from '../../components/AppModalViewport';
 import { BrandSpinner } from '../../components/AppLoaders';
 import type { FinancialTransaction } from '../../types';
 
@@ -69,6 +70,12 @@ const getTypeBadgeColor = (type?: string) => {
   if (type === 'VENTA') return 'bg-sky-50 text-sky-700 border-sky-200';
   if (type === 'GASTO' || type === 'COMPRA') return 'bg-rose-50 text-rose-700 border-rose-200';
   return 'bg-slate-50 text-slate-700 border-slate-200';
+};
+
+const getNotifyButtonStyles = (sent: boolean) => {
+  return sent
+    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
+    : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100';
 };
 
 const getBaseStatusLabel = (statusRaw?: unknown) => {
@@ -154,6 +161,17 @@ const getFileIconClass = (fileUrl?: string | null) => {
   return 'fa-file-lines text-slate-400';
 };
 
+const getContactName = (contact: any) => {
+  const rawName = String(contact.name || '').trim();
+  const firstLast = `${String(contact.first_name || '').trim()} ${String(contact.last_name || '').trim()}`.trim();
+  const fallbackName = String(contact.full_name || contact.contact_name || contact.nombre_contacto || '').trim();
+  return rawName || firstLast || fallbackName || 'Contacto';
+};
+
+const getContactEmail = (contact: any) => {
+  return String(contact.email || contact.email_contact || contact.contact_email || contact.correo || contact.email_cliente || '').trim();
+};
+
 const normalizeAutomationRecipients = (raw: unknown) => {
   if (!Array.isArray(raw)) return [] as Array<{ name: string; email: string; type: 'contact' | 'team' | 'external' }>;
   return raw
@@ -181,7 +199,7 @@ const normalizeNotificationType = (rawType: unknown) => {
 };
 
 const normalizeNotificationLogs = (rawLogs: unknown) => {
-  if (!Array.isArray(rawLogs)) return [] as Array<{ fecha: string; hora: string; tipo: string; enviado_por: string; accionado_por: string; destinatarios: string }>;
+  if (!Array.isArray(rawLogs)) return [] as Array<{ fecha: string; hora: string; tipo: string; enviado_por: string; accionado_por: string; destinatarios: string; estado_envio: string }>;
   return rawLogs.map((item: any) => {
     const recipientsRaw = item?.destinatarios;
     const recipients = Array.isArray(recipientsRaw)
@@ -191,9 +209,10 @@ const normalizeNotificationLogs = (rawLogs: unknown) => {
       fecha: String(item?.fecha_human || item?.fecha || item?.fecha_raw || '-'),
       hora: String(item?.hora || ''),
       tipo: normalizeNotificationType(item?.tipo),
-      enviado_por: String(item?.enviado_por || 'Sistema'),
-      accionado_por: String(item?.accionado_por || '-'),
-      destinatarios: recipients || '-',
+      enviado_por: String(item?.enviado_por || '').trim(),
+      accionado_por: String(item?.accionado_por || '').trim(),
+      destinatarios: recipients || '',
+      estado_envio: String(item?.estado_envio || 'success').trim().toLowerCase(),
     };
   });
 };
@@ -212,9 +231,13 @@ const FinancialDetail: React.FC = () => {
   const [processing, setProcessing] = useState(false);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   
-  const [currentTab, setCurrentTab] = useState<'resumen' | 'abonos' | 'archivos'>('resumen');
+  const [currentTab, setCurrentTab] = useState<'resumen' | 'abonos' | 'notificaciones' | 'archivos'>('resumen');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
+  const [isProviderModalOpen, setIsProviderModalOpen] = useState(false);
+  const [providerContactSearch, setProviderContactSearch] = useState('');
+  const [selectedProviderRecipients, setSelectedProviderRecipients] = useState<Array<{ id: string | null; name: string; email: string; type: 'contact' }>>([]);
+  const [providerModalError, setProviderModalError] = useState<string | null>(null);
   const [companyContacts, setCompanyContacts] = useState<any[]>([]);
   const [uploadingInvoiceFile, setUploadingInvoiceFile] = useState(false);
   const [uploadingRetentionFile, setUploadingRetentionFile] = useState(false);
@@ -300,6 +323,8 @@ const FinancialDetail: React.FC = () => {
         status: tx.estado_registro,
         issue_date_input: tx.v_input_fecha_emision,
         due_date_input: tx.v_input_fecha_vencimiento,
+        notify_contador: tx.notify_contador === true || tx.notify_contador === 'true' || tx.notify_contador === 1 || tx.notify_contador === '1',
+        notify_provider: tx.notify_provider === true || tx.notify_provider === 'true' || tx.notify_provider === 1 || tx.notify_provider === '1',
         
         // --- Nuevos campos mapeados ---
         payment_date_input: tx.v_input_fecha_pago || tx.fecha_pago,
@@ -335,6 +360,7 @@ const FinancialDetail: React.FC = () => {
         automation_recipients: normalizeAutomationRecipients(tx.automation_recipients),
         next_reminder_label: tx.v_texto_proximo_recordatorio_human || tx.v_proximo_recordatorio || tx.v_input_proximo_recordatorio,
         notification_logs: normalizeNotificationLogs(tx.notification_logs),
+        resumen_notificaciones: tx.resumen_notificaciones,
         usuario_creador: tx.usuario_creador,
         creator_avatar: tx.avatar_usuario_creador || tx.usuario_creador_avatar || tx.created_by_avatar || tx.owner_avatar || null,
         creator_user_id: tx.id_usuario_creador || tx.id_user_creador || tx.created_by || null,
@@ -428,6 +454,70 @@ const FinancialDetail: React.FC = () => {
       setToast({ message: 'Notificación enviada a contabilidad', type: 'success' });
     } catch {
       setToast({ message: 'Error al notificar a contabilidad', type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const openProviderModal = () => {
+    setProviderContactSearch('');
+    setSelectedProviderRecipients([]);
+    setProviderModalError(null);
+    setIsProviderModalOpen(true);
+  };
+
+  const toggleProviderRecipient = (recipient: { id: string | null; name: string; email: string; type: 'contact' }) => {
+    setSelectedProviderRecipients((prev) => {
+      const exists = prev.some((item) => item.email === recipient.email);
+      if (exists) return prev.filter((item) => item.email !== recipient.email);
+      return [...prev, recipient];
+    });
+  };
+
+  const selectAllProviderRecipients = () => {
+    const filteredRecipients = (companyContacts || []).filter((contact) => {
+      const name = getContactName(contact).toLowerCase();
+      return providerContactSearch.trim() === '' || name.includes(providerContactSearch.trim().toLowerCase());
+    }).map((contact) => {
+      const email = getContactEmail(contact);
+      if (!email) return null;
+      return {
+        id: contact.id_contact ? String(contact.id_contact) : contact.id ? String(contact.id) : null,
+        name: getContactName(contact),
+        email,
+        type: 'contact' as const,
+      };
+    }).filter(Boolean) as Array<{ id: string | null; name: string; email: string; type: 'contact' }>;
+
+    setSelectedProviderRecipients(filteredRecipients);
+  };
+
+  const clearAllProviderRecipients = () => {
+    setSelectedProviderRecipients([]);
+  };
+
+  const handleSendProviderNotification = async () => {
+    if (!transaction?.id_transaction || !user) return;
+    if (selectedProviderRecipients.length === 0) {
+      setProviderModalError('Selecciona al menos un contacto antes de enviar la notificación.');
+      return;
+    }
+    setProviderModalError(null);
+    setProcessing(true);
+    try {
+      await financialService.notifyProvider({
+        id_transaction: transaction.id_transaction,
+        id_tenant: user.id_tenant,
+        id_user: user.id_user,
+        recipients: selectedProviderRecipients,
+      });
+      setTransaction((prev: any) => prev ? { ...prev, notify_provider: true } : prev);
+      setToast({ message: 'Notificación enviada al proveedor', type: 'success' });
+      setIsProviderModalOpen(false);
+      await invalidateFinancials(getCurrentMonthRange());
+      await fetchData(true);
+    } catch {
+      setToast({ message: 'Error al notificar al proveedor', type: 'error' });
     } finally {
       setProcessing(false);
     }
@@ -670,6 +760,32 @@ const FinancialDetail: React.FC = () => {
   
   const paymentCount = Array.isArray(transaction.payment_history) ? transaction.payment_history.length : 0;
   const canNotifyByEmail = hasEmailIntegration();
+  const accountantNotified = Boolean(transaction.notify_contador);
+  const providerNotified = Boolean(transaction.notify_provider);
+  const showProviderButton = transaction.transaction_type !== 'VENTA';
+  const providerButtonEnabled = transaction.status === 'PAGADO' && canNotifyByEmail;
+  const providerButtonTitle = !canNotifyByEmail
+    ? 'Activa tu integración de correo para poder notificar proveedor.'
+    : transaction.status !== 'PAGADO'
+      ? 'Solo habilitado cuando la transacción esté pagada.'
+      : 'Notificar proveedor';
+
+  const getNotificationSummaryTooltip = (summary: any, defaultLabel: string) => {
+    if (!summary || !summary.sent_at || !summary.triggered_by_name) {
+      return defaultLabel;
+    }
+    return `Enviado por ${summary.triggered_by_name} el ${summary.sent_at}`;
+  };
+
+  const getProviderSummaryRecipients = (summary: any) => {
+    if (!summary || !Array.isArray(summary.recipients) || summary.recipients.length === 0) return null;
+    const names = summary.recipients.map((recipient: any) => String(recipient.name || recipient.email || '').trim()).filter(Boolean);
+    return names.length > 0 ? names.join(', ') : null;
+  };
+
+  const accountantTooltip = getNotificationSummaryTooltip(transaction.resumen_notificaciones?.finance, 'Notificar a contabilidad');
+  const providerTooltip = getNotificationSummaryTooltip(transaction.resumen_notificaciones?.provider, providerButtonTitle);
+  const providerSummaryRecipients = getProviderSummaryRecipients(transaction.resumen_notificaciones?.provider);
   const hasFinanceContactConfigured = !!String(financeContact?.email || '').trim();
   const isClosedStatus = transaction.status === 'PAGADO' || transaction.status === 'ANULADO';
   const balanceLabel = transaction.status === 'VENCIDO' ? 'Saldo Vencido' : 'Saldo Pendiente';
@@ -713,6 +829,33 @@ const FinancialDetail: React.FC = () => {
                 </span>
               )}
             </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {(transaction.transaction_type === 'GASTO' || transaction.transaction_type === 'COMPRA') && (
+                <button
+                  type="button"
+                  onClick={handleNotifyAccountant}
+                  disabled={processing || !hasFinanceContactConfigured}
+                  className={`px-3 py-1.5 border rounded text-sm font-medium transition flex items-center gap-2 ${getNotifyButtonStyles(accountantNotified)} disabled:opacity-50 disabled:cursor-not-allowed`}
+                  title={!hasFinanceContactConfigured ? 'Configura un contacto financiero en Integraciones del workspace.' : accountantTooltip}
+                >
+                  <i className="fa-solid fa-paper-plane text-xs" title={accountantTooltip}></i>
+                  {accountantNotified ? 'Contadora Enviada' : 'Notificar Contadora'}
+                </button>
+              )}
+
+              {showProviderButton && (
+                <button
+                  type="button"
+                  onClick={openProviderModal}
+                  disabled={processing || !providerButtonEnabled}
+                  className={`px-3 py-1.5 border rounded text-sm font-medium transition flex items-center gap-2 ${getNotifyButtonStyles(providerNotified)} disabled:opacity-50 disabled:cursor-not-allowed`}
+                  title={providerTooltip}
+                >
+                  <i className="fa-solid fa-handshake-angle text-xs" title={providerTooltip}></i>
+                  {providerNotified ? 'Proveedor Notificado' : 'Notificar Proveedor'}
+                </button>
+              )}
+            </div>
             <p className="mt-1 text-sm text-gray-600 max-w-[560px] truncate">{transaction.description || '-'}</p>
           </div>
           
@@ -724,18 +867,6 @@ const FinancialDetail: React.FC = () => {
               </div>
             </div>
             <div className="flex gap-2">
-              
-              {(transaction.transaction_type === 'GASTO' || transaction.transaction_type === 'COMPRA') && (
-                <button 
-                  onClick={handleNotifyAccountant} 
-                  disabled={processing || !hasFinanceContactConfigured}
-                  className="px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 rounded text-sm font-medium transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  title={!hasFinanceContactConfigured ? 'Configura un contacto financiero en Integraciones del workspace.' : 'Notificar a contabilidad'}
-                >
-                  <i className="fa-solid fa-paper-plane text-xs"></i> Notificar Contadora
-                </button>
-              )}
-
               {!isClosedStatus && (
                 <button
                   onClick={() => setIsCollectionModalOpen(true)}
@@ -756,6 +887,101 @@ const FinancialDetail: React.FC = () => {
           </div>
 
           {/* PROGRESS BAR */}
+          {isProviderModalOpen && (
+            <AppModalViewport className="z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fade-in">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                  <div>
+                    <h3 className="font-bold text-slate-900">Notificar proveedor</h3>
+                    <p className="text-sm text-slate-500">Selecciona los contactos de la empresa que recibirán esta notificación.</p>
+                  </div>
+                  <button onClick={() => setIsProviderModalOpen(false)} className="text-slate-400 hover:text-slate-600"><i className="fa-solid fa-times"></i></button>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Buscar contactos</label>
+                    <input
+                      value={providerContactSearch}
+                      onChange={(e) => setProviderContactSearch(e.target.value)}
+                      placeholder="Buscar por nombre"
+                      className="mt-2 w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-sm outline-none focus:border-slate-300 focus:bg-white"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <button
+                      type="button"
+                      onClick={selectAllProviderRecipients}
+                      className="px-3 py-2 bg-slate-800 text-white rounded-md text-sm font-semibold hover:bg-slate-700 transition"
+                    >
+                      Seleccionar todo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearAllProviderRecipients}
+                      className="px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-md text-sm font-semibold hover:bg-slate-50 transition"
+                    >
+                      Deseleccionar todo
+                    </button>
+                    <span className="text-xs text-slate-500">{selectedProviderRecipients.length} seleccionado{selectedProviderRecipients.length === 1 ? '' : 's'}</span>
+                  </div>
+
+                  <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                    {(() => {
+                      const rows = (companyContacts || []).filter((contact) => {
+                        const name = getContactName(contact).toLowerCase();
+                        return providerContactSearch.trim() === '' || name.includes(providerContactSearch.trim().toLowerCase());
+                      }).map((contact) => {
+                        const email = getContactEmail(contact);
+                        if (!email) return null;
+                        const name = getContactName(contact);
+                        const contactId = contact.id_contact ?? contact.id ?? null;
+                        const isSelected = selectedProviderRecipients.some((item) => item.email === email);
+                        return (
+                          <button
+                            key={`${contactId ?? 'anon'}-${email}`}
+                            type="button"
+                            onClick={() => toggleProviderRecipient({ id: contactId ? String(contactId) : null, name, email, type: 'contact' })}
+                            className={`w-full px-4 py-3 text-left flex items-center justify-between gap-3 transition ${isSelected ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                          >
+                            <div className="min-w-0">
+                              <p className="font-semibold text-slate-800 truncate">{name}</p>
+                              <p className="text-[11px] text-slate-500 truncate">{email}</p>
+                            </div>
+                            <span className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300 text-transparent'}`}>
+                              <i className="fa-solid fa-check text-[10px]"></i>
+                            </span>
+                          </button>
+                        );
+                      }).filter(Boolean);
+
+                      if (rows.length === 0) {
+                        return (
+                          <div className="p-4 text-sm text-slate-500">
+                            No se encontraron contactos de la empresa. Verifica que la empresa tenga contactos cargados.
+                          </div>
+                        );
+                      }
+
+                      return rows;
+                    })()}
+                  </div>
+
+                  {providerModalError && <div className="text-sm text-red-600">{providerModalError}</div>}
+                </div>
+                <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+                  <button onClick={() => setIsProviderModalOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancelar</button>
+                  <button
+                    onClick={handleSendProviderNotification}
+                    disabled={processing || selectedProviderRecipients.length === 0}
+                    className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Enviar notificación
+                  </button>
+                </div>
+              </div>
+            </AppModalViewport>
+          )}
           <div className="flex items-center w-full max-w-[700px] gap-2.5 mt-5">
           <div className="flex-1 flex flex-col gap-1">
             <div className={`h-1.5 w-full rounded-full ${transaction.status === 'PENDIENTE' ? 'bg-amber-500' : 'bg-gray-200'}`}></div>
@@ -881,6 +1107,43 @@ const FinancialDetail: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Último envío a contador */}
+                {transaction.resumen_notificaciones?.finance?.sent_at && (
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-envelope text-blue-400"></i></div>
+                    <div className="w-full flex justify-between items-center">
+                      <p className="text-sm text-gray-600">Último envío a contador</p>
+                      <p className="text-sm font-medium text-gray-900 tabular-nums">
+                        {transaction.resumen_notificaciones.finance.sent_at}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Último envío a proveedor */}
+                {transaction.resumen_notificaciones?.provider?.sent_at && (
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-building text-purple-400"></i></div>
+                      <div className="w-full flex justify-between items-center">
+                        <p className="text-sm text-gray-600">Último envío a proveedor</p>
+                        <p className="text-sm font-medium text-gray-900 tabular-nums">
+                          {transaction.resumen_notificaciones.provider.sent_at}
+                        </p>
+                      </div>
+                    </div>
+                    {providerSummaryRecipients && (
+                      <div className="flex items-start gap-3">
+                        <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-user text-purple-400"></i></div>
+                        <div className="w-full">
+                          <p className="text-sm text-gray-600">Destinatario(s)</p>
+                          <p className="text-sm font-medium text-gray-900 truncate">{providerSummaryRecipients}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
               </div>
             </div>
 
@@ -917,6 +1180,14 @@ const FinancialDetail: React.FC = () => {
                   <span>Historial de Abonos</span>
                   <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-gray-100 px-1 text-[10px] font-bold text-gray-600">
                     {paymentCount}
+                  </span>
+                </span>
+              </button>
+              <button onClick={() => setCurrentTab('notificaciones')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'notificaciones' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                <span className="inline-flex items-center gap-2">
+                  <span>Historial de Auditoría</span>
+                  <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-gray-100 px-1 text-[10px] font-bold text-gray-600">
+                    {transaction.notification_logs?.length || 0}
                   </span>
                 </span>
               </button>
@@ -1055,6 +1326,62 @@ const FinancialDetail: React.FC = () => {
                 </div>
                 <div className="p-5">
                   <PaymentHistoryTable paymentHistory={transaction.payment_history} />
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: HISTORIAL DE NOTIFICACIONES */}
+            {currentTab === 'notificaciones' && (
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-gray-800">Historial de Auditoría</h3>
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                      {transaction.notification_logs?.length || 0}
+                    </span>
+                  </div>
+                </div>
+                <div className="p-5">
+                  {!transaction.notification_logs || transaction.notification_logs.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <i className="fa-solid fa-bell-slash text-3xl mb-3 text-gray-300"></i>
+                      <p className="text-sm">No hay historial de auditoría</p>
+                    </div>
+                  ) : (
+                    <div className="relative space-y-6">
+                      <div className="absolute left-7 top-6 bottom-6 w-px bg-gray-200"></div>
+                      {transaction.notification_logs.map((log: any, index: number) => (
+                        <div key={index} className="relative flex gap-4 pl-10">
+                          <div className="absolute left-0 top-2 w-12 flex justify-center">
+                            <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow-sm">
+                              <i className={`fa-solid ${log.tipo === 'CONTADORA' ? 'fa-building-columns' : 'fa-envelope'} text-blue-600 text-sm`}></i>
+                            </div>
+                          </div>
+                          <div className="flex-1 p-4 border border-gray-200 rounded-xl bg-gray-50">
+                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                              <span className="text-sm font-semibold text-gray-900">
+                                {log.tipo === 'CONTADORA' ? 'Notificación a Contadora' : 'Notificación a Proveedor'}
+                              </span>
+                              {log.estado_envio && log.estado_envio !== 'success' && (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  Error
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-600 mb-2">{log.fecha}</p>
+                            <div className="space-y-1 text-xs text-gray-500">
+                              {(log.accionado_por || log.enviado_por) && (
+                                <p><strong>Enviado por:</strong> {log.accionado_por || log.enviado_por}</p>
+                              )}
+                              {log.destinatarios && (
+                                <p><strong>Destinatarios:</strong> {log.destinatarios}</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
