@@ -173,7 +173,7 @@ const getContactEmail = (contact: any) => {
 };
 
 const normalizeAutomationRecipients = (raw: unknown) => {
-  if (!Array.isArray(raw)) return [] as Array<{ name: string; email: string; type: 'contact' | 'team' | 'external' }>;
+  if (!Array.isArray(raw)) return [] as Array<{ name: string; email: string; type: 'contact' | 'team' | 'external'; is_primary?: boolean }>;
   return raw
     .map((item) => {
       if (typeof item === 'string') {
@@ -187,9 +187,9 @@ const normalizeAutomationRecipients = (raw: unknown) => {
       const name = String(rec.name || email || 'Destinatario').trim();
       const type = rec.type === 'team' ? 'team' : rec.type === 'contact' ? 'contact' : 'external';
       if (!email && !name) return null;
-      return { name: name || email, email: email || name, type };
+      return { name: name || email, email: email || name, type, is_primary: !!rec.is_primary };
     })
-    .filter(Boolean) as Array<{ name: string; email: string; type: 'contact' | 'team' | 'external' }>;
+    .filter(Boolean) as Array<{ name: string; email: string; type: 'contact' | 'team' | 'external'; is_primary?: boolean }>;
 };
 
 const normalizeNotificationType = (rawType: unknown) => {

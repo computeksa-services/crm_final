@@ -3,6 +3,14 @@ import { useAuth } from '../contexts/AuthContext';
 import { apiFetch } from '../services/apiClient';
 import { BrandSpinner } from './AppLoaders';
 import AppModalViewport from './AppModalViewport';
+import {
+  ensurePrimaryRecipient,
+  isSalutationEligible,
+  normalizeLoadedRecipients,
+  onToggleRecipient,
+  setPrimaryRecipient,
+  validateRecipientsForSend,
+} from '../utils/recipientHelpers';
 
 // --- TIPOS ---
 type ContactOption = {
@@ -47,6 +55,7 @@ export type Recipient = {
   name: string;
   type: 'contact' | 'team' | 'external';
   id: string | null;
+  is_primary?: boolean;
 };
 
 const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSend, transactionData }) => {
@@ -164,7 +173,7 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
                     
                     // Aplicar todas las preselecciones de una sola vez
                     if (recipientsToSelect.length > 0) {
-                        setSelectedRecipients(recipientsToSelect);
+                        setSelectedRecipients(ensurePrimaryRecipient(recipientsToSelect));
                         hasPreselectRef.current = true;
                     }
                 }
@@ -178,12 +187,11 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
 
       // Cargar configuración previa si existe (edición)
       if (transactionData.automation_recipients && transactionData.automation_recipients.length > 0) {
-          // Parseamos si viene como string, o usamos directo si es objeto
           let savedRecipients = transactionData.automation_recipients;
           if (typeof savedRecipients === 'string') {
               try { savedRecipients = JSON.parse(savedRecipients); } catch(e) {}
           }
-          setSelectedRecipients(savedRecipients);
+          setSelectedRecipients(normalizeLoadedRecipients(Array.isArray(savedRecipients) ? savedRecipients : []));
           hasPreselectRef.current = true;
       }
     };
@@ -195,14 +203,11 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
 
   // Handlers
   const toggleRecipient = (recipient: Recipient) => {
-    setSelectedRecipients(prev => {
-      const exists = prev.find(r => r.email === recipient.email);
-      if (exists) {
-        return prev.filter(r => r.email !== recipient.email);
-      } else {
-        return [...prev, recipient];
-      }
-    });
+    setSelectedRecipients((prev) => onToggleRecipient(prev, recipient));
+  };
+
+  const handleSetPrimary = (email: string) => {
+    setSelectedRecipients((prev) => setPrimaryRecipient(prev, email));
   };
 
   const addExternalRecipient = () => {
@@ -263,9 +268,15 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
       alert('No puedes enviar correos sin una integración activa. Por favor, configura una integración primero.');
       return;
     }
+
+    const validationError = validateRecipientsForSend(selectedRecipients);
+    if (validationError) {
+      alert(validationError);
+      return;
+    }
     
     onSend({
-      recipients: selectedRecipients,
+      recipients: ensurePrimaryRecipient(selectedRecipients),
       update_automation: {
         enabled: autoEnabled,
         frequency: Number(frequency) || 3
@@ -319,7 +330,8 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
             
             {/* 1. Destinatarios del Cliente */}
             <div>
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Destinatarios (Cliente)</h3>
+                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Destinatarios (Cliente)</h3>
+                <p className="text-[10px] text-slate-500 mb-3">Marca el contacto que recibirá el saludo &quot;Estimado(a)...&quot; del correo.</p>
                 
                 {loadingContacts ? (
                     <div className="text-center py-4 text-slate-400 text-xs"><BrandSpinner className="mr-2" size="xs" /> Cargando contactos...</div>
@@ -332,20 +344,33 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         {contacts.map(c => {
                             const isSelected = selectedRecipients.some(r => r.email === c.email);
+                            const isPrimary = selectedRecipients.some(r => r.email === c.email && r.is_primary);
                             return (
-                                <label key={c.id_contact} className={`flex items-start gap-3 p-3 border rounded-xl cursor-pointer transition-all ${isSelected ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-brand-200'}`}>
+                                <div key={c.id_contact} className={`flex items-start gap-3 p-3 border rounded-xl transition-all ${isSelected ? 'border-brand-500 bg-brand-50' : 'border-slate-200 hover:border-brand-200'}`}>
                                     <input 
                                         type="checkbox" 
                                         checked={isSelected}
                                         onChange={() => toggleRecipient({ email: c.email, name: c.name, type: 'contact', id: c.id_contact })}
                                         className="mt-1 w-4 h-4 text-brand-600 rounded focus:ring-brand-500"
                                     />
-                                    <div className="overflow-hidden">
+                                    <div className="overflow-hidden flex-1 min-w-0">
                                         <p className={`text-sm font-bold truncate ${isSelected ? 'text-brand-900' : 'text-slate-700'}`}>{c.name}</p>
                                         <p className="text-xs text-slate-500 truncate">{c.email}</p>
                                         {c.position && <p className="text-[10px] text-slate-400 mt-0.5">{c.position}</p>}
+                                        {isSelected && (
+                                            <label className="flex items-center gap-1.5 mt-2 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    name="primary-recipient"
+                                                    checked={isPrimary}
+                                                    onChange={() => handleSetPrimary(c.email)}
+                                                    className="w-3.5 h-3.5 text-brand-600"
+                                                />
+                                                <span className="text-[10px] font-semibold text-brand-700">Saludo del correo</span>
+                                            </label>
+                                        )}
                                     </div>
-                                </label>
+                                </div>
                             );
                         })}
                     </div>
@@ -404,10 +429,22 @@ const CollectionModal: React.FC<CollectionModalProps> = ({ isOpen, onClose, onSe
                 
                 {/* Chips de Externos y Seleccionados */}
                 <div className="flex flex-wrap gap-2">
-                    {selectedRecipients.map((r, i) => (
-                        <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-slate-300 text-xs text-slate-600 shadow-sm">
+                    {selectedRecipients.filter(isSalutationEligible).map((r) => (
+                        <span key={r.email} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-xs shadow-sm ${r.is_primary ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-white border-slate-300 text-slate-600'}`}>
                             {r.type === 'external' && <i className="fa-solid fa-globe text-slate-400"></i>}
+                            {r.is_primary && <i className="fa-solid fa-star text-amber-500 text-[10px]" title="Saludo del correo"></i>}
                             {r.name}
+                            {r.is_primary ? (
+                                <span className="text-[9px] font-bold uppercase text-amber-600">Principal</span>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={() => handleSetPrimary(r.email)}
+                                    className="text-[9px] font-semibold text-brand-600 hover:underline"
+                                >
+                                    Saludo
+                                </button>
+                            )}
                             <button onClick={() => toggleRecipient(r)} className="hover:text-red-500 transition-colors ml-1"><i className="fa-solid fa-times"></i></button>
                         </span>
                     ))}

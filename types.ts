@@ -604,6 +604,7 @@ export interface FinancialTransaction {
     name: string;
     type: 'contact' | 'team' | 'external';
     email: string;
+    is_primary?: boolean;
   }>;
   next_reminder_label?: string; // Texto formateado del próximo recordatorio (mapeado de v_proximo_recordatorio)
 

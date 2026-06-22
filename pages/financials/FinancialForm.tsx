@@ -9,6 +9,14 @@ import Toast from '../../components/Toast';
 import { apiFetch } from '../../services/apiClient';
 import { GATEWAY_CONFIG, buildUrl } from '../../services/gatewayConfig';
 import type { ClientCompany, FinancialTransaction, Quote } from '../../types';
+import {
+  ensurePrimaryRecipient,
+  isSalutationEligible,
+  normalizeLoadedRecipients,
+  onToggleRecipient,
+  setPrimaryRecipient,
+  validateRecipientsForSend,
+} from '../../utils/recipientHelpers';
 
 // --- HELPERS ---
 const formatCurrency = (val: number | string) => {
@@ -118,6 +126,7 @@ type SelectedRecipient = {
   name: string;
   type: 'contact' | 'team' | 'external';
   id: string | null;
+  is_primary?: boolean;
 };
 
 type SearchOption = {
@@ -485,7 +494,7 @@ const FinancialForm: React.FC = () => {
     }
 
     if (recipientsToSelect.length > 0) {
-      setSelectedRecipients(recipientsToSelect);
+      setSelectedRecipients(ensurePrimaryRecipient(recipientsToSelect));
     }
   }, [transaction.enable_automation, transaction.id_client_company, filteredContacts, user]);
 
@@ -730,13 +739,7 @@ const FinancialForm: React.FC = () => {
             navigate(location.pathname + location.search, { state: { breadcrumb: normalized.invoice_number }, replace: true });
 
             if (Array.isArray(tx.automation_recipients)) {
-              const recipients: SelectedRecipient[] = tx.automation_recipients.map((r: any) => ({
-                email: r.email,
-                name: r.name,
-                type: r.type || 'external',
-                id: r.id || null
-              }));
-              setSelectedRecipients(recipients);
+              setSelectedRecipients(normalizeLoadedRecipients(tx.automation_recipients));
             }
           }
         } else {
@@ -819,10 +822,11 @@ const FinancialForm: React.FC = () => {
   };
 
   const toggleRecipient = (recipient: SelectedRecipient) => {
-    setSelectedRecipients(prev => {
-      const exists = prev.some(r => r.email === recipient.email);
-      return exists ? prev.filter(r => r.email !== recipient.email) : [...prev, recipient];
-    });
+    setSelectedRecipients((prev) => onToggleRecipient(prev, recipient));
+  };
+
+  const handleSetPrimary = (email: string) => {
+    setSelectedRecipients((prev) => setPrimaryRecipient(prev, email));
   };
 
   const addExternalRecipient = () => {
@@ -897,6 +901,14 @@ const FinancialForm: React.FC = () => {
       setToast({ message: 'Selecciona al menos un destinatario para activar recordatorios.', type: 'error' });
       return;
     }
+
+    if (transaction.enable_automation) {
+      const recipientError = validateRecipientsForSend(selectedRecipients);
+      if (recipientError) {
+        setToast({ message: recipientError, type: 'error' });
+        return;
+      }
+    }
     
     setSaving(true);
     try {
@@ -922,7 +934,7 @@ const FinancialForm: React.FC = () => {
         automation_frequency: parseInt(String(transaction.automation_frequency)) || 3,
         id_tenant: user?.id_tenant,
         id_user: user?.id_user,
-        automation_recipients: transaction.enable_automation ? selectedRecipients : [],
+        automation_recipients: transaction.enable_automation ? ensurePrimaryRecipient(selectedRecipients) : [],
         
         retention_date: showRetentionSection ? transaction.retention_date : null,
         payment_date: transaction.status === 'PAGADO' ? transaction.payment_date : null,
@@ -1346,18 +1358,35 @@ const FinancialForm: React.FC = () => {
 
                   <div className="space-y-2">
                     <p className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Contactos empresa</p>
+                    <p className="text-[10px] text-zinc-400">Marca quién recibirá el saludo &quot;Estimado(a)...&quot; del correo.</p>
                     <div className="max-h-28 overflow-y-auto space-y-1 pr-1 custom-scrollbar">
-                      {filteredContacts.length > 0 ? filteredContacts.map(c => (
-                        <label key={c.id_contact} className="flex items-center gap-2 p-2 hover:bg-zinc-50 rounded text-[11px] cursor-pointer transition-colors border border-transparent hover:border-zinc-100">
+                      {filteredContacts.length > 0 ? filteredContacts.map(c => {
+                        const email = c.email || c.email_contact;
+                        const isSelected = selectedRecipients.some(r => r.email === email);
+                        const isPrimary = selectedRecipients.some(r => r.email === email && r.is_primary);
+                        return (
+                        <div key={c.id_contact} className="flex items-center gap-2 p-2 hover:bg-zinc-50 rounded text-[11px] border border-transparent hover:border-zinc-100">
                           <input
                             type="checkbox"
-                            checked={selectedRecipients.some(r => r.email === (c.email || c.email_contact))}
-                            onChange={() => toggleRecipient({ email: c.email || c.email_contact, name: c.first_name + (c.last_name ? ` ${c.last_name}` : ''), type: 'contact', id: c.id_contact })}
+                            checked={isSelected}
+                            onChange={() => toggleRecipient({ email, name: c.first_name + (c.last_name ? ` ${c.last_name}` : ''), type: 'contact', id: c.id_contact })}
                             className="w-3.5 h-3.5 rounded text-blue-600"
                           />
-                          <span className="text-zinc-700">{c.first_name} {c.last_name}</span>
-                        </label>
-                      )) : <p className="text-[11px] text-zinc-400">Sin contactos.</p>}
+                          <span className="text-zinc-700 flex-1">{c.first_name} {c.last_name}</span>
+                          {isSelected && (
+                            <label className="flex items-center gap-1 cursor-pointer flex-shrink-0">
+                              <input
+                                type="radio"
+                                name="form-primary-recipient"
+                                checked={isPrimary}
+                                onChange={() => handleSetPrimary(email)}
+                                className="w-3 h-3 text-blue-600"
+                              />
+                              <span className="text-[9px] font-semibold text-blue-700">Saludo</span>
+                            </label>
+                          )}
+                        </div>
+                      ); }) : <p className="text-[11px] text-zinc-400">Sin contactos.</p>}
                     </div>
                   </div>
 
@@ -1391,8 +1420,12 @@ const FinancialForm: React.FC = () => {
                     <div className="pt-3 border-t border-zinc-100">
                       <div className="flex flex-wrap gap-2 max-w-full">
                         {selectedRecipients.map((recipient, index) => (
-                          <span key={`${recipient.email}-${index}`} className="px-2.5 py-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-full text-[11px] font-medium flex items-center gap-1.5 shadow-sm break-all max-w-full">
+                          <span key={`${recipient.email}-${index}`} className={`px-2.5 py-1 border rounded-full text-[11px] font-medium flex items-center gap-1.5 shadow-sm break-all max-w-full ${recipient.is_primary && isSalutationEligible(recipient) ? 'bg-amber-50 text-amber-800 border-amber-200' : 'bg-indigo-50 text-indigo-700 border-indigo-200'}`}>
+                            {recipient.is_primary && isSalutationEligible(recipient) && <i className="fa-solid fa-star text-amber-500 text-[9px]"></i>}
                             <span className="truncate max-w-[180px]" title={recipient.name}>{recipient.name}</span>
+                            {!recipient.is_primary && isSalutationEligible(recipient) && (
+                              <button type="button" onClick={() => handleSetPrimary(recipient.email)} className="text-[9px] font-semibold text-blue-600 hover:underline flex-shrink-0">Saludo</button>
+                            )}
                             <button type="button" onClick={() => toggleRecipient(recipient)} className="text-rose-500 hover:text-rose-700 font-bold text-xs flex-shrink-0">×</button>
                           </span>
                         ))}
