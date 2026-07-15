@@ -804,9 +804,8 @@ const FinancialsList: React.FC = () => {
   };
 
   const confirmPayment = async () => {
-      if (!paymentModal.tx) return;
+      if (!paymentModal.tx || !user) return;
       try {
-          const currentPaid = Number(paymentModal.tx.paid_amount || 0);
           const currentBalance = Number(paymentModal.tx.balance_due || paymentModal.tx.total_value || 0);
           const amount = Math.min(Number(paymentModal.amount || 0), currentBalance);
           if (amount <= 0) {
@@ -814,24 +813,19 @@ const FinancialsList: React.FC = () => {
               return;
           }
 
-          const newPaidAmount = currentPaid + amount;
-          const newBalance = Math.max(currentBalance - amount, 0);
-          await financialService.update({
-              id_transaction: paymentModal.tx.id_transaction, id_tenant: user?.id_tenant,
-              status: newBalance === 0 ? 'PAGADO' : 'PENDIENTE',
+          await financialService.addPayment({
+              id_transaction: paymentModal.tx.id_transaction,
+              id_tenant: user.id_tenant,
+              created_by: user.id_user,
+              amount,
               payment_date: paymentModal.date,
               payment_method: paymentModal.method,
-              payment_reference: paymentModal.ref,
-              paid_amount: newPaidAmount,
-              balance_due: newBalance,
-              total_value: paymentModal.tx.total_value,
-              subtotal: paymentModal.tx.subtotal,
-              tax_amount: paymentModal.tx.tax_amount
+              reference: paymentModal.ref || undefined,
           });
           setPaymentModal(prev => ({ ...prev, isOpen: false }));
-          setToast({ message: 'Pago registrado', type: 'success' });
+          setToast({ message: 'Abono registrado', type: 'success' });
           invalidateFinancials({ start: dateRange.start, end: dateRange.end, include_open: includeOpen });
-      } catch (e) { setToast({ message: 'Error registrando pago', type: 'error' }); }
+      } catch (e) { setToast({ message: 'Error registrando abono', type: 'error' }); }
   };
 
   const handleDelete = async () => {
@@ -1317,14 +1311,20 @@ const FinancialsList: React.FC = () => {
         {paymentModal.isOpen && (
           <AppModalViewport className="z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fade-in">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
-                  <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 className="font-bold text-slate-800">Registrar Pago</h3><button onClick={() => setPaymentModal(p => ({...p, isOpen:false}))} className="text-slate-400 hover:text-slate-600"><i className="fa-solid fa-times"></i></button></div>
+                  <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 className="font-bold text-slate-800">Registrar Abono</h3><button onClick={() => setPaymentModal(p => ({...p, isOpen:false}))} className="text-slate-400 hover:text-slate-600"><i className="fa-solid fa-times"></i></button></div>
                   <div className="p-6 space-y-4">
+                      {paymentModal.tx && (
+                        <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                          <span className="text-xs font-bold text-slate-500 uppercase">Saldo Pendiente</span>
+                          <span className="text-sm font-bold text-slate-800 tabular-nums">{formatCurrency(Number(paymentModal.tx.balance_due || paymentModal.tx.total_value || 0))}</span>
+                        </div>
+                      )}
                       <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Fecha</label><input type="date" value={paymentModal.date} onChange={e => setPaymentModal(p => ({...p, date: e.target.value}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" /></div>
-                      <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Monto</label><div className="relative"><span className="absolute left-3 top-2 text-slate-400">$</span><input type="number" max={paymentModal.tx?.balance_due || undefined} value={paymentModal.amount} onChange={e => setPaymentModal(p => ({...p, amount: parseFloat(e.target.value) || 0}))} className="w-full pl-6 pr-3 py-2 border border-slate-300 rounded-lg text-sm font-bold" /></div></div>
-                      <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Método</label><select value={paymentModal.method} onChange={e => setPaymentModal(p => ({...p, method: e.target.value}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"><option value="TRANSFERENCIA">Transferencia</option><option value="EFECTIVO">Efectivo</option><option value="CHEQUE">Cheque</option></select></div>
+                      <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Monto del Abono</label><div className="relative"><span className="absolute left-3 top-2 text-slate-400">$</span><input type="number" max={paymentModal.tx?.balance_due || undefined} value={paymentModal.amount} onChange={e => setPaymentModal(p => ({...p, amount: parseFloat(e.target.value) || 0}))} className="w-full pl-6 pr-3 py-2 border border-slate-300 rounded-lg text-sm font-bold" /></div></div>
+                      <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Método</label><select value={paymentModal.method} onChange={e => setPaymentModal(p => ({...p, method: e.target.value}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"><option value="TRANSFERENCIA">Transferencia</option><option value="EFECTIVO">Efectivo</option><option value="CHEQUE">Cheque</option><option value="TARJETA">Tarjeta</option></select></div>
                       <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Referencia</label><input type="text" placeholder="Ej: #12345" value={paymentModal.ref} onChange={e => setPaymentModal(p => ({...p, ref: e.target.value}))} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm" /></div>
                   </div>
-                  <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2"><button onClick={() => setPaymentModal(p => ({...p, isOpen:false}))} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancelar</button><button onClick={confirmPayment} className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm">Confirmar Pago</button></div>
+                  <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2"><button onClick={() => setPaymentModal(p => ({...p, isOpen:false}))} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancelar</button><button onClick={confirmPayment} className="px-4 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm">Registrar Abono</button></div>
                 </div>
               </AppModalViewport>
       )}

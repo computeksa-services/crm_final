@@ -1,0 +1,203 @@
+
+{
+  "name": "API - Actualizar Abono",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "api/financial/abono/update",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || {};\n\nconst payload = {\n  id_payment: body.id_payment ? String(body.id_payment).trim() : null,\n  id_tenant: body.id_tenant ? String(body.id_tenant).trim() : null,\n  id_transaction: body.id_transaction ? String(body.id_transaction).trim() : null,\n  amount: body.amount !== undefined ? Number(body.amount) : undefined,\n  payment_date: body.payment_date ? String(body.payment_date).trim() : undefined,\n  payment_method: body.payment_method ? String(body.payment_method).trim() : undefined,\n  reference: body.reference ? String(body.reference).trim() : undefined,\n  notes: body.notes ? String(body.notes).trim() : undefined,\n};\n\nreturn [{ json: { sqlPayload: payload } }];"
+      },
+      "name": "Preparar Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [400, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sqlPayload = $input.first().json.sqlPayload;\nconst errors = [];\n\nif (!sqlPayload.id_payment) errors.push('id_payment es requerido');\nif (!sqlPayload.id_tenant) errors.push('id_tenant es requerido');\nif (!sqlPayload.id_transaction) errors.push('id_transaction es requerido');\nif (sqlPayload.amount !== undefined && (isNaN(sqlPayload.amount) || sqlPayload.amount <= 0)) errors.push('amount debe ser un numero mayor a 0');\n\nif (errors.length > 0) {\n  return [{ json: { valid: false, errors } }];\n}\nreturn [{ json: { valid: true, sqlPayload } }];"
+      },
+      "name": "Validar Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [600, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.valid }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "name": "Payload Valido?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, message: 'Payload invalido', errors: $json.errors }) }}",
+        "options": { "responseCode": 400 }
+      },
+      "name": "400 Bad Request",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1040, 440]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id_payment, amount, payment_date, payment_method, reference_number, notes FROM \"financial_transaction_payments\" WHERE id_payment = ($1::jsonb ->> 'id_payment') AND id_transaction = ($1::jsonb ->> 'id_transaction')",
+        "additionalFields": {
+          "queryParameters": {
+            "parameters": [
+              { "parameter": "$1", "value": "={{ JSON.stringify($json.sqlPayload) }}" }
+            ]
+          }
+        }
+      },
+      "name": "Buscar Abono",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1040, 180]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all();\nconst row = rows[0];\nconst sqlPayload = $('Preparar Payload').first().json.sqlPayload;\n\nif (!row || row.json.id_payment === undefined) {\n  return [{ json: { exists: false } }];\n}\n\nreturn [{ json: { exists: true, sqlPayload, old_amount: row.json.amount } }];"
+      },
+      "name": "Verificar",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1260, 180]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "leftValue": "={{ $json.exists }}", "rightValue": true, "operator": { "type": "boolean", "operation": "true" } }
+          ],
+          "combinator": "and"
+        }
+      },
+      "name": "Existe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1480, 180]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, message: 'Abono no encontrado' }) }}",
+        "options": { "responseCode": 404 }
+      },
+      "name": "404 No Existe",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1720, 320]
+    },
+    {
+      "parameters": {
+        "jsCode": "const sqlPayload = $('Verificar').first().json.sqlPayload;\nconst oldAmount = $('Verificar').first().json.old_amount || 0;\nconst newAmount = sqlPayload.amount !== undefined ? Number(sqlPayload.amount) : oldAmount;\nconst diff = newAmount - oldAmount;\n\nreturn [{ json: { sqlPayload, diff, newAmount, oldAmount } }];"
+      },
+      "name": "Calcular Diferencia",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1720, 60]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE \"financial_transaction_payments\" SET amount = COALESCE(($1::jsonb ->> 'amount')::numeric, amount), payment_date = COALESCE(NULLIF($1::jsonb ->> 'payment_date', '')::date, payment_date), payment_method = COALESCE(NULLIF($1::jsonb ->> 'payment_method', ''), payment_method), reference_number = COALESCE(NULLIF($1::jsonb ->> 'reference', ''), reference_number), notes = COALESCE(NULLIF($1::jsonb ->> 'notes', ''), notes) WHERE id_payment = ($1::jsonb ->> 'id_payment') AND id_transaction = ($1::jsonb ->> 'id_transaction') RETURNING id_payment, amount, payment_date, payment_method, reference_number, notes",
+        "additionalFields": {
+          "queryParameters": {
+            "parameters": [
+              { "parameter": "$1", "value": "={{ JSON.stringify($('Calcular Diferencia').first().json.sqlPayload) }}" }
+            ]
+          }
+        }
+      },
+      "name": "Actualizar Abono",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1960, 60]
+    },
+    {
+      "parameters": {
+        "jsCode": "const payment = $input.first().json;\nconst diff = $('Calcular Diferencia').first().json.diff;\nconst sqlPayload = $('Calcular Diferencia').first().json.sqlPayload;\n\nreturn [{ json: { payment, diff, id_transaction: sqlPayload.id_transaction, id_tenant: sqlPayload.id_tenant } }];"
+      },
+      "name": "Preparar Update TX",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 60]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE \"financial_transactions\" SET paid_amount = COALESCE(paid_amount, 0) + $1, status = CASE WHEN (COALESCE(paid_amount, 0) + $1) >= total_value THEN 'PAGADO' WHEN due_date < CURRENT_DATE THEN 'VENCIDO' ELSE 'PENDIENTE' END, updated_at = NOW() WHERE id_transaction = $2 AND id_tenant = $3 RETURNING id_transaction, status, paid_amount",
+        "additionalFields": {
+          "queryParameters": {
+            "parameters": [
+              { "parameter": "$1", "value": "={{ $json.diff }}" },
+              { "parameter": "$2", "value": "={{ $json.id_transaction }}" },
+              { "parameter": "$3", "value": "={{ $json.id_tenant }}" }
+            ]
+          }
+        }
+      },
+      "name": "Actualizar Factura",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2440, 60]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, message: 'Abono actualizado', payment: $('Actualizar Abono').first().json }) }}",
+        "options": { "responseCode": 200 }
+      },
+      "name": "200 OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [2680, 60]
+    }
+  ],
+  "connections": {
+    "Webhook": { "main": [[{ "node": "Preparar Payload", "type": "main", "index": 0 }]] },
+    "Preparar Payload": { "main": [[{ "node": "Validar Payload", "type": "main", "index": 0 }]] },
+    "Validar Payload": { "main": [[{ "node": "Payload Valido?", "type": "main", "index": 0 }]] },
+    "Payload Valido?": {
+      "main": [
+        [{ "node": "Buscar Abono", "type": "main", "index": 0 }],
+        [{ "node": "400 Bad Request", "type": "main", "index": 0 }]
+      ]
+    },
+    "Buscar Abono": { "main": [[{ "node": "Verificar", "type": "main", "index": 0 }]] },
+    "Verificar": { "main": [[{ "node": "Existe?", "type": "main", "index": 0 }]] },
+    "Existe?": {
+      "main": [
+        [{ "node": "Calcular Diferencia", "type": "main", "index": 0 }],
+        [{ "node": "404 No Existe", "type": "main", "index": 0 }]
+      ]
+    },
+    "Calcular Diferencia": { "main": [[{ "node": "Actualizar Abono", "type": "main", "index": 0 }]] },
+    "Actualizar Abono": { "main": [[{ "node": "Preparar Update TX", "type": "main", "index": 0 }]] },
+    "Preparar Update TX": { "main": [[{ "node": "Actualizar Factura", "type": "main", "index": 0 }]] },
+    "Actualizar Factura": { "main": [[{ "node": "200 OK", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}

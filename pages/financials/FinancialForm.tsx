@@ -19,6 +19,19 @@ import {
 } from '../../utils/recipientHelpers';
 
 // --- HELPERS ---
+const toISODate = (val: string): string => {
+  if (!val) return '';
+  if (/^\d{4}-\d{2}-\d{2}/.test(val)) return val.slice(0, 10);
+  const ddmmyyyy = val.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (ddmmyyyy) {
+    const [, dd, mm, yyyy] = ddmmyyyy;
+    return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+  }
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return '';
+  return d.toISOString().split('T')[0];
+};
+
 const formatCurrency = (val: number | string) => {
   const num = Number(val) || 0;
   return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -38,6 +51,13 @@ const normalizeTransactionType = (value: any): FinancialTransaction['transaction
   if (raw === 'VENTA') return 'VENTA';
   if (raw === 'COMPRA' || raw === 'GASTO') return 'GASTO';
   return 'OTRO';
+};
+
+const normalizeStatus = (value: any): 'PENDIENTE' | 'PAGADO' | 'ANULADO' => {
+  const raw = String(value || '').trim().toUpperCase();
+  if (raw === 'PAGADO') return 'PAGADO';
+  if (raw === 'ANULADO') return 'ANULADO';
+  return 'PENDIENTE';
 };
 
 const normalizeBooleanValue = (value: unknown): boolean | undefined => {
@@ -152,7 +172,10 @@ type FinancialFormData = Partial<Omit<FinancialTransaction, 'subtotal' | 'tax_am
     status?: 'PENDIENTE' | 'PAGADO' | 'ANULADO';
     retention_date?: string;
     payment_date?: string;
+    payment_method?: string;
     payment_document_number?: string;
+    payment_reference?: string;
+    historial_abonos?: any[];
 };
 
 const SearchableClientSelector: React.FC<{
@@ -360,6 +383,7 @@ const FinancialForm: React.FC = () => {
   const skippedInitialEditCompanyPrefillRef = useRef(false);
   const retentionToggleInitializedRef = useRef(false);
   const quotesFetchedRef = useRef(false);
+  const existingAbonosCountRef = useRef(0);
 
   // --- FILTRADO DINÁMICO ---
   const filteredQuotes = useMemo(() => {
@@ -692,6 +716,15 @@ const FinancialForm: React.FC = () => {
           const tx = Array.isArray(data) ? data[0] : data;
           
           if (tx) {
+            console.log('[EDIT] API response keys:', Object.keys(tx));
+            console.log('[EDIT] payment_date fields:', {
+              v_input_fecha_pago: tx.v_input_fecha_pago,
+              payment_date: tx.payment_date,
+              fecha_pago: tx.fecha_pago,
+              v_texto_fecha_pago_human: tx.v_texto_fecha_pago_human,
+              estado_registro: tx.estado_registro,
+              status: tx.status,
+            });
             // Utilidad para convertir DD/MM/YYYY a YYYY-MM-DD
             const convertDDMMYYYYToISO = (dateStr: string) => {
               if (!dateStr || typeof dateStr !== 'string') return '';
@@ -707,12 +740,12 @@ const FinancialForm: React.FC = () => {
   invoice_number: tx.numero_factura || tx.invoice_number,
   description: tx.descripcion_concepto || tx.description,
   transaction_type: normalizeTransactionType(tx.tipo_transaccion || tx.transaction_type),
-  status: tx.estado_registro || tx.status,
+  status: normalizeStatus(tx.estado_registro || tx.status),
   
-  issue_date: tx.v_input_fecha_emision || tx.issue_date || tx.fecha_emision?.split('T')[0],
-  due_date: tx.v_input_fecha_vencimiento || tx.due_date || tx.fecha_vencimiento?.split('T')[0],
-  payment_date: tx.v_input_fecha_pago || tx.payment_date || tx.fecha_pago?.split('T')[0],
-  retention_date: tx.v_input_fecha_retencion || tx.retention_date || tx.fecha_retencion?.split('T')[0],
+  issue_date: toISODate(tx.v_input_fecha_emision || tx.issue_date || tx.fecha_emision?.split('T')[0] || ''),
+  due_date: toISODate(tx.v_input_fecha_vencimiento || tx.due_date || tx.fecha_vencimiento?.split('T')[0] || ''),
+  payment_date: toISODate(tx.v_input_fecha_pago || tx.payment_date || tx.fecha_pago?.split('T')[0] || (Array.isArray(tx.historial_abonos) && tx.historial_abonos.length > 0 ? tx.historial_abonos[tx.historial_abonos.length - 1].payment_date : '') || ''),
+  retention_date: toISODate(tx.v_input_fecha_retencion || tx.retention_date || tx.fecha_retencion?.split('T')[0] || ''),
   
   id_client_company: tx.id_empresa_cliente || tx.id_client_company,
   
@@ -725,13 +758,16 @@ const FinancialForm: React.FC = () => {
   retention_number: tx.retention_number,
 
   // 🔥 ESTA ES LA LÍNEA QUE FALTA PARA QUE EL INPUT SE LLENE 🔥
-  payment_document_number: tx.numero_documento_pago || tx.payment_document_number || '',
+  payment_document_number: tx.numero_documento_pago || tx.payment_document_number || (Array.isArray(tx.historial_abonos) && tx.historial_abonos.length > 0 ? tx.historial_abonos[tx.historial_abonos.length - 1].reference_number || tx.historial_abonos[tx.historial_abonos.length - 1].reference : '') || '',
+  payment_reference: (Array.isArray(tx.historial_abonos) && tx.historial_abonos.length > 0 ? tx.historial_abonos[tx.historial_abonos.length - 1].reference_number || tx.historial_abonos[tx.historial_abonos.length - 1].reference : '') || tx.payment_reference || tx.referencia_pago || '',
+  payment_method: (Array.isArray(tx.historial_abonos) && tx.historial_abonos.length > 0 ? tx.historial_abonos[tx.historial_abonos.length - 1].payment_method : '') || tx.payment_method || tx.metodo_pago || '',
 
   is_urgent: tx.es_urgente || tx.is_urgent,
   notes: tx.notas_internas || tx.notes,
   enable_automation: tx.enable_automation === true,
   automation_frequency: tx.automation_frequency ? String(tx.automation_frequency) : '3',
-  automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : []
+  automation_recipients: Array.isArray(tx.automation_recipients) ? tx.automation_recipients : [],
+  historial_abonos: Array.isArray(tx.historial_abonos) ? tx.historial_abonos : [],
 };
             
             setTransaction(normalized);
@@ -741,6 +777,7 @@ const FinancialForm: React.FC = () => {
             if (Array.isArray(tx.automation_recipients)) {
               setSelectedRecipients(normalizeLoadedRecipients(tx.automation_recipients));
             }
+            existingAbonosCountRef.current = Array.isArray(tx.historial_abonos) ? tx.historial_abonos.length : 0;
           }
         } else {
           setToast({ message: 'Error al cargar la transacción.', type: 'error' });
@@ -758,6 +795,7 @@ const FinancialForm: React.FC = () => {
   }, [user, location.search, navigate]);
 
   const setDefaults = () => {
+    existingAbonosCountRef.current = 0;
     const today = new Date().toISOString().split('T')[0];
     setTransaction({
       transaction_type: 'VENTA',
@@ -772,6 +810,7 @@ const FinancialForm: React.FC = () => {
       automation_frequency: '3',
       retention_value: '',
       payment_date: '',
+      payment_method: '',
       payment_document_number: '',
       retention_date: ''
     });
@@ -883,6 +922,11 @@ const FinancialForm: React.FC = () => {
       return;
     }
 
+    if (transaction.status === 'PAGADO' && !transaction.payment_method) {
+      setToast({ message: 'El método de pago es obligatorio cuando el estado es PAGADO.', type: 'error' });
+      return;
+    }
+
     if (showRetentionSection && !transaction.retention_date) {
       setToast({ message: 'La fecha de retención es obligatoria cuando se aplica retención.', type: 'error' });
       return;
@@ -937,20 +981,61 @@ const FinancialForm: React.FC = () => {
         automation_recipients: transaction.enable_automation ? ensurePrimaryRecipient(selectedRecipients) : [],
         
         retention_date: showRetentionSection ? transaction.retention_date : null,
+        fecha_retencion: showRetentionSection ? transaction.retention_date : null,
         payment_date: transaction.status === 'PAGADO' ? transaction.payment_date : null,
+        fecha_pago: transaction.status === 'PAGADO' ? transaction.payment_date : null,
+        payment_method: transaction.status === 'PAGADO' ? transaction.payment_method : null,
+        metodo_pago: transaction.status === 'PAGADO' ? transaction.payment_method : null,
         payment_document_number: transaction.status === 'PAGADO' ? transaction.payment_document_number : null,
+        payment_reference: transaction.status === 'PAGADO' ? transaction.payment_reference : null,
+        referencia_pago: transaction.status === 'PAGADO' ? transaction.payment_reference : null,
+        numero_documento_pago: transaction.status === 'PAGADO' ? transaction.payment_document_number : null,
       };
 
-      let res;
+      let savedTxId: string | number | undefined;
       if (isEditMode) {
         await financialService.update(payload);
-        res = { ok: true };
+        savedTxId = transaction.id_transaction;
       } else {
-        await financialService.create(payload);
-        res = { ok: true };
+        const createRes = await financialService.create(payload);
+        savedTxId = createRes?.id || createRes?.id_transaction || createRes?.id_transaccion;
       }
 
-      if (res && !res.ok) throw new Error('Error en respuesta del servidor');
+      if (transaction.status === 'PAGADO' && savedTxId) {
+        if (existingAbonosCountRef.current === 0) {
+          try {
+            await financialService.addPayment({
+              id_transaction: String(savedTxId),
+              id_tenant: String(user?.id_tenant),
+              created_by: String(user?.id_user),
+              amount: finalTotal,
+              payment_date: transaction.payment_date || '',
+              payment_method: transaction.payment_method || 'TRANSFERENCIA',
+              reference: transaction.payment_reference || transaction.payment_document_number || undefined,
+              notes: 'Pago registrado desde formulario',
+            });
+          } catch (abonoErr) {
+            console.warn('Transacción guardada pero error al crear abono automático:', abonoErr);
+          }
+        } else {
+          try {
+            const lastAbono = Array.isArray(transaction.historial_abonos) && transaction.historial_abonos.length > 0
+              ? transaction.historial_abonos[transaction.historial_abonos.length - 1]
+              : null;
+            if (lastAbono?.id_payment) {
+              await financialService.updatePayment({
+                id_payment: String(lastAbono.id_payment),
+                id_tenant: String(user?.id_tenant),
+                id_transaction: String(savedTxId),
+                payment_method: transaction.payment_method || undefined,
+                reference: transaction.payment_document_number || transaction.payment_reference || undefined,
+              });
+            }
+          } catch (abonoErr) {
+            console.warn('Transacción guardada pero error al actualizar abono:', abonoErr);
+          }
+        }
+      }
       await invalidateFinancials(getCurrentMonthRange());
       setToast({ message: isEditMode ? 'Registro actualizado.' : 'Registro creado.', type: 'success' });
       setTimeout(() => navigate('/app/financials'), 1000);
@@ -1065,21 +1150,34 @@ const FinancialForm: React.FC = () => {
                 <>
                   <div>
                     <label className="block text-xs font-medium text-zinc-700 mb-1.5">Fecha de pago *</label>
-                    <input
-                      type="date"
-                      name="payment_date"
-                      value={transaction.payment_date || ''}
-                      onChange={handleInputChange}
-                      className="w-full text-sm text-zinc-900 bg-white border border-zinc-300 rounded-lg px-3 py-2.5 outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                    />
+                    <div className="w-full text-sm text-zinc-900 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2.5">
+                      {transaction.payment_date || <span className="text-zinc-400 italic">Sin fecha</span>}
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">Nro. documento de pago</label>
+                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">Método de pago *</label>
+                    <select
+                      name="payment_method"
+                      value={transaction.payment_method || ''}
+                      onChange={handleInputChange}
+                      className="w-full text-sm text-zinc-900 bg-white border border-zinc-300 rounded-lg px-3 py-2.5 outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    >
+                      <option value="">Seleccionar...</option>
+                      <option value="TRANSFERENCIA">Transferencia</option>
+                      <option value="EFECTIVO">Efectivo</option>
+                      <option value="CHEQUE">Cheque</option>
+                      <option value="TARJETA">Tarjeta</option>
+                      <option value="OTRO">Otro</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">N° Documento / Comprobante</label>
                     <input
+                      type="text"
                       name="payment_document_number"
                       value={transaction.payment_document_number || ''}
                       onChange={handleInputChange}
-                      placeholder="Ej: TRANSF-1234, CHQ-998..."
+                      placeholder="N° de comprobante..."
                       className="w-full text-sm text-zinc-900 bg-white border border-zinc-300 rounded-lg px-3 py-2.5 outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                     />
                   </div>

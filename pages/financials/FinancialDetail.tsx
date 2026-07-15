@@ -52,30 +52,30 @@ const getPaymentStatusColor = (code?: string, statusRaw?: unknown) => {
     const normalizedStatus = String(statusRaw || '').trim().toUpperCase();
 
     if (normalizedCode === 'PAID' || normalizedStatus === 'PAGADO') {
-      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      return 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-700';
     }
     if (normalizedCode === 'OVERDUE' || normalizedStatus === 'VENCIDO') {
-      return 'bg-rose-50 text-rose-700 border-rose-200';
+      return 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-700';
     }
     if (normalizedCode === 'WARNING' || normalizedCode === 'PENDING' || normalizedStatus === 'PENDIENTE') {
-      return 'bg-amber-50 text-amber-700 border-amber-200';
+      return 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-700';
     }
     if (normalizedStatus === 'ANULADO') {
-      return 'bg-slate-50 text-slate-700 border-slate-200';
+      return 'bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600';
     }
-    return 'bg-slate-50 text-slate-700 border-slate-200';
+    return 'bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600';
 };
 
 const getTypeBadgeColor = (type?: string) => {
-  if (type === 'VENTA') return 'bg-sky-50 text-sky-700 border-sky-200';
-  if (type === 'GASTO' || type === 'COMPRA') return 'bg-rose-50 text-rose-700 border-rose-200';
-  return 'bg-slate-50 text-slate-700 border-slate-200';
+  if (type === 'VENTA') return 'bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-400 border-sky-200 dark:border-sky-700';
+  if (type === 'GASTO' || type === 'COMPRA') return 'bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-700';
+  return 'bg-slate-50 dark:bg-slate-700/50 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-600';
 };
 
 const getNotifyButtonStyles = (sent: boolean) => {
   return sent
-    ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100'
-    : 'bg-amber-50 border-amber-200 text-amber-800 hover:bg-amber-100';
+    ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-700 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+    : 'bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-700 text-amber-800 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50';
 };
 
 const getBaseStatusLabel = (statusRaw?: unknown) => {
@@ -100,37 +100,37 @@ const getDueTimePresentation = (indicatorRaw: unknown, absoluteDaysRaw: unknown,
   if (indicator === 'PAGADO_A_TIEMPO') {
     return {
       text: statusLabel || 'Pagado a tiempo',
-      className: 'text-emerald-600',
+      className: 'text-emerald-600 dark:text-emerald-400',
     };
   }
   if (indicator === 'PAGADO_ATRASADO') {
     return {
       text: statusLabel || `Pagado (Atraso de ${absoluteDays} días)`,
-      className: 'text-red-600',
+      className: 'text-red-600 dark:text-red-400',
     };
   }
 
   if (indicator === 'ATRASADO') {
     return {
       text: `Vencido hace ${absoluteDays} días`,
-      className: 'text-red-600',
+      className: 'text-red-600 dark:text-red-400',
     };
   }
   if (indicator === 'HOY') {
     return {
       text: 'Vence HOY',
-      className: 'text-amber-600',
+      className: 'text-amber-600 dark:text-amber-400',
     };
   }
   if (indicator === 'A_TIEMPO') {
     return {
       text: `Vence en ${absoluteDays} días`,
-      className: 'text-emerald-600',
+      className: 'text-emerald-600 dark:text-emerald-400',
     };
   }
   return {
     text: '-',
-    className: 'text-gray-500',
+    className: 'text-gray-500 dark:text-gray-400',
   };
 };
 
@@ -233,6 +233,7 @@ const FinancialDetail: React.FC = () => {
   
   const [currentTab, setCurrentTab] = useState<'resumen' | 'abonos' | 'notificaciones' | 'archivos'>('resumen');
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<import('../../types').PaymentRecord | null>(null);
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [isProviderModalOpen, setIsProviderModalOpen] = useState(false);
   const [providerContactSearch, setProviderContactSearch] = useState('');
@@ -306,6 +307,9 @@ const FinancialDetail: React.FC = () => {
       if (!txResponse.ok) throw new Error('Error de red');
       const data = await txResponse.json();
       const tx = Array.isArray(data) ? data[0] : data;
+      console.log('[FinancialDetail] Backend data:', tx);
+      console.log('[FinancialDetail] payment_reference:', tx?.payment_reference);
+      console.log('[FinancialDetail] historial_abonos:', tx?.historial_abonos);
 
       if (!tx) { navigate('/app/financials'); return; }
 
@@ -327,15 +331,16 @@ const FinancialDetail: React.FC = () => {
         notify_provider: tx.notify_provider === true || tx.notify_provider === 'true' || tx.notify_provider === 1 || tx.notify_provider === '1',
         
         // --- Nuevos campos mapeados ---
-        payment_date_input: tx.v_input_fecha_pago || tx.fecha_pago,
+        payment_date_input: tx.v_input_fecha_pago || tx.fecha_pago?.split('T')[0] || (Array.isArray(tx.historial_abonos) && tx.historial_abonos.length > 0 ? tx.historial_abonos[tx.historial_abonos.length - 1].payment_date : '') || '',
         payment_document_number: tx.numero_documento_pago,
-        retention_date_input: tx.v_input_fecha_retencion || tx.fecha_retencion,
+        payment_reference: tx.payment_reference || tx.referencia_pago,
+        retention_date_input: tx.v_input_fecha_retencion || tx.fecha_retencion?.split('T')[0] || '',
         retention_number: tx.retention_number,
         // ------------------------------
         
         issue_date_human: tx.v_texto_fecha_emision_human || tx.v_texto_fecha_emision,
         due_date_human: tx.v_texto_fecha_vencimiento_human || tx.v_texto_fecha_vencimiento,
-        payment_date_human: tx.v_texto_fecha_pago_human,
+        payment_date_human: tx.v_texto_fecha_pago_human || (Array.isArray(tx.historial_abonos) && tx.historial_abonos.length > 0 ? tx.historial_abonos[tx.historial_abonos.length - 1].payment_date : ''),
         payment_status_code: tx.v_codigo_estado,
         payment_status_label: tx.v_etiqueta_estado,
         client_company_name: tx.nombre_cliente_proveedor,
@@ -373,12 +378,15 @@ const FinancialDetail: React.FC = () => {
               amount: toNumberSafe(p.amount),
               payment_date: String(p.payment_date || ''),
               payment_method: String(p.payment_method || ''),
-              reference: p.reference_number ? String(p.reference_number) : undefined,
+              reference: p.reference_number ? String(p.reference_number) : p.reference ? String(p.reference) : undefined,
               notes: p.notes ? String(p.notes) : undefined,
               created_by: String(p.registrado_por || tx.usuario_creador || 'Sistema'),
               created_by_name: String(p.registrado_por || tx.usuario_creador || 'Sistema'),
               created_at: p.fecha_registro ? String(p.fecha_registro) : undefined,
+              _sort_key: String(p.fecha_registro || p.payment_date || '').trim(),
             }))
+            .sort((a: any, b: any) => (a._sort_key > b._sort_key ? 1 : a._sort_key < b._sort_key ? -1 : 0))
+            .map(({ _sort_key, ...rest }: any) => rest)
           : [],
       };
 
@@ -565,6 +573,34 @@ const FinancialDetail: React.FC = () => {
       await fetchData(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Error al registrar el abono';
+      setToast({ message, type: 'error' });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleEditPayment = async (paymentId: string, paymentData: {
+    amount: number;
+    payment_date: string;
+    payment_method: string;
+    reference?: string;
+    notes?: string;
+  }) => {
+    if (!transaction || !user?.id_tenant) return;
+    setProcessing(true);
+    try {
+      await financialService.updatePayment({
+        id_payment: paymentId,
+        id_tenant: user.id_tenant,
+        id_transaction: transaction.id_transaction,
+        ...paymentData,
+      });
+      setToast({ message: 'Abono actualizado exitosamente', type: 'success' });
+      setEditingPayment(null);
+      await invalidateFinancials(getCurrentMonthRange());
+      await fetchData(true);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Error al actualizar el abono';
       setToast({ message, type: 'error' });
     } finally {
       setProcessing(false);
@@ -802,17 +838,17 @@ const FinancialDetail: React.FC = () => {
       : 0;
 
   return (
-    <div className="min-h-screen bg-[#F9F9FA]">
+    <div className="min-h-screen bg-[#F9F9FA] dark:bg-slate-900">
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
       <ConfirmModal {...confirmState} isOpen={confirmState.isOpen} onClose={() => setConfirmState(p => ({...p, isOpen: false}))} />
       
       {/* HEADER */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-40 dark:bg-slate-800 dark:border-slate-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 shrink-0">
             <div className="flex items-center gap-3 min-w-0">
-              <h1 className="text-2xl font-bold text-gray-900 whitespace-nowrap truncate">Factura #{transaction.invoice_number}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 whitespace-nowrap truncate dark:text-gray-100">Factura #{transaction.invoice_number}</h1>
               
               <span className={`text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 border shrink-0 ${getTypeBadgeColor(transaction.transaction_type)}`}>
                 {transaction.transaction_type}
@@ -823,7 +859,7 @@ const FinancialDetail: React.FC = () => {
               </span>
 
               {transaction.is_urgent && (
-                <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 border shrink-0 bg-rose-50 text-rose-700 border-rose-200 uppercase">
+                <span className="text-xs px-2.5 py-1 rounded-full font-semibold inline-flex items-center gap-1.5 border shrink-0 bg-rose-50 text-rose-700 border-rose-200 uppercase dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-700">
                   <i className="fa-solid fa-triangle-exclamation text-[10px]"></i>
                   URGENTE
                 </span>
@@ -856,14 +892,14 @@ const FinancialDetail: React.FC = () => {
                 </button>
               )}
             </div>
-            <p className="mt-1 text-sm text-gray-600 max-w-[560px] truncate">{transaction.description || '-'}</p>
+            <p className="mt-1 text-sm text-gray-600 max-w-[560px] truncate dark:text-gray-400">{transaction.description || '-'}</p>
           </div>
           
           <div className="ml-auto w-full md:w-auto flex items-center justify-end gap-4">
             <div className="text-right">
-              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide">{balanceLabel}</p>
+              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wide dark:text-gray-400">{balanceLabel}</p>
               <div className="flex items-baseline gap-1 justify-end">
-                <span className="text-xl font-bold text-gray-900">{formatCurrency(transaction.balance_due)}</span>
+                <span className="text-xl font-bold text-gray-900 dark:text-gray-100">{formatCurrency(transaction.balance_due)}</span>
               </div>
             </div>
             <div className="flex gap-2">
@@ -871,17 +907,17 @@ const FinancialDetail: React.FC = () => {
                 <button
                   onClick={() => setIsCollectionModalOpen(true)}
                   disabled={processing || !canNotifyByEmail}
-                  className="px-3 py-1.5 border border-amber-300 bg-amber-50 text-amber-800 rounded text-sm font-medium hover:bg-amber-100 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-3 py-1.5 border border-amber-300 bg-amber-50 text-amber-800 rounded text-sm font-medium hover:bg-amber-100 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 dark:border-amber-600 dark:bg-amber-900/30 dark:text-amber-400 dark:hover:bg-amber-900/50"
                   title={!canNotifyByEmail ? 'Activa tu integración de correo para notificar vencimientos.' : 'Notificar vencimiento'}
                 >
                   <i className="fa-solid fa-bell text-xs"></i>
                   {transaction.status === 'VENCIDO' ? 'Notificar Vencimiento' : 'Enviar Recordatorio'}
                 </button>
               )}
-              <button onClick={() => navigate(`/app/financials/edit?id=${transaction.id_transaction}`)} className="px-4 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded text-sm font-medium transition flex items-center gap-2">
+              <button onClick={() => navigate(`/app/financials/edit?id=${transaction.id_transaction}`)} className="px-4 py-1.5 bg-gray-900 hover:bg-gray-800 text-white rounded text-sm font-medium transition flex items-center gap-2 dark:bg-gray-100 dark:hover:bg-gray-200 dark:text-gray-900">
                 <i className="fa-solid fa-pen text-xs"></i> Editar
               </button>
-              <button onClick={() => setConfirmState({ isOpen: true, title: '¿Seguro desea eliminar este registro?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="px-3 py-1.5 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50 text-gray-700 transition"><i className="fa-solid fa-trash text-xs"></i></button>
+              <button onClick={() => setConfirmState({ isOpen: true, title: '¿Seguro desea eliminar este registro?', message: 'Esta acción es irreversible.', onConfirm: handleDelete })} className="px-3 py-1.5 border border-gray-300 rounded text-sm font-medium hover:bg-gray-50 text-gray-700 transition dark:border-slate-600 dark:hover:bg-slate-700 dark:text-gray-300"><i className="fa-solid fa-trash text-xs"></i></button>
             </div>
           </div>
           </div>
@@ -889,22 +925,22 @@ const FinancialDetail: React.FC = () => {
           {/* PROGRESS BAR */}
           {isProviderModalOpen && (
             <AppModalViewport className="z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-fade-in">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
-                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden dark:bg-slate-800">
+                <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 dark:border-slate-700 dark:bg-slate-700/50">
                   <div>
-                    <h3 className="font-bold text-slate-900">Notificar proveedor</h3>
-                    <p className="text-sm text-slate-500">Selecciona los contactos de la empresa que recibirán esta notificación.</p>
+                    <h3 className="font-bold text-slate-900 dark:text-slate-100">Notificar proveedor</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Selecciona los contactos de la empresa que recibirán esta notificación.</p>
                   </div>
-                  <button onClick={() => setIsProviderModalOpen(false)} className="text-slate-400 hover:text-slate-600"><i className="fa-solid fa-times"></i></button>
+                  <button onClick={() => setIsProviderModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:text-gray-500 dark:hover:text-slate-400"><i className="fa-solid fa-times"></i></button>
                 </div>
                 <div className="p-6 space-y-4">
                   <div>
-                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Buscar contactos</label>
+                    <label className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-gray-500">Buscar contactos</label>
                     <input
                       value={providerContactSearch}
                       onChange={(e) => setProviderContactSearch(e.target.value)}
                       placeholder="Buscar por nombre"
-                      className="mt-2 w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-sm outline-none focus:border-slate-300 focus:bg-white"
+                      className="mt-2 w-full px-3 py-2 border border-slate-200 rounded-lg bg-slate-50 text-sm outline-none focus:border-slate-300 focus:bg-white dark:border-slate-600 dark:bg-slate-700/50 dark:focus:border-slate-500 dark:focus:bg-slate-800"
                     />
                   </div>
 
@@ -919,14 +955,14 @@ const FinancialDetail: React.FC = () => {
                     <button
                       type="button"
                       onClick={clearAllProviderRecipients}
-                      className="px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-md text-sm font-semibold hover:bg-slate-50 transition"
+                      className="px-3 py-2 bg-white border border-slate-200 text-slate-700 rounded-md text-sm font-semibold hover:bg-slate-50 transition dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
                     >
                       Deseleccionar todo
                     </button>
-                    <span className="text-xs text-slate-500">{selectedProviderRecipients.length} seleccionado{selectedProviderRecipients.length === 1 ? '' : 's'}</span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400">{selectedProviderRecipients.length} seleccionado{selectedProviderRecipients.length === 1 ? '' : 's'}</span>
                   </div>
 
-                  <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                  <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white dark:border-slate-600 dark:bg-slate-800">
                     {(() => {
                       const rows = (companyContacts || []).filter((contact) => {
                         const name = getContactName(contact).toLowerCase();
@@ -942,13 +978,13 @@ const FinancialDetail: React.FC = () => {
                             key={`${contactId ?? 'anon'}-${email}`}
                             type="button"
                             onClick={() => toggleProviderRecipient({ id: contactId ? String(contactId) : null, name, email, type: 'contact' })}
-                            className={`w-full px-4 py-3 text-left flex items-center justify-between gap-3 transition ${isSelected ? 'bg-slate-100' : 'hover:bg-slate-50'}`}
+                            className={`w-full px-4 py-3 text-left flex items-center justify-between gap-3 transition ${isSelected ? 'bg-slate-100 dark:bg-slate-700' : 'hover:bg-slate-50 dark:hover:bg-slate-700'}`}
                           >
                             <div className="min-w-0">
-                              <p className="font-semibold text-slate-800 truncate">{name}</p>
-                              <p className="text-[11px] text-slate-500 truncate">{email}</p>
+                              <p className="font-semibold text-slate-800 truncate dark:text-slate-200">{name}</p>
+                              <p className="text-[11px] text-slate-500 truncate dark:text-slate-400">{email}</p>
                             </div>
-                            <span className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300 text-transparent'}`}>
+                            <span className={`w-5 h-5 rounded-full border flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300 text-transparent dark:bg-slate-800'}`}>
                               <i className="fa-solid fa-check text-[10px]"></i>
                             </span>
                           </button>
@@ -957,7 +993,7 @@ const FinancialDetail: React.FC = () => {
 
                       if (rows.length === 0) {
                         return (
-                          <div className="p-4 text-sm text-slate-500">
+                          <div className="p-4 text-sm text-slate-500 dark:text-slate-400">
                             No se encontraron contactos de la empresa. Verifica que la empresa tenga contactos cargados.
                           </div>
                         );
@@ -967,10 +1003,10 @@ const FinancialDetail: React.FC = () => {
                     })()}
                   </div>
 
-                  {providerModalError && <div className="text-sm text-red-600">{providerModalError}</div>}
+                  {providerModalError && <div className="text-sm text-red-600 dark:text-red-400">{providerModalError}</div>}
                 </div>
-                <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
-                  <button onClick={() => setIsProviderModalOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200">Cancelar</button>
+                <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2 dark:bg-slate-700/50 dark:border-slate-700">
+                  <button onClick={() => setIsProviderModalOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg border border-slate-200 dark:text-slate-400 dark:hover:bg-slate-600 dark:border-slate-600">Cancelar</button>
                   <button
                     onClick={handleSendProviderNotification}
                     disabled={processing || selectedProviderRecipients.length === 0}
@@ -984,26 +1020,26 @@ const FinancialDetail: React.FC = () => {
           )}
           <div className="flex items-center w-full max-w-[700px] gap-2.5 mt-5">
           <div className="flex-1 flex flex-col gap-1">
-            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'PENDIENTE' ? 'bg-amber-500' : 'bg-gray-200'}`}></div>
-            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'PENDIENTE' ? 'text-amber-600' : 'text-gray-400'}`}>
+            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'PENDIENTE' ? 'bg-amber-500' : 'bg-gray-200 dark:bg-slate-600'}`}></div>
+            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'PENDIENTE' ? 'text-amber-600' : 'text-gray-400 dark:text-gray-500'}`}>
               <i className={`fa-solid ${transaction.status === 'PENDIENTE' ? 'fa-circle' : 'fa-circle-notch'} text-[8px]`}></i> PENDIENTE
             </span>
           </div>
           <div className="flex-1 flex flex-col gap-1">
-            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'VENCIDO' ? 'bg-rose-500' : 'bg-gray-200'}`}></div>
-            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'VENCIDO' ? 'text-rose-600' : 'text-gray-400'}`}>
+            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'VENCIDO' ? 'bg-rose-500' : 'bg-gray-200 dark:bg-slate-600'}`}></div>
+            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'VENCIDO' ? 'text-rose-600' : 'text-gray-400 dark:text-gray-500'}`}>
               <i className={`fa-solid ${transaction.status === 'VENCIDO' ? 'fa-circle' : 'fa-circle-notch'} text-[8px]`}></i> VENCIDO
             </span>
           </div>
           <div className="flex-1 flex flex-col gap-1">
-            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'PAGADO' ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
-            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'PAGADO' ? 'text-emerald-600' : 'text-gray-400'}`}>
+            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'PAGADO' ? 'bg-emerald-500' : 'bg-gray-200 dark:bg-slate-600'}`}></div>
+            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'PAGADO' ? 'text-emerald-600' : 'text-gray-400 dark:text-gray-500'}`}>
               <i className={`fa-solid ${transaction.status === 'PAGADO' ? 'fa-circle' : 'fa-circle-notch'} text-[8px]`}></i> PAGADO
             </span>
           </div>
           <div className="flex-1 flex flex-col gap-1">
-            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'ANULADO' ? 'bg-slate-500' : 'bg-gray-200'}`}></div>
-            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'ANULADO' ? 'text-slate-600' : 'text-gray-400'}`}>
+            <div className={`h-1.5 w-full rounded-full ${transaction.status === 'ANULADO' ? 'bg-slate-500' : 'bg-gray-200 dark:bg-slate-600'}`}></div>
+            <span className={`text-[11px] font-semibold uppercase flex items-center gap-1 ${transaction.status === 'ANULADO' ? 'text-slate-600 dark:text-slate-400' : 'text-gray-400 dark:text-gray-500'}`}>
               <i className={`fa-solid ${transaction.status === 'ANULADO' ? 'fa-circle' : 'fa-circle-notch'} text-[8px]`}></i> ANULADO
             </span>
           </div>
@@ -1019,15 +1055,15 @@ const FinancialDetail: React.FC = () => {
           <div className="lg:col-span-4 space-y-6">
             
             <div>
-              <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4">Acerca del Documento</h2>
+              <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-4 dark:text-gray-500">Acerca del Documento</h2>
               <div className="space-y-4">
                 
                 {/* Cliente */}
                 <div className="flex items-start gap-3">
-                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-building text-gray-400"></i></div>
+                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-building text-gray-400 dark:text-gray-500"></i></div>
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Cliente</p>
-                    <Link to={`/app/client-companies/${transaction.id_client_company}`} className="text-sm font-medium text-gray-900 hover:text-blue-600 leading-tight">
+                    <p className="text-xs text-gray-500 mb-0.5 dark:text-gray-400">Cliente</p>
+                    <Link to={`/app/client-companies/${transaction.id_client_company}`} className="text-sm font-medium text-gray-900 hover:text-blue-600 leading-tight dark:text-gray-100">
                       {transaction.client_company_name}
                     </Link>
                   </div>
@@ -1035,30 +1071,30 @@ const FinancialDetail: React.FC = () => {
 
                 {/* RUC */}
                 <div className="flex items-start gap-3">
-                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-id-card text-gray-400"></i></div>
+                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-id-card text-gray-400 dark:text-gray-500"></i></div>
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5">RUC / NIT</p>
-                    <p className="text-sm text-gray-900 tabular-nums">{transaction.client_ruc || '-'}</p>
+                    <p className="text-xs text-gray-500 mb-0.5 dark:text-gray-400">RUC / NIT</p>
+                    <p className="text-sm text-gray-900 tabular-nums dark:text-gray-100">{transaction.client_ruc || '-'}</p>
                   </div>
                 </div>
 
-                <hr className="border-gray-200 my-2" />
+                <hr className="border-gray-200 my-2 dark:border-slate-700" />
 
                 {/* Emisión */}
                 <div className="flex items-start gap-3">
-                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-calendar-plus text-gray-400"></i></div>
+                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-calendar-plus text-gray-400 dark:text-gray-500"></i></div>
                   <div className="w-full flex justify-between items-center">
-                    <p className="text-sm text-gray-600">Emisión</p>
-                    <p className="text-sm text-gray-900 tabular-nums">{transaction.issue_date_human || transaction.issue_date_input || '-'}</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Emisión</p>
+                    <p className="text-sm text-gray-900 tabular-nums dark:text-gray-100">{transaction.issue_date_human || transaction.issue_date_input || '-'}</p>
                   </div>
                 </div>
                 
                 {/* Vencimiento */}
                 <div className="flex items-start gap-3">
-                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-calendar-xmark text-gray-400"></i></div>
+                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-calendar-xmark text-gray-400 dark:text-gray-500"></i></div>
                   <div className="w-full flex justify-between items-center">
-                    <p className="text-sm text-gray-600">Vencimiento</p>
-                    <p className={`text-sm font-medium tabular-nums ${transaction.status === 'VENCIDO' ? 'text-red-600' : 'text-gray-900'}`}>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Vencimiento</p>
+                    <p className={`text-sm font-medium tabular-nums ${transaction.status === 'VENCIDO' ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100'}`}>
                       {transaction.due_date_human || transaction.due_date_input || '-'}
                     </p>
                   </div>
@@ -1067,40 +1103,70 @@ const FinancialDetail: React.FC = () => {
                 {/* NUEVO: Detalles de Retención */}
                 {transaction.retention_value > 0 && (
                   <div className="flex items-start gap-3">
-                    <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-file-invoice-dollar text-gray-400"></i></div>
+                    <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-file-invoice-dollar text-gray-400 dark:text-gray-500"></i></div>
                     <div className="w-full flex justify-between items-start">
-                      <p className="text-sm text-gray-600 mt-0.5">Retención</p>
+                      <p className="text-sm text-gray-600 mt-0.5 dark:text-gray-400">Retención</p>
                       <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900 tabular-nums">{transaction.retention_number || 'Sin número'}</p>
+                        <p className="text-sm font-medium text-gray-900 tabular-nums dark:text-gray-100">{transaction.retention_number || 'Sin número'}</p>
                         {transaction.retention_date_input && (
-                          <p className="text-xs text-gray-500">{transaction.retention_date_input}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{transaction.retention_date_input}</p>
                         )}
                       </div>
                     </div>
                   </div>
                 )}
+
+
 
                 {/* NUEVO: Fecha de Pago Directa */}
                 {transaction.payment_date_input && (
                   <div className="flex items-start gap-3">
-                    <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-calendar-check text-gray-400"></i></div>
+                    <div className="w-6 flex justify-center pt-0.5"><i className="fa-regular fa-calendar-check text-gray-400 dark:text-gray-500"></i></div>
                     <div className="w-full flex justify-between items-start">
-                      <p className="text-sm text-gray-600 mt-0.5">Fecha Pago</p>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900 tabular-nums">{transaction.payment_date_human || transaction.payment_date_input}</p>
-                        {transaction.payment_document_number && (
-                          <p className="text-xs text-gray-500 truncate max-w-[120px]">{transaction.payment_document_number}</p>
-                        )}
-                      </div>
+                      <p className="text-sm text-gray-600 mt-0.5 dark:text-gray-400">Fecha Pago</p>
+                      <p className="text-sm font-medium text-gray-900 tabular-nums dark:text-gray-100">{transaction.payment_date_human || transaction.payment_date_input}</p>
                     </div>
                   </div>
                 )}
 
+                {/* N° de Factura */}
+                {transaction.invoice_number && (
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-file-invoice text-gray-400 dark:text-gray-500"></i></div>
+                    <div className="w-full flex justify-between items-start">
+                      <p className="text-sm text-gray-600 mt-0.5 dark:text-gray-400">N° Factura</p>
+                      <p className="text-sm font-medium text-gray-900 tabular-nums dark:text-gray-100">{transaction.invoice_number}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Referencia del Último Abono */}
+                {(() => {
+                  const lastPayment = transaction.payment_history?.length > 0
+                    ? [...transaction.payment_history].sort((a: any, b: any) => {
+                        const dateA = String(a.created_at || a.payment_date || '');
+                        const dateB = String(b.created_at || b.payment_date || '');
+                        return dateA > dateB ? -1 : dateA < dateB ? 1 : 0;
+                      })[0]
+                    : null;
+                  const reference = lastPayment?.reference || transaction.payment_reference;
+                  if (!reference) return null;
+                  return (
+                    <div className="flex items-start gap-3">
+                      <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-receipt text-emerald-400"></i></div>
+                      <div className="w-full flex justify-between items-start">
+                        <p className="text-sm text-gray-600 mt-0.5 dark:text-gray-400">Referencia</p>
+                        <p className="text-sm font-medium text-gray-900 tabular-nums font-mono dark:text-gray-100">{reference}</p>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Estado Pago Relativo */}
                 <div className="flex items-start gap-3">
-                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-clock text-gray-400"></i></div>
+                  <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-clock text-gray-400 dark:text-gray-500"></i></div>
                   <div className="w-full flex justify-between items-center">
-                    <p className="text-sm text-gray-600">Estado</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">Estado</p>
                     <p className={`text-sm font-medium ${dueTime.className}`}>
                       {dueTime.text}
                     </p>
@@ -1112,8 +1178,8 @@ const FinancialDetail: React.FC = () => {
                   <div className="flex items-start gap-3">
                     <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-envelope text-blue-400"></i></div>
                     <div className="w-full flex justify-between items-center">
-                      <p className="text-sm text-gray-600">Último envío a contador</p>
-                      <p className="text-sm font-medium text-gray-900 tabular-nums">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Último envío a contador</p>
+                      <p className="text-sm font-medium text-gray-900 tabular-nums dark:text-gray-100">
                         {transaction.resumen_notificaciones.finance.sent_at}
                       </p>
                     </div>
@@ -1126,8 +1192,8 @@ const FinancialDetail: React.FC = () => {
                     <div className="flex items-start gap-3">
                       <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-building text-purple-400"></i></div>
                       <div className="w-full flex justify-between items-center">
-                        <p className="text-sm text-gray-600">Último envío a proveedor</p>
-                        <p className="text-sm font-medium text-gray-900 tabular-nums">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">Último envío a proveedor</p>
+                        <p className="text-sm font-medium text-gray-900 tabular-nums dark:text-gray-100">
                           {transaction.resumen_notificaciones.provider.sent_at}
                         </p>
                       </div>
@@ -1136,8 +1202,8 @@ const FinancialDetail: React.FC = () => {
                       <div className="flex items-start gap-3">
                         <div className="w-6 flex justify-center pt-0.5"><i className="fa-solid fa-user text-purple-400"></i></div>
                         <div className="w-full">
-                          <p className="text-sm text-gray-600">Destinatario(s)</p>
-                          <p className="text-sm font-medium text-gray-900 truncate">{providerSummaryRecipients}</p>
+                          <p className="text-sm text-gray-600 dark:text-gray-400">Destinatario(s)</p>
+                          <p className="text-sm font-medium text-gray-900 truncate dark:text-gray-100">{providerSummaryRecipients}</p>
                         </div>
                       </div>
                     )}
@@ -1149,17 +1215,17 @@ const FinancialDetail: React.FC = () => {
 
             {/* Creado por */}
             <div>
-              <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Creado por</h2>
-              <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg bg-white">
+              <h2 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3 dark:text-gray-500">Creado por</h2>
+              <div className="flex items-center gap-3 p-3 border border-gray-200 rounded-lg bg-white dark:border-slate-700 dark:bg-slate-800">
                 <Avatar
                   src={creatorAvatarFromCache || transaction.creator_avatar || null}
                   name={transaction.usuario_creador || transaction.created_by_name || 'Sistema'}
                   size="sm"
                 />
                 <div>
-                  <p className="text-sm font-semibold text-gray-900 leading-none">
+                  <p className="text-sm font-semibold text-gray-900 leading-none dark:text-gray-100">
                     {transaction.usuario_creador || transaction.created_by_name || 'Sistema'}
-                    {creatorIsCurrentUser && <span className="text-gray-400 font-medium"> (Tú)</span>}
+                    {creatorIsCurrentUser && <span className="text-gray-400 font-medium dark:text-gray-500"> (Tú)</span>}
                   </p>
                 </div>
               </div>
@@ -1171,37 +1237,37 @@ const FinancialDetail: React.FC = () => {
           <div className="lg:col-span-8">
             
             {/* TABS */}
-            <div className="border-b border-gray-200 mb-6 flex gap-6">
-              <button onClick={() => setCurrentTab('resumen')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'resumen' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            <div className="border-b border-gray-200 mb-6 flex gap-6 dark:border-slate-700">
+              <button onClick={() => setCurrentTab('resumen')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'resumen' ? 'border-gray-900 text-gray-900 dark:border-gray-100 dark:text-gray-100' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}>
                 Resumen Financiero
               </button>
-              <button onClick={() => setCurrentTab('abonos')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'abonos' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              <button onClick={() => setCurrentTab('abonos')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'abonos' ? 'border-gray-900 text-gray-900 dark:border-gray-100 dark:text-gray-100' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}>
                 <span className="inline-flex items-center gap-2">
                   <span>Historial de Abonos</span>
-                  <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-gray-100 px-1 text-[10px] font-bold text-gray-600">
+                  <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-gray-100 px-1 text-[10px] font-bold text-gray-600 dark:bg-slate-700 dark:text-gray-400">
                     {paymentCount}
                   </span>
                 </span>
               </button>
-              <button onClick={() => setCurrentTab('notificaciones')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'notificaciones' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              <button onClick={() => setCurrentTab('notificaciones')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'notificaciones' ? 'border-gray-900 text-gray-900 dark:border-gray-100 dark:text-gray-100' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}>
                 <span className="inline-flex items-center gap-2">
                   <span>Historial de Auditoría</span>
-                  <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-gray-100 px-1 text-[10px] font-bold text-gray-600">
+                  <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-gray-100 px-1 text-[10px] font-bold text-gray-600 dark:bg-slate-700 dark:text-gray-400">
                     {transaction.notification_logs?.length || 0}
                   </span>
                 </span>
               </button>
-              <button onClick={() => setCurrentTab('archivos')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'archivos' ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              <button onClick={() => setCurrentTab('archivos')} className={`pb-3 border-b-2 text-sm font-semibold transition-colors ${currentTab === 'archivos' ? 'border-gray-900 text-gray-900 dark:border-gray-100 dark:text-gray-100' : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'}`}>
                 <span className="inline-flex items-center gap-2">
                   <span>Archivos</span>
                   <span className="inline-flex items-center gap-1.5">
                     <span
                       title="Factura"
-                      className={`h-2.5 w-2.5 rounded-full ${transaction.invoice_file_url ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                      className={`h-2.5 w-2.5 rounded-full ${transaction.invoice_file_url ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-500'}`}
                     ></span>
                     <span
                       title="Retención"
-                      className={`h-2.5 w-2.5 rounded-full ${transaction.retention_file_url ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                      className={`h-2.5 w-2.5 rounded-full ${transaction.retention_file_url ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-500'}`}
                     ></span>
                   </span>
                 </span>
@@ -1213,14 +1279,14 @@ const FinancialDetail: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 
                 {/* PANEL IZQUIERDO: ESTRUCTURA DEL VALOR */}
-                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
-                    <h3 className="text-sm font-bold text-gray-800"><i className="fa-solid fa-calculator text-gray-400 mr-2"></i>Estructura del Valor</h3>
+                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden dark:bg-slate-800 dark:border-slate-700">
+                  <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 dark:border-slate-700 dark:bg-slate-700/30">
+                    <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200"><i className="fa-solid fa-calculator text-gray-400 mr-2 dark:text-gray-500"></i>Estructura del Valor</h3>
                   </div>
                   
                   <div className="p-5 text-sm">
                     {/* Bloque Base */}
-                    <div className="space-y-3 text-gray-600 mb-4">
+                    <div className="space-y-3 text-gray-600 mb-4 dark:text-gray-400">
                       <div className="flex justify-between">
                         <span>Subtotal (Base Imponible)</span>
                         <span className="tabular-nums">{formatCurrency(transaction.subtotal)}</span>
@@ -1231,11 +1297,11 @@ const FinancialDetail: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="border-t border-dashed border-gray-200 mb-4"></div>
+                    <div className="border-t border-dashed border-gray-200 mb-4 dark:border-slate-700"></div>
 
                     {/* Total Bruto antes de retención */}
                     <div className="space-y-3 mb-4">
-                      <div className="flex justify-between text-gray-900 font-medium">
+                      <div className="flex justify-between text-gray-900 font-medium dark:text-gray-100">
                         <span>Total antes de Retención</span>
                         <span className="tabular-nums font-semibold">{formatCurrency(grossTotal)}</span>
                       </div>
@@ -1248,9 +1314,9 @@ const FinancialDetail: React.FC = () => {
                     </div>
 
                     {/* Neto: solo mostrar el total_value del backend */}
-                    <div className="flex justify-between items-center bg-gray-50 -mx-5 px-5 py-3 border-y border-gray-100 mb-4">
-                      <span className="font-bold text-gray-800">Total Neto a Cobrar</span>
-                      <span className="text-lg font-bold text-gray-900 tabular-nums">{formatCurrency(transaction.total_value)}</span>
+                    <div className="flex justify-between items-center bg-gray-50 -mx-5 px-5 py-3 border-y border-gray-100 mb-4 dark:bg-slate-700/50 dark:border-slate-700">
+                      <span className="font-bold text-gray-800 dark:text-gray-200">Total Neto a Cobrar</span>
+                      <span className="text-lg font-bold text-gray-900 tabular-nums dark:text-gray-100">{formatCurrency(transaction.total_value)}</span>
                     </div>
 
                     {/* Abonos */}
@@ -1260,8 +1326,8 @@ const FinancialDetail: React.FC = () => {
                     </div>
 
                     {/* Saldo */}
-                    <div className="flex justify-between items-center bg-amber-50 border border-amber-200/60 rounded-lg p-3">
-                      <span className="font-bold text-amber-800 uppercase text-xs tracking-wider">{balanceLabel}</span>
+                    <div className="flex justify-between items-center bg-amber-50 border border-amber-200/60 rounded-lg p-3 dark:bg-amber-900/30 dark:border-amber-700/60">
+                      <span className="font-bold text-amber-800 uppercase text-xs tracking-wider dark:text-amber-400">{balanceLabel}</span>
                       <span className="text-xl font-black text-amber-600 tabular-nums">{formatCurrency(transaction.balance_due)}</span>
                     </div>
                   </div>
@@ -1280,18 +1346,18 @@ const FinancialDetail: React.FC = () => {
                   )}
 
                   {/* Resumen Rápido (Corregido con Retención) */}
-                  <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
-                      <h3 className="text-sm font-bold text-gray-800">Progreso de Pagos</h3>
+                  <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden dark:bg-slate-800 dark:border-slate-700">
+                    <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 dark:border-slate-700 dark:bg-slate-700/30">
+                      <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200">Progreso de Pagos</h3>
                     </div>
                     <div className="p-5 space-y-4">
                       <div className="text-center">
-                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2">Porcentaje Pagado</p>
-                        <p className="text-3xl font-bold text-gray-900">
+                        <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 dark:text-gray-400">Porcentaje Pagado</p>
+                        <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                           {transaction.total_value > 0 ? `${progressPercent}%` : '0%'}
                         </p>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-gray-200 rounded-full h-2 dark:bg-slate-600">
                         <div 
                           className="bg-emerald-500 h-2 rounded-full transition-all"
                           style={{ width: `${progressPercent}%` }}
@@ -1307,17 +1373,17 @@ const FinancialDetail: React.FC = () => {
 
             {/* TAB 2: HISTORIAL DE ABONOS */}
             {currentTab === 'abonos' && (
-              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden dark:bg-slate-800 dark:border-slate-700">
+                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center dark:border-slate-700 dark:bg-slate-700/30">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-gray-800">Historial de Pagos</h3>
-                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                    <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200">Historial de Pagos</h3>
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600 dark:bg-slate-700 dark:text-gray-400">
                       {paymentCount}
                     </span>
                   </div>
                   {transaction.status !== 'PAGADO' && (
                     <button 
-                      onClick={() => setIsPaymentModalOpen(true)}
+                      onClick={() => { setEditingPayment(null); setIsPaymentModalOpen(true); }}
                       className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm transition flex items-center justify-center gap-2"
                     >
                       <i className="fa-solid fa-money-bill-transfer text-xs"></i> Registrar Abono
@@ -1325,41 +1391,47 @@ const FinancialDetail: React.FC = () => {
                   )}
                 </div>
                 <div className="p-5">
-                  <PaymentHistoryTable paymentHistory={transaction.payment_history} />
+                  <PaymentHistoryTable
+                    paymentHistory={transaction.payment_history}
+                    onEdit={(payment) => {
+                      setEditingPayment(payment);
+                      setIsPaymentModalOpen(true);
+                    }}
+                  />
                 </div>
               </div>
             )}
 
             {/* TAB 3: HISTORIAL DE NOTIFICACIONES */}
             {currentTab === 'notificaciones' && (
-              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50">
+              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden dark:bg-slate-800 dark:border-slate-700">
+                <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 dark:border-slate-700 dark:bg-slate-700/30">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-gray-800">Historial de Auditoría</h3>
-                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                    <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200">Historial de Auditoría</h3>
+                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600 dark:bg-slate-700 dark:text-gray-400">
                       {transaction.notification_logs?.length || 0}
                     </span>
                   </div>
                 </div>
                 <div className="p-5">
                   {!transaction.notification_logs || transaction.notification_logs.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <i className="fa-solid fa-bell-slash text-3xl mb-3 text-gray-300"></i>
+                    <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+                      <i className="fa-solid fa-bell-slash text-3xl mb-3 text-gray-300 dark:text-gray-600"></i>
                       <p className="text-sm">No hay historial de auditoría</p>
                     </div>
                   ) : (
                     <div className="relative space-y-6">
-                      <div className="absolute left-7 top-6 bottom-6 w-px bg-gray-200"></div>
+                      <div className="absolute left-7 top-6 bottom-6 w-px bg-gray-200 dark:bg-slate-700"></div>
                       {transaction.notification_logs.map((log: any, index: number) => (
                         <div key={index} className="relative flex gap-4 pl-10">
                           <div className="absolute left-0 top-2 w-12 flex justify-center">
-                            <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow-sm">
-                              <i className={`fa-solid ${log.tipo === 'CONTADORA' ? 'fa-building-columns' : 'fa-envelope'} text-blue-600 text-sm`}></i>
+                            <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow-sm dark:bg-slate-800 dark:border-slate-700">
+                              <i className={`fa-solid ${log.tipo === 'CONTADORA' ? 'fa-building-columns' : 'fa-envelope'} text-blue-600 text-sm dark:text-blue-400`}></i>
                             </div>
                           </div>
-                          <div className="flex-1 p-4 border border-gray-200 rounded-xl bg-gray-50">
+                          <div className="flex-1 p-4 border border-gray-200 rounded-xl bg-gray-50 dark:border-slate-700 dark:bg-slate-700/50">
                             <div className="flex flex-wrap items-center gap-2 mb-2">
-                              <span className="text-sm font-semibold text-gray-900">
+                              <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                 {log.tipo === 'CONTADORA' ? 'Notificación a Contadora' : 'Notificación a Proveedor'}
                               </span>
                               {log.estado_envio && log.estado_envio !== 'success' && (
@@ -1368,8 +1440,8 @@ const FinancialDetail: React.FC = () => {
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-gray-600 mb-2">{log.fecha}</p>
-                            <div className="space-y-1 text-xs text-gray-500">
+                            <p className="text-xs text-gray-600 mb-2 dark:text-gray-400">{log.fecha}</p>
+                            <div className="space-y-1 text-xs text-gray-500 dark:text-gray-400">
                               {(log.accionado_por || log.enviado_por) && (
                                 <p><strong>Enviado por:</strong> {log.accionado_por || log.enviado_por}</p>
                               )}
@@ -1388,11 +1460,11 @@ const FinancialDetail: React.FC = () => {
 
             {currentTab === 'archivos' && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
+                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden dark:bg-slate-800 dark:border-slate-700">
+                  <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3 dark:border-slate-700 dark:bg-slate-700/30">
                     <div>
-                      <h3 className="text-sm font-bold text-gray-800">Archivo de Factura</h3>
-                      <p className="text-xs text-gray-500 mt-1">Documento principal de la factura</p>
+                      <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200">Archivo de Factura</h3>
+                      <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Documento principal de la factura</p>
                     </div>
                     <input
                       type="file"
@@ -1404,35 +1476,35 @@ const FinancialDetail: React.FC = () => {
                       onClick={() => invoiceFileInputRef.current?.click()}
                       disabled={processing || uploadingInvoiceFile || Boolean(transaction.invoice_file_url)}
                       title={transaction.invoice_file_url ? 'Ya existe un archivo de factura. Elimínalo para subir otro.' : 'Subir archivo de factura'}
-                      className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center transition-colors disabled:opacity-50"
+                      className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100 flex items-center justify-center transition-colors disabled:opacity-50 dark:bg-blue-900/30 dark:text-blue-400"
                     >
                       {uploadingInvoiceFile ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-upload text-xs"></i>}
                     </button>
                   </div>
                   <div className="p-5">
                     {!transaction.invoice_file_url ? (
-                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500 dark:border-slate-700 dark:bg-slate-700/50 dark:text-gray-400">
                         No hay archivo de factura.
                       </div>
                     ) : (
-                      <div className="rounded-xl border border-gray-200 px-4 py-4 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors">
+                      <div className="rounded-xl border border-gray-200 px-4 py-4 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors dark:border-slate-700 dark:hover:bg-slate-700">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 dark:bg-slate-700">
                             <i className={`fa-solid ${getFileIconClass(transaction.invoice_file_url)} text-base`}></i>
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-slate-800 truncate">{getFileNameFromUrl(transaction.invoice_file_url)}</p>
-                            <p className="text-xs text-slate-500 truncate">Factura cargada</p>
+                            <p className="text-sm font-semibold text-slate-800 truncate dark:text-slate-200">{getFileNameFromUrl(transaction.invoice_file_url)}</p>
+                            <p className="text-xs text-slate-500 truncate dark:text-slate-400">Factura cargada</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => openFileSecure(transaction.invoice_file_url)} className="p-2 text-slate-400 hover:text-blue-600 transition-colors">
+                          <button onClick={() => openFileSecure(transaction.invoice_file_url)} className="p-2 text-slate-400 hover:text-blue-600 transition-colors dark:text-gray-500">
                             <i className="fa-solid fa-eye"></i>
                           </button>
                           <button
                             onClick={() => handleDeleteFile('invoice')}
                             disabled={deletingFileKey === 'invoice'}
-                            className="p-2 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                            className="p-2 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50 dark:text-gray-500"
                           >
                             {deletingFileKey === 'invoice' ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-trash-can"></i>}
                           </button>
@@ -1442,11 +1514,11 @@ const FinancialDetail: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                  <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3">
+                <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden dark:bg-slate-800 dark:border-slate-700">
+                  <div className="px-5 py-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-3 dark:border-slate-700 dark:bg-slate-700/30">
                     <div>
-                      <h3 className="text-sm font-bold text-gray-800">Archivo de Retención</h3>
-                      <p className="text-xs text-gray-500 mt-1">Comprobante o soporte de retención</p>
+                      <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200">Archivo de Retención</h3>
+                      <p className="text-xs text-gray-500 mt-1 dark:text-gray-400">Comprobante o soporte de retención</p>
                     </div>
                     <input
                       type="file"
@@ -1458,35 +1530,35 @@ const FinancialDetail: React.FC = () => {
                       onClick={() => retentionFileInputRef.current?.click()}
                       disabled={processing || uploadingRetentionFile || Boolean(transaction.retention_file_url)}
                       title={transaction.retention_file_url ? 'Ya existe un archivo de retención. Elimínalo para subir otro.' : 'Subir archivo de retención'}
-                      className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition-colors disabled:opacity-50"
+                      className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100 flex items-center justify-center transition-colors disabled:opacity-50 dark:bg-indigo-900/30 dark:text-indigo-400"
                     >
                       {uploadingRetentionFile ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-upload text-xs"></i>}
                     </button>
                   </div>
                   <div className="p-5">
                     {!transaction.retention_file_url ? (
-                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500 dark:border-slate-700 dark:bg-slate-700/50 dark:text-gray-400">
                         No hay archivo de retención.
                       </div>
                     ) : (
                       <div className="rounded-xl border border-gray-200 px-4 py-4 flex items-center justify-between gap-3 hover:bg-gray-50 transition-colors">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center shrink-0 dark:bg-slate-700">
                             <i className={`fa-solid ${getFileIconClass(transaction.retention_file_url)} text-base`}></i>
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-slate-800 truncate">{getFileNameFromUrl(transaction.retention_file_url)}</p>
-                            <p className="text-xs text-slate-500 truncate">Retención cargada</p>
+                            <p className="text-sm font-semibold text-slate-800 truncate dark:text-slate-200">{getFileNameFromUrl(transaction.retention_file_url)}</p>
+                            <p className="text-xs text-slate-500 truncate dark:text-slate-400">Retención cargada</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => openFileSecure(transaction.retention_file_url)} className="p-2 text-slate-400 hover:text-blue-600 transition-colors">
+                          <button onClick={() => openFileSecure(transaction.retention_file_url)} className="p-2 text-slate-400 hover:text-blue-600 transition-colors dark:text-gray-500">
                             <i className="fa-solid fa-eye"></i>
                           </button>
                           <button
                             onClick={() => handleDeleteFile('retention')}
                             disabled={deletingFileKey === 'retention'}
-                            className="p-2 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50"
+                            className="p-2 text-slate-400 hover:text-red-500 transition-colors disabled:opacity-50 dark:text-gray-500"
                           >
                             {deletingFileKey === 'retention' ? <BrandSpinner size="xs" /> : <i className="fa-solid fa-trash-can"></i>}
                           </button>
@@ -1505,9 +1577,11 @@ const FinancialDetail: React.FC = () => {
       {/* PAYMENT FORM MODAL */}
       <PaymentFormModal
         isOpen={isPaymentModalOpen}
-        onClose={() => setIsPaymentModalOpen(false)}
+        onClose={() => { setIsPaymentModalOpen(false); setEditingPayment(null); }}
         balanceDue={transaction.balance_due}
+        editPayment={editingPayment}
         onSubmit={handleAddPayment}
+        onEditSubmit={handleEditPayment}
         isLoading={processing}
       />
 

@@ -1,10 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import type { PaymentRecord } from '../types';
 
 interface PaymentFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   balanceDue?: number;
+  editPayment?: PaymentRecord | null;
   onSubmit: (paymentData: {
+    amount: number;
+    payment_date: string;
+    payment_method: string;
+    reference?: string;
+    notes?: string;
+  }) => Promise<void>;
+  onEditSubmit?: (paymentId: string, paymentData: {
     amount: number;
     payment_date: string;
     payment_method: string;
@@ -18,7 +27,9 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
   isOpen,
   onClose,
   balanceDue = 0,
+  editPayment = null,
   onSubmit,
+  onEditSubmit,
   isLoading = false,
 }) => {
   const [amount, setAmount] = useState<string>('');
@@ -28,28 +39,47 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
   const [notes, setNotes] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
-  // Set default date to today on mount/open
+  const isEditMode = Boolean(editPayment);
+
+  const toISODate = (val: string): string => {
+    if (!val) return '';
+    if (/^\d{4}-\d{2}-\d{2}/.test(val)) return val.slice(0, 10);
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return '';
+    return d.toISOString().split('T')[0];
+  };
+
   useEffect(() => {
     if (isOpen) {
-      const today = new Date().toISOString().split('T')[0];
-      setPaymentDate(today);
-      setAmount(String(balanceDue || ''));
+      if (editPayment) {
+        setAmount(String(editPayment.amount || ''));
+        setPaymentDate(toISODate(editPayment.payment_date || ''));
+        setPaymentMethod(editPayment.payment_method || '');
+        setReference(editPayment.reference || '');
+        setNotes(editPayment.notes || '');
+      } else {
+        const today = new Date().toISOString().split('T')[0];
+        setPaymentDate(today);
+        setAmount(String(balanceDue || ''));
+        setReference('');
+        setNotes('');
+        setPaymentMethod('');
+      }
       setError(null);
     }
-  }, [isOpen, balanceDue]);
+  }, [isOpen, editPayment, balanceDue]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    // Validation
     const numAmount = parseFloat(amount);
     if (!amount || numAmount <= 0) {
       setError('El monto debe ser mayor a 0');
       return;
     }
 
-    if (numAmount > (balanceDue || 0)) {
+    if (!isEditMode && numAmount > (balanceDue || 0)) {
       setError(`El monto no puede exceder el saldo pendiente (${balanceDue})`);
       return;
     }
@@ -65,15 +95,20 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
     }
 
     try {
-      await onSubmit({
+      const data = {
         amount: numAmount,
         payment_date: paymentDate,
         payment_method: paymentMethod,
         reference: reference || undefined,
         notes: notes || undefined,
-      });
+      };
 
-      // Reset form on success
+      if (isEditMode && onEditSubmit && editPayment?.id_abono) {
+        await onEditSubmit(editPayment.id_abono, data);
+      } else {
+        await onSubmit(data);
+      }
+
       setAmount('');
       setPaymentDate('');
       setPaymentMethod('');
@@ -81,7 +116,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
       setNotes('');
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error al registrar el abono');
+      setError(err instanceof Error ? err.message : 'Error al guardar el abono');
     }
   };
 
@@ -92,7 +127,10 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full animate-in fade-in zoom-in-95">
         {/* Header */}
         <div className="border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-gray-900">Registrar Abono</h2>
+          <div className="flex items-center gap-2">
+            <i className={`fa-solid ${isEditMode ? 'fa-pen-to-square text-blue-500' : 'fa-money-bill-transfer text-emerald-500'}`}></i>
+            <h2 className="text-lg font-bold text-gray-900">{isEditMode ? 'Editar Abono' : 'Registrar Abono'}</h2>
+          </div>
           <button
             onClick={onClose}
             disabled={isLoading}
@@ -107,7 +145,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
           {/* Amount */}
           <div>
             <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider mb-1">
-              Monto a Abonar
+              Monto
             </label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-bold">$</span>
@@ -115,7 +153,6 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
                 type="number"
                 step="0.01"
                 min="0.01"
-                max={balanceDue || undefined}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 disabled={isLoading}
@@ -123,7 +160,7 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
                 placeholder="0.00"
               />
             </div>
-            {balanceDue > 0 && (
+            {!isEditMode && balanceDue > 0 && (
               <p className="text-xs text-gray-500 mt-1">Saldo pendiente: ${balanceDue.toFixed(2)}</p>
             )}
           </div>
@@ -211,10 +248,12 @@ export const PaymentFormModal: React.FC<PaymentFormModalProps> = ({
             <button
               type="submit"
               disabled={isLoading}
-              className="flex-1 px-4 py-2 bg-emerald-600 text-white font-semibold rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              className={`flex-1 px-4 py-2 text-white font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2 ${
+                isEditMode ? 'bg-blue-600 hover:bg-blue-700' : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
             >
               {isLoading && <i className="fa-solid fa-spinner animate-spin text-sm"></i>}
-              {isLoading ? 'Guardando...' : 'Guardar'}
+              {isLoading ? 'Guardando...' : isEditMode ? 'Actualizar' : 'Guardar'}
             </button>
           </div>
         </form>

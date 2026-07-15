@@ -72,5 +72,44 @@ export const financialService = {
     });
     if (!res.ok) throw new Error('Error al enviar notificación al proveedor');
     return res.json();
+  },
+
+  addPayment: async (payload: {
+    id_transaction: string;
+    id_tenant: string;
+    created_by: string;
+    amount: number;
+    payment_date: string;
+    payment_method: string;
+    reference?: string;
+    notes?: string;
+  }) => {
+    const res = await apiFetch(`${API_URL}/api/financial/abono`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Error al registrar el abono');
+    return res.json();
+  },
+
+  updatePayment: async (payload: {
+    id_payment: string;
+    id_tenant: string;
+    id_transaction: string;
+    amount?: number;
+    payment_date?: string;
+    payment_method?: string;
+    reference?: string;
+    notes?: string;
+  }) => {
+    const res = await apiFetch(`${API_URL}/api/financial/abono/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Error al actualizar el abono');
+    const text = await res.text();
+    return text ? JSON.parse(text) : {};
   }
 };
