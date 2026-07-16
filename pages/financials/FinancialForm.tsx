@@ -716,15 +716,6 @@ const FinancialForm: React.FC = () => {
           const tx = Array.isArray(data) ? data[0] : data;
           
           if (tx) {
-            console.log('[EDIT] API response keys:', Object.keys(tx));
-            console.log('[EDIT] payment_date fields:', {
-              v_input_fecha_pago: tx.v_input_fecha_pago,
-              payment_date: tx.payment_date,
-              fecha_pago: tx.fecha_pago,
-              v_texto_fecha_pago_human: tx.v_texto_fecha_pago_human,
-              estado_registro: tx.estado_registro,
-              status: tx.status,
-            });
             // Utilidad para convertir DD/MM/YYYY a YYYY-MM-DD
             const convertDDMMYYYYToISO = (dateStr: string) => {
               if (!dateStr || typeof dateStr !== 'string') return '';
@@ -745,7 +736,7 @@ const FinancialForm: React.FC = () => {
   issue_date: toISODate(tx.v_input_fecha_emision || tx.issue_date || tx.fecha_emision?.split('T')[0] || ''),
   due_date: toISODate(tx.v_input_fecha_vencimiento || tx.due_date || tx.fecha_vencimiento?.split('T')[0] || ''),
   payment_date: toISODate(tx.v_input_fecha_pago || tx.payment_date || tx.fecha_pago?.split('T')[0] || (Array.isArray(tx.historial_abonos) && tx.historial_abonos.length > 0 ? tx.historial_abonos[tx.historial_abonos.length - 1].payment_date : '') || ''),
-  retention_date: toISODate(tx.v_input_fecha_retencion || tx.retention_date || tx.fecha_retencion?.split('T')[0] || ''),
+  retention_date: toISODate(tx.v_input_fecha_retencion || tx.v_texto_fecha_retencion_human || tx.retention_date || tx.retention_date_input || tx.fecha_retencion?.split('T')[0] || tx.fecha_retencion || tx.fecha_creacion_registro || ''),
   
   id_client_company: tx.id_empresa_cliente || tx.id_client_company,
   
@@ -755,10 +746,9 @@ const FinancialForm: React.FC = () => {
   retention_value: tx.valor_retencion ? String(tx.valor_retencion) : '',
   credit_days: tx.dias_credito ? String(tx.dias_credito) : '',
   
-  retention_number: tx.retention_number,
+  retention_number: tx.retention_number || tx.numero_retencion || tx.retention_number_input || '',
 
-  // 🔥 ESTA ES LA LÍNEA QUE FALTA PARA QUE EL INPUT SE LLENE 🔥
-  payment_document_number: tx.numero_documento_pago || tx.payment_document_number || (Array.isArray(tx.historial_abonos) && tx.historial_abonos.length > 0 ? tx.historial_abonos[tx.historial_abonos.length - 1].reference_number || tx.historial_abonos[tx.historial_abonos.length - 1].reference : '') || '',
+  payment_document_number: tx.numero_documento_pago || tx.payment_document_number || tx.referencia_pago || tx.reference || tx.numero_referencia || (Array.isArray(tx.historial_abonos) && tx.historial_abonos.length > 0 ? tx.historial_abonos[tx.historial_abonos.length - 1].reference_number || tx.historial_abonos[tx.historial_abonos.length - 1].reference : '') || '',
   payment_reference: (Array.isArray(tx.historial_abonos) && tx.historial_abonos.length > 0 ? tx.historial_abonos[tx.historial_abonos.length - 1].reference_number || tx.historial_abonos[tx.historial_abonos.length - 1].reference : '') || tx.payment_reference || tx.referencia_pago || '',
   payment_method: (Array.isArray(tx.historial_abonos) && tx.historial_abonos.length > 0 ? tx.historial_abonos[tx.historial_abonos.length - 1].payment_method : '') || tx.payment_method || tx.metodo_pago || '',
 
@@ -986,10 +976,10 @@ const FinancialForm: React.FC = () => {
         fecha_pago: transaction.status === 'PAGADO' ? transaction.payment_date : null,
         payment_method: transaction.status === 'PAGADO' ? transaction.payment_method : null,
         metodo_pago: transaction.status === 'PAGADO' ? transaction.payment_method : null,
-        payment_document_number: transaction.status === 'PAGADO' ? transaction.payment_document_number : null,
-        payment_reference: transaction.status === 'PAGADO' ? transaction.payment_reference : null,
-        referencia_pago: transaction.status === 'PAGADO' ? transaction.payment_reference : null,
-        numero_documento_pago: transaction.status === 'PAGADO' ? transaction.payment_document_number : null,
+        payment_document_number: transaction.payment_document_number || null,
+        payment_reference: transaction.payment_reference || null,
+        referencia_pago: transaction.payment_reference || null,
+        numero_documento_pago: transaction.payment_document_number || null,
       };
 
       let savedTxId: string | number | undefined;
@@ -1146,6 +1136,18 @@ const FinancialForm: React.FC = () => {
                 </select>
               </div>
 
+              <div>
+                <label className="block text-xs font-medium text-zinc-700 mb-1.5">N° Documento / Comprobante</label>
+                <input
+                  type="text"
+                  name="payment_document_number"
+                  value={transaction.payment_document_number || ''}
+                  onChange={handleInputChange}
+                  placeholder="N° de comprobante..."
+                  className="w-full text-sm text-zinc-900 bg-white border border-zinc-300 rounded-lg px-3 py-2.5 outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
               {transaction.status === 'PAGADO' && (
                 <>
                   <div>
@@ -1169,17 +1171,6 @@ const FinancialForm: React.FC = () => {
                       <option value="TARJETA">Tarjeta</option>
                       <option value="OTRO">Otro</option>
                     </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">N° Documento / Comprobante</label>
-                    <input
-                      type="text"
-                      name="payment_document_number"
-                      value={transaction.payment_document_number || ''}
-                      onChange={handleInputChange}
-                      placeholder="N° de comprobante..."
-                      className="w-full text-sm text-zinc-900 bg-white border border-zinc-300 rounded-lg px-3 py-2.5 outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                    />
                   </div>
                 </>
               )}
