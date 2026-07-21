@@ -1,0 +1,52 @@
+name: Deploy to EasyPanel (11 PM Daily)
+
+on:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build project
+        run: npm run build
+        env:
+          VITE_WEBHOOK_URL: ${{ secrets.VITE_WEBHOOK_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+
+      - name: Deploy to EasyPanel via API
+        env:
+          EASYPANEL_URL: ${{ secrets.EASYPANEL_URL }}
+          EASYPANEL_TOKEN: ${{ secrets.EASYPANEL_REDEPLOY_CICD }}
+        run: |
+          echo "Triggering EasyPanel deploy..."
+
+          # Get service info
+          SERVICE_INFO=$(curl -s -H "Authorization: Bearer $EASYPANEL_TOKEN" \
+            "$EASYPANEL_URL/api/rpc/service.list")
+
+          echo "Service info: $SERVICE_INFO"
+
+          # Trigger deploy
+          DEPLOY_RESPONSE=$(curl -s -X POST \
+            -H "Authorization: Bearer $EASYPANEL_TOKEN" \
+            -H "Content-Type: application/json" \
+            "$EASYPANEL_URL/api/rpc/service.deploy" \
+            -d '{}')
+
+          echo "Deploy response: $DEPLOY_RESPONSE"
+          echo "Deploy triggered successfully!"
