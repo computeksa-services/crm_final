@@ -10,43 +10,28 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build project
-        run: npm run build
-        env:
-          VITE_WEBHOOK_URL: ${{ secrets.VITE_WEBHOOK_URL }}
-          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-
-      - name: Deploy to EasyPanel via API
+      - name: Trigger EasyPanel Redeploy
         env:
           EASYPANEL_URL: ${{ secrets.EASYPANEL_URL }}
           EASYPANEL_TOKEN: ${{ secrets.EASYPANEL_REDEPLOY_CICD }}
         run: |
-          echo "Triggering EasyPanel deploy..."
+          echo "Triggering redeploy on EasyPanel..."
 
-          # Get service info
-          SERVICE_INFO=$(curl -s -H "Authorization: Bearer $EASYPANEL_TOKEN" \
-            "$EASYPANEL_URL/api/rpc/service.list")
-
-          echo "Service info: $SERVICE_INFO"
-
-          # Trigger deploy
-          DEPLOY_RESPONSE=$(curl -s -X POST \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer $EASYPANEL_TOKEN" \
             -H "Content-Type: application/json" \
             "$EASYPANEL_URL/api/rpc/service.deploy" \
             -d '{}')
 
-          echo "Deploy response: $DEPLOY_RESPONSE"
-          echo "Deploy triggered successfully!"
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "HTTP Status: $HTTP_CODE"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "Redeploy triggered successfully!"
+          else
+            echo "Failed to trigger redeploy"
+            exit 1
+          fi
