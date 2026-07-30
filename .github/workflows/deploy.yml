@@ -1,15 +1,35 @@
-name: Deploy to EasyPanel (11 PM Daily)
+name: Deploy to EasyPanel (11 PM Ecuador)
 
 on:
   schedule:
     - cron: "0 4 * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  deploy:
+  check-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if deploy is needed
+        run: |
+          LATEST=$(git rev-parse HEAD)
+          DEPLOYED=""
+          if git tag -l "deployed" > /dev/null 2>&1; then
+            DEPLOYED=$(git rev-parse deployed 2>/dev/null || echo "")
+          fi
+
+          if [ "$LATEST" = "$DEPLOYED" ]; then
+            echo "No new changes since last deploy. Skipping."
+            exit 0
+          fi
+
       - name: Trigger EasyPanel Redeploy
         env:
           EASYPANEL_URL: ${{ secrets.EASYPANEL_URL }}
@@ -35,3 +55,9 @@ jobs:
             echo "Failed to trigger redeploy"
             exit 1
           fi
+
+      - name: Mark as deployed
+        if: success()
+        run: |
+          git tag -f deployed
+          git push origin deployed --force
