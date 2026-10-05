@@ -25,13 +25,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 
-# config.js no se cachea: se regenera en cada arranque con las variables del contenedor
-RUN printf '%s\n' \
-    'location = /config.js {' \
-    '    add_header Cache-Control "no-store, no-cache, must-revalidate";' \
-    '    expires -1;' \
-    '}' \
-    >> /etc/nginx/conf.d/default.conf
+# La regla de no-cache para /config.js ya esta en nginx.conf, dentro del bloque server.
 
 RUN chmod +x /docker-entrypoint.sh
 
