@@ -1,14 +1,42 @@
+# ---------- Etapa 1: compilar ----------
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
+
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+
 COPY . .
-ARG VITE_WEBHOOK_URL
-ARG VITE_GOOGLE_CLIENT_ID
+
+# Valores por defecto para que el build nunca falle por falta de variables.
+# Los valores reales se inyectan en tiempo de arranque (ver docker-entrypoint.sh),
+# asi la misma imagen sirve para cualquier entorno.
+ARG VITE_WEBHOOK_URL=""
+ARG VITE_GOOGLE_CLIENT_ID=""
+ARG VITE_MICROSOFT_CLIENT_ID=""
+ARG VITE_REDIRECT_URI=""
+
+ENV NODE_OPTIONS=--max-old-space-size=2048
 RUN npm run build
 
+# ---------- Etapa 2: servir ----------
 FROM nginx:alpine
+
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+
+# config.js no se cachea: se regenera en cada arranque con las variables del contenedor
+RUN printf '%s\n' \
+    'location = /config.js {' \
+    '    add_header Cache-Control "no-store, no-cache, must-revalidate";' \
+    '    expires -1;' \
+    '}' \
+    >> /etc/nginx/conf.d/default.conf
+
+RUN chmod +x /docker-entrypoint.sh
+
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
+  CMD wget -qO- http://127.0.0.1/ >/dev/null || exit 1
+
+ENTRYPOINT ["/docker-entrypoint.sh"]

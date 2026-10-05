@@ -11,9 +11,22 @@ export default defineConfig(({ mode }) => {
   
   const baseUrl = env.VITE_WEBHOOK_URL
 
+  // Reemplaza los accesos a import.meta.env.VITE_* por una lectura en tiempo
+  // de ejecucion desde window.__APP_CONFIG__ (generado por docker-entrypoint.sh).
+  // Asi una unica imagen sirve para cualquier entorno sin recompilar.
+  // esbuild solo admite nombres de entidad (identificador o miembro), por eso
+// se accede como window.__APP_CONFIG__.<CLAVE> y no con una expresion.
+  const runtimeConfigExpr = (key: string) => `window.__APP_CONFIG__.${key}`;
+
   return {
     plugins: [react()],
     base: '/',
+    define: {
+      'import.meta.env.VITE_WEBHOOK_URL': runtimeConfigExpr('VITE_WEBHOOK_URL'),
+      'import.meta.env.VITE_GOOGLE_CLIENT_ID': runtimeConfigExpr('VITE_GOOGLE_CLIENT_ID'),
+      'import.meta.env.VITE_MICROSOFT_CLIENT_ID': runtimeConfigExpr('VITE_MICROSOFT_CLIENT_ID'),
+      'import.meta.env.VITE_REDIRECT_URI': runtimeConfigExpr('VITE_REDIRECT_URI'),
+    },
     server: {
       host: '0.0.0.0',
       port: 3000,
