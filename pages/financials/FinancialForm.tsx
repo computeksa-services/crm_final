@@ -32,6 +32,14 @@ const toISODate = (val: string): string => {
   return d.toISOString().split('T')[0];
 };
 
+const pickValue = (...vals: any[]): string => {
+  for (const v of vals) {
+    if (v === undefined || v === null || v === '') continue;
+    return String(v);
+  }
+  return '';
+};
+
 const formatCurrency = (val: number | string) => {
   const num = Number(val) || 0;
   return num.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
@@ -743,7 +751,7 @@ const FinancialForm: React.FC = () => {
   subtotal: tx.subtotal ? String(tx.subtotal) : '',
   tax_amount: tx.impuestos !== undefined ? String(tx.impuestos) : '',
   total_value: tx.total_factura || tx.total_value || 0,
-  retention_value: tx.valor_retencion ? String(tx.valor_retencion) : '',
+  retention_value: pickValue(tx.valor_retencion, tx.retention_value, tx.valor_retenido),
   credit_days: tx.dias_credito ? String(tx.dias_credito) : '',
   
   retention_number: tx.retention_number || tx.numero_retencion || tx.retention_number_input || '',
@@ -1152,9 +1160,13 @@ const FinancialForm: React.FC = () => {
                 <>
                   <div>
                     <label className="block text-xs font-medium text-zinc-700 mb-1.5">Fecha de pago *</label>
-                    <div className="w-full text-sm text-zinc-900 bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2.5">
-                      {transaction.payment_date || <span className="text-zinc-400 italic">Sin fecha</span>}
-                    </div>
+                    <input
+                      type="date"
+                      name="payment_date"
+                      value={transaction.payment_date || ''}
+                      onChange={handleInputChange}
+                      className="w-full text-sm text-zinc-900 bg-white border border-zinc-300 rounded-lg px-3 py-2.5 outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-zinc-700 mb-1.5">Método de pago *</label>
