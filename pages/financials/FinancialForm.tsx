@@ -19,6 +19,11 @@ import {
 } from '../../utils/recipientHelpers';
 
 // --- HELPERS ---
+const ES_MONTHS: Record<string, string> = {
+  ene: '01', feb: '02', mar: '03', abr: '04', may: '05', jun: '06',
+  jul: '07', ago: '08', sep: '09', oct: '10', nov: '11', dic: '12',
+};
+
 const toISODate = (val: string): string => {
   if (!val) return '';
   if (/^\d{4}-\d{2}-\d{2}/.test(val)) return val.slice(0, 10);
@@ -26,6 +31,15 @@ const toISODate = (val: string): string => {
   if (ddmmyyyy) {
     const [, dd, mm, yyyy] = ddmmyyyy;
     return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+  }
+  // Ej: "lun, 24 ago 2026" o "24 de agosto de 2026" (format_date_es)
+  const esFecha = val.match(/^(?:[a-záéíóúñ]{3},\s*)?(\d{1,2})\s+de\s+([a-záéíóúñ]+)(?:\s+de)?\s+(\d{4})$|^(?:[a-záéíóúñ]{3},\s*)?(\d{1,2})\s+([a-záéíóúñ]{3,})\s+(\d{4})$/i);
+  if (esFecha) {
+    const dia = esFecha[1] || esFecha[4];
+    const mesRaw = esFecha[2] || esFecha[5];
+    const anio = esFecha[3] || esFecha[6];
+    const mes = ES_MONTHS[String(mesRaw).toLowerCase().slice(0, 3)];
+    if (dia && mes && anio) return `${anio}-${mes}-${dia.padStart(2, '0')}`;
   }
   const d = new Date(val);
   if (isNaN(d.getTime())) return '';
