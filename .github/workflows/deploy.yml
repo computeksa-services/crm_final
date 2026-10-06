@@ -1,47 +1,81 @@
-name: Deploy to EasyPanel (11 PM Ecuador)
+name: Deploy to EasyPanel
 
 on:
+  workflow_run:
+    workflows: ["Build & Push Docker Image"]
+    types: [completed]
+  workflow_dispatch:
   schedule:
     - cron: "0 4 * * *"
-  workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  check-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
+    # Solo desplegar si el build que lo disparo termino bien y fue un push a main.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Check if deploy is needed
+      - name: Verificar secrets de EasyPanel
+        env:
+          EASYPANEL_URL: ${{ secrets.EASYPANEL_URL }}
+          EASYPANEL_TOKEN: ${{ secrets.EASYPANEL_REDEPLOY_CICD }}
         run: |
-          LATEST=$(git rev-parse HEAD)
-          DEPLOYED=""
-          if git tag -l "deployed" > /dev/null 2>&1; then
-            DEPLOYED=$(git rev-parse deployed 2>/dev/null || echo "")
+          if [ -z "$EASYPANEL_URL" ] || [ -z "$EASYPANEL_TOKEN" ]; then
+            echo "::error::Faltan secrets. Ve a Settings > Secrets and variables > Actions y crea EASYPANEL_URL y EASYPANEL_REDEPLOY_CICD."
+            exit 1
           fi
+          echo "Secrets presentes."
 
-          if [ "$LATEST" = "$DEPLOYED" ]; then
-            echo "No new changes since last deploy. Skipping."
+      - name: Check if deploy is needed
+        id: check
+        run: |
+          # Un build nuevo siempre necesita deploy; solo el cron re-valida el tag.
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "Build nuevo detectado, deploy necesario."
             exit 0
           fi
 
+          LATEST=$(git rev-parse HEAD)
+          DEPLOYED=""
+          if git rev-parse --verify deployed >/dev/null 2>&1; then
+            DEPLOYED=$(git rev-parse deployed)
+          fi
+
+          if [ "$LATEST" = "$DEPLOYED" ]; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "No hay cambios desde el ultimo deploy. Omitiendo."
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "Hay cambios desde el ultimo deploy."
+          fi
+
       - name: Trigger EasyPanel Redeploy
+        if: steps.check.outputs.needed == 'true'
         env:
           EASYPANEL_URL: ${{ secrets.EASYPANEL_URL }}
           EASYPANEL_TOKEN: ${{ secrets.EASYPANEL_REDEPLOY_CICD }}
         run: |
           echo "Triggering redeploy on EasyPanel..."
 
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST \
             -H "Authorization: Bearer $EASYPANEL_TOKEN" \
             -H "Content-Type: application/json" \
             "$EASYPANEL_URL/api/rpc/service.deploy" \
-            -d '{}')
+            -d '{}' --max-time 60)
 
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
           BODY=$(echo "$RESPONSE" | sed '$d')
@@ -52,12 +86,12 @@ jobs:
           if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
             echo "Redeploy triggered successfully!"
           else
-            echo "Failed to trigger redeploy"
+            echo "::error::Fallo el redeploy de EasyPanel (HTTP $HTTP_CODE)."
             exit 1
           fi
 
       - name: Mark as deployed
-        if: success()
+        if: success() && steps.check.outputs.needed == 'true'
         run: |
           git tag -f deployed
           git push origin deployed --force
